@@ -1,7 +1,9 @@
 ﻿using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
+
 using FluentCertificates.Extensions;
+
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.Sec;
 using Org.BouncyCastle.Asn1.X509;
@@ -25,7 +27,7 @@ public record CertificateBuilder
     public int? PathLength { get; init; }
     public DateTimeOffset NotBefore { get; init; } = DateTimeOffset.UtcNow.AddHours(-1);
     public DateTimeOffset NotAfter { get; init; } = DateTimeOffset.UtcNow.AddHours(1);
-    public X509Name Subject { get; init; }
+    public X509Name Subject { get; init; } = null!;
     public X509Certificate2? Issuer { get; init; }
     public string[] DnsNames { get; init; } = Array.Empty<string>();
     public string? FriendlyName { get; init; }

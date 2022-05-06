@@ -24,10 +24,10 @@ public record CertificateFinder : IQueryable<X509Certificate2>
 
 
     public CertificateFinder SetStores(params X509Store[] stores)
-        => this with { Stores = stores.Select(x => (x.Name, x.Location)).ToImmutableList() };
+        => this with { Stores = stores.Select(x => (x.Name!, x.Location)).ToImmutableList() };
 
     public CertificateFinder SetStores(IEnumerable<X509Store> stores)
-        => this with { Stores = stores.Select(x => (x.Name, x.Location)).ToImmutableList() };
+        => this with { Stores = stores.Select(x => (x.Name!, x.Location)).ToImmutableList() };
 
     public CertificateFinder SetStores(params (string Name, StoreLocation Location)[] stores)
         => this with { Stores = stores.Select(x => (x.Name, x.Location)).ToImmutableList() };
@@ -43,10 +43,10 @@ public record CertificateFinder : IQueryable<X509Certificate2>
 
 
     public CertificateFinder AddStores(params X509Store[] stores)
-        => this with { Stores = Stores.AddRange(stores.Select(x => (x.Name, x.Location))) };
+        => this with { Stores = Stores.AddRange(stores.Select(x => (x.Name!, x.Location))) };
 
     public CertificateFinder AddStores(IEnumerable<X509Store> stores)
-        => this with { Stores = Stores.AddRange(stores.Select(x => (x.Name, x.Location))) };
+        => this with { Stores = Stores.AddRange(stores.Select(x => (x.Name!, x.Location))) };
 
     public CertificateFinder AddStores(params (string Name, StoreLocation Location)[] stores)
         => this with { Stores = Stores.AddRange(stores.Select(x => (x.Name, x.Location))) };
@@ -62,7 +62,7 @@ public record CertificateFinder : IQueryable<X509Certificate2>
 
 
     public CertificateFinder AddStore(X509Store store)
-        => this with { Stores = Stores.Add((store.Name, store.Location)) };
+        => this with { Stores = Stores.Add((store.Name!, store.Location)) };
 
     public CertificateFinder AddStore(string name, StoreLocation location)
         => this with { Stores = Stores.Add((name, location)) };
