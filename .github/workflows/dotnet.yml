@@ -1,0 +1,53 @@
+name: .NET
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ v* ]
+
+env:
+  buildConfiguration: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Setup GitVersion
+      uses: gittools/actions/gitversion/setup@v0.9.13
+      with:
+        versionSpec: 5.x
+
+    - name: Execute GitVersion
+      uses: gittools/actions/gitversion/execute@v0.9.13
+      id: gitversion
+      with:
+        additionalArguments: /output BuildServer
+        useConfigFile: true
+
+    - name: Use .NET 6
+      uses: actions/setup-dotnet@v2
+      with:
+        dotnet-version: 6.x
+
+    - name: Restore
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration ${{ env.buildConfiguration }} --no-restore
+
+    - name: Test
+      run: dotnet test --configuration ${{ env.buildConfiguration }} --no-build --verbosity normal --filter FullyQualifiedName!~IntegrationTests
+
+    - name: Pack
+      run: dotnet pack --configuration ${{ env.buildConfiguration }} --no-build --output "${{ github.workspace }}/artifacts/"
+
+    - name: Push
+      run: dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg" -s $NUGET_SOURCE -k $NUGET_API_KEY
+      env:
+        NUGET_SOURCE: ${{ secrets.NUGET_SOURCE }}
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
