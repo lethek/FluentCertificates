@@ -4,6 +4,7 @@ using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
+using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Security;
 
@@ -90,7 +91,7 @@ namespace FluentCertificates.Extensions
             var bcCert = DotNetUtilities.FromX509Certificate(cert);
             pem.WriteObject(bcCert);
             if (include != ExportKeys.None && cert.HasPrivateKey) {
-                pem.WriteObject(InternalTools.GetBouncyCastleRsaKeyPair(cert).Private);
+                pem.WriteObject(cert.GetBouncyCastleRsaKeyPair().Private);
             }
             return sw.ToString();
         }
@@ -116,6 +117,19 @@ namespace FluentCertificates.Extensions
                 default:
                     return null;
             }
+        }
+
+
+        internal static AsymmetricCipherKeyPair GetBouncyCastleRsaKeyPair(this X509Certificate2 cert)
+        {
+            using var source = cert.GetRSAPrivateKey() ?? throw new KeyException("RSA private key expected but not found");
+            using var rsa = RSA.Create();
+            var pbeParams = new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 1);
+            var pwd = (new byte[32]).AsSpan();
+            InternalTools.SecureRandom.NextBytes(pwd);
+            rsa.ImportEncryptedPkcs8PrivateKey(pwd, source.ExportEncryptedPkcs8PrivateKey(pwd, pbeParams), out _);
+            pwd.Clear();
+            return DotNetUtilities.GetRsaKeyPair(rsa);
         }
 
 

@@ -69,7 +69,7 @@ public static class X509Certificate2EnumerableExtensions
         }
         if (include != ExportKeys.None) {
             foreach (var cert in list.Where(x => x.HasPrivateKey)) {
-                pem.WriteObject(InternalTools.GetBouncyCastleRsaKeyPair(cert).Private);
+                pem.WriteObject(cert.GetBouncyCastleRsaKeyPair().Private);
             }
         }
         return sw.ToString();

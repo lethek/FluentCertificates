@@ -34,4 +34,8 @@ public static class X509ChainExtensions
         chain.ToEnumerable().ExportAsPem(path, include);
         return chain;
     }
+
+
+    public static string ToPemString(this X509Chain chain, ExportKeys include = ExportKeys.All)
+        => chain.ToEnumerable().ToPemString(include);
 }

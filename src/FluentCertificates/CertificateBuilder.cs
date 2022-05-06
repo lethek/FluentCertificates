@@ -1,7 +1,7 @@
 ﻿using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
-
+using FluentCertificates.Extensions;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.Sec;
 using Org.BouncyCastle.Asn1.X509;
@@ -179,7 +179,7 @@ public record CertificateBuilder
         //Create certificate
         var algorithm = PkcsObjectIdentifiers.Sha256WithRsaEncryption.ToString();
         var cert = options.Issuer != null
-            ? generator.Generate(new Asn1SignatureFactory(algorithm, InternalTools.GetBouncyCastleRsaKeyPair(options.Issuer).Private, InternalTools.SecureRandom))
+            ? generator.Generate(new Asn1SignatureFactory(algorithm, options.Issuer.GetBouncyCastleRsaKeyPair().Private, InternalTools.SecureRandom))
             : generator.Generate(new Asn1SignatureFactory(algorithm, key.Private, InternalTools.SecureRandom));
 
         //Place the certificate and private-key into a PKCS12 store
