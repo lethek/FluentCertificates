@@ -191,9 +191,10 @@ public record CertificateBuilder
 
         //Finally copy the PKCS12 store to a .NET X509Certificate2 structure to return
         using var pfxStream = new MemoryStream();
-        store.Save(pfxStream, null, InternalTools.SecureRandom);
+        var pwd = InternalTools.CreateRandomCharArray(20);
+        store.Save(pfxStream, pwd, InternalTools.SecureRandom);
         pfxStream.Seek(0, SeekOrigin.Begin);
-        var newCert = new X509Certificate2(pfxStream.ToArray(), "", X509KeyStorageFlags.Exportable);
+        var newCert = new X509Certificate2(pfxStream.ToArray(), new String(pwd), X509KeyStorageFlags.Exportable);
         if (options.FriendlyName != null) {
             newCert.FriendlyName = options.FriendlyName;
         }
