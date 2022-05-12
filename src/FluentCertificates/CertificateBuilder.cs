@@ -23,11 +23,11 @@ namespace FluentCertificates;
 public record CertificateBuilder
 {
     public CertificateUsage? Usage { get; init; }
-    public int KeyLength { get; init; } = 4096;
+    public int KeyLength { get; init; } = 2048;
     public int? PathLength { get; init; }
     public DateTimeOffset NotBefore { get; init; } = DateTimeOffset.UtcNow.AddHours(-1);
     public DateTimeOffset NotAfter { get; init; } = DateTimeOffset.UtcNow.AddHours(1);
-    public X509Name Subject { get; init; } = null!;
+    public X509Name Subject { get; init; } = EmptyName;
     public X509Certificate2? Issuer { get; init; }
     public string[] DnsNames { get; init; } = Array.Empty<string>();
     public string? FriendlyName { get; init; }
@@ -77,6 +77,8 @@ public record CertificateBuilder
     public X509Certificate2 Build()
     {
         switch (Usage) {
+            case null:
+                return CreateCertificate(this);
             case CertificateUsage.CA:
                 return CreateCaCertificate(this);
             case CertificateUsage.Server:
@@ -96,10 +98,8 @@ public record CertificateBuilder
 
     private static void Validate(CertificateBuilder options)
     {
-        if (options.Subject == null) throw new ArgumentNullException(nameof(Subject));
-        if (!options.Usage.HasValue) throw new ArgumentNullException(nameof(Usage));
-        if (options.NotBefore >= options.NotAfter) throw new ArgumentException($"{nameof(NotBefore)} cannot be later than or equal to {nameof(NotAfter)}", nameof(NotAfter));
         if (options.KeyLength <= 0) throw new ArgumentException($"{nameof(KeyLength)} must be greater than zero", nameof(KeyLength));
+        if (options.NotBefore >= options.NotAfter) throw new ArgumentException($"{nameof(NotBefore)} cannot be later than or equal to {nameof(NotAfter)}", nameof(NotAfter));
     }
 
 
@@ -133,7 +133,6 @@ public record CertificateBuilder
         => CreateCertificate(options, generator => {
             generator.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(false));
             generator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment));
-
             generator.AddExtension(X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(
                 new DerSequence(
                     KeyPurposeID.IdKPCodeSigning,
@@ -251,4 +250,7 @@ public record CertificateBuilder
         BinaryPrimitives.WriteInt64BigEndian(span.Slice(10, 8), InternalTools.SecureRandom.NextLong());
         return new BigInteger(span.ToArray());
     }
+
+
+    private static readonly X509Name EmptyName = new X509NameBuilder();
 }

@@ -20,7 +20,7 @@ public record CertificateFinder : IQueryable<X509Certificate2>
 
 
     public CertificateFinder ClearStores()
-        => this with { Stores = ImmutableList<(string, StoreLocation)>.Empty };
+        => this with { Stores = Stores.Clear() };
 
 
     public CertificateFinder SetStores(params X509Store[] stores)
