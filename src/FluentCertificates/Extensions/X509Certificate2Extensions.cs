@@ -136,6 +136,7 @@ namespace FluentCertificates.Extensions
         private static X509Certificate2 FilterPrivateKey(X509Certificate2 cert, ExportKeys include)
             => include switch {
                 ExportKeys.All => cert,
+                ExportKeys.Leaf => cert,
                 ExportKeys.None => cert.HasPrivateKey ? new X509Certificate2(cert.RawData, "", X509KeyStorageFlags.Exportable) : cert,
                 _ => throw new ArgumentOutOfRangeException(nameof(include))
             };
