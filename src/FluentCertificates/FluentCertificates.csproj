@@ -8,6 +8,11 @@
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Description>Very simple library using the Fluent Builder pattern for creating, finding and exporting certificates. Makes it easy to generate your own certificate chains, or just stand-alone self-signed certs.</Description>
+    <PackageTags>certificate, fluent, x509, pfx, pem, cert, crt, CA</PackageTags>
+    <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
