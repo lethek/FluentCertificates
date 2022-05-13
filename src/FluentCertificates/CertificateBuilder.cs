@@ -1,5 +1,4 @@
 ﻿using System.Buffers.Binary;
-using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 
@@ -18,7 +17,6 @@ using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509.Extension;
 using Org.BouncyCastle.X509;
-using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
 namespace FluentCertificates;
 
@@ -80,30 +78,26 @@ public record CertificateBuilder
 
 
     public X509Certificate2 Build()
-    {
-        switch (Usage) {
-            case null:
-                return CreateCertificate(this);
-            case CertificateUsage.CA:
-                return CreateCaCertificate(this);
-            case CertificateUsage.Server:
-                return CreateServerCertificate(this);
-            case CertificateUsage.Client:
-                return CreateClientCertificate(this);
-            case CertificateUsage.CodeSign:
-                return CreateCodeSigningCertificate(this);
-        }
-        throw new NotSupportedException($"{Usage} {nameof(Usage)} not yet supported");
-    }
+        => CreateCertificate(
+            this, 
+            Usage switch {
+                null => null,
+                CertificateUsage.CA => GetCaExtensions(this),
+                CertificateUsage.Server => GetServerExtensions(this),
+                CertificateUsage.Client => GetClientExtensions(this),
+                CertificateUsage.CodeSign => GetCodeSigningExtensions(this),
+                _ => throw new NotSupportedException($"{Usage} {nameof(Usage)} not yet supported")
+            }
+        );
 
 
-    public CertificateBuilder ExportCsrAsPem()
-    {
-        Validate();
-        var builder = Key != null ? this : SetKey(GenerateRsaKeyPair(KeyLength));
+    //public CertificateBuilder ExportCsrAsPem()
+    //{
+    //    Validate();
+    //    var builder = Key != null ? this : SetKey(GenerateRsaKeyPair(KeyLength));
 
-        return this;
-    }
+    //    return this;
+    //}
 
 
     public void Validate()
@@ -152,42 +146,7 @@ public record CertificateBuilder
         };
 
 
-    private static X509Certificate2 CreateCaCertificate(CertificateBuilder options)
-        => CreateCertificate(
-            options,
-            generator => {
-                foreach (var ext in GetCaExtensions(options)) {
-                    generator.AddExtension(ext.Oid, ext.Extension.IsCritical, ext.Extension.GetParsedValue());
-                }
-            }
-        );
-
-
-    private static X509Certificate2 CreateServerCertificate(CertificateBuilder options)
-        => CreateCertificate(options, generator => {
-            foreach (var ext in GetServerExtensions(options)) {
-                generator.AddExtension(ext.Oid, ext.Extension.IsCritical, ext.Extension.GetParsedValue());
-            }
-        });
-
-
-    private static X509Certificate2 CreateClientCertificate(CertificateBuilder options)
-        => CreateCertificate(options, generator => {
-            foreach (var ext in GetClientExtensions(options)) {
-                generator.AddExtension(ext.Oid, ext.Extension.IsCritical, ext.Extension.GetParsedValue());
-            }
-        });
-
-
-    private static X509Certificate2 CreateCodeSigningCertificate(CertificateBuilder options)
-        => CreateCertificate(options, generator => {
-            foreach (var ext in GetCodeSigningExtensions(options)) {
-                generator.AddExtension(ext.Oid, ext.Extension.IsCritical, ext.Extension.GetParsedValue());
-            }
-        });
-
-
-    private static X509Certificate2 CreateCertificate(CertificateBuilder options, Action<X509V3CertificateGenerator>? extend = null)
+    private static X509Certificate2 CreateCertificate(CertificateBuilder options, IEnumerable<X509ExtensionItem>? extensions = null)
     {
         Validate(options);
 
@@ -206,7 +165,11 @@ public record CertificateBuilder
             notAfter: options.NotAfter.DateTime
         );
 
-        extend?.Invoke(generator);
+        if (extensions != null) {
+            foreach (var extension in extensions) {
+                generator.AddExtension(extension.Oid, extension.Extension.IsCritical, extension.Extension.GetParsedValue());
+            }
+        }
 
         //Add Subject Alternative Name if necessary
         var sanGeneralNames = new List<GeneralName>();
