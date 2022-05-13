@@ -35,6 +35,9 @@ public record CertificateBuilder
     public string? Email { get; init; }
 
 
+    private AsymmetricCipherKeyPair? Key { get; init; }
+
+
     public static CertificateBuilder Create()
         => new();
 
@@ -71,6 +74,10 @@ public record CertificateBuilder
 
     public CertificateBuilder SetPathLength(int? value)
         => this with { PathLength = value };
+
+    public CertificateBuilder SetKey(AsymmetricCipherKeyPair? value)
+        => this with { Key = value };
+
 
     public X509Certificate2 Build()
     {
@@ -150,7 +157,7 @@ public record CertificateBuilder
             ? DotNetUtilities.FromX509Certificate(options.Issuer)
             : null;
 
-        var key = GenerateRsaKeyPair(options.KeyLength);
+        var key = options.Key ?? GenerateRsaKeyPair(options.KeyLength);
 
         var generator = CreateCertificateGenerator(
             issuer: issuerCert?.SubjectDN ?? options.Subject,
