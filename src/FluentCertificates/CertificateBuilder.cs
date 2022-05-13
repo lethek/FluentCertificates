@@ -1,5 +1,5 @@
 ﻿using System.Buffers.Binary;
-using System.Diagnostics.CodeAnalysis;
+using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 
@@ -18,6 +18,7 @@ using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509.Extension;
 using Org.BouncyCastle.X509;
+using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
 namespace FluentCertificates;
 
@@ -33,7 +34,6 @@ public record CertificateBuilder
     public string[] DnsNames { get; init; } = Array.Empty<string>();
     public string? FriendlyName { get; init; }
     public string? Email { get; init; }
-
 
     private AsymmetricCipherKeyPair? Key { get; init; }
 
@@ -97,6 +97,15 @@ public record CertificateBuilder
     }
 
 
+    public CertificateBuilder ExportCsrAsPem()
+    {
+        Validate();
+        var builder = Key != null ? this : SetKey(GenerateRsaKeyPair(KeyLength));
+
+        return this;
+    }
+
+
     public void Validate()
         => Validate(this);
 
@@ -108,47 +117,76 @@ public record CertificateBuilder
     }
 
 
+    private static List<X509ExtensionItem> GetCaExtensions(CertificateBuilder options)
+        => new() {
+            new (X509Extensions.BasicConstraints, true, options.PathLength.HasValue ? new BasicConstraints(options.PathLength.Value) : new BasicConstraints(true)),
+            new (X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyCertSign | KeyUsage.CrlSign))
+        };
+
+
+    private static List<X509ExtensionItem> GetServerExtensions(CertificateBuilder options)
+        => new() {
+            new (X509Extensions.BasicConstraints, true, new BasicConstraints(false)),
+            new (X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment)),
+            new (X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(KeyPurposeID.IdKPServerAuth)),
+        };
+
+
+    private static List<X509ExtensionItem> GetClientExtensions(CertificateBuilder options)
+        => new() {
+            new (X509Extensions.BasicConstraints, true, new BasicConstraints(false)),
+            new (X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature)),
+            new (X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(KeyPurposeID.IdKPClientAuth)),
+        };
+
+
+    private static List<X509ExtensionItem> GetCodeSigningExtensions(CertificateBuilder options)
+        => new() {
+            new (X509Extensions.BasicConstraints, true, new BasicConstraints(false)),
+            new (X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment)),
+            new (X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(new DerSequence(
+                KeyPurposeID.IdKPCodeSigning,
+                KeyPurposeID.IdKPTimeStamping,
+                new DerObjectIdentifier("1.3.6.1.4.1.311.10.3.13")
+            ))),
+        };
+
+
     private static X509Certificate2 CreateCaCertificate(CertificateBuilder options)
         => CreateCertificate(
             options,
             generator => {
-                generator.AddExtension(X509Extensions.BasicConstraints, true, options.PathLength.HasValue ? new BasicConstraints(options.PathLength.Value) : new BasicConstraints(true));
-                generator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyCertSign | KeyUsage.CrlSign));
+                foreach (var ext in GetCaExtensions(options)) {
+                    generator.AddExtension(ext.Oid, ext.Extension.IsCritical, ext.Extension.GetParsedValue());
+                }
             }
         );
 
 
     private static X509Certificate2 CreateServerCertificate(CertificateBuilder options)
         => CreateCertificate(options, generator => {
-            generator.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(false));
-            generator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment));
-            generator.AddExtension(X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(KeyPurposeID.IdKPServerAuth));
+            foreach (var ext in GetServerExtensions(options)) {
+                generator.AddExtension(ext.Oid, ext.Extension.IsCritical, ext.Extension.GetParsedValue());
+            }
         });
 
 
     private static X509Certificate2 CreateClientCertificate(CertificateBuilder options)
         => CreateCertificate(options, generator => {
-            generator.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(false));
-            generator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature));
-            generator.AddExtension(X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(KeyPurposeID.IdKPClientAuth));
+            foreach (var ext in GetClientExtensions(options)) {
+                generator.AddExtension(ext.Oid, ext.Extension.IsCritical, ext.Extension.GetParsedValue());
+            }
         });
 
 
     private static X509Certificate2 CreateCodeSigningCertificate(CertificateBuilder options)
         => CreateCertificate(options, generator => {
-            generator.AddExtension(X509Extensions.BasicConstraints, true, new BasicConstraints(false));
-            generator.AddExtension(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment));
-            generator.AddExtension(X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(
-                new DerSequence(
-                    KeyPurposeID.IdKPCodeSigning,
-                    KeyPurposeID.IdKPTimeStamping,
-                    new DerObjectIdentifier("1.3.6.1.4.1.311.10.3.13")
-                )
-            ));
+            foreach (var ext in GetCodeSigningExtensions(options)) {
+                generator.AddExtension(ext.Oid, ext.Extension.IsCritical, ext.Extension.GetParsedValue());
+            }
         });
 
 
-    [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>")]
     private static X509Certificate2 CreateCertificate(CertificateBuilder options, Action<X509V3CertificateGenerator>? extend = null)
     {
         Validate(options);
