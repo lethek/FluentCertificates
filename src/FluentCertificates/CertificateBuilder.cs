@@ -1,5 +1,5 @@
 ﻿using System.Buffers.Binary;
-using System.Runtime.InteropServices;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
@@ -146,6 +146,7 @@ public record CertificateBuilder
         };
 
 
+    [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     private static X509Certificate2 CreateCertificate(CertificateBuilder options, IEnumerable<X509ExtensionItem>? extensions = null)
     {
         Validate(options);
