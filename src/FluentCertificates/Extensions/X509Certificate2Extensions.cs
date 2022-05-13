@@ -1,6 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Security;
+﻿using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -128,7 +126,19 @@ namespace FluentCertificates.Extensions
             => cert.NotBefore.ToUniversalTime() <= atTime && atTime <= cert.NotAfter.ToUniversalTime();
 
 
-        public static bool VerifyIssuerSignature(this X509Certificate2 cert, X509Certificate2 issuer)
+        public static bool IsSelfSigned(this X509Certificate2 cert)
+            => cert.IsIssuedBy(cert);
+
+
+        public static bool IsIssuedBy(this X509Certificate2 cert, X509Certificate2 issuer)
+            => AreByteSpansEqual(cert.IssuerName.RawData, issuer.SubjectName.RawData);
+               
+
+        public static bool VerifyIssuer(this X509Certificate2 cert, X509Certificate2 issuer)
+            => cert.IsIssuedBy(issuer) && VerifyIssuerSignature(cert, issuer);
+
+
+        private static bool VerifyIssuerSignature(X509Certificate2 cert, X509Certificate2 issuer)
         {
             var thisCert = DotNetUtilities.FromX509Certificate(cert);
             var issuerCert = DotNetUtilities.FromX509Certificate(issuer);
@@ -154,6 +164,10 @@ namespace FluentCertificates.Extensions
             pwd.Clear();
             return DotNetUtilities.GetRsaKeyPair(rsa);
         }
+
+
+        private static bool AreByteSpansEqual(Span<byte> first, Span<byte> second)
+            => first.SequenceEqual(second);
 
 
         private static X509Certificate2 FilterPrivateKey(X509Certificate2 cert, ExportKeys include)

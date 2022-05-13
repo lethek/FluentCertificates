@@ -3,13 +3,18 @@ using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
+using FluentCertificates.Tests.Fixtures;
 
 using Xunit;
 
 namespace FluentCertificates.Tests;
 
-public class CertificateBuilderTests
+public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 {
+    public CertificateBuilderTests(CertificateTestingFixture fixture)
+        => Fixture = fixture;
+
+
     [Fact]
     public void Build_InvalidKeyLength_ThrowsException()
     {
@@ -38,7 +43,7 @@ public class CertificateBuilderTests
             .Build();
 
         Assert.Contains(rootCert.Extensions.OfType<X509BasicConstraintsExtension>(), x => x.CertificateAuthority);
-        Assert.Equal(rootCert.SubjectName.RawData, rootCert.IssuerName.RawData);
+        Assert.True(rootCert.IsSelfSigned());
     }
 
 
@@ -57,7 +62,29 @@ public class CertificateBuilderTests
             .Build();
 
         Assert.Contains(rootCA.Extensions.OfType<X509BasicConstraintsExtension>(), x => x.CertificateAuthority);
-        Assert.Equal(rootCA.SubjectName.RawData, subCA.IssuerName.RawData);
-        Assert.True(subCA.VerifyIssuerSignature(rootCA));
+        Assert.True(subCA.IsIssuedBy(rootCA));
+        Assert.True(subCA.VerifyIssuer(rootCA));
     }
+
+
+    [Fact]
+    public void Build_WebCertificate_IsValid()
+    {
+        var issuer = Fixture.IntermediateCA;
+
+        var cert = CertificateBuilder.Create()
+            .SetUsage(CertificateUsage.Server)
+            .SetFriendlyName("FluentCertificates Test Server")
+            .SetDnsNames("*.fake.domain", "fake.domain", "another.domain")
+            .SetSubject(new X509NameBuilder().SetCommonName("*.fake.domain"))
+            .SetIssuer(issuer)
+            .Build();
+
+        Assert.True(cert.IsValidNow());
+        Assert.True(cert.VerifyIssuer(issuer));
+        //TODO: assert correct SANs etc.
+    }
+
+
+    private CertificateTestingFixture Fixture { get; }
 }
