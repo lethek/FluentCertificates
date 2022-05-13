@@ -53,9 +53,6 @@ public record CertificateBuilder
     public CertificateBuilder SetSubject(X509Name value)
         => this with { Subject = value };
 
-    public CertificateBuilder SetSubject(Func<X509NameBuilder, X509Name> subjectBuilder)
-        => this with { Subject = subjectBuilder.Invoke(X509NameBuilder.Create()) };
-
     public CertificateBuilder SetIssuer(X509Certificate2 value)
         => this with { Issuer = value };
 
@@ -205,10 +202,10 @@ public record CertificateBuilder
 
     private static AsymmetricCipherKeyPair GenerateRsaKeyPair(int length)
     {
-        var keygenParam = new KeyGenerationParameters(InternalTools.SecureRandom, length);
-        var keyGenerator = new RsaKeyPairGenerator();
-        keyGenerator.Init(keygenParam);
-        return keyGenerator.GenerateKeyPair();
+        var parameters = new KeyGenerationParameters(InternalTools.SecureRandom, length);
+        var generator = new RsaKeyPairGenerator();
+        generator.Init(parameters);
+        return generator.GenerateKeyPair();
     }
 
 
@@ -216,10 +213,10 @@ public record CertificateBuilder
     {
         var ecParam = SecNamedCurves.GetByName(curveName);
         var ecDomain = new ECDomainParameters(ecParam.Curve, ecParam.G, ecParam.N);
-        var keygenParam = new ECKeyGenerationParameters(ecDomain, InternalTools.SecureRandom);
-        var keyGenerator = new ECKeyPairGenerator();
-        keyGenerator.Init(keygenParam);
-        return keyGenerator.GenerateKeyPair();
+        var parameters = new ECKeyGenerationParameters(ecDomain, InternalTools.SecureRandom);
+        var generator = new ECKeyPairGenerator();
+        generator.Init(parameters);
+        return generator.GenerateKeyPair();
     }
 
 
