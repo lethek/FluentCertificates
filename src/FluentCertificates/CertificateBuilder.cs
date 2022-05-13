@@ -1,5 +1,6 @@
 ﻿using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
@@ -192,12 +193,20 @@ public record CertificateBuilder
         store.Save(pfxStream, pwd, InternalTools.SecureRandom);
         pfxStream.Seek(0, SeekOrigin.Begin);
         var newCert = new X509Certificate2(pfxStream.ToArray(), new String(pwd), X509KeyStorageFlags.Exportable);
-        if (options.FriendlyName != null && OperatingSystem.IsWindows()) {
+        if (options.FriendlyName != null && IsWindows()) {
             newCert.FriendlyName = options.FriendlyName;
         }
 
         return newCert;
     }
+
+
+    private static bool IsWindows()
+#if NET5_0_OR_GREATER
+        => OperatingSystem.IsWindows();
+#else
+        => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+#endif
 
 
     private static AsymmetricCipherKeyPair GenerateRsaKeyPair(int length)
