@@ -192,7 +192,7 @@ public record CertificateBuilder
         store.Save(pfxStream, pwd, InternalTools.SecureRandom);
         pfxStream.Seek(0, SeekOrigin.Begin);
         var newCert = new X509Certificate2(pfxStream.ToArray(), new String(pwd), X509KeyStorageFlags.Exportable);
-        if (options.FriendlyName != null) {
+        if (options.FriendlyName != null && OperatingSystem.IsWindows()) {
             newCert.FriendlyName = options.FriendlyName;
         }
 
