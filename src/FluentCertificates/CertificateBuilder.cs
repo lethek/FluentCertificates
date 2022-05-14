@@ -80,6 +80,9 @@ public record CertificateBuilder
     public CertificateBuilder SetKey(AsymmetricCipherKeyPair? value)
         => this with { Key = value };
 
+    public CertificateBuilder GenerateKey()
+        => this with { Key = GenerateRsaKeyPair(KeyLength) };
+    
     public CertificateBuilder AddExtension(DerObjectIdentifier oid, Org.BouncyCastle.Asn1.X509.X509Extension extension)
         => AddExtension(new X509ExtensionItem(oid, extension));
 
@@ -94,26 +97,17 @@ public record CertificateBuilder
 
 
     public X509Certificate2 Build()
-        => CreateCertificate(
-            this,
-            Usage switch {
-                null => null,
-                CertificateUsage.CA => GetCaExtensions(this),
-                CertificateUsage.Server => GetServerExtensions(this),
-                CertificateUsage.Client => GetClientExtensions(this),
-                CertificateUsage.CodeSign => GetCodeSigningExtensions(this),
-                _ => throw new NotSupportedException($"{Usage} {nameof(Usage)} not yet supported")
-            }
-        );
+        => CreateCertificate(this);
 
 
-    //public CertificateBuilder ExportCsrAsPem()
-    //{
-    //    Validate();
-    //    var builder = Key != null ? this : SetKey(GenerateRsaKeyPair(KeyLength));
-
-    //    return this;
-    //}
+    public Pkcs10CertificationRequest ToCsr()
+    {
+        var key = Key ?? throw new ArgumentNullException(nameof(Key), "Call SetKey(key) or GenerateKey() first to create a private/public keypair");
+        var extensions = new X509Extensions(BuildExtensions(this).ToDictionary(x => x.Oid, x => x.Extension));
+        var attributes = new DerSet(new AttributePkcs(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
+        var sigFactory = new Asn1SignatureFactory(PkcsObjectIdentifiers.Sha256WithRsaEncryption.Id, key.Private);
+        return new Pkcs10CertificationRequest(sigFactory, this.Subject, key.Public, attributes);
+    }
 
 
     public void Validate()
@@ -162,8 +156,39 @@ public record CertificateBuilder
         };
 
 
+    private static ImmutableHashSet<X509ExtensionItem> BuildExtensions(CertificateBuilder options)
+    {
+        //Setup default extensions based on selected certificate Usage
+        var extensions = options.Usage switch {
+            null => new List<X509ExtensionItem>(),
+            CertificateUsage.CA => GetCaExtensions(options),
+            CertificateUsage.Server => GetServerExtensions(options),
+            CertificateUsage.Client => GetClientExtensions(options),
+            CertificateUsage.CodeSign => GetCodeSigningExtensions(options),
+            _ => throw new NotSupportedException($"{options.Usage} {nameof(Usage)} not yet supported")
+        };
+
+        //Setup extension for Subject Alternative Name if necessary
+        var sanGeneralNames = new List<GeneralName>();
+        if (options.DnsNames.Any()) {
+            sanGeneralNames.AddRange(options.DnsNames.Select(dnsName => new GeneralName(GeneralName.DnsName, dnsName)));
+        }
+        if (!String.IsNullOrEmpty(options.Email)) {
+            sanGeneralNames.Add(new GeneralName(GeneralName.Rfc822Name, options.Email));
+        }
+        if (sanGeneralNames.Any()) {
+            extensions.Add(new(X509Extensions.SubjectAlternativeName, false, new GeneralNames(sanGeneralNames.ToArray())));
+        }
+
+        //Collate extensions; manually specified ones take precedence over those generated from other builder properties (e.g. Usage, DnsNames, Email)
+        return extensions.Any()
+            ? options.Extensions.Union(extensions)
+            : options.Extensions;
+    }
+
+
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
-    private static X509Certificate2 CreateCertificate(CertificateBuilder options, IEnumerable<X509ExtensionItem>? extensions = null)
+    private static X509Certificate2 CreateCertificate(CertificateBuilder options)
     {
         Validate(options);
 
@@ -181,28 +206,9 @@ public record CertificateBuilder
             notBefore: options.NotBefore.DateTime,
             notAfter: options.NotAfter.DateTime
         );
-        
-        //Setup extension for Subject Alternative Name if necessary
-        var sanGeneralNames = new List<GeneralName>();
-        if (options.DnsNames.Any()) {
-            sanGeneralNames.AddRange(options.DnsNames.Select(dnsName => new GeneralName(GeneralName.DnsName, dnsName)));
-        }
-        if (!String.IsNullOrEmpty(options.Email)) {
-            sanGeneralNames.Add(new GeneralName(GeneralName.Rfc822Name, options.Email));
-        }
-        if (sanGeneralNames.Any()) {
-            extensions = (extensions ?? Enumerable.Empty<X509ExtensionItem>()).Append(
-                new(X509Extensions.SubjectAlternativeName, false, new GeneralNames(sanGeneralNames.ToArray()))
-            );
-        }
 
-        //Collate extensions; manually specified ones take precedence over those generated from other builder properties (e.g. Usage, DnsNames, Email)
-        var collatedExtensions = extensions != null
-            ? options.Extensions.Union(extensions)
-            : options.Extensions;
-
-        foreach (var item in collatedExtensions) {
-            generator.AddExtension(item.Oid, item.Extension.IsCritical, item.Extension.GetParsedValue());
+        foreach (var extension in BuildExtensions(options)) {
+            generator.AddExtension(extension.Oid, extension.Extension.IsCritical, extension.Extension.GetParsedValue());
         }
         
         //Create certificate
