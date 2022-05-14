@@ -1,4 +1,5 @@
 ﻿using System.Buffers.Binary;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
@@ -33,6 +34,8 @@ public record CertificateBuilder
     public string[] DnsNames { get; init; } = Array.Empty<string>();
     public string? FriendlyName { get; init; }
     public string? Email { get; init; }
+    public ImmutableHashSet<X509ExtensionItem> Extensions { get; init; } = ImmutableHashSet<X509ExtensionItem>.Empty.WithComparer(X509ExtensionItem.OidEqualityComparer);
+
 
     private AsymmetricCipherKeyPair? Key { get; init; }
 
@@ -77,10 +80,22 @@ public record CertificateBuilder
     public CertificateBuilder SetKey(AsymmetricCipherKeyPair? value)
         => this with { Key = value };
 
+    public CertificateBuilder AddExtension(X509ExtensionItem extension)
+        => this with { Extensions = Extensions.Add(extension) };
+
+    public CertificateBuilder AddExtension(DerObjectIdentifier oid, Org.BouncyCastle.Asn1.X509.X509Extension extension)
+        => this with { Extensions = Extensions.Add(new X509ExtensionItem(oid, extension)) };
+
+    public CertificateBuilder SetExtensions(IEnumerable<X509ExtensionItem> values)
+        => this with { Extensions = values.ToImmutableHashSet(X509ExtensionItem.OidEqualityComparer) };
+
+    public CertificateBuilder AddExtensions(IEnumerable<X509ExtensionItem> values)
+        => this with { Extensions = Extensions.Union(values) };
+
 
     public X509Certificate2 Build()
         => CreateCertificate(
-            this, 
+            this,
             Usage switch {
                 null => null,
                 CertificateUsage.CA => GetCaExtensions(this),
@@ -167,10 +182,9 @@ public record CertificateBuilder
             notAfter: options.NotAfter.DateTime
         );
 
-        if (extensions != null) {
-            foreach (var extension in extensions) {
-                generator.AddExtension(extension.Oid, extension.Extension.IsCritical, extension.Extension.GetParsedValue());
-            }
+        var collatedExtensions = extensions != null ? options.Extensions.Union(extensions) : options.Extensions;
+        foreach (var item in collatedExtensions) {
+            generator.AddExtension(item.Oid, item.Extension.IsCritical, item.Extension.GetParsedValue());
         }
 
         //Add Subject Alternative Name if necessary
