@@ -80,17 +80,17 @@ public record CertificateBuilder
     public CertificateBuilder SetKey(AsymmetricCipherKeyPair? value)
         => this with { Key = value };
 
+    public CertificateBuilder AddExtension(DerObjectIdentifier oid, Org.BouncyCastle.Asn1.X509.X509Extension extension)
+        => AddExtension(new X509ExtensionItem(oid, extension));
+
     public CertificateBuilder AddExtension(X509ExtensionItem extension)
         => this with { Extensions = Extensions.Add(extension) };
 
-    public CertificateBuilder AddExtension(DerObjectIdentifier oid, Org.BouncyCastle.Asn1.X509.X509Extension extension)
-        => this with { Extensions = Extensions.Add(new X509ExtensionItem(oid, extension)) };
+    public CertificateBuilder AddExtensions(IEnumerable<X509ExtensionItem> values)
+        => this with { Extensions = Extensions.Union(values) };
 
     public CertificateBuilder SetExtensions(IEnumerable<X509ExtensionItem> values)
         => this with { Extensions = values.ToImmutableHashSet(X509ExtensionItem.OidEqualityComparer) };
-
-    public CertificateBuilder AddExtensions(IEnumerable<X509ExtensionItem> values)
-        => this with { Extensions = Extensions.Union(values) };
 
 
     public X509Certificate2 Build()
@@ -181,13 +181,8 @@ public record CertificateBuilder
             notBefore: options.NotBefore.DateTime,
             notAfter: options.NotAfter.DateTime
         );
-
-        var collatedExtensions = extensions != null ? options.Extensions.Union(extensions) : options.Extensions;
-        foreach (var item in collatedExtensions) {
-            generator.AddExtension(item.Oid, item.Extension.IsCritical, item.Extension.GetParsedValue());
-        }
-
-        //Add Subject Alternative Name if necessary
+        
+        //Setup extension for Subject Alternative Name if necessary
         var sanGeneralNames = new List<GeneralName>();
         if (options.DnsNames.Any()) {
             sanGeneralNames.AddRange(options.DnsNames.Select(dnsName => new GeneralName(GeneralName.DnsName, dnsName)));
@@ -196,9 +191,20 @@ public record CertificateBuilder
             sanGeneralNames.Add(new GeneralName(GeneralName.Rfc822Name, options.Email));
         }
         if (sanGeneralNames.Any()) {
-            generator.AddExtension(X509Extensions.SubjectAlternativeName, false, new GeneralNames(sanGeneralNames.ToArray()));
+            extensions = (extensions ?? Enumerable.Empty<X509ExtensionItem>()).Append(
+                new(X509Extensions.SubjectAlternativeName, false, new GeneralNames(sanGeneralNames.ToArray()))
+            );
         }
 
+        //Collate extensions; manually specified ones take precedence over those generated from other builder properties (e.g. Usage, DnsNames, Email)
+        var collatedExtensions = extensions != null
+            ? options.Extensions.Union(extensions)
+            : options.Extensions;
+
+        foreach (var item in collatedExtensions) {
+            generator.AddExtension(item.Oid, item.Extension.IsCritical, item.Extension.GetParsedValue());
+        }
+        
         //Create certificate
         var algorithm = PkcsObjectIdentifiers.Sha256WithRsaEncryption.ToString();
         var cert = options.Issuer != null
