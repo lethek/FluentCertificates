@@ -197,41 +197,41 @@ public record CertificateBuilder
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     private static X509Certificate2 CreateCertificate(CertificateBuilder options)
     {
-        Validate(options);
+        var builder = options.SetKeyPair(options.KeyPair ?? GenerateRsaKeyPair(options.KeyLength));
 
-        var issuerCert = (options.Issuer != null)
-            ? DotNetUtilities.FromX509Certificate(options.Issuer)
+        Validate(builder);
+
+        var issuerCert = (builder.Issuer != null)
+            ? DotNetUtilities.FromX509Certificate(builder.Issuer)
             : null;
-
-        var keypair = options.KeyPair ?? GenerateRsaKeyPair(options.KeyLength);
 
         var generator = new X509V3CertificateGenerator();
         generator.SetSerialNumber(GenerateSerialNumber());
-        generator.SetIssuerDN(issuerCert?.SubjectDN ?? options.Subject);
-        generator.SetSubjectDN(options.Subject);
-        generator.SetPublicKey(keypair.Public);
-        generator.SetNotBefore(options.NotBefore.DateTime);
-        generator.SetNotAfter(options.NotAfter.DateTime);
+        generator.SetIssuerDN(issuerCert?.SubjectDN ?? builder.Subject);
+        generator.SetSubjectDN(builder.Subject);
+        generator.SetPublicKey(builder.KeyPair?.Public);
+        generator.SetNotBefore(builder.NotBefore.DateTime);
+        generator.SetNotAfter(builder.NotAfter.DateTime);
 
         if (issuerCert != null) {
             generator.AddExtension(X509Extensions.AuthorityKeyIdentifier, false, new AuthorityKeyIdentifierStructure(issuerCert.GetPublicKey()));
         }
 
-        foreach (var extension in BuildExtensions(options)) {
+        foreach (var extension in BuildExtensions(builder)) {
             generator.AddExtension(extension.Oid, extension.Extension.IsCritical, extension.Extension.GetParsedValue());
         }
 
         //Create certificate
         var algorithm = PkcsObjectIdentifiers.Sha256WithRsaEncryption.ToString();
-        var cert = options.Issuer != null
-            ? generator.Generate(new Asn1SignatureFactory(algorithm, options.Issuer.GetBouncyCastleRsaKeyPair().Private, InternalTools.SecureRandom))
-            : generator.Generate(new Asn1SignatureFactory(algorithm, keypair.Private, InternalTools.SecureRandom));
+        var cert = builder.Issuer != null
+            ? generator.Generate(new Asn1SignatureFactory(algorithm, builder.Issuer.GetBouncyCastleRsaKeyPair().Private, InternalTools.SecureRandom))
+            : generator.Generate(new Asn1SignatureFactory(algorithm, builder.KeyPair?.Private, InternalTools.SecureRandom));
 
         //Place the certificate and private-key into a PKCS12 store
         var store = new Pkcs12Store();
         var certEntry = new X509CertificateEntry(cert);
         store.SetCertificateEntry(cert.SerialNumber.ToString(), certEntry);
-        store.SetKeyEntry(cert.SerialNumber.ToString(), new AsymmetricKeyEntry(keypair.Private), new[] { certEntry });
+        store.SetKeyEntry(cert.SerialNumber.ToString(), new AsymmetricKeyEntry(builder.KeyPair?.Private), new[] { certEntry });
 
         //Finally copy the PKCS12 store to a .NET X509Certificate2 structure to return
         using var pfxStream = new MemoryStream();
@@ -239,8 +239,8 @@ public record CertificateBuilder
         store.Save(pfxStream, pwd, InternalTools.SecureRandom);
         pfxStream.Seek(0, SeekOrigin.Begin);
         var newCert = new X509Certificate2(pfxStream.ToArray(), new String(pwd), X509KeyStorageFlags.Exportable);
-        if (options.FriendlyName != null && IsWindows()) {
-            newCert.FriendlyName = options.FriendlyName;
+        if (builder.FriendlyName != null && IsWindows()) {
+            newCert.FriendlyName = builder.FriendlyName;
         }
 
         return newCert;
@@ -257,10 +257,12 @@ public record CertificateBuilder
 
     private static AsymmetricCipherKeyPair GenerateRsaKeyPair(int length)
     {
-        var parameters = new KeyGenerationParameters(InternalTools.SecureRandom, length);
-        var generator = new RsaKeyPairGenerator();
-        generator.Init(parameters);
-        return generator.GenerateKeyPair();
+        var key = RSA.Create(length);
+        return DotNetUtilities.GetKeyPair(key);
+        //var parameters = new KeyGenerationParameters(InternalTools.SecureRandom, length);
+        //var generator = new RsaKeyPairGenerator();
+        //generator.Init(parameters);
+        //return generator.GenerateKeyPair();
     }
 
 
