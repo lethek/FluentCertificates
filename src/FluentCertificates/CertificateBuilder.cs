@@ -83,7 +83,7 @@ public record CertificateBuilder
 
     public CertificateBuilder SetKeyPair(AsymmetricCipherKeyPair? value)
         => this with { KeyPair = value };
-    
+
     public CertificateBuilder AddExtension(DerObjectIdentifier oid, Org.BouncyCastle.Asn1.X509.X509Extension extension)
         => AddExtension(new X509ExtensionItem(oid, extension));
 
@@ -120,6 +120,11 @@ public record CertificateBuilder
         if (options.KeyLength <= 0) throw new ArgumentException($"{nameof(KeyLength)} must be greater than zero", nameof(KeyLength));
         if (options.NotBefore >= options.NotAfter) throw new ArgumentException($"{nameof(NotBefore)} cannot be later than or equal to {nameof(NotAfter)}", nameof(NotAfter));
     }
+
+    public static List<X509ExtensionItem> GetCommonExtensions(CertificateBuilder options)
+        => new() {
+            new X509ExtensionItem(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifierStructure(options.KeyPair.Public))
+        };
 
 
     private static List<X509ExtensionItem> GetCaExtensions(CertificateBuilder options)
@@ -160,14 +165,15 @@ public record CertificateBuilder
     private static ImmutableHashSet<X509ExtensionItem> BuildExtensions(CertificateBuilder options)
     {
         //Setup default extensions based on selected certificate Usage
-        var extensions = options.Usage switch {
+        var extensions = GetCommonExtensions(options);
+        extensions.AddRange(options.Usage switch {
             null => new List<X509ExtensionItem>(),
             CertificateUsage.CA => GetCaExtensions(options),
             CertificateUsage.Server => GetServerExtensions(options),
             CertificateUsage.Client => GetClientExtensions(options),
             CertificateUsage.CodeSign => GetCodeSigningExtensions(options),
             _ => throw new NotSupportedException($"{options.Usage} {nameof(Usage)} not yet supported")
-        };
+        });
 
         //Setup extension for Subject Alternative Name if necessary
         var sanGeneralNames = new List<GeneralName>();
@@ -199,19 +205,22 @@ public record CertificateBuilder
 
         var keypair = options.KeyPair ?? GenerateRsaKeyPair(options.KeyLength);
 
-        var generator = CreateCertificateGenerator(
-            issuer: issuerCert?.SubjectDN ?? options.Subject,
-            issuerPublic: issuerCert?.GetPublicKey(),
-            subject: options.Subject,
-            subjectPublic: keypair.Public,
-            notBefore: options.NotBefore.DateTime,
-            notAfter: options.NotAfter.DateTime
-        );
+        var generator = new X509V3CertificateGenerator();
+        generator.SetSerialNumber(GenerateSerialNumber());
+        generator.SetIssuerDN(issuerCert?.SubjectDN ?? options.Subject);
+        generator.SetSubjectDN(options.Subject);
+        generator.SetPublicKey(keypair.Public);
+        generator.SetNotBefore(options.NotBefore.DateTime);
+        generator.SetNotAfter(options.NotAfter.DateTime);
+
+        if (issuerCert != null) {
+            generator.AddExtension(X509Extensions.AuthorityKeyIdentifier, false, new AuthorityKeyIdentifierStructure(issuerCert.GetPublicKey()));
+        }
 
         foreach (var extension in BuildExtensions(options)) {
             generator.AddExtension(extension.Oid, extension.Extension.IsCritical, extension.Extension.GetParsedValue());
         }
-        
+
         //Create certificate
         var algorithm = PkcsObjectIdentifiers.Sha256WithRsaEncryption.ToString();
         var cert = options.Issuer != null
@@ -263,26 +272,6 @@ public record CertificateBuilder
         var generator = new ECKeyPairGenerator();
         generator.Init(parameters);
         return generator.GenerateKeyPair();
-    }
-
-
-    private static X509V3CertificateGenerator CreateCertificateGenerator(X509Name issuer, AsymmetricKeyParameter? issuerPublic, X509Name subject, AsymmetricKeyParameter subjectPublic, DateTime notBefore, DateTime notAfter)
-    {
-        var generator = new X509V3CertificateGenerator();
-        generator.SetIssuerDN(issuer);
-        generator.SetSubjectDN(subject);
-        generator.SetPublicKey(subjectPublic);
-        generator.SetSerialNumber(GenerateSerialNumber());
-        generator.SetNotBefore(notBefore);
-        generator.SetNotAfter(notAfter);
-
-        generator.AddExtension(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifierStructure(subjectPublic));
-
-        if (issuerPublic != null) {
-            generator.AddExtension(X509Extensions.AuthorityKeyIdentifier, false, new AuthorityKeyIdentifierStructure(issuerPublic));
-        }
-
-        return generator;
     }
 
 
