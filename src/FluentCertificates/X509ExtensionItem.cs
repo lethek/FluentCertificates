@@ -35,7 +35,7 @@ public record X509ExtensionItem
 
     private class EqualityComparer : IEqualityComparer<X509ExtensionItem>
     {
-        public bool Equals(X509ExtensionItem x, X509ExtensionItem y)
+        public bool Equals(X509ExtensionItem? x, X509ExtensionItem? y)
         {
             if (ReferenceEquals(x, y)) return true;
             if (ReferenceEquals(x, null)) return false;
