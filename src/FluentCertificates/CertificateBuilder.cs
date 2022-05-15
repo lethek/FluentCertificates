@@ -2,6 +2,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
@@ -37,7 +38,7 @@ public record CertificateBuilder
     public ImmutableHashSet<X509ExtensionItem> Extensions { get; init; } = ImmutableHashSet<X509ExtensionItem>.Empty.WithComparer(X509ExtensionItem.OidEqualityComparer);
 
 
-    private AsymmetricCipherKeyPair? Key { get; init; }
+    private AsymmetricCipherKeyPair? KeyPair { get; init; }
 
 
     public static CertificateBuilder Create()
@@ -77,11 +78,11 @@ public record CertificateBuilder
     public CertificateBuilder SetPathLength(int? value)
         => this with { PathLength = value };
 
-    public CertificateBuilder SetKey(AsymmetricCipherKeyPair? value)
-        => this with { Key = value };
+    public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
+        => this with { KeyPair = DotNetUtilities.GetKeyPair(value) };
 
-    public CertificateBuilder GenerateKey()
-        => this with { Key = GenerateRsaKeyPair(KeyLength) };
+    public CertificateBuilder SetKeyPair(AsymmetricCipherKeyPair? value)
+        => this with { KeyPair = value };
     
     public CertificateBuilder AddExtension(DerObjectIdentifier oid, Org.BouncyCastle.Asn1.X509.X509Extension extension)
         => AddExtension(new X509ExtensionItem(oid, extension));
@@ -102,11 +103,11 @@ public record CertificateBuilder
 
     public Pkcs10CertificationRequest ToCsr()
     {
-        var key = Key ?? throw new ArgumentNullException(nameof(Key), "Call SetKey(key) or GenerateKey() first to create a private/public keypair");
+        var keypair = KeyPair ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to create a private/public keypair");
         var extensions = new X509Extensions(BuildExtensions(this).ToDictionary(x => x.Oid, x => x.Extension));
         var attributes = new DerSet(new AttributePkcs(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
-        var sigFactory = new Asn1SignatureFactory(PkcsObjectIdentifiers.Sha256WithRsaEncryption.Id, key.Private);
-        return new Pkcs10CertificationRequest(sigFactory, this.Subject, key.Public, attributes);
+        var sigFactory = new Asn1SignatureFactory(PkcsObjectIdentifiers.Sha256WithRsaEncryption.Id, keypair.Private);
+        return new Pkcs10CertificationRequest(sigFactory, this.Subject, keypair.Public, attributes);
     }
 
 
@@ -196,13 +197,13 @@ public record CertificateBuilder
             ? DotNetUtilities.FromX509Certificate(options.Issuer)
             : null;
 
-        var key = options.Key ?? GenerateRsaKeyPair(options.KeyLength);
+        var keypair = options.KeyPair ?? GenerateRsaKeyPair(options.KeyLength);
 
         var generator = CreateCertificateGenerator(
             issuer: issuerCert?.SubjectDN ?? options.Subject,
             issuerPublic: issuerCert?.GetPublicKey(),
             subject: options.Subject,
-            subjectPublic: key.Public,
+            subjectPublic: keypair.Public,
             notBefore: options.NotBefore.DateTime,
             notAfter: options.NotAfter.DateTime
         );
@@ -215,13 +216,13 @@ public record CertificateBuilder
         var algorithm = PkcsObjectIdentifiers.Sha256WithRsaEncryption.ToString();
         var cert = options.Issuer != null
             ? generator.Generate(new Asn1SignatureFactory(algorithm, options.Issuer.GetBouncyCastleRsaKeyPair().Private, InternalTools.SecureRandom))
-            : generator.Generate(new Asn1SignatureFactory(algorithm, key.Private, InternalTools.SecureRandom));
+            : generator.Generate(new Asn1SignatureFactory(algorithm, keypair.Private, InternalTools.SecureRandom));
 
         //Place the certificate and private-key into a PKCS12 store
         var store = new Pkcs12Store();
         var certEntry = new X509CertificateEntry(cert);
         store.SetCertificateEntry(cert.SerialNumber.ToString(), certEntry);
-        store.SetKeyEntry(cert.SerialNumber.ToString(), new AsymmetricKeyEntry(key.Private), new[] { certEntry });
+        store.SetKeyEntry(cert.SerialNumber.ToString(), new AsymmetricKeyEntry(keypair.Private), new[] { certEntry });
 
         //Finally copy the PKCS12 store to a .NET X509Certificate2 structure to return
         using var pfxStream = new MemoryStream();
