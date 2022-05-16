@@ -181,6 +181,7 @@ public record CertificateBuilder
             CertificateUsage.Server => GetServerExtensions(builder),
             CertificateUsage.Client => GetClientExtensions(builder),
             CertificateUsage.CodeSign => GetCodeSigningExtensions(builder),
+            CertificateUsage.SMime => GetSMimeExtensions(builder),
             _ => throw new NotSupportedException($"{builder.Usage} {nameof(Usage)} not yet supported")
         });
 
@@ -241,6 +242,13 @@ public record CertificateBuilder
                 KeyPurposeID.IdKPTimeStamping,
                 new DerObjectIdentifier("1.3.6.1.4.1.311.10.3.13")
             ))),
+        };
+
+    private static List<X509ExtensionItem> GetSMimeExtensions(CertificateBuilder builder)
+        => new() {
+            new(X509Extensions.BasicConstraints, true, new BasicConstraints(false)),
+            new(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.NonRepudiation | KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment)),
+            new(X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(KeyPurposeID.IdKPEmailProtection)),
         };
 
 

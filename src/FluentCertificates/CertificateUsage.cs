@@ -5,5 +5,6 @@ public enum CertificateUsage
     CA,
     Client,
     Server,
-    CodeSign
+    CodeSign,
+    SMime
 }
