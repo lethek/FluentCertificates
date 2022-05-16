@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
@@ -20,8 +19,8 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     public void Build_InvalidKeyLength_ThrowsException()
     {
         Assert.ThrowsAny<Exception>(() => new CertificateBuilder().SetKeyLength(10).Build());
-        Assert.Throws<CryptographicException>(() => new CertificateBuilder().SetKeyLength(0).Build());
-        Assert.Throws<CryptographicException>(() => new CertificateBuilder().SetKeyLength(-1024).Build());
+        Assert.Throws<ArgumentException>(() => new CertificateBuilder().SetKeyLength(0).Build());
+        Assert.Throws<ArgumentException>(() => new CertificateBuilder().SetKeyLength(-1024).Build());
     }
 
 
