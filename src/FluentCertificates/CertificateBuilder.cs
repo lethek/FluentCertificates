@@ -62,7 +62,7 @@ public record CertificateBuilder
     public CertificateBuilder SetSubject(X509Name value)
         => this with { Subject = value };
 
-    public CertificateBuilder SetIssuer(X509Certificate2 value)
+    public CertificateBuilder SetIssuer(X509Certificate2? value)
         => this with { Issuer = value };
 
     public CertificateBuilder SetDnsNames(IEnumerable<string> values)

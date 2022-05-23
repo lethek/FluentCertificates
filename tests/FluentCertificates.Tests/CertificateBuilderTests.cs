@@ -58,14 +58,18 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     [Fact]
     public void Build_SubordinateCA_IsSignedByRoot()
     {
+        var now = DateTimeOffset.UtcNow;
+
         using var rootCA = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
             .SetSubject(new X509NameBuilder().SetCommonName("Test Root CA"))
+            .SetNotAfter(now.AddHours(1))
             .Build();
 
         using var subCA = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
             .SetSubject(new X509NameBuilder().SetCommonName("Test Subordinate CA 1"))
+            .SetNotAfter(now.AddMinutes(1))
             .SetIssuer(rootCA)
             .Build();
 
@@ -74,7 +78,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
         Assert.True(subCA.VerifyIssuer(rootCA));
     }
 
-
+    
     [Fact]
     public void Build_WebCertificate_IsValid()
     {
