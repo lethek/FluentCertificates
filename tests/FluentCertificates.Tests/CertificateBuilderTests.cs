@@ -16,6 +16,14 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 
 
     [Fact]
+    public void Build_NewCertificate_HasPrivateKey()
+    {
+        var cert = new CertificateBuilder().Build();
+        Assert.True(cert.HasPrivateKey);
+    }
+
+
+    [Fact]
     public void Build_InvalidKeyLength_ThrowsException()
     {
         Assert.ThrowsAny<Exception>(() => new CertificateBuilder().SetKeyLength(10).Build());

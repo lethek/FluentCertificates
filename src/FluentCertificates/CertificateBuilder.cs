@@ -40,7 +40,7 @@ public record CertificateBuilder
     public ImmutableHashSet<X509ExtensionItem> Extensions { get; init; } = ImmutableHashSet<X509ExtensionItem>.Empty.WithComparer(X509ExtensionItem.OidEqualityComparer);
 
 
-    private AsymmetricCipherKeyPair? KeyPair { get; init; }
+    private AsymmetricAlgorithm? KeyPair { get; init; }
 
 
     public static CertificateBuilder Create()
@@ -81,9 +81,6 @@ public record CertificateBuilder
         => this with { PathLength = value };
 
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
-        => this with { KeyPair = DotNetUtilities.GetKeyPair(value) };
-
-    public CertificateBuilder SetKeyPair(AsymmetricCipherKeyPair? value)
         => this with { KeyPair = value };
 
     public CertificateBuilder AddExtension(DerObjectIdentifier oid, Org.BouncyCastle.Asn1.X509.X509Extension extension)
@@ -109,10 +106,11 @@ public record CertificateBuilder
     public Pkcs10CertificationRequest ToCsr()
     {
         var keypair = KeyPair ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to provide a public/private keypair");
+        var bouncyKeyPair = DotNetUtilities.GetKeyPair(keypair);
         var extensions = new X509Extensions(BuildExtensions(this).ToDictionary(x => x.Oid, x => x.Extension));
         var attributes = new DerSet(new AttributePkcs(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
-        var sigFactory = new Asn1SignatureFactory(PkcsObjectIdentifiers.Sha256WithRsaEncryption.Id, keypair.Private);
-        return new Pkcs10CertificationRequest(sigFactory, Subject, keypair.Public, attributes);
+        var sigFactory = new Asn1SignatureFactory(PkcsObjectIdentifiers.Sha256WithRsaEncryption.Id, bouncyKeyPair.Private);
+        return new Pkcs10CertificationRequest(sigFactory, Subject, bouncyKeyPair.Public, attributes);
     }
 
 
@@ -125,15 +123,68 @@ public record CertificateBuilder
             ? SetKeyPair(GenerateRsaKeyPair(KeyLength))
             : this;
 
+        var keypair = (RSA)builder.KeyPair!;
+        
+        var csr = new CertificateRequest(builder.Subject.ToString(), keypair, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+        foreach (var item in BuildExtensions(builder)) {
+            csr.CertificateExtensions.Add(new System.Security.Cryptography.X509Certificates.X509Extension(
+                item.Oid.Id, item.Extension.Value.GetOctets(), item.Extension.IsCritical
+            ));
+        }
+
+        if (builder.Issuer != null) {
+            csr.CertificateExtensions.Add(new X509AuthorityKeyIdentifierExtension(builder.Issuer, false));
+        }
+
+        var cert = builder.Issuer != null
+            ? csr.Create(
+                builder.Issuer,
+                builder.NotBefore,
+                builder.NotAfter,
+                GenerateSerialNumber().ToByteArray()
+            )
+            : csr.Create(
+                new X500DistinguishedName(builder.Subject.ToString()),
+                X509SignatureGenerator.CreateForRSA(keypair, RSASignaturePadding.Pkcs1),
+                builder.NotBefore,
+                builder.NotAfter,
+                GenerateSerialNumber().ToByteArray()
+            );
+
+        if (!String.IsNullOrEmpty(builder.FriendlyName) && IsWindows()) {
+            cert.FriendlyName = builder.FriendlyName;
+        }
+
+        return builder.KeyPair switch {
+            RSA rsa => cert.CopyWithPrivateKey(rsa),
+            ECDsa ecdsa => cert.CopyWithPrivateKey(ecdsa),
+            DSA dsa => cert.CopyWithPrivateKey(dsa),
+            _ => cert
+        };
+    }
+
+
+    [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
+    public X509Certificate2 BouncyBuild()
+    {
+        Validate();
+
+        var builder = KeyPair == null
+            ? SetKeyPair(GenerateRsaKeyPair(KeyLength))
+            : this;
+
         var issuerCert = (builder.Issuer != null)
             ? DotNetUtilities.FromX509Certificate(builder.Issuer)
             : null;
+
+        var bouncyKeyPair = DotNetUtilities.GetKeyPair(builder.KeyPair);
 
         var generator = new X509V3CertificateGenerator();
         generator.SetSerialNumber(GenerateSerialNumber());
         generator.SetIssuerDN(issuerCert?.SubjectDN ?? builder.Subject);
         generator.SetSubjectDN(builder.Subject);
-        generator.SetPublicKey(builder.KeyPair?.Public);
+        generator.SetPublicKey(bouncyKeyPair?.Public);
         generator.SetNotBefore(builder.NotBefore.DateTime);
         generator.SetNotAfter(builder.NotAfter.DateTime);
 
@@ -149,13 +200,13 @@ public record CertificateBuilder
         var algorithm = PkcsObjectIdentifiers.Sha256WithRsaEncryption.ToString();
         var cert = builder.Issuer != null
             ? generator.Generate(new Asn1SignatureFactory(algorithm, builder.Issuer.GetBouncyCastleRsaKeyPair().Private, InternalTools.SecureRandom))
-            : generator.Generate(new Asn1SignatureFactory(algorithm, builder.KeyPair?.Private, InternalTools.SecureRandom));
+            : generator.Generate(new Asn1SignatureFactory(algorithm, bouncyKeyPair?.Private, InternalTools.SecureRandom));
 
         //Place the certificate and private-key into a PKCS12 store
         var store = new Pkcs12Store();
         var certEntry = new X509CertificateEntry(cert);
         store.SetCertificateEntry(cert.SerialNumber.ToString(), certEntry);
-        store.SetKeyEntry(cert.SerialNumber.ToString(), new AsymmetricKeyEntry(builder.KeyPair?.Private), new[] { certEntry });
+        store.SetKeyEntry(cert.SerialNumber.ToString(), new AsymmetricKeyEntry(bouncyKeyPair?.Private), new[] { certEntry });
 
         //Finally copy the PKCS12 store to a .NET X509Certificate2 structure to return
         using var pfxStream = new MemoryStream();
@@ -206,7 +257,7 @@ public record CertificateBuilder
 
     private static List<X509ExtensionItem> GetCommonExtensions(CertificateBuilder builder)
         => new() {
-            new X509ExtensionItem(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifierStructure(builder.KeyPair?.Public)),
+            new X509ExtensionItem(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifierStructure(DotNetUtilities.GetKeyPair(builder.KeyPair)?.Public)),
         };
 
 
@@ -260,10 +311,13 @@ public record CertificateBuilder
 #endif
 
 
-    private static AsymmetricCipherKeyPair GenerateRsaKeyPair(int length)
+    private static AsymmetricAlgorithm GenerateRsaKeyPair(int length)
     {
         var key = RSA.Create(length);
-        return DotNetUtilities.GetKeyPair(key);
+        return key;
+
+        //return DotNetUtilities.GetKeyPair(key);
+
         //var parameters = new KeyGenerationParameters(InternalTools.SecureRandom, length);
         //var generator = new RsaKeyPairGenerator();
         //generator.Init(parameters);

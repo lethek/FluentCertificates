@@ -5,8 +5,8 @@ namespace FluentCertificates;
 
 public record X509ExtensionItem
 {
-    public DerObjectIdentifier Oid { get; init; }
-    public X509Extension Extension { get; init; }
+    public DerObjectIdentifier Oid { get; }
+    public X509Extension Extension { get; }
 
 
     public X509ExtensionItem(DerObjectIdentifier oid, X509Extension extension)
@@ -30,7 +30,7 @@ public record X509ExtensionItem
     }
 
 
-    public static IEqualityComparer<X509ExtensionItem> OidEqualityComparer = new EqualityComparer();
+    public static readonly IEqualityComparer<X509ExtensionItem> OidEqualityComparer = new EqualityComparer();
 
 
     private class EqualityComparer : IEqualityComparer<X509ExtensionItem>

@@ -4,7 +4,7 @@ namespace FluentCertificates;
 
 internal static class InternalTools
 {
-    internal static SecureRandom SecureRandom = new();
+    internal static readonly SecureRandom SecureRandom = new();
 
 
     internal static char[] CreateRandomCharArray(int length, string charSet = DefaultRandomCharSet)

@@ -16,19 +16,22 @@ public class CertificateTestingFixture : IDisposable
     {
         var namePrefix = "FluentCertificates Test";
         var nameBuilder = new X509NameBuilder();
+        var now = DateTimeOffset.UtcNow;
 
         RootCA = CertificateBuilder.Create()
             .SetUsage(CertificateUsage.CA)
             .SetFriendlyName($"{namePrefix} Root CA")
             .SetSubject(nameBuilder.SetCommonName($"{namePrefix} Root CA"))
+            .SetNotAfter(now.AddYears(100))
             .Build();
 
         IntermediateCA = CertificateBuilder.Create()
             .SetUsage(CertificateUsage.CA)
             .SetFriendlyName($"{namePrefix} Intermediate CA")
             .SetSubject(nameBuilder.SetCommonName($"{namePrefix} Intermediate CA"))
+            .SetNotAfter(now.AddYears(100))
             .SetIssuer(RootCA)
-            .Build();
+           .Build();
 
         CAs = IntermediateCA.BuildChain(new[] { RootCA }, true);
     }
