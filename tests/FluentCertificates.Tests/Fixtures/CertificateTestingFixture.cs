@@ -29,7 +29,7 @@ public class CertificateTestingFixture : IDisposable
             .SetUsage(CertificateUsage.CA)
             .SetFriendlyName($"{namePrefix} Intermediate CA")
             .SetSubject(nameBuilder.SetCommonName($"{namePrefix} Intermediate CA"))
-            .SetNotAfter(now.AddYears(100))
+            .SetNotAfter(now.AddYears(99))
             .SetIssuer(RootCA)
            .Build();
 
