@@ -2,6 +2,8 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
+using FluentCertificates.Internals;
+
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Security;
