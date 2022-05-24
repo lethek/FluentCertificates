@@ -102,22 +102,12 @@ namespace FluentCertificates.Extensions
 
 
         public static AsymmetricAlgorithm? GetPrivateKey(this X509Certificate2 cert)
-        {
-            const string RSA = "1.2.840.113549.1.1.1";
-            const string DSA = "1.2.840.10040.4.1";
-            const string ECC = "1.2.840.10045.2.1";
-
-            switch (cert.PublicKey.Oid.Value) {
-                case RSA:
-                    return cert.GetRSAPrivateKey();
-                case DSA:
-                    return cert.GetDSAPrivateKey();
-                case ECC:
-                    return cert.GetECDsaPrivateKey();
-                default:
-                    return null;
-            }
-        }
+            => cert.PublicKey.Oid.Value switch {
+                "1.2.840.113549.1.1.1" => cert.GetRSAPrivateKey(),
+                "1.2.840.10040.4.1" => cert.GetDSAPrivateKey(),
+                "1.2.840.10045.2.1" => cert.GetECDsaPrivateKey(),
+                _ => throw new NotSupportedException($"Unsupported public-key OID {cert.PublicKey.Oid.Value}")
+            };
 
 
         public static bool IsValidNow(this X509Certificate2 cert)

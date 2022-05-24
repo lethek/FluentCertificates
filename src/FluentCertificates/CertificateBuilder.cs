@@ -327,11 +327,11 @@ public record CertificateBuilder
 
 
     private static bool IsWindows()
-#if NET5_0_OR_GREATER
+        #if NET5_0_OR_GREATER
         => OperatingSystem.IsWindows();
-#else
+        #else
         => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-#endif
+        #endif
 
 
     private static byte[] GenerateSerialNumber()
