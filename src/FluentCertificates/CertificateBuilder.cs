@@ -172,16 +172,19 @@ public record CertificateBuilder
                 GenerateSerialNumber()
             );
 
-        if (!String.IsNullOrEmpty(builder.FriendlyName) && IsWindows()) {
-            cert.FriendlyName = builder.FriendlyName;
-        }
-
-        return builder.KeyPair switch {
+        cert = builder.KeyPair switch {
             RSA rsa => cert.CopyWithPrivateKey(rsa),
             ECDsa ecdsa => cert.CopyWithPrivateKey(ecdsa),
             DSA dsa => cert.CopyWithPrivateKey(dsa),
             _ => cert
         };
+
+        if (!String.IsNullOrEmpty(builder.FriendlyName) && IsWindows()) {
+            //CopyWithPrivateKey doesn't copy FriendlyName so it needs to be set here after the copy is made
+            cert.FriendlyName = builder.FriendlyName;
+        }
+
+        return cert;
     }
 
 
