@@ -8,20 +8,20 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
+using FluentCertificates.Internals;
 
 using Org.BouncyCastle.Asn1.Pkcs;
-using Org.BouncyCastle.Asn1.Sec;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1;
-using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Operators;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509.Extension;
 using Org.BouncyCastle.X509;
+
+using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
+using X509ExtensionBC = Org.BouncyCastle.Asn1.X509.X509Extension;
 
 namespace FluentCertificates;
 
@@ -37,7 +37,7 @@ public record CertificateBuilder
     public string[] DnsNames { get; init; } = Array.Empty<string>();
     public string? FriendlyName { get; init; }
     public string? Email { get; init; }
-    public ImmutableHashSet<X509ExtensionItem> Extensions { get; init; } = ImmutableHashSet<X509ExtensionItem>.Empty.WithComparer(X509ExtensionItem.OidEqualityComparer);
+    public ImmutableHashSet<X509Extension> Extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
 
 
     private AsymmetricAlgorithm? KeyPair { get; init; }
@@ -84,16 +84,16 @@ public record CertificateBuilder
         => this with { KeyPair = value };
 
     public CertificateBuilder AddExtension(DerObjectIdentifier oid, Org.BouncyCastle.Asn1.X509.X509Extension extension)
-        => AddExtension(new X509ExtensionItem(oid, extension));
+        => AddExtension(extension.ConvertToDotNet(oid));
 
-    public CertificateBuilder AddExtension(X509ExtensionItem extension)
+    public CertificateBuilder AddExtension(X509Extension extension)
         => this with { Extensions = Extensions.Add(extension) };
 
-    public CertificateBuilder AddExtensions(IEnumerable<X509ExtensionItem> values)
+    public CertificateBuilder AddExtensions(IEnumerable<X509Extension> values)
         => this with { Extensions = Extensions.Union(values) };
 
-    public CertificateBuilder SetExtensions(IEnumerable<X509ExtensionItem> values)
-        => this with { Extensions = values.ToImmutableHashSet(X509ExtensionItem.OidEqualityComparer) };
+    public CertificateBuilder SetExtensions(IEnumerable<X509Extension> values)
+        => this with { Extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
 
 
     public void Validate()
@@ -107,7 +107,7 @@ public record CertificateBuilder
     {
         var keypair = KeyPair ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to provide a public/private keypair");
         var bouncyKeyPair = DotNetUtilities.GetKeyPair(keypair);
-        var extensions = new X509Extensions(BuildExtensions(this).ToDictionary(x => x.Oid, x => x.Extension));
+        var extensions = new X509Extensions(BuildExtensions(this).ToDictionary(x => x.Oid, x => x.ConvertToBouncyCastle()));
         var attributes = new DerSet(new AttributePkcs(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
         var sigFactory = new Asn1SignatureFactory(PkcsObjectIdentifiers.Sha256WithRsaEncryption.Id, bouncyKeyPair.Private);
         return new Pkcs10CertificationRequest(sigFactory, Subject, bouncyKeyPair.Public, attributes);
@@ -120,17 +120,15 @@ public record CertificateBuilder
         Validate();
 
         var builder = KeyPair == null
-            ? SetKeyPair(GenerateRsaKeyPair(KeyLength))
+            ? SetKeyPair(RSA.Create(KeyLength))
             : this;
 
         var keypair = (RSA)builder.KeyPair!;
         
         var csr = new CertificateRequest(builder.Subject.ToString(), keypair, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 
-        foreach (var item in BuildExtensions(builder)) {
-            csr.CertificateExtensions.Add(new System.Security.Cryptography.X509Certificates.X509Extension(
-                item.Oid.Id, item.Extension.Value.GetOctets(), item.Extension.IsCritical
-            ));
+        foreach (var extension in BuildExtensions(builder)) {
+            csr.CertificateExtensions.Add(extension);
         }
 
         if (builder.Issuer != null) {
@@ -165,13 +163,14 @@ public record CertificateBuilder
     }
 
 
+    [Obsolete("Use the Build method instead.")]
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
-    public X509Certificate2 BouncyBuild()
+    internal X509Certificate2 BouncyBuild()
     {
         Validate();
 
         var builder = KeyPair == null
-            ? SetKeyPair(GenerateRsaKeyPair(KeyLength))
+            ? SetKeyPair(RSA.Create(KeyLength))
             : this;
 
         var issuerCert = (builder.Issuer != null)
@@ -193,7 +192,7 @@ public record CertificateBuilder
         }
 
         foreach (var extension in BuildExtensions(builder)) {
-            generator.AddExtension(extension.Oid, extension.Extension.IsCritical, extension.Extension.GetParsedValue());
+            generator.AddExtension(extension.Oid.Value, extension.Critical, extension.ConvertToBouncyCastle().GetParsedValue());
         }
 
         //Create certificate
@@ -222,84 +221,86 @@ public record CertificateBuilder
     }
 
 
-    private static ImmutableHashSet<X509ExtensionItem> BuildExtensions(CertificateBuilder builder)
+    private static ImmutableHashSet<X509Extension> BuildExtensions(CertificateBuilder builder)
     {
         //Setup default extensions based on selected certificate Usage
         var extensions = GetCommonExtensions(builder);
         extensions.AddRange(builder.Usage switch {
-            null => new List<X509ExtensionItem>(),
+            null => new List<X509Extension>(),
             CertificateUsage.CA => GetCaExtensions(builder),
             CertificateUsage.Server => GetServerExtensions(builder),
             CertificateUsage.Client => GetClientExtensions(builder),
             CertificateUsage.CodeSign => GetCodeSigningExtensions(builder),
             CertificateUsage.SMime => GetSMimeExtensions(builder),
-            _ => throw new NotSupportedException($"{builder.Usage} {nameof(Usage)} not yet supported")
+            _ => throw new NotImplementedException($"{builder.Usage} {nameof(Usage)} not yet implemented")
         });
 
         //Setup extension for Subject Alternative Name if necessary
-        var sanGeneralNames = new List<GeneralName>();
-        if (builder.DnsNames.Any()) {
-            sanGeneralNames.AddRange(builder.DnsNames.Select(dnsName => new GeneralName(GeneralName.DnsName, dnsName)));
+        var sanBuilder = new SubjectAlternativeNameBuilder();
+        foreach (var dnsName in builder.DnsNames) {
+            sanBuilder.AddDnsName(dnsName);
         }
         if (!String.IsNullOrEmpty(builder.Email)) {
-            sanGeneralNames.Add(new GeneralName(GeneralName.Rfc822Name, builder.Email));
+            sanBuilder.AddEmailAddress(builder.Email);
         }
-        if (sanGeneralNames.Any()) {
-            extensions.Add(new(X509Extensions.SubjectAlternativeName, false, new GeneralNames(sanGeneralNames.ToArray())));
+        if (builder.DnsNames.Any() || !String.IsNullOrEmpty(builder.Email)) {
+            extensions.Add(sanBuilder.Build());
         }
 
-        //Collate extensions; manually specified ones take precedence over those generated from other builder properties (e.g. Usage, DnsNames, Email)
+        //Collate extensions; manually specified ones override those matching ones generated above (e.g. Usage, DnsNames, Email, etc.)
         return extensions.Any()
             ? builder.Extensions.Union(extensions)
             : builder.Extensions;
     }
 
 
-    private static List<X509ExtensionItem> GetCommonExtensions(CertificateBuilder builder)
+    private static List<X509Extension> GetCommonExtensions(CertificateBuilder builder)
         => new() {
-            new X509ExtensionItem(X509Extensions.SubjectKeyIdentifier, false, new SubjectKeyIdentifierStructure(DotNetUtilities.GetKeyPair(builder.KeyPair)?.Public)),
+            new X509ExtensionBC(false, new DerOctetString(new SubjectKeyIdentifierStructure(DotNetUtilities.GetKeyPair(builder.KeyPair).Public)))
+                .ConvertToDotNet(X509Extensions.SubjectKeyIdentifier)
         };
 
 
-    private static List<X509ExtensionItem> GetCaExtensions(CertificateBuilder builder)
+    private static List<X509Extension> GetCaExtensions(CertificateBuilder builder)
         => new() {
-            new (X509Extensions.BasicConstraints, true, builder.PathLength.HasValue ? new BasicConstraints(builder.PathLength.Value) : new BasicConstraints(true)),
-            new (X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyCertSign | KeyUsage.CrlSign)),
+            new X509BasicConstraintsExtension(true, builder.PathLength.HasValue, builder.PathLength ?? 0, true),
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true),
         };
 
 
-    private static List<X509ExtensionItem> GetServerExtensions(CertificateBuilder builder)
+    private static List<X509Extension> GetServerExtensions(CertificateBuilder builder)
         => new() {
-            new (X509Extensions.BasicConstraints, true, new BasicConstraints(false)),
-            new (X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment)),
-            new (X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(KeyPurposeID.IdKPServerAuth)),
+            new X509BasicConstraintsExtension(false, false, 0, true),
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true),
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.IdKPServerAuth.Id) }, false),
         };
 
 
-    private static List<X509ExtensionItem> GetClientExtensions(CertificateBuilder builder)
+    private static List<X509Extension> GetClientExtensions(CertificateBuilder builder)
         => new() {
-            new (X509Extensions.BasicConstraints, true, new BasicConstraints(false)),
-            new (X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature)),
-            new (X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(KeyPurposeID.IdKPClientAuth)),
+            new X509BasicConstraintsExtension(false, false, 0, true),
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true),
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.IdKPClientAuth.Id) }, false),
         };
 
 
-    private static List<X509ExtensionItem> GetCodeSigningExtensions(CertificateBuilder builder)
+    private static List<X509Extension> GetCodeSigningExtensions(CertificateBuilder builder)
         => new() {
-            new (X509Extensions.BasicConstraints, true, new BasicConstraints(false)),
-            new (X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment)),
-            new (X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(new DerSequence(
-                KeyPurposeID.IdKPCodeSigning,
-                KeyPurposeID.IdKPTimeStamping,
-                new DerObjectIdentifier("1.3.6.1.4.1.311.10.3.13")
-            ))),
+            new X509BasicConstraintsExtension(false, false, 0, true),
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true),
+            new X509EnhancedKeyUsageExtension(new OidCollection {
+                new(KeyPurposeID.IdKPCodeSigning.Id),
+                new(KeyPurposeID.IdKPTimeStamping.Id),
+                new("1.3.6.1.4.1.311.10.3.13")
+            }, false),
         };
 
-    private static List<X509ExtensionItem> GetSMimeExtensions(CertificateBuilder builder)
+
+    private static List<X509Extension> GetSMimeExtensions(CertificateBuilder builder)
         => new() {
-            new(X509Extensions.BasicConstraints, true, new BasicConstraints(false)),
-            new(X509Extensions.KeyUsage, true, new KeyUsage(KeyUsage.NonRepudiation | KeyUsage.DigitalSignature | KeyUsage.KeyEncipherment)),
-            new(X509Extensions.ExtendedKeyUsage, false, new ExtendedKeyUsage(KeyPurposeID.IdKPEmailProtection)),
+            new X509BasicConstraintsExtension(false, false, 0, true),
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.NonRepudiation, true),
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.IdKPEmailProtection.Id) }, false),
         };
 
 
@@ -309,31 +310,6 @@ public record CertificateBuilder
 #else
         => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 #endif
-
-
-    private static AsymmetricAlgorithm GenerateRsaKeyPair(int length)
-    {
-        var key = RSA.Create(length);
-        return key;
-
-        //return DotNetUtilities.GetKeyPair(key);
-
-        //var parameters = new KeyGenerationParameters(InternalTools.SecureRandom, length);
-        //var generator = new RsaKeyPairGenerator();
-        //generator.Init(parameters);
-        //return generator.GenerateKeyPair();
-    }
-
-
-    private static AsymmetricCipherKeyPair GenerateEcKeyPair(string curveName)
-    {
-        var ecParam = SecNamedCurves.GetByName(curveName);
-        var ecDomain = new ECDomainParameters(ecParam.Curve, ecParam.G, ecParam.N);
-        var parameters = new ECKeyGenerationParameters(ecDomain, InternalTools.SecureRandom);
-        var generator = new ECKeyPairGenerator();
-        generator.Init(parameters);
-        return generator.GenerateKeyPair();
-    }
 
 
     private static BigInteger GenerateSerialNumber()
@@ -347,4 +323,5 @@ public record CertificateBuilder
 
 
     private static readonly X509Name EmptyName = new X509NameBuilder();
+    private static readonly X509ExtensionOidEqualityComparer X509ExtensionOidEqualityComparer = new();
 }
