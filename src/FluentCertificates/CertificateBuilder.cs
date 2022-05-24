@@ -23,6 +23,7 @@ using Org.BouncyCastle.X509;
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 using X509ExtensionBC = Org.BouncyCastle.Asn1.X509.X509Extension;
 
+
 namespace FluentCertificates;
 
 public record CertificateBuilder
@@ -37,6 +38,8 @@ public record CertificateBuilder
     public string[] DnsNames { get; init; } = Array.Empty<string>();
     public string? FriendlyName { get; init; }
     public string? Email { get; init; }
+    public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
+    public RSASignaturePadding RSASignaturePadding { get; init; } = RSASignaturePadding.Pkcs1;
     public ImmutableHashSet<X509Extension> Extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
 
 
@@ -80,17 +83,29 @@ public record CertificateBuilder
     public CertificateBuilder SetPathLength(int? value)
         => this with { PathLength = value };
 
+    public CertificateBuilder SetHashAlgorithm(HashAlgorithmName value)
+        => this with { HashAlgorithm = value };
+    
+    public CertificateBuilder SetRSASignaturePadding(RSASignaturePadding value)
+        => this with { RSASignaturePadding = value };
+
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
         => this with { KeyPair = value };
-
-    public CertificateBuilder AddExtension(DerObjectIdentifier oid, Org.BouncyCastle.Asn1.X509.X509Extension extension)
-        => AddExtension(extension.ConvertToDotNet(oid));
-
+    
     public CertificateBuilder AddExtension(X509Extension extension)
         => this with { Extensions = Extensions.Add(extension) };
+    
+    public CertificateBuilder AddExtension(DerObjectIdentifier oid, X509ExtensionBC extension)
+        => AddExtension(extension.ConvertToDotNet(oid));
+
+    public CertificateBuilder AddExtensions(params X509Extension[] values)
+        => this with { Extensions = Extensions.Union(values) };
 
     public CertificateBuilder AddExtensions(IEnumerable<X509Extension> values)
         => this with { Extensions = Extensions.Union(values) };
+
+    public CertificateBuilder SetExtensions(params X509Extension[] values)
+        => this with { Extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
 
     public CertificateBuilder SetExtensions(IEnumerable<X509Extension> values)
         => this with { Extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
@@ -98,18 +113,24 @@ public record CertificateBuilder
 
     public void Validate()
     {
-        if (KeyLength <= 0 && KeyPair == null) throw new ArgumentException($"{nameof(KeyLength)} must be greater than zero", nameof(KeyLength));
-        if (NotBefore >= NotAfter) throw new ArgumentException($"{nameof(NotBefore)} cannot be later than or equal to {nameof(NotAfter)}", nameof(NotAfter));
+        if (KeyLength <= 0 && KeyPair == null) {
+            throw new ArgumentException($"{nameof(KeyLength)} must be greater than zero", nameof(KeyLength));
+        }
+
+        if (NotBefore >= NotAfter) {
+            throw new ArgumentException($"{nameof(NotBefore)} cannot be later than or equal to {nameof(NotAfter)}", nameof(NotAfter));
+        }
     }
 
 
     public Pkcs10CertificationRequest ToCsr()
     {
+        //TODO: replace this with a ToCertificateRequest() for native .NET; write CertificateRequest extension methods for exporting to PEM etc.
         var keypair = KeyPair ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to provide a public/private keypair");
         var bouncyKeyPair = DotNetUtilities.GetKeyPair(keypair);
         var extensions = new X509Extensions(BuildExtensions(this).ToDictionary(x => x.Oid, x => x.ConvertToBouncyCastle()));
         var attributes = new DerSet(new AttributePkcs(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
-        var sigFactory = new Asn1SignatureFactory(PkcsObjectIdentifiers.Sha256WithRsaEncryption.Id, bouncyKeyPair.Private);
+        var sigFactory = new Asn1SignatureFactory(GetSignatureAlgorithm(this).Id, bouncyKeyPair.Private);
         return new Pkcs10CertificationRequest(sigFactory, Subject, bouncyKeyPair.Public, attributes);
     }
 
@@ -119,13 +140,14 @@ public record CertificateBuilder
     {
         Validate();
 
+        //TODO: Add support for other key algorithms such as ECDsa
         var builder = KeyPair == null
             ? SetKeyPair(RSA.Create(KeyLength))
             : this;
 
         var keypair = (RSA)builder.KeyPair!;
-        
-        var csr = new CertificateRequest(builder.Subject.ToString(), keypair, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+
+        var csr = new CertificateRequest(builder.Subject.ToString(), keypair, builder.HashAlgorithm, builder.RSASignaturePadding);
 
         foreach (var extension in BuildExtensions(builder)) {
             csr.CertificateExtensions.Add(extension);
@@ -140,14 +162,14 @@ public record CertificateBuilder
                 builder.Issuer,
                 builder.NotBefore,
                 builder.NotAfter,
-                GenerateSerialNumber().ToByteArray()
+                GenerateSerialNumber()
             )
             : csr.Create(
                 new X500DistinguishedName(builder.Subject.ToString()),
-                X509SignatureGenerator.CreateForRSA(keypair, RSASignaturePadding.Pkcs1),
+                X509SignatureGenerator.CreateForRSA(keypair, builder.RSASignaturePadding),
                 builder.NotBefore,
                 builder.NotAfter,
-                GenerateSerialNumber().ToByteArray()
+                GenerateSerialNumber()
             );
 
         if (!String.IsNullOrEmpty(builder.FriendlyName) && IsWindows()) {
@@ -180,7 +202,7 @@ public record CertificateBuilder
         var bouncyKeyPair = DotNetUtilities.GetKeyPair(builder.KeyPair);
 
         var generator = new X509V3CertificateGenerator();
-        generator.SetSerialNumber(GenerateSerialNumber());
+        generator.SetSerialNumber(new BigInteger(GenerateSerialNumber()));
         generator.SetIssuerDN(issuerCert?.SubjectDN ?? builder.Subject);
         generator.SetSubjectDN(builder.Subject);
         generator.SetPublicKey(bouncyKeyPair?.Public);
@@ -196,7 +218,7 @@ public record CertificateBuilder
         }
 
         //Create certificate
-        var algorithm = PkcsObjectIdentifiers.Sha256WithRsaEncryption.ToString();
+        var algorithm = GetSignatureAlgorithm(builder).Id;
         var cert = builder.Issuer != null
             ? generator.Generate(new Asn1SignatureFactory(algorithm, builder.Issuer.GetBouncyCastleRsaKeyPair().Private, InternalTools.SecureRandom))
             : generator.Generate(new Asn1SignatureFactory(algorithm, bouncyKeyPair?.Private, InternalTools.SecureRandom));
@@ -312,14 +334,25 @@ public record CertificateBuilder
 #endif
 
 
-    private static BigInteger GenerateSerialNumber()
+    private static byte[] GenerateSerialNumber()
     {
         Span<byte> span = stackalloc byte[18];
         BinaryPrimitives.WriteInt16BigEndian(span.Slice(0, 2), 0x4D58);
         BinaryPrimitives.WriteInt64BigEndian(span.Slice(2, 8), DateTime.UtcNow.Ticks);
         BinaryPrimitives.WriteInt64BigEndian(span.Slice(10, 8), InternalTools.SecureRandom.NextLong());
-        return new BigInteger(span.ToArray());
+        return span.ToArray();
     }
+
+
+    private static DerObjectIdentifier GetSignatureAlgorithm(CertificateBuilder builder)
+        => builder.HashAlgorithm.Name switch {
+            nameof(HashAlgorithmName.MD5) => PkcsObjectIdentifiers.MD5WithRsaEncryption,
+            nameof(HashAlgorithmName.SHA1) => PkcsObjectIdentifiers.Sha1WithRsaEncryption,
+            nameof(HashAlgorithmName.SHA256) => PkcsObjectIdentifiers.Sha256WithRsaEncryption,
+            nameof(HashAlgorithmName.SHA384) => PkcsObjectIdentifiers.Sha384WithRsaEncryption,
+            nameof(HashAlgorithmName.SHA512) => PkcsObjectIdentifiers.Sha512WithRsaEncryption,
+            _ => throw new NotSupportedException($"Specified {nameof(HashAlgorithm)} {builder.HashAlgorithm} is not supported.")
+        };
 
 
     private static readonly X509Name EmptyName = new X509NameBuilder();
