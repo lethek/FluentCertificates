@@ -3,6 +3,7 @@ using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
+using FluentCertificates.Internals;
 using FluentCertificates.Tests.Fixtures;
 
 using Xunit;
@@ -20,6 +21,17 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     {
         var cert = new CertificateBuilder().Build();
         Assert.True(cert.HasPrivateKey);
+    }
+
+
+    [SkippableFact]
+    public void Build_CertificateOnWindows_WithFriendlyName()
+    {
+        Skip.IfNot(Tools.IsWindows);
+
+        const string friendlyName = "A FriendlyName can be set on Windows";
+        var cert = new CertificateBuilder().SetFriendlyName(friendlyName).Build();
+        Assert.Equal(friendlyName, cert.FriendlyName);
     }
 
 

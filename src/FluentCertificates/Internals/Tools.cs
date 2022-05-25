@@ -1,4 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
+#if !NET5_0_OR_GREATER
+using System.Runtime.InteropServices;
+#endif
 
 using Org.BouncyCastle.Asn1.Sec;
 using Org.BouncyCastle.Crypto.Generators;
@@ -7,12 +10,32 @@ using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
 
 [assembly: InternalsVisibleTo("LINQPadQuery")]
+[assembly: InternalsVisibleTo("FluentCertificates.Tests")]
 
 namespace FluentCertificates.Internals;
 
-internal static class InternalTools
+internal static class Tools
 {
     internal static readonly SecureRandom SecureRandom = new();
+
+
+    internal static bool IsWindows
+        #if NET5_0_OR_GREATER
+        => OperatingSystem.IsWindows();
+        #else
+        => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        #endif
+
+
+    internal static char[] CreateRandomCharArray(int length, string charSet = DefaultRandomCharSet)
+    {
+        var result = new char[length];
+        for (var i = 0; i < length; i++) {
+            var idx = SecureRandom.Next(charSet.Length);
+            result[i] = charSet[idx];
+        }
+        return result;
+    }
 
 
     internal static AsymmetricCipherKeyPair GenerateRsaKeyPairBouncy(int length)
@@ -32,17 +55,6 @@ internal static class InternalTools
         var generator = new ECKeyPairGenerator();
         generator.Init(parameters);
         return generator.GenerateKeyPair();
-    }
-
-
-    internal static char[] CreateRandomCharArray(int length, string charSet = DefaultRandomCharSet)
-    {
-        var result = new char[length];
-        for (var i = 0; i < length; i++) {
-            var idx = SecureRandom.Next(charSet.Length);
-            result[i] = charSet[idx];
-        }
-        return result;
     }
 
 

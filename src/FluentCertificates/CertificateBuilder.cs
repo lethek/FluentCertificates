@@ -1,9 +1,6 @@
 ﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-#if !NET5_0_OR_GREATER
-using System.Runtime.InteropServices;
-#endif
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -46,6 +43,10 @@ public record CertificateBuilder
     private AsymmetricAlgorithm? KeyPair { get; init; }
 
 
+    /// <summary>
+    /// Creates a new instance of the CertificateBuilder class with default values.
+    /// </summary>
+    /// <returns>A new instance of the CertificateBuilder class with default values.</returns>
     public static CertificateBuilder Create()
         => new();
 
@@ -85,16 +86,16 @@ public record CertificateBuilder
 
     public CertificateBuilder SetHashAlgorithm(HashAlgorithmName value)
         => this with { HashAlgorithm = value };
-    
+
     public CertificateBuilder SetRSASignaturePadding(RSASignaturePadding value)
         => this with { RSASignaturePadding = value };
 
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
         => this with { KeyPair = value };
-    
+
     public CertificateBuilder AddExtension(X509Extension extension)
         => this with { Extensions = Extensions.Add(extension) };
-    
+
     public CertificateBuilder AddExtension(DerObjectIdentifier oid, X509ExtensionBC extension)
         => AddExtension(extension.ConvertToDotNet(oid));
 
@@ -128,13 +129,17 @@ public record CertificateBuilder
         //TODO: replace this with a ToCertificateRequest() for native .NET; write CertificateRequest extension methods for exporting to PEM etc.
         var keypair = KeyPair ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to provide a public/private keypair");
         var bouncyKeyPair = DotNetUtilities.GetKeyPair(keypair);
-        var extensions = new X509Extensions(BuildExtensions(this).ToDictionary(x => x.Oid, x => x.ConvertToBouncyCastle()));
+        var extensions = new X509Extensions(BuildExtensions(this).ToDictionary(x => x.Oid!, x => x.ConvertToBouncyCastle()));
         var attributes = new DerSet(new AttributePkcs(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
         var sigFactory = new Asn1SignatureFactory(GetSignatureAlgorithm(this).Id, bouncyKeyPair.Private);
         return new Pkcs10CertificationRequest(sigFactory, Subject, bouncyKeyPair.Public, attributes);
     }
 
 
+    /// <summary>
+    /// Builds an X509Certificate2 instance based on the parameters that have been set previously in the builder.
+    /// </summary>
+    /// <returns>An X509Certificate2 instance.</returns>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Build()
     {
@@ -179,7 +184,7 @@ public record CertificateBuilder
             _ => cert
         };
 
-        if (!String.IsNullOrEmpty(builder.FriendlyName) && IsWindows()) {
+        if (!String.IsNullOrEmpty(builder.FriendlyName) && Tools.IsWindows) {
             //CopyWithPrivateKey doesn't copy FriendlyName so it needs to be set here after the copy is made
             cert.FriendlyName = builder.FriendlyName;
         }
@@ -188,6 +193,10 @@ public record CertificateBuilder
     }
 
 
+    /// <summary>
+    /// Builds an X509Certificate2 instance based on the parameters that have been set previously in the builder. Uses a combination of BouncyCastle and system .NET methods.
+    /// </summary>
+    /// <returns>An X509Certificate2 instance.</returns>
     [Obsolete("Use the Build method instead.")]
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     internal X509Certificate2 BouncyBuild()
@@ -217,14 +226,14 @@ public record CertificateBuilder
         }
 
         foreach (var extension in BuildExtensions(builder)) {
-            generator.AddExtension(extension.Oid.Value, extension.Critical, extension.ConvertToBouncyCastle().GetParsedValue());
+            generator.AddExtension(extension.Oid?.Value, extension.Critical, extension.ConvertToBouncyCastle().GetParsedValue());
         }
 
         //Create certificate
         var algorithm = GetSignatureAlgorithm(builder).Id;
         var cert = builder.Issuer != null
-            ? generator.Generate(new Asn1SignatureFactory(algorithm, builder.Issuer.GetBouncyCastleRsaKeyPair().Private, InternalTools.SecureRandom))
-            : generator.Generate(new Asn1SignatureFactory(algorithm, bouncyKeyPair?.Private, InternalTools.SecureRandom));
+            ? generator.Generate(new Asn1SignatureFactory(algorithm, builder.Issuer.GetBouncyCastleRsaKeyPair().Private, Tools.SecureRandom))
+            : generator.Generate(new Asn1SignatureFactory(algorithm, bouncyKeyPair?.Private, Tools.SecureRandom));
 
         //Place the certificate and private-key into a PKCS12 store
         var store = new Pkcs12Store();
@@ -234,11 +243,11 @@ public record CertificateBuilder
 
         //Finally copy the PKCS12 store to a .NET X509Certificate2 structure to return
         using var pfxStream = new MemoryStream();
-        var pwd = InternalTools.CreateRandomCharArray(20);
-        store.Save(pfxStream, pwd, InternalTools.SecureRandom);
+        var pwd = Tools.CreateRandomCharArray(20);
+        store.Save(pfxStream, pwd, Tools.SecureRandom);
         pfxStream.Seek(0, SeekOrigin.Begin);
-        var newCert = new X509Certificate2(pfxStream.ToArray(), new String(pwd), X509KeyStorageFlags.Exportable);
-        if (!String.IsNullOrEmpty(builder.FriendlyName) && IsWindows()) {
+        var newCert = new X509Certificate2(pfxStream.ToArray(), new string(pwd), X509KeyStorageFlags.Exportable);
+        if (!String.IsNullOrEmpty(builder.FriendlyName) && Tools.IsWindows) {
             newCert.FriendlyName = builder.FriendlyName;
         }
 
@@ -316,7 +325,7 @@ public record CertificateBuilder
             new X509EnhancedKeyUsageExtension(new OidCollection {
                 new(KeyPurposeID.IdKPCodeSigning.Id),
                 new(KeyPurposeID.IdKPTimeStamping.Id),
-                new("1.3.6.1.4.1.311.10.3.13")
+                new("1.3.6.1.4.1.311.10.3.13") //Used by Microsoft Authenticode to limit the signature's lifetime to the certificate's expiration
             }, false),
         };
 
@@ -329,20 +338,13 @@ public record CertificateBuilder
         };
 
 
-    private static bool IsWindows()
-        #if NET5_0_OR_GREATER
-        => OperatingSystem.IsWindows();
-        #else
-        => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-        #endif
-
-
     private static byte[] GenerateSerialNumber()
     {
         Span<byte> span = stackalloc byte[18];
-        BinaryPrimitives.WriteInt16BigEndian(span.Slice(0, 2), 0x4D58);
-        BinaryPrimitives.WriteInt64BigEndian(span.Slice(2, 8), DateTime.UtcNow.Ticks);
-        BinaryPrimitives.WriteInt64BigEndian(span.Slice(10, 8), InternalTools.SecureRandom.NextLong());
+
+        BinaryPrimitives.WriteInt16BigEndian(span[0..2], 0x4D58);
+        BinaryPrimitives.WriteInt64BigEndian(span[2..10], DateTime.UtcNow.Ticks);
+        BinaryPrimitives.WriteInt64BigEndian(span[10..18], Tools.SecureRandom.NextLong());
         return span.ToArray();
     }
 

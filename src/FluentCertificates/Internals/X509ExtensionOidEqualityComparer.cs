@@ -6,12 +6,20 @@ internal class X509ExtensionOidEqualityComparer : IEqualityComparer<X509Extensio
 {
     public bool Equals(X509Extension? x, X509Extension? y)
     {
-        if (ReferenceEquals(x, y)) return true;
-        if (ReferenceEquals(x, null)) return false;
-        if (ReferenceEquals(y, null)) return false;
-        if (x.GetType() != y.GetType()) return false;
-        return x.Oid.Value.Equals(y.Oid.Value);
+        if (ReferenceEquals(x, y)) {
+            return true;
+        }
+
+        if (x is null || y is null) {
+            return false;
+        }
+
+        if (x.GetType() != y.GetType()) {
+            return false;
+        }
+
+        return String.Equals(x.Oid?.Value, y.Oid?.Value);
     }
 
-    public int GetHashCode(X509Extension obj) => HashCode.Combine(obj.Oid.Value);
+    public int GetHashCode(X509Extension obj) => HashCode.Combine(obj.Oid?.Value);
 }

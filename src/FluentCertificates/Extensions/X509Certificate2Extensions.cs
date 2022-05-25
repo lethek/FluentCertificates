@@ -151,7 +151,7 @@ namespace FluentCertificates.Extensions
             using var rsa = RSA.Create();
             var pbeParams = new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 1);
             Span<byte> pwd = stackalloc byte[32];
-            InternalTools.SecureRandom.NextBytes(pwd);
+            Tools.SecureRandom.NextBytes(pwd);
             rsa.ImportEncryptedPkcs8PrivateKey(pwd, source.ExportEncryptedPkcs8PrivateKey(pwd, pbeParams), out _);
             pwd.Clear();
             return DotNetUtilities.GetRsaKeyPair(rsa);
