@@ -145,7 +145,7 @@ public record CertificateBuilder
     {
         //TODO: Add support for other key algorithms such as ECDsa
         var keypair = (RSA)KeyPair! ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to provide a public/private keypair");
-
+        
         var csr = new CertificateRequest(Subject.ToString(), keypair, HashAlgorithm, RSASignaturePadding);
 
         foreach (var extension in BuildExtensions(this)) {
