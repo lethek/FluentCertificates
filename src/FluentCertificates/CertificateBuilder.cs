@@ -124,15 +124,39 @@ public record CertificateBuilder
     }
 
 
-    public Pkcs10CertificationRequest ToCsr()
+    [Obsolete("Use the ToCertificateRequest method instead.")]
+    internal Pkcs10CertificationRequest ToBouncyCertificateRequest()
     {
-        //TODO: replace this with a ToCertificateRequest() for native .NET; write CertificateRequest extension methods for exporting to PEM etc.
         var keypair = KeyPair ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to provide a public/private keypair");
         var bouncyKeyPair = DotNetUtilities.GetKeyPair(keypair);
         var extensions = new X509Extensions(BuildExtensions(this).ToDictionary(x => x.Oid!, x => x.ConvertToBouncyCastle()));
         var attributes = new DerSet(new AttributePkcs(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
         var sigFactory = new Asn1SignatureFactory(GetSignatureAlgorithm(this).Id, bouncyKeyPair.Private);
         return new Pkcs10CertificationRequest(sigFactory, Subject, bouncyKeyPair.Public, attributes);
+    }
+
+
+    /// <summary>
+    /// Build a CertificateRequest based on the parameters that have been set previously in the builder.
+    /// </summary>
+    /// <returns>A CertificateRequest instance.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when the SetKeyPair(AsymmetricAlgorithm) method has not been called.</exception>
+    public CertificateRequest ToCertificateRequest()
+    {
+        //TODO: Add support for other key algorithms such as ECDsa
+        var keypair = (RSA)KeyPair! ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to provide a public/private keypair");
+
+        var csr = new CertificateRequest(Subject.ToString(), keypair, HashAlgorithm, RSASignaturePadding);
+
+        foreach (var extension in BuildExtensions(this)) {
+            csr.CertificateExtensions.Add(extension);
+        }
+
+        if (Issuer != null) {
+            csr.CertificateExtensions.Add(new X509AuthorityKeyIdentifierExtension(Issuer, false));
+        }
+
+        return csr;
     }
 
 
@@ -150,17 +174,7 @@ public record CertificateBuilder
             ? SetKeyPair(RSA.Create(KeyLength))
             : this;
 
-        var keypair = (RSA)builder.KeyPair!;
-
-        var csr = new CertificateRequest(builder.Subject.ToString(), keypair, builder.HashAlgorithm, builder.RSASignaturePadding);
-
-        foreach (var extension in BuildExtensions(builder)) {
-            csr.CertificateExtensions.Add(extension);
-        }
-
-        if (builder.Issuer != null) {
-            csr.CertificateExtensions.Add(new X509AuthorityKeyIdentifierExtension(builder.Issuer, false));
-        }
+        var csr = builder.ToCertificateRequest();
 
         var cert = builder.Issuer != null
             ? csr.Create(
@@ -171,7 +185,7 @@ public record CertificateBuilder
             )
             : csr.Create(
                 new X500DistinguishedName(builder.Subject.ToString()),
-                X509SignatureGenerator.CreateForRSA(keypair, builder.RSASignaturePadding),
+                X509SignatureGenerator.CreateForRSA((RSA)builder.KeyPair!, builder.RSASignaturePadding),
                 builder.NotBefore,
                 builder.NotAfter,
                 GenerateSerialNumber()
