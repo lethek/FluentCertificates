@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 
@@ -6,7 +7,12 @@ using FluentCertificates.Extensions;
 using FluentCertificates.Internals;
 using FluentCertificates.Tests.Fixtures;
 
+using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.X509;
+
 using Xunit;
+
+using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
 namespace FluentCertificates.Tests;
 
@@ -106,8 +112,21 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 
         Assert.True(cert.IsValidNow());
         Assert.True(cert.VerifyIssuer(issuer));
-        //TODO: assert correct SANs etc.
+
+        //Assert correct DNS names in the SAN
+        var ext = cert.Extensions[X509Extensions.SubjectAlternativeName.Id];
+        var san = EnumerateNamesFromSAN(ext!).Where(x => x.TagNo == GeneralName.DnsName).ToList();
+        Assert.Contains(san, x => x.Name.ToString() == "*.fake.domain");
+        Assert.Contains(san, x => x.Name.ToString() == "fake.domain");
+        Assert.Contains(san, x => x.Name.ToString() == "another.domain");
     }
+
+
+    private static IEnumerable<GeneralName> EnumerateNamesFromSAN(X509Extension extension)
+        => Asn1Sequence
+            .GetInstance(extension.ConvertToBouncyCastle().GetParsedValue())
+            .Cast<Asn1Encodable>()
+            .Select(GeneralName.GetInstance);
 
 
     private CertificateTestingFixture Fixture { get; }
