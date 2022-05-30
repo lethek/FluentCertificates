@@ -90,7 +90,11 @@ public record CertificateFinder : IQueryable<X509Certificate2>
             .Distinct()
             .SelectMany(x => {
                 try {
+                    #if NETSTANDARD2_0
+                    using var store = new X509Store(x.Name, x.Location);
+                    #else
                     using var store = new X509Store(x.Name, x.Location, OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
+                    #endif
                     return store.Certificates.Cast<X509Certificate2>();
                 } catch (CryptographicException) {
                     //Thrown if store doesn't exist: we don't want to create a new store or error-out, just return empty results for it
