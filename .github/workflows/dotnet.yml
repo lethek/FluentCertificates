@@ -1,4 +1,4 @@
-name: .NET
+name: Build & Publish
 
 on:
   push:
@@ -41,13 +41,27 @@ jobs:
       run: dotnet restore
 
     - name: Build
-      run: dotnet build --configuration ${{ env.buildConfiguration }} --no-restore
+      run: dotnet build -c ${{ env.buildConfiguration }} --no-restore -p:Version=$NUGETVER -p:FileVersion=$SEMVER -p:AssemblyVersion=$ASSEMBLYVER
+      env:
+        NUGETVER: ${{ steps.gitversion.outputs.nuGetVersion }}
+        SEMVER: ${{ steps.gitversion.outputs.assemblySemFileVer }}
+        ASSEMBLYVER: 1.0.0.0
 
     - name: Test
-      run: dotnet test --configuration ${{ env.buildConfiguration }} --no-build --verbosity normal --filter FullyQualifiedName!~IntegrationTests
+      run: dotnet test -c ${{ env.buildConfiguration }} --no-build -v normal --filter FullyQualifiedName!~IntegrationTests
 
     - name: Pack
-      run: dotnet pack --configuration ${{ env.buildConfiguration }} --no-build --output "${{ github.workspace }}/artifacts/"
+      run: dotnet pack -c ${{ env.buildConfiguration }} --no-build -o "${{ github.workspace }}/artifacts/" -p:PackageVersion=$NUGETVER
+      env:
+        NUGETVER: ${{ steps.gitversion.outputs.nuGetVersion }}
+
+    - name: Upload
+      uses: actions/upload-artifact@v3
+      with:
+        name: nuget
+        path: |
+          ${{ github.workspace }}/artifacts/*.nupkg
+          ${{ github.workspace }}/artifacts/*.snupkg
 
     - name: Push
       run: dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg" -s $NUGET_SOURCE -k $NUGET_API_KEY --skip-duplicate

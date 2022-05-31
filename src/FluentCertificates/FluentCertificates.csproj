@@ -16,13 +16,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="GitVersion.MsBuild" Version="5.10.1">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\FluentCertificates.Builder\FluentCertificates.Builder.csproj" />
     <ProjectReference Include="..\FluentCertificates.Finder\FluentCertificates.Finder.csproj" />
   </ItemGroup>
