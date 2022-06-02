@@ -1,4 +1,5 @@
 ﻿using System.Collections.Immutable;
+using System.Security.Cryptography.X509Certificates;
 
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1;
@@ -156,6 +157,10 @@ public record X509NameBuilder
 
     public static implicit operator string(X509NameBuilder builder)
         => builder.ToString();
+
+
+    public static implicit operator X500DistinguishedName(X509NameBuilder builder)
+        => new(builder.ToString());
 
 
     public ImmutableList<(DerObjectIdentifier OID, string Value)> Attributes { get; init; }

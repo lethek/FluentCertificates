@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
@@ -8,7 +9,9 @@ using FluentCertificates.Internals;
 using FluentCertificates.Tests.Fixtures;
 
 using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Asn1.X9;
 
 using Xunit;
 
@@ -27,6 +30,24 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     {
         var cert = new CertificateBuilder().Build();
         Assert.True(cert.HasPrivateKey);
+    }
+
+
+    [Fact]
+    public void Build_NewCertificate_WithRSAKeys()
+    {
+        var keys = RSA.Create();
+        var cert = new CertificateBuilder().SetKeyPair(keys).Build();
+        Assert.Equal(PkcsObjectIdentifiers.RsaEncryption.Id, cert.GetKeyAlgorithm());
+    }
+
+
+    [Fact]
+    public void Build_NewCertificate_WithECDsaKeys()
+    {
+        var keys = ECDsa.Create();
+        var cert = new CertificateBuilder().SetKeyPair(keys).Build();
+        Assert.Equal(X9ObjectIdentifiers.IdECPublicKey.Id, cert.GetKeyAlgorithm());
     }
 
 

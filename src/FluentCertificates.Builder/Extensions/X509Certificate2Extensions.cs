@@ -102,7 +102,7 @@ namespace FluentCertificates.Extensions
 
 
         public static AsymmetricAlgorithm? GetPrivateKey(this X509Certificate2 cert)
-            => cert.PublicKey.Oid.Value switch {
+            => cert.GetKeyAlgorithm() switch {
                 "1.2.840.113549.1.1.1" => cert.GetRSAPrivateKey(),
                 "1.2.840.10040.4.1" => cert.GetDSAPrivateKey(),
                 "1.2.840.10045.2.1" => cert.GetECDsaPrivateKey(),
