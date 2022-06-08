@@ -51,6 +51,64 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     }
 
 
+    [Fact]
+    public void Build_NewCertificate_WithDSAKeys()
+    {
+        //NOTE: FluentCertificates does not currently support creating DSA certificates on .NET 5 or earlier
+        
+        #if NET6_0_OR_GREATER
+        var cert = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
+        Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert.GetKeyAlgorithm());
+        #else
+        Assert.Throws<NotImplementedException>(() => CertificateBuilder.Create().GenerateKeyPair(KeyAlgorithm.DSA).Build());
+        #endif
+    }
+
+
+    [Fact]
+    public void Build_NewRSACertificate_WithECDsaIssuer()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        using var rootCA = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(new X509NameBuilder().SetCommonName("Test Root CA"))
+            .SetNotAfter(now.AddHours(1))
+            .GenerateKeyPair(KeyAlgorithm.ECDsa)
+            .Build();
+
+        using var cert = new CertificateBuilder()
+            .SetIssuer(rootCA)
+            .GenerateKeyPair(KeyAlgorithm.RSA)
+            .Build();
+
+        Assert.True(cert.IsIssuedBy(rootCA));
+        Assert.True(cert.VerifyIssuer(rootCA));
+    }
+
+
+    [Fact]
+    public void Build_NewECDsaCertificate_WithRSAIssuer()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        using var rootCA = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(new X509NameBuilder().SetCommonName("Test Root CA"))
+            .SetNotAfter(now.AddHours(1))
+            .GenerateKeyPair(KeyAlgorithm.RSA)
+            .Build();
+
+        using var cert = new CertificateBuilder()
+            .SetIssuer(rootCA)
+            .GenerateKeyPair(KeyAlgorithm.ECDsa)
+            .Build();
+
+        Assert.True(cert.IsIssuedBy(rootCA));
+        Assert.True(cert.VerifyIssuer(rootCA));
+    }
+
+
     [SkippableFact]
     public void Build_CertificateOnWindows_WithFriendlyName()
     {

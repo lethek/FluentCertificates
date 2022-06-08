@@ -11,16 +11,11 @@ using FluentCertificates.Internals;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1;
-using Org.BouncyCastle.Crypto.Operators;
-using Org.BouncyCastle.Math;
-using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509.Extension;
-using Org.BouncyCastle.X509;
 
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 using X509ExtensionBC = Org.BouncyCastle.Asn1.X509.X509Extension;
-using Org.BouncyCastle.Crypto;
 
 
 namespace FluentCertificates;
@@ -28,7 +23,7 @@ namespace FluentCertificates;
 public partial record CertificateBuilder
 {
     public CertificateUsage? Usage { get; init; }
-    public int KeyLength { get; init; } = 2048;
+    public int? KeyLength { get; init; }
     public int? PathLength { get; init; }
     public DateTimeOffset NotBefore { get; init; } = DateTimeOffset.UtcNow.AddHours(-1);
     public DateTimeOffset NotAfter { get; init; } = DateTimeOffset.UtcNow.AddHours(1);
@@ -46,17 +41,27 @@ public partial record CertificateBuilder
 
 
     /// <summary>
-    /// Creates a new instance of the CertificateBuilder class with default values.
+    /// Creates a new instance of CertificateBuilder with default values.
     /// </summary>
-    /// <returns>A new instance of the CertificateBuilder class with default values.</returns>
+    /// <returns>A new instance of CertificateBuilder with default values.</returns>
     public static CertificateBuilder Create()
         => new();
 
 
+    /// <summary>
+    /// Use this for a quick and easy way to set some appropriate default extensions for the 
+    /// </summary>
+    /// <param name="value">What the certificate's primary purpose will be.</param>
+    /// <returns>A new instance of CertificateBuilder with the specified Usage set.</returns>
     public CertificateBuilder SetUsage(CertificateUsage value)
         => this with { Usage = value };
 
-    public CertificateBuilder SetKeyLength(int value)
+    /// <summary>
+    /// Sets the KeyLength for generating new keys. Default is 4096 bits for RSA and is 2048 for DSA. KeyLength is ignored when generating ECDsa keys. 
+    /// </summary>
+    /// <param name="value"></param>
+    /// <returns>A new instance of CertificateBuilder with the specified KeyLength set.</returns>
+    public CertificateBuilder SetKeyLength(int? value)
         => this with { KeyLength = value };
 
     public CertificateBuilder SetNotBefore(DateTimeOffset value)
@@ -86,14 +91,37 @@ public partial record CertificateBuilder
     public CertificateBuilder SetPathLength(int? value)
         => this with { PathLength = value };
 
+    /// <summary>
+    /// Use to change the hashing algorithm. Default is SHA256.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <returns>A new instance of CertificateBuilder with the specified HashAlgorithm set.</returns>
     public CertificateBuilder SetHashAlgorithm(HashAlgorithmName value)
         => this with { HashAlgorithm = value };
 
+    /// <summary>
+    /// Use to change the the padding algorithm for RSA signatures. Default is PKCS1. This is ignored when using other key algorithms (ECDsa/DSA).
+    /// </summary>
+    /// <param name="value"></param>
+    /// <returns>A new instance of CertificateBuilder with the specified RSASignaturePadding set.</returns>
     public CertificateBuilder SetRSASignaturePadding(RSASignaturePadding value)
         => this with { RSASignaturePadding = value };
 
+    /// <summary>
+    /// Use this to provide a key-pair to use when creating new certificates or certificate-requests.
+    /// </summary>
+    /// <param name="value">A public-private keypair. Supported algorithms currently include RSA, ECDsa and the deprecated DSA.</param>
+    /// <returns>A new instance of CertificateBuilder with the specified key-pair set.</returns>
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
         => this with { KeyPair = value };
+
+    /// <summary>
+    /// Use this to generate a new key-pair to use when creating new certificates or certificate-requests.
+    /// </summary>
+    /// <param name="value">The type of algorithm to use for generating the keys. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. The default is RSA.</param>
+    /// <returns>A new instance of CertificateBuilder with the new key-pair set.</returns>
+    public CertificateBuilder GenerateKeyPair(KeyAlgorithm value = KeyAlgorithm.RSA)
+        => SetKeyPair(CreateKeyPair(value));
 
     public CertificateBuilder AddExtension(X509Extension extension)
         => this with { Extensions = Extensions.Add(extension) };
@@ -138,7 +166,12 @@ public partial record CertificateBuilder
         var request = KeyPair switch {
             RSA rsa => new CertificateRequest(dn, rsa, HashAlgorithm, RSASignaturePadding),
             ECDsa ecdsa => new CertificateRequest(dn, ecdsa, HashAlgorithm),
-            null => throw new ArgumentNullException(nameof(KeyPair), $"Call {nameof(SetKeyPair)}(...) first to provide a public/private keypair"),
+            #if NET6_0_OR_GREATER
+            DSA dsa => new CertificateRequest(dn, new PublicKey(dsa), HashAlgorithm),
+            #else
+            DSA dsa => throw new NotImplementedException($"Support for DSA is not yet implemented on .NET 5 or earlier."),
+            #endif
+            null => throw new ArgumentNullException(nameof(KeyPair), $"Call {nameof(SetKeyPair)}(...) or {nameof(GenerateKeyPair)}() first to provide a public/private keypair"),
             _ => throw new NotSupportedException($"Unsupported {nameof(KeyPair)} algorithm: {KeyPair.SignatureAlgorithm}")
         };
 
@@ -164,7 +197,7 @@ public partial record CertificateBuilder
         Validate();
 
         var builder = KeyPair == null
-            ? SetKeyPair(RSA.Create(KeyLength))
+            ? GenerateKeyPair(KeyAlgorithm.RSA)
             : this;
 
         Debug.Assert(builder.KeyPair != null);
@@ -173,14 +206,15 @@ public partial record CertificateBuilder
 
         var cert = builder.Issuer != null
             ? request.Create(
-                builder.Issuer,
+                builder.Issuer.SubjectName,
+                builder.CreateSignatureGenerator(builder.Issuer.GetPrivateKey()),
                 builder.NotBefore,
                 builder.NotAfter,
                 builder.GenerateSerialNumber()
             )
             : request.Create(
                 new X500DistinguishedName(builder.Subject.ToString()),
-                builder.CreateSignatureGenerator(),
+                builder.CreateSignatureGenerator(builder.KeyPair),
                 builder.NotBefore,
                 builder.NotAfter,
                 builder.GenerateSerialNumber()
@@ -212,13 +246,22 @@ public partial record CertificateBuilder
     }
 
 
-    private X509SignatureGenerator CreateSignatureGenerator()
-        => KeyPair switch {
+    private AsymmetricAlgorithm CreateKeyPair(KeyAlgorithm algorithm)
+        => algorithm switch {
+            KeyAlgorithm.DSA => DSA.Create(KeyLength ?? 1024),
+            KeyAlgorithm.RSA => RSA.Create(KeyLength ?? 4096),
+            KeyAlgorithm.ECDsa => ECDsa.Create() ?? throw new NotSupportedException("Unsupported ECDSA algorithm"),
+            _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null)
+        };
+
+
+    private X509SignatureGenerator CreateSignatureGenerator(AsymmetricAlgorithm? keys)
+        => keys switch {
             DSA dsa => new DSAX509SignatureGenerator(dsa),
             RSA rsa => X509SignatureGenerator.CreateForRSA(rsa, RSASignaturePadding),
             ECDsa ecdsa => X509SignatureGenerator.CreateForECDsa(ecdsa),
-            null => throw new ArgumentNullException(nameof(KeyPair), $"Call {nameof(SetKeyPair)}(...) first to provide a public/private keypair"),
-            _ => throw new NotSupportedException($"Unsupported {nameof(KeyPair)} algorithm: {KeyPair.SignatureAlgorithm}")
+            null => throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(GenerateKeyPair)}() first to provide a public/private keypair"),
+            _ => throw new NotSupportedException($"Unsupported {nameof(KeyPair)} algorithm: {keys.SignatureAlgorithm}")
         };
 
 

@@ -43,7 +43,7 @@ public partial record CertificateBuilder
         Validate();
 
         var builder = KeyPair == null
-            ? SetKeyPair(RSA.Create(KeyLength))
+            ? GenerateKeyPair(KeyAlgorithm.RSA)
             : this;
 
         var issuerCert = (builder.Issuer != null)
