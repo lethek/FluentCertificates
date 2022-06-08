@@ -5,7 +5,7 @@ using Org.BouncyCastle.Asn1.X509;
 
 using Xunit;
 
-namespace FluentCertificates.Tests;
+namespace FluentCertificates;
 
 public class X509NameBuilderTests
 {
@@ -13,31 +13,31 @@ public class X509NameBuilderTests
     public void Add_Multiple_Matching_Attributes()
     {
         //The multiple assertions below demonstrate alternative, equivalent syntaxes
-        const string expected = "DC=app,DC=smmx";
+        const string expected = "DC=app,DC=fake";
 
         Assert.Equal(expected,
             X509NameBuilder.Create()
                 .AddDomainComponent("app")
-                .AddDomainComponent("smmx")
+                .AddDomainComponent("fake")
                 .Build().ToString()
         );
 
         Assert.Equal(expected,
             X509NameBuilder.Create()
-                .AddDomainComponents("app", "smmx")
+                .AddDomainComponents("app", "fake")
                 .Build().ToString()
         );
 
         Assert.Equal(expected,
             X509NameBuilder.Create()
                 .Add(X509Name.DC, "app")
-                .Add(X509Name.DC, "smmx")
+                .Add(X509Name.DC, "fake")
                 .Build().ToString()
         );
 
         Assert.Equal(expected,
             X509NameBuilder.Create()
-                .Add(X509Name.DC, "app", "smmx")
+                .Add(X509Name.DC, "app", "fake")
                 .Build().ToString()
         );
     }
@@ -49,7 +49,7 @@ public class X509NameBuilderTests
         Assert.Empty(
             X509NameBuilder.Create()
                 .SetOrganizationalUnits("services")
-                .SetDomainComponents("app", "smmx")
+                .SetDomainComponents("app", "fake")
                 .Clear()
                 .Build().ToString()
         );
@@ -59,9 +59,9 @@ public class X509NameBuilderTests
     [Fact]
     public void Converts_Implicitly_To_String()
     {
-        const string expected = "DC=app,DC=smmx";
+        const string expected = "DC=app,DC=fake";
 
-        string actual = X509NameBuilder.Create().SetDomainComponents("app", "smmx");
+        string actual = X509NameBuilder.Create().SetDomainComponents("app", "fake");
 
         Assert.Equal(expected, actual);
     }
@@ -72,10 +72,10 @@ public class X509NameBuilderTests
     {
         var expected = new X509Name(
             new List<DerObjectIdentifier> { X509Name.DC, X509Name.DC },
-            new List<string> { "app", "smmx" }
+            new List<string> { "app", "fake" }
         );
 
-        X509Name actual = X509NameBuilder.Create().SetDomainComponents("app", "smmx");
+        X509Name actual = X509NameBuilder.Create().SetDomainComponents("app", "fake");
 
         Assert.Equal(expected, actual);
     }
@@ -84,17 +84,17 @@ public class X509NameBuilderTests
     [Fact]
     public void Set_Removes_Matching_Attributes_Then_Adds()
     {
-        Assert.Equal("DC=app,DC=smmx",
+        Assert.Equal("DC=app,DC=fake",
             X509NameBuilder.Create()
-                .SetDomainComponents("app", "smmx")
+                .SetDomainComponents("app", "fake")
                 .Build().ToString()
         );
 
-        Assert.Equal("OU=services,DC=app,DC=smmx",
+        Assert.Equal("OU=services,DC=app,DC=fake",
             X509NameBuilder.Create()
                 .AddOrganizationalUnit("services")
                 .AddDomainComponents("old", "domain", "to", "remove")
-                .SetDomainComponents("app", "smmx")
+                .SetDomainComponents("app", "fake")
                 .Build().ToString()
         );
     }

@@ -4,7 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using FluentCertificates.Extensions;
 
 
-namespace FluentCertificates.Tests.Fixtures;
+namespace FluentCertificates.Fixtures;
 
 public class CertificateTestingFixture : IDisposable
 {

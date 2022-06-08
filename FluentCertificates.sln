@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates", "src\F
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D1107791-8E04-42B0-977E-E2221B0067AC}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Tests", "tests\FluentCertificates.Tests\FluentCertificates.Tests.csproj", "{4D225EFF-EF8F-4A2F-B3B1-D40BE29921E0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Builder.Tests", "tests\FluentCertificates.Builder.Tests\FluentCertificates.Builder.Tests.csproj", "{4D225EFF-EF8F-4A2F-B3B1-D40BE29921E0}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{389E86C0-CD86-431C-BDE5-6AF0913F4A02}"
 	ProjectSection(SolutionItems) = preProject
@@ -19,9 +19,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FluentCertificates.Finder", "src\FluentCertificates.Finder\FluentCertificates.Finder.csproj", "{2A5624D4-FD07-43FC-88DB-49CB9F4A56E1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Finder", "src\FluentCertificates.Finder\FluentCertificates.Finder.csproj", "{2A5624D4-FD07-43FC-88DB-49CB9F4A56E1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FluentCertificates.Builder", "src\FluentCertificates.Builder\FluentCertificates.Builder.csproj", "{6DD8E968-AF67-4E6E-9CC2-AC6661527284}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Builder", "src\FluentCertificates.Builder\FluentCertificates.Builder.csproj", "{6DD8E968-AF67-4E6E-9CC2-AC6661527284}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

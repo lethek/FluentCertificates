@@ -6,7 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
 using FluentCertificates.Internals;
-using FluentCertificates.Tests.Fixtures;
+using FluentCertificates.Fixtures;
 
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
@@ -17,7 +17,7 @@ using Xunit;
 
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
-namespace FluentCertificates.Tests;
+namespace FluentCertificates;
 
 public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 {

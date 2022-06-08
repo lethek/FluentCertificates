@@ -9,9 +9,6 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
 
-[assembly: InternalsVisibleTo("LINQPadQuery")]
-[assembly: InternalsVisibleTo("FluentCertificates.Tests")]
-
 namespace FluentCertificates.Internals;
 
 internal static class Tools
