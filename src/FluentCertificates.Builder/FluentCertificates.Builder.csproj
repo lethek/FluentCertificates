@@ -8,9 +8,10 @@
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Description>Part of the FluentCertificates package. Very simple library using the Immutable Fluent Builder pattern for creating and exporting certificates. Makes it easy to generate your own certificate chains, or just stand-alone self-signed certs.</Description>
+    <Description>FluentCertificates.Builder is part of the FluentCertificates package. This library uses the Immutable Fluent Builder pattern for easily creating and exporting certificates.</Description>
     <PackageTags>certificate, fluent, x509, pfx, pem, cert, crt, CA</PackageTags>
     <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <RootNamespace>FluentCertificates</RootNamespace>
@@ -25,6 +26,10 @@
     <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
     <PackageReference Include="System.Collections.Immutable" Version="6.0.0" Condition="'$(TargetFramework)' == 'netstandard2.1'" />
     <PackageReference Include="System.Formats.Asn1" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
