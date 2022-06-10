@@ -64,9 +64,19 @@ public partial record CertificateBuilder
     public CertificateBuilder SetKeyLength(int? value)
         => this with { KeyLength = value };
 
+    /// <summary>
+    /// Sets the certificate's validity period to begin from the specified timestamp. Default value is 1 hour ago.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <returns>A new instance of CertificateBuilder with the specified NotBefore set.</returns>
     public CertificateBuilder SetNotBefore(DateTimeOffset value)
         => this with { NotBefore = value };
 
+    /// <summary>
+    /// Sets the certificate's validity period to end at the specified timestamp. Default value is 1 hour in the future.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <returns>A new instance of CertificateBuilder with the specified NotAfter set.</returns>
     public CertificateBuilder SetNotAfter(DateTimeOffset value)
         => this with { NotAfter = value };
 
@@ -82,6 +92,11 @@ public partial record CertificateBuilder
     public CertificateBuilder SetDnsNames(params string[] values)
         => this with { DnsNames = values.ToArray() };
 
+    /// <summary>
+    /// Use to set a FriendlyName for the certificate. This feature is only supported on Windows and will be ignored on other platforms.
+    /// </summary>
+    /// <param name="value"></param>
+    /// <returns>A new instance of CertificateBuilder with the specified FriendlyName set.</returns>
     public CertificateBuilder SetFriendlyName(string value)
         => this with { FriendlyName = value };
 
