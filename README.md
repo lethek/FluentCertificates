@@ -9,8 +9,8 @@ FluentCertificates is a library using the Immutable Fluent Builder pattern for e
 This project is published in three NuGet packages:
 
 * [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Simply brings in both the FluentCertificates.Builder and FluentCertificates.Finder packages.
-* [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes extension methods. [Examples below](#certificatebuilder-examples)
-* [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across a collection of X509Stores. [Examples below](#certificatefinder-examples)
+* [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension-methods. [Examples below.](#certificatebuilder-examples)
+* [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across a collection of X509Stores. [Examples below.](#certificatefinder-examples)
 
 ## `CertificateBuilder` examples
 
