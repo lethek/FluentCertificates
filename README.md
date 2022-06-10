@@ -1,7 +1,7 @@
 # FluentCertificates
 
 [![GitHub license](https://img.shields.io/github/license/lethek/FluentCertificates)](https://github.com/lethek/FluentCertificates/blob/main/LICENSE)
-[![NuGet Stats](https://img.shields.io/nuget/vpre/FluentCertificates.svg)](https://www.nuget.org/packages/FluentCertificates)
+[![NuGet Stats](https://img.shields.io/nuget/v/FluentCertificates.svg)](https://www.nuget.org/packages/FluentCertificates)
 [![Build & Publish](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml/badge.svg)](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml)
 
 FluentCertificates is a library using the Immutable Fluent Builder pattern for easily creating, finding and exporting certificates. Makes it simple to generate your own certificate chains, or just stand-alone self-signed certificates.
