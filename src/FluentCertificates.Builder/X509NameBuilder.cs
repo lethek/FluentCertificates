@@ -23,6 +23,9 @@ public record X509NameBuilder
     public X509NameBuilder() : this(null) { }
 
 
+    public ImmutableList<(DerObjectIdentifier OID, string Value)> Attributes { get; init; }
+
+    
     public X509Name Build()
         => new(
             Attributes.Select(x => x.OID).ToArray(),
@@ -134,7 +137,7 @@ public record X509NameBuilder
     public X509NameBuilder AddOrganizationalUnits(params string[] values)
         => Add(X509Name.OU, values);
 
-    
+
     public X509NameBuilder AddDomainComponent(string value)
         => Add(X509Name.DC, value);
 
@@ -152,52 +155,56 @@ public record X509NameBuilder
         => Build().ToString();
 
 
-    public static bool operator ==(string left, X509NameBuilder right)
-        => new X500DistinguishedName(left).RawData.SequenceEqual(((X500DistinguishedName)right).RawData);
+    public X500DistinguishedName ToX500DistinguishedName()
+        => new(ToString());
 
 
-    public static bool operator !=(string left, X509NameBuilder right)
-        => !new X500DistinguishedName(left).RawData.SequenceEqual(((X500DistinguishedName)right).RawData);
+    public virtual bool Equals(X509Name? other)
+        => other != null && Build().Equivalent(other, true);
 
 
-    public static bool operator ==(X509NameBuilder left, string right)
-        => right == left;
+    public virtual bool Equals(X500DistinguishedName? other)
+        => other != null && ToX500DistinguishedName().RawData.SequenceEqual(other.RawData);
 
 
-    public static bool operator !=(X509NameBuilder left, string right)
-        => right != left;
+    public virtual bool Equals(string? other)
+        => other != null && ToX500DistinguishedName().RawData.SequenceEqual(new X500DistinguishedName(other).RawData);
 
 
-    public static bool operator ==(X500DistinguishedName left, X509NameBuilder right)
-        => left.RawData.SequenceEqual(((X500DistinguishedName)right).RawData);
+    public static bool Equals(X509NameBuilder? left, X509Name? right)
+        => (left == null && right == null) || (left != null && left.Equals(right));
 
 
-    public static bool operator !=(X500DistinguishedName left, X509NameBuilder right)
-        => !left.RawData.SequenceEqual(((X500DistinguishedName)right).RawData);
+    public static bool Equals(X509NameBuilder? left, X500DistinguishedName? right)
+        => (left == null && right == null) || (left != null && left.Equals(right));
 
 
-    public static bool operator ==(X509NameBuilder left, X500DistinguishedName right)
-        => right == left;
+    public static bool Equals(X509NameBuilder? left, string? right)
+        => (left == null && right == null) || (left != null && left.Equals(right));
 
 
-    public static bool operator !=(X509NameBuilder left, X500DistinguishedName right)
-        => right != left;
+    public static bool operator ==(X509NameBuilder? left, X500DistinguishedName? right) => Equals(left, right);
+    public static bool operator ==(X509NameBuilder? left, X509Name? right) => Equals(left, right);
+    public static bool operator ==(X509NameBuilder? left, string? right) => Equals(left, right);
 
 
-    public static bool operator ==(X509Name left, X509NameBuilder right)
-        => left.Equivalent(right, true);
+    public static bool operator ==(X500DistinguishedName left, X509NameBuilder right) => Equals(right, left);
+    public static bool operator ==(X509Name left, X509NameBuilder right) => Equals(right, left);
+    public static bool operator ==(string left, X509NameBuilder right) => Equals(right, left);
 
 
-    public static bool operator !=(X509Name left, X509NameBuilder right)
-        => !left.Equivalent(right, true);
+    public static bool operator !=(X509NameBuilder left, X500DistinguishedName right) => !Equals(left, right);
+    public static bool operator !=(X509NameBuilder left, X509Name right) => !Equals(left, right);
+    public static bool operator !=(X509NameBuilder left, string right) => !Equals(left, right);
 
 
-    public static bool operator ==(X509NameBuilder left, X509Name right)
-        => right == left;
+    public static bool operator !=(X500DistinguishedName left, X509NameBuilder right) => !Equals(right, left);
+    public static bool operator !=(X509Name left, X509NameBuilder right) => !Equals(right, left);
+    public static bool operator !=(string left, X509NameBuilder right) => !Equals(right, left);
 
-
-    public static bool operator !=(X509NameBuilder left, X509Name right)
-        => right != left;
+    
+    public static implicit operator X500DistinguishedName(X509NameBuilder builder)
+        => builder.ToX500DistinguishedName();
 
 
     public static implicit operator X509Name(X509NameBuilder builder)
@@ -206,11 +213,4 @@ public record X509NameBuilder
 
     public static implicit operator string(X509NameBuilder builder)
         => builder.ToString();
-
-
-    public static implicit operator X500DistinguishedName(X509NameBuilder builder)
-        => new(builder.ToString());
-
-
-    public ImmutableList<(DerObjectIdentifier OID, string Value)> Attributes { get; init; }
 }

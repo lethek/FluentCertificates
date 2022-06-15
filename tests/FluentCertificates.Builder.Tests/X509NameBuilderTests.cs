@@ -101,6 +101,22 @@ public class X509NameBuilderTests
     }
 
 
+    //[Fact]
+    //public void StaticInequality_With_X509Name()
+    //{
+    //    var name = new X509NameBuilder()
+    //        .SetCommonName("Inequality_With_NullX509Name")
+    //        .SetOrganization("SMMX")
+    //        .SetCountry("AU");
+
+    //    X509Name? other = null;
+    //    Assert.True(name == other);
+    //    Assert.True(other == name);
+    //    Assert.True(name.Equals(other));
+    //}
+
+
+
     [Theory]
     [InlineData("CN=Equality_With_X509Name, O=SMMX, C=AU")]
     [InlineData("CN=Equality_With_X509Name,O=SMMX,C=AU")]
@@ -114,6 +130,7 @@ public class X509NameBuilderTests
         var other = new X509Name(dn);
         Assert.True(name == other);
         Assert.True(other == name);
+        Assert.True(name.Equals(other));
     }
 
 
@@ -130,6 +147,7 @@ public class X509NameBuilderTests
         var other = new X509Name(dn);
         Assert.True(name != other);
         Assert.True(other != name);
+        Assert.False(name.Equals(other));
     }
 
 
@@ -146,6 +164,7 @@ public class X509NameBuilderTests
         var other = new X500DistinguishedName(dn);
         Assert.True(name == other);
         Assert.True(other == name);
+        Assert.True(name.Equals(other));
     }
 
 
@@ -162,6 +181,7 @@ public class X509NameBuilderTests
         var other = new X500DistinguishedName(dn);
         Assert.True(name != other);
         Assert.True(other != name);
+        Assert.False(name.Equals(other));
     }
 
 
@@ -177,6 +197,7 @@ public class X509NameBuilderTests
 
         Assert.True(name == dn);
         Assert.True(dn == name);
+        Assert.True(name.Equals(dn));
     }
 
 
@@ -192,5 +213,6 @@ public class X509NameBuilderTests
 
         Assert.True(name != dn);
         Assert.True(dn != name);
+        Assert.False(name.Equals(dn));
     }
 }
