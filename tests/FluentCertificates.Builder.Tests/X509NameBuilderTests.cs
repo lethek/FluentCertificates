@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Security.Cryptography.X509Certificates;
 
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.X509;
@@ -80,7 +81,7 @@ public class X509NameBuilderTests
         Assert.Equal(expected, actual);
     }
 
-    
+
     [Fact]
     public void Set_Removes_Matching_Attributes_Then_Adds()
     {
@@ -97,5 +98,99 @@ public class X509NameBuilderTests
                 .SetDomainComponents("app", "fake")
                 .Build().ToString()
         );
+    }
+
+
+    [Theory]
+    [InlineData("CN=Equality_With_X509Name, O=SMMX, C=AU")]
+    [InlineData("CN=Equality_With_X509Name,O=SMMX,C=AU")]
+    public void Equality_With_X509Name(string dn)
+    {
+        var name = new X509NameBuilder()
+            .SetCommonName("Equality_With_X509Name")
+            .SetOrganization("SMMX")
+            .SetCountry("AU");
+
+        var other = new X509Name(dn);
+        Assert.True(name == other);
+        Assert.True(other == name);
+    }
+
+
+    [Theory]
+    [InlineData("O=SMMX, CN=Inequality_With_X509Name, C=AU")]
+    [InlineData("O=SMMX,CN=Inequality_With_X509Name,C=AU")]
+    public void Inequality_With_X509Name(string dn)
+    {
+        var name = new X509NameBuilder()
+            .SetCommonName("Inequality_With_X509Name")
+            .SetOrganization("SMMX")
+            .SetCountry("AU");
+
+        var other = new X509Name(dn);
+        Assert.True(name != other);
+        Assert.True(other != name);
+    }
+
+
+    [Theory]
+    [InlineData("CN=Equality_With_X500DistinguishedName, O=SMMX, C=AU")]
+    [InlineData("CN=Equality_With_X500DistinguishedName,O=SMMX,C=AU")]
+    public void Equality_With_X500DistinguishedName(string dn)
+    {
+        var name = new X509NameBuilder()
+            .SetCommonName("Equality_With_X500DistinguishedName")
+            .SetOrganization("SMMX")
+            .SetCountry("AU");
+
+        var other = new X500DistinguishedName(dn);
+        Assert.True(name == other);
+        Assert.True(other == name);
+    }
+
+
+    [Theory]
+    [InlineData("O=SMMX, CN=Inequality_With_X500DistinguishedName, C=AU")]
+    [InlineData("O=SMMX,CN=Inequality_With_X500DistinguishedName,C=AU")]
+    public void Inequality_With_X500DistinguishedName(string dn)
+    {
+        var name = new X509NameBuilder()
+            .SetCommonName("Inequality_With_X500DistinguishedName")
+            .SetOrganization("SMMX")
+            .SetCountry("AU");
+
+        var other = new X500DistinguishedName(dn);
+        Assert.True(name != other);
+        Assert.True(other != name);
+    }
+
+
+    [Theory]
+    [InlineData("CN=Equality_With_String, O=SMMX, C=AU")]
+    [InlineData("CN=Equality_With_String,O=SMMX,C=AU")]
+    public void Equality_With_String(string dn)
+    {
+        var name = new X509NameBuilder()
+            .SetCommonName("Equality_With_String")
+            .SetOrganization("SMMX")
+            .SetCountry("AU");
+
+        Assert.True(name == dn);
+        Assert.True(dn == name);
+    }
+
+
+    [Theory]
+    [InlineData("O=SMMX, CN=Inequality_With_String, C=AU")]
+    [InlineData("O=SMMX,CN=Inequality_With_String,C=AU")]
+    public void Inequality_With_String(string dn)
+    {
+        var name = new X509NameBuilder()
+            .SetCommonName("Inequality_With_String")
+            .SetOrganization("SMMX")
+            .SetCountry("AU");
+
+        Assert.True(name != dn);
+        Assert.True(dn != name);
     }
 }

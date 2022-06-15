@@ -6,6 +6,7 @@ using Org.BouncyCastle.Asn1;
 
 namespace FluentCertificates;
 
+
 // ReSharper disable WithExpressionModifiesAllMembers
 public record X509NameBuilder
 {
@@ -142,13 +143,61 @@ public record X509NameBuilder
         => Add(X509Name.DC, values);
 
 
-    [Obsolete("Obsolete: use Subject Alternative Name extensions instead")]
+    [Obsolete("Obsolete: use Subject Alternative Name extensions instead. If you're using CertificateBuilder then try its SetEmail method.")]
     public X509NameBuilder SetEmail(string value)
         => Set(X509Name.E, value);
 
 
     public override string ToString()
         => Build().ToString();
+
+
+    public static bool operator ==(string left, X509NameBuilder right)
+        => new X500DistinguishedName(left).RawData.SequenceEqual(((X500DistinguishedName)right).RawData);
+
+
+    public static bool operator !=(string left, X509NameBuilder right)
+        => !new X500DistinguishedName(left).RawData.SequenceEqual(((X500DistinguishedName)right).RawData);
+
+
+    public static bool operator ==(X509NameBuilder left, string right)
+        => right == left;
+
+
+    public static bool operator !=(X509NameBuilder left, string right)
+        => right != left;
+
+
+    public static bool operator ==(X500DistinguishedName left, X509NameBuilder right)
+        => left.RawData.SequenceEqual(((X500DistinguishedName)right).RawData);
+
+
+    public static bool operator !=(X500DistinguishedName left, X509NameBuilder right)
+        => !left.RawData.SequenceEqual(((X500DistinguishedName)right).RawData);
+
+
+    public static bool operator ==(X509NameBuilder left, X500DistinguishedName right)
+        => right == left;
+
+
+    public static bool operator !=(X509NameBuilder left, X500DistinguishedName right)
+        => right != left;
+
+
+    public static bool operator ==(X509Name left, X509NameBuilder right)
+        => left.Equivalent(right, true);
+
+
+    public static bool operator !=(X509Name left, X509NameBuilder right)
+        => !left.Equivalent(right, true);
+
+
+    public static bool operator ==(X509NameBuilder left, X509Name right)
+        => right == left;
+
+
+    public static bool operator !=(X509NameBuilder left, X509Name right)
+        => right != left;
 
 
     public static implicit operator X509Name(X509NameBuilder builder)
