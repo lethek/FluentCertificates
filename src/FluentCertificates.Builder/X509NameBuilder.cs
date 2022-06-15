@@ -171,16 +171,14 @@ public record X509NameBuilder
         => other != null && ToX500DistinguishedName().RawData.SequenceEqual(new X500DistinguishedName(other).RawData);
 
 
-    public static bool Equals(X509NameBuilder? left, X509Name? right)
-        => (left == null && right == null) || (left != null && left.Equals(right));
+    public static bool Equals(X509NameBuilder? left, X500DistinguishedName? right) => (left == null && right == null) || (left != null && left.Equals(right));
+    public static bool Equals(X509NameBuilder? left, X509Name? right) => (left == null && right == null) || (left != null && left.Equals(right));
+    public static bool Equals(X509NameBuilder? left, string? right) => (left == null && right == null) || (left != null && left.Equals(right));
 
 
-    public static bool Equals(X509NameBuilder? left, X500DistinguishedName? right)
-        => (left == null && right == null) || (left != null && left.Equals(right));
-
-
-    public static bool Equals(X509NameBuilder? left, string? right)
-        => (left == null && right == null) || (left != null && left.Equals(right));
+    public static bool Equals(X500DistinguishedName? left, X509NameBuilder? right) => (left == null && right == null) || (right != null && right.Equals(left));
+    public static bool Equals(X509Name? left, X509NameBuilder? right) => (left == null && right == null) || (right != null && right.Equals(left));
+    public static bool Equals(string? left, X509NameBuilder? right) => (left == null && right == null) || (right != null && right.Equals(left));
 
 
     public static bool operator ==(X509NameBuilder? left, X500DistinguishedName? right) => Equals(left, right);
@@ -188,9 +186,9 @@ public record X509NameBuilder
     public static bool operator ==(X509NameBuilder? left, string? right) => Equals(left, right);
 
 
-    public static bool operator ==(X500DistinguishedName left, X509NameBuilder right) => Equals(right, left);
-    public static bool operator ==(X509Name left, X509NameBuilder right) => Equals(right, left);
-    public static bool operator ==(string left, X509NameBuilder right) => Equals(right, left);
+    public static bool operator ==(X500DistinguishedName left, X509NameBuilder right) => Equals(left, right);
+    public static bool operator ==(X509Name left, X509NameBuilder right) => Equals(left, right);
+    public static bool operator ==(string left, X509NameBuilder right) => Equals(left, right);
 
 
     public static bool operator !=(X509NameBuilder left, X500DistinguishedName right) => !Equals(left, right);
@@ -198,9 +196,9 @@ public record X509NameBuilder
     public static bool operator !=(X509NameBuilder left, string right) => !Equals(left, right);
 
 
-    public static bool operator !=(X500DistinguishedName left, X509NameBuilder right) => !Equals(right, left);
-    public static bool operator !=(X509Name left, X509NameBuilder right) => !Equals(right, left);
-    public static bool operator !=(string left, X509NameBuilder right) => !Equals(right, left);
+    public static bool operator !=(X500DistinguishedName left, X509NameBuilder right) => !Equals(left, right);
+    public static bool operator !=(X509Name left, X509NameBuilder right) => !Equals(left, right);
+    public static bool operator !=(string left, X509NameBuilder right) => !Equals(left, right);
 
     
     public static implicit operator X500DistinguishedName(X509NameBuilder builder)
