@@ -127,12 +127,12 @@ public class X500NameBuilderTests
 
 
     [Theory]
-    [InlineData("CN=Equality_With_X509Name, O=SMMX, C=AU")]
-    [InlineData("CN=Equality_With_X509Name,O=SMMX,C=AU")]
+    [InlineData($"CN={nameof(Equality_With_X509Name)}, O=SMMX, C=AU")]
+    [InlineData($"CN={nameof(Equality_With_X509Name)},O=SMMX,C=AU")]
     public void Equality_With_X509Name(string dn)
     {
         var builder = new X500NameBuilder()
-            .SetCommonName("Equality_With_X509Name")
+            .SetCommonName(nameof(Equality_With_X509Name))
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
@@ -144,12 +144,12 @@ public class X500NameBuilderTests
 
 
     [Theory]
-    [InlineData("O=SMMX, CN=Inequality_With_X509Name, C=AU")]
-    [InlineData("O=SMMX,CN=Inequality_With_X509Name,C=AU")]
+    [InlineData($"O=SMMX, CN={nameof(Inequality_With_X509Name)}, C=AU")]
+    [InlineData($"O=SMMX,CN={nameof(Inequality_With_X509Name)},C=AU")]
     public void Inequality_With_X509Name(string dn)
     {
         var builder = new X500NameBuilder()
-            .SetCommonName("Inequality_With_X509Name")
+            .SetCommonName(nameof(Inequality_With_X509Name))
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
@@ -161,12 +161,12 @@ public class X500NameBuilderTests
 
 
     [Theory]
-    [InlineData("CN=Equality_With_X500DistinguishedName, O=SMMX, C=AU")]
-    [InlineData("CN=Equality_With_X500DistinguishedName,O=SMMX,C=AU")]
+    [InlineData($"CN={nameof(Equality_With_X500DistinguishedName)}, O=SMMX, C=AU")]
+    [InlineData($"CN={nameof(Equality_With_X500DistinguishedName)},O=SMMX,C=AU")]
     public void Equality_With_X500DistinguishedName(string dn)
     {
         var builder = new X500NameBuilder()
-            .SetCommonName("Equality_With_X500DistinguishedName")
+            .SetCommonName(nameof(Equality_With_X500DistinguishedName))
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
@@ -178,12 +178,12 @@ public class X500NameBuilderTests
 
 
     [Theory]
-    [InlineData("O=SMMX, CN=Inequality_With_X500DistinguishedName, C=AU")]
-    [InlineData("O=SMMX,CN=Inequality_With_X500DistinguishedName,C=AU")]
+    [InlineData($"O=SMMX, CN={nameof(Inequality_With_X500DistinguishedName)}, C=AU")]
+    [InlineData($"O=SMMX,CN={nameof(Inequality_With_X500DistinguishedName)},C=AU")]
     public void Inequality_With_X500DistinguishedName(string dn)
     {
         var builder = new X500NameBuilder()
-            .SetCommonName("Inequality_With_X500DistinguishedName")
+            .SetCommonName(nameof(Inequality_With_X500DistinguishedName))
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
@@ -195,12 +195,12 @@ public class X500NameBuilderTests
 
 
     [Theory]
-    [InlineData("CN=Equality_With_String, O=SMMX, C=AU")]
-    [InlineData("CN=Equality_With_String,O=SMMX,C=AU")]
+    [InlineData($"CN={nameof(Equality_With_String)}, O=SMMX, C=AU")]
+    [InlineData($"CN={nameof(Equality_With_String)},O=SMMX,C=AU")]
     public void Equality_With_String(string dn)
     {
         var builder = new X500NameBuilder()
-            .SetCommonName("Equality_With_String")
+            .SetCommonName(nameof(Equality_With_String))
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
@@ -211,12 +211,12 @@ public class X500NameBuilderTests
 
 
     [Theory]
-    [InlineData("O=SMMX, CN=Inequality_With_String, C=AU")]
-    [InlineData("O=SMMX,CN=Inequality_With_String,C=AU")]
+    [InlineData($"O=SMMX, CN={nameof(Inequality_With_String)}, C=AU")]
+    [InlineData($"O=SMMX,CN={nameof(Inequality_With_String)},C=AU")]
     public void Inequality_With_String(string dn)
     {
         var builder = new X500NameBuilder()
-            .SetCommonName("Inequality_With_String")
+            .SetCommonName(nameof(Inequality_With_String))
             .SetOrganization("SMMX")
             .SetCountry("AU");
 

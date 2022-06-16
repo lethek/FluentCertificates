@@ -11,8 +11,10 @@ using FluentCertificates.Internals;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1;
+#if !NET6_0_OR_GREATER
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509.Extension;
+#endif
 
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 using X509ExtensionBC = Org.BouncyCastle.Asn1.X509.X509Extension;
@@ -27,7 +29,7 @@ public partial record CertificateBuilder
     public int? PathLength { get; init; }
     public DateTimeOffset NotBefore { get; init; } = DateTimeOffset.UtcNow.AddHours(-1);
     public DateTimeOffset NotAfter { get; init; } = DateTimeOffset.UtcNow.AddHours(1);
-    public X509Name Subject { get; init; } = EmptyName;
+    public X500NameBuilder Subject { get; init; } = EmptyNameBuilder;
     public X509Certificate2? Issuer { get; init; }
     public string[] DnsNames { get; init; } = Array.Empty<string>();
     public string? FriendlyName { get; init; }
@@ -80,8 +82,11 @@ public partial record CertificateBuilder
     public CertificateBuilder SetNotAfter(DateTimeOffset value)
         => this with { NotAfter = value };
 
-    public CertificateBuilder SetSubject(X509Name value)
+    public CertificateBuilder SetSubject(X500NameBuilder value)
         => this with { Subject = value };
+
+    public CertificateBuilder SetSubject(Func<X500NameBuilder, X500NameBuilder> func)
+        => this with { Subject = func(Subject) };
 
     public CertificateBuilder SetIssuer(X509Certificate2? value)
         => this with { Issuer = value };
@@ -93,7 +98,7 @@ public partial record CertificateBuilder
         => this with { DnsNames = values.ToArray() };
 
     /// <summary>
-    /// Use to set a FriendlyName for the certificate. This feature is only supported on Windows and will be ignored on other platforms.
+    /// Use to set a FriendlyName for the certificate. This feature is only supported on Windows and will be ignored on all other platforms.
     /// </summary>
     /// <param name="value"></param>
     /// <returns>A new instance of CertificateBuilder with the specified FriendlyName set.</returns>
@@ -176,7 +181,7 @@ public partial record CertificateBuilder
     /// <exception cref="ArgumentNullException">Thrown when the SetKeyPair(AsymmetricAlgorithm) method has not been called.</exception>
     public CertificateRequest ToCertificateRequest()
     {
-        var dn = new X500DistinguishedName(Subject.ToString());
+        var dn = Subject.Build();
 
         var request = KeyPair switch {
             RSA rsa => new CertificateRequest(dn, rsa, HashAlgorithm, RSASignaturePadding),
@@ -228,7 +233,7 @@ public partial record CertificateBuilder
                 builder.GenerateSerialNumber()
             )
             : request.Create(
-                new X500DistinguishedName(builder.Subject.ToString()),
+                builder.Subject.Build(),
                 builder.CreateSignatureGenerator(builder.KeyPair),
                 builder.NotBefore,
                 builder.NotAfter,
@@ -380,6 +385,6 @@ public partial record CertificateBuilder
         };
 
 
-    private static readonly X509Name EmptyName = new X500NameBuilder();
+    private static readonly X500NameBuilder EmptyNameBuilder = new();
     private static readonly X509ExtensionOidEqualityComparer X509ExtensionOidEqualityComparer = new();
 }

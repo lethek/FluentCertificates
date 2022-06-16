@@ -28,8 +28,22 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     [Fact]
     public void Build_NewCertificate_HasPrivateKey()
     {
-        var cert = new CertificateBuilder().Build();
+        using var cert = new CertificateBuilder().Build();
         Assert.True(cert.HasPrivateKey);
+    }
+
+
+    [Fact]
+    public void Build_NewCertificate_WithSubject()
+    {
+        const string testName = nameof(Build_NewCertificate_WithSubject);
+        const string expected = $"CN={testName}";
+
+        using var cert1 = new CertificateBuilder().SetSubject(new X500NameBuilder().SetCommonName(testName)).Build();
+        Assert.Equal(expected, cert1.Subject);
+
+        using var cert2 = new CertificateBuilder().SetSubject(b => b.SetCommonName(testName)).Build();
+        Assert.Equal(expected, cert2.Subject);
     }
 
 
@@ -37,7 +51,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     public void Build_NewCertificate_WithRSAKeys()
     {
         var keys = RSA.Create();
-        var cert = new CertificateBuilder().SetKeyPair(keys).Build();
+        using var cert = new CertificateBuilder().SetKeyPair(keys).Build();
         Assert.Equal(PkcsObjectIdentifiers.RsaEncryption.Id, cert.GetKeyAlgorithm());
     }
 
@@ -46,7 +60,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     public void Build_NewCertificate_WithECDsaKeys()
     {
         var keys = ECDsa.Create();
-        var cert = new CertificateBuilder().SetKeyPair(keys).Build();
+        using var cert = new CertificateBuilder().SetKeyPair(keys).Build();
         Assert.Equal(X9ObjectIdentifiers.IdECPublicKey.Id, cert.GetKeyAlgorithm());
     }
 
@@ -55,12 +69,13 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     public void Build_NewCertificate_WithDSAKeys()
     {
         //NOTE: FluentCertificates does not currently support creating DSA certificates on .NET 5 or earlier
-        
         #if NET6_0_OR_GREATER
-        var cert = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
+        using var cert = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
         Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert.GetKeyAlgorithm());
         #else
-        Assert.Throws<NotImplementedException>(() => CertificateBuilder.Create().GenerateKeyPair(KeyAlgorithm.DSA).Build());
+        Assert.Throws<NotImplementedException>(() => {
+            using var cert = CertificateBuilder.Create().GenerateKeyPair(KeyAlgorithm.DSA).Build();
+        });
         #endif
     }
 
@@ -115,7 +130,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
         Skip.IfNot(Tools.IsWindows);
 
         const string friendlyName = "A FriendlyName can be set on Windows";
-        var cert = new CertificateBuilder().SetFriendlyName(friendlyName).Build();
+        using var cert = new CertificateBuilder().SetFriendlyName(friendlyName).Build();
         Assert.Equal(friendlyName, cert.FriendlyName);
     }
 
@@ -123,9 +138,15 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     [Fact]
     public void Build_InvalidKeyLength_ThrowsException()
     {
-        Assert.ThrowsAny<Exception>(() => new CertificateBuilder().SetKeyLength(10).Build());
-        Assert.Throws<ArgumentException>(() => new CertificateBuilder().SetKeyLength(0).Build());
-        Assert.Throws<ArgumentException>(() => new CertificateBuilder().SetKeyLength(-1024).Build());
+        Assert.ThrowsAny<Exception>(() => {
+            using var cert = new CertificateBuilder().SetKeyLength(10).Build();
+        });
+        Assert.Throws<ArgumentException>(() => {
+            using var cert = new CertificateBuilder().SetKeyLength(0).Build();
+        });
+        Assert.Throws<ArgumentException>(() => {
+            using var cert = new CertificateBuilder().SetKeyLength(-1024).Build();
+        });
     }
 
 
@@ -181,7 +202,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     {
         var issuer = Fixture.IntermediateCA;
 
-        var cert = CertificateBuilder.Create()
+        using var cert = CertificateBuilder.Create()
             .SetUsage(CertificateUsage.Server)
             .SetFriendlyName("FluentCertificates Test Server")
             .SetDnsNames("*.fake.domain", "fake.domain", "another.domain")
