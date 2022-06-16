@@ -77,6 +77,15 @@ public partial record CertificateBuilder
     public CertificateBuilder SetSubject(X500NameBuilder value)
         => this with { Subject = value };
 
+    public CertificateBuilder SetSubject(X509Name value)
+        => this with { Subject = new X500NameBuilder(value) };
+
+    public CertificateBuilder SetSubject(X500DistinguishedName value)
+        => this with { Subject = new X500NameBuilder(value) };
+
+    public CertificateBuilder SetSubject(string value)
+        => this with { Subject = new X500NameBuilder(value) };
+
     public CertificateBuilder SetSubject(Func<X500NameBuilder, X500NameBuilder> func)
         => this with { Subject = func(Subject) };
 

@@ -39,11 +39,22 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
         const string testName = nameof(Build_NewCertificate_WithSubject);
         const string expected = $"CN={testName}";
 
-        using var cert1 = new CertificateBuilder().SetSubject(new X500NameBuilder().SetCommonName(testName)).Build();
+        //Test several different, equivalent ways of setting the Subject
+
+        using var cert1 = new CertificateBuilder().SetSubject(b => b.SetCommonName(testName)).Build();
         Assert.Equal(expected, cert1.Subject);
 
-        using var cert2 = new CertificateBuilder().SetSubject(b => b.SetCommonName(testName)).Build();
+        using var cert2 = new CertificateBuilder().SetSubject(new X500NameBuilder().SetCommonName(testName)).Build();
         Assert.Equal(expected, cert2.Subject);
+
+        using var cert3 = new CertificateBuilder().SetSubject(new X500DistinguishedName(expected)).Build();
+        Assert.Equal(expected, cert3.Subject);
+
+        using var cert4 = new CertificateBuilder().SetSubject(new X509Name(expected)).Build();
+        Assert.Equal(expected, cert4.Subject);
+
+        using var cert5 = new CertificateBuilder { Subject = new X500NameBuilder(expected) }.Build();
+        Assert.Equal(expected, cert5.Subject);
     }
 
 

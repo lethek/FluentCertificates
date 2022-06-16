@@ -15,7 +15,9 @@ public class X500NameBuilderTests
     [Fact]
     public void Create_Empty_Builder()
     {
-        Assert.Empty(new X500NameBuilder().Attributes);
+        var builder = new X500NameBuilder();
+        Assert.Empty(builder.Attributes);
+        Assert.Empty(builder.ToString());
     }
 
 
@@ -23,11 +25,7 @@ public class X500NameBuilderTests
     public void Create_Builder_FromString()
     {
         const string expected = "DC=app,DC=fake";
-        var builder = new X500NameBuilder(expected);
-        Assert.Equal(expected, builder.ToString());
-        
-        //builder.Attributes.SequenceEqual(builder.Attributes, )
-
+        Assert.Equal(expected, new X500NameBuilder(expected).ToString());
     }
 
 
