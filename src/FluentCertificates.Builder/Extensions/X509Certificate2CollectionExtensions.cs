@@ -12,6 +12,13 @@ public static class X509Certificate2CollectionExtensions
             .Cast<X509Certificate2>();
 
 
+    public static X509Certificate2Collection ExportAsPkcs7(this X509Certificate2Collection collection, BinaryWriter writer)
+    {
+        collection.ToEnumerable().ExportAsPkcs7(writer);
+        return collection;
+    }
+
+
     public static X509Certificate2Collection ExportAsPkcs7(this X509Certificate2Collection collection, string path)
     {
         collection.ToEnumerable().ExportAsPkcs7(path);
@@ -19,6 +26,13 @@ public static class X509Certificate2CollectionExtensions
     }
 
 
+    public static X509Certificate2Collection ExportAsPkcs12(this X509Certificate2Collection collection, BinaryWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
+    {
+        collection.ToEnumerable().ExportAsPkcs12(writer, password, include);
+        return collection;
+    }
+
+    
     public static X509Certificate2Collection ExportAsPkcs12(this X509Certificate2Collection collection, string path, string? password = null, ExportKeys include = ExportKeys.All)
     {
         collection.ToEnumerable().ExportAsPkcs12(path, password, include);

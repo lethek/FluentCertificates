@@ -39,6 +39,13 @@ namespace FluentCertificates.Extensions
         }
 
 
+        public static X509Certificate2 ExportAsCert(this X509Certificate2 cert, BinaryWriter writer)
+        {
+            writer.Write(cert.Export(X509ContentType.Cert));
+            return cert;
+        }
+
+        
         public static X509Certificate2 ExportAsCert(this X509Certificate2 cert, string path)
         {
             File.WriteAllBytes(path, cert.Export(X509ContentType.Cert));
@@ -46,6 +53,16 @@ namespace FluentCertificates.Extensions
         }
 
 
+        public static X509Certificate2 ExportAsPkcs12(this X509Certificate2 cert, BinaryWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
+        {
+            var data = FilterPrivateKey(cert, include).Export(X509ContentType.Pfx, password)
+                       ?? throw new ArgumentException("Nothing to export", nameof(cert));
+
+            writer.Write(data);
+            return cert;
+        }
+
+        
         public static X509Certificate2 ExportAsPkcs12(this X509Certificate2 cert, string path, string? password = null, ExportKeys include = ExportKeys.All)
         {
             var data = FilterPrivateKey(cert, include).Export(X509ContentType.Pfx, password)
@@ -56,6 +73,16 @@ namespace FluentCertificates.Extensions
         }
 
 
+        public static X509Certificate2 ExportAsPkcs12(this X509Certificate2 cert, BinaryWriter writer, SecureString password, ExportKeys include = ExportKeys.All)
+        {
+            var data = FilterPrivateKey(cert, include).Export(X509ContentType.Pfx, password)
+                       ?? throw new ArgumentException("Nothing to export", nameof(cert));
+
+            writer.Write(data);
+            return cert;
+        }
+
+        
         public static X509Certificate2 ExportAsPkcs12(this X509Certificate2 cert, string path, SecureString password, ExportKeys include = ExportKeys.All)
         {
             var data = FilterPrivateKey(cert, include).Export(X509ContentType.Pfx, password)
@@ -66,6 +93,16 @@ namespace FluentCertificates.Extensions
         }
 
 
+        public static X509Certificate2 ExportAsPkcs7(this X509Certificate2 cert, BinaryWriter writer)
+        {
+            var data = new X509Certificate2Collection(cert).Export(X509ContentType.Pkcs7)
+                       ?? throw new ArgumentException("Nothing to export", nameof(cert));
+
+            writer.Write(data);
+            return cert;
+        }
+
+        
         public static X509Certificate2 ExportAsPkcs7(this X509Certificate2 cert, string path)
         {
             var data = new X509Certificate2Collection(cert).Export(X509ContentType.Pkcs7)

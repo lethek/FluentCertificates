@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.IO;
 #if NET5_0_OR_GREATER
 using System.Security.Cryptography;
 #endif
@@ -25,6 +26,23 @@ public static class X509Certificate2EnumerableExtensions
 
 
     [SuppressMessage("ReSharper", "SuspiciousTypeConversion.Global")]
+    public static IEnumerable<X509Certificate2> ExportAsPkcs7(this IEnumerable<X509Certificate2> enumerable, BinaryWriter writer)
+    {
+        //In .NET 6 and up, X509Certificate2Collection implements IEnumerable<X509Certificate2>, so no need to allocate & copy
+        var collection = enumerable is X509Certificate2Collection certCollection
+            ? certCollection
+            : enumerable.ToCollection();
+
+        var data = collection
+                       .Export(X509ContentType.Pkcs7)
+                   ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
+
+        writer.Write(data);
+        return enumerable;
+    }
+
+
+    [SuppressMessage("ReSharper", "SuspiciousTypeConversion.Global")]
     public static IEnumerable<X509Certificate2> ExportAsPkcs7(this IEnumerable<X509Certificate2> enumerable, string path)
     {
         //In .NET 6 and up, X509Certificate2Collection implements IEnumerable<X509Certificate2>, so no need to allocate & copy
@@ -37,6 +55,18 @@ public static class X509Certificate2EnumerableExtensions
             ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
 
         File.WriteAllBytes(path, data);
+        return enumerable;
+    }
+
+
+    public static IEnumerable<X509Certificate2> ExportAsPkcs12(this IEnumerable<X509Certificate2> enumerable, BinaryWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
+    {
+        var data = enumerable
+                       .FilterPrivateKeys(include)
+                       .ToCollection()
+                       .Export(X509ContentType.Pkcs12, password)
+                   ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
+        writer.Write(data);
         return enumerable;
     }
 
