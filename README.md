@@ -8,7 +8,7 @@ FluentCertificates is a library using the Immutable Fluent Builder pattern for e
 
 This project is published in three NuGet packages:
 
-* [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Simply brings in both the FluentCertificates.Builder and FluentCertificates.Finder packages.
+* [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Just brings in both the FluentCertificates.Builder and FluentCertificates.Finder packages.
 * [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension-methods. [Examples below](#certificatebuilder-examples)
 * [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across a collection of X509Stores. [Examples below](#certificatefinder-examples)
 
@@ -19,7 +19,7 @@ This project is published in three NuGet packages:
 ```csharp
 var request = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
-    .SetSubject(new X509NameBuilder().SetCommonName("*.fake.domain"))
+    .SetSubject(new X500NameBuilder().SetCommonName("*.fake.domain"))
     .SetDnsNames("*.fake.domain", "fake.domain")
     .ToCertificateRequest();
 ```
@@ -31,7 +31,7 @@ var request = new CertificateBuilder()
 var cert = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetFriendlyName("Example self-signed web-server certificate")
-    .SetSubject(new X509NameBuilder().SetCommonName("*.fake.domain"))
+    .SetSubject(new X500NameBuilder().SetCommonName("*.fake.domain"))
     .SetDnsNames("*.fake.domain", "fake.domain")
     .SetNotAfter(DateTimeOffset.UtcNow.AddMonths(1))
     .Build();
@@ -40,7 +40,7 @@ var cert = new CertificateBuilder()
 var builder = new CertificateBuilder() {
     Usage = CertificateUsage.Server,
     FriendlyName = "Example self-signed web-server certificate",
-    Subject = new X509NameBuilder().SetCommonName("*.fake.domain"),
+    Subject = new X500NameBuilder().SetCommonName("*.fake.domain"),
     DnsNames = new[] { "*.fake.domain", "fake.domain" },
     NotAfter = DateTimeOffset.UtcNow.AddMonths(1)
 };
@@ -54,7 +54,7 @@ var cert = builder.Build();
 var issuer = new CertificateBuilder()
     .SetUsage(CertificateUsage.CA)
     .SetFriendlyName("Example root CA")
-    .SetSubject(new X509NameBuilder().SetCommonName("Example root CA"))
+    .SetSubject(new X500NameBuilder().SetCommonName("Example root CA"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddYears(100))
     .Build();
 ```
@@ -66,7 +66,7 @@ var issuer = new CertificateBuilder()
 var cert = new CertificateBuilder()
     .SetUsage(CertificateUsage.Client)
     .SetFriendlyName("Example client-auth certificate")
-    .SetSubject(new X509NameBuilder().SetCommonName("User: Michael"))
+    .SetSubject(new X500NameBuilder().SetCommonName("User: Michael"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddYears(1))
     .SetIssuer(issuer)
     .Build();
@@ -77,7 +77,7 @@ var cert = new CertificateBuilder()
 ```csharp
 var cert = new CertificateBuilder()
     .SetFriendlyName("Example certificate with customized extensions")
-    .SetSubject(new X509NameBuilder().SetCommonName("Example certificate with customized extensions"))
+    .SetSubject(new X500NameBuilder().SetCommonName("Example certificate with customized extensions"))
     .AddExtension(new X509BasicConstraintsExtension(false, false, 0, true))
     .AddExtension(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DataEncipherment, true))
     .AddExtension(new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.AnyExtendedKeyUsage.Id) }, false))
@@ -91,7 +91,7 @@ var cert = new CertificateBuilder()
 
 *TODO: document this*
 
-## `X509NameBuilder` examples
+## `X500NameBuilder` examples
 
 *TODO: document this*
 

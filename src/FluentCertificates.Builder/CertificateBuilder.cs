@@ -380,6 +380,6 @@ public partial record CertificateBuilder
         };
 
 
-    private static readonly X509Name EmptyName = new X509NameBuilder();
+    private static readonly X509Name EmptyName = new X500NameBuilder();
     private static readonly X509ExtensionOidEqualityComparer X509ExtensionOidEqualityComparer = new();
 }

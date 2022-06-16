@@ -72,7 +72,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 
         using var rootCA = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(new X509NameBuilder().SetCommonName("Test Root CA"))
+            .SetSubject(new X500NameBuilder().SetCommonName("Test Root CA"))
             .SetNotAfter(now.AddHours(1))
             .GenerateKeyPair(KeyAlgorithm.ECDsa)
             .Build();
@@ -94,7 +94,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 
         using var rootCA = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(new X509NameBuilder().SetCommonName("Test Root CA"))
+            .SetSubject(new X500NameBuilder().SetCommonName("Test Root CA"))
             .SetNotAfter(now.AddHours(1))
             .GenerateKeyPair(KeyAlgorithm.RSA)
             .Build();
@@ -144,7 +144,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     {
         using var rootCert = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(new X509NameBuilder().SetCommonName("Test Root CA"))
+            .SetSubject(new X500NameBuilder().SetCommonName("Test Root CA"))
             .Build();
 
         Assert.Contains(rootCert.Extensions.OfType<X509BasicConstraintsExtension>(), x => x.CertificateAuthority);
@@ -159,13 +159,13 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 
         using var rootCA = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(new X509NameBuilder().SetCommonName("Test Root CA"))
+            .SetSubject(new X500NameBuilder().SetCommonName("Test Root CA"))
             .SetNotAfter(now.AddHours(1))
             .Build();
 
         using var subCA = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(new X509NameBuilder().SetCommonName("Test Subordinate CA 1"))
+            .SetSubject(new X500NameBuilder().SetCommonName("Test Subordinate CA 1"))
             .SetNotAfter(now.AddMinutes(1))
             .SetIssuer(rootCA)
             .Build();
@@ -185,7 +185,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
             .SetUsage(CertificateUsage.Server)
             .SetFriendlyName("FluentCertificates Test Server")
             .SetDnsNames("*.fake.domain", "fake.domain", "another.domain")
-            .SetSubject(new X509NameBuilder().SetCommonName("*.fake.domain"))
+            .SetSubject(new X500NameBuilder().SetCommonName("*.fake.domain"))
             .SetIssuer(issuer)
             .Build();
 

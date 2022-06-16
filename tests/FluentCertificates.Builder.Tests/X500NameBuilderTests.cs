@@ -8,8 +8,16 @@ using Xunit;
 
 namespace FluentCertificates;
 
-public class X509NameBuilderTests
+public class X500NameBuilderTests
 {
+    [Fact]
+    public void Create_Empty_Builder()
+    {
+        Assert.Empty(X500NameBuilder.Create().Attributes);
+        Assert.Empty(new X500NameBuilder().Attributes);
+    }
+
+
     [Fact]
     public void Add_Multiple_Matching_Attributes()
     {
@@ -17,29 +25,33 @@ public class X509NameBuilderTests
         const string expected = "DC=app,DC=fake";
 
         Assert.Equal(expected,
-            X509NameBuilder.Create()
+            X500NameBuilder.Create()
                 .AddDomainComponent("app")
                 .AddDomainComponent("fake")
-                .Build().ToString()
+                .Build()
+                .Name
         );
 
         Assert.Equal(expected,
-            X509NameBuilder.Create()
+            X500NameBuilder.Create()
                 .AddDomainComponents("app", "fake")
-                .Build().ToString()
+                .Build()
+                .Name
         );
 
         Assert.Equal(expected,
-            X509NameBuilder.Create()
+            X500NameBuilder.Create()
                 .Add(X509Name.DC, "app")
                 .Add(X509Name.DC, "fake")
-                .Build().ToString()
+                .Build()
+                .Name
         );
 
         Assert.Equal(expected,
-            X509NameBuilder.Create()
+            X500NameBuilder.Create()
                 .Add(X509Name.DC, "app", "fake")
-                .Build().ToString()
+                .Build()
+                .Name
         );
     }
 
@@ -47,13 +59,13 @@ public class X509NameBuilderTests
     [Fact]
     public void Clear_Removes_All_Attributes()
     {
-        Assert.Empty(
-            X509NameBuilder.Create()
-                .SetOrganizationalUnits("services")
-                .SetDomainComponents("app", "fake")
-                .Clear()
-                .Build().ToString()
-        );
+        var builder = X500NameBuilder.Create()
+            .SetOrganizationalUnits("services")
+            .SetDomainComponents("app", "fake")
+            .Clear();
+
+        Assert.Empty(builder.Attributes);
+        Assert.Empty(builder.Build().Name);
     }
 
 
@@ -62,7 +74,7 @@ public class X509NameBuilderTests
     {
         const string expected = "DC=app,DC=fake";
 
-        string actual = X509NameBuilder.Create().SetDomainComponents("app", "fake");
+        string actual = X500NameBuilder.Create().SetDomainComponents("app", "fake");
 
         Assert.Equal(expected, actual);
     }
@@ -76,9 +88,20 @@ public class X509NameBuilderTests
             new List<string> { "app", "fake" }
         );
 
-        X509Name actual = X509NameBuilder.Create().SetDomainComponents("app", "fake");
+        X509Name actual = X500NameBuilder.Create().SetDomainComponents("app", "fake");
 
         Assert.Equal(expected, actual);
+    }
+
+
+    [Fact]
+    public void Converts_Implicitly_To_X500DistinguishedName()
+    {
+        var expected = new X500DistinguishedName("DC=app,DC=fake");
+
+        X500DistinguishedName actual = X500NameBuilder.Create().SetDomainComponents("app", "fake");
+
+        Assert.Equal(expected.RawData, actual.RawData);
     }
 
 
@@ -86,35 +109,21 @@ public class X509NameBuilderTests
     public void Set_Removes_Matching_Attributes_Then_Adds()
     {
         Assert.Equal("DC=app,DC=fake",
-            X509NameBuilder.Create()
+            X500NameBuilder.Create()
                 .SetDomainComponents("app", "fake")
-                .Build().ToString()
+                .Build()
+                .Name
         );
 
         Assert.Equal("OU=services,DC=app,DC=fake",
-            X509NameBuilder.Create()
+            X500NameBuilder.Create()
                 .AddOrganizationalUnit("services")
                 .AddDomainComponents("old", "domain", "to", "remove")
                 .SetDomainComponents("app", "fake")
-                .Build().ToString()
+                .Build()
+                .Name
         );
     }
-
-
-    //[Fact]
-    //public void StaticInequality_With_X509Name()
-    //{
-    //    var name = new X509NameBuilder()
-    //        .SetCommonName("Inequality_With_NullX509Name")
-    //        .SetOrganization("SMMX")
-    //        .SetCountry("AU");
-
-    //    X509Name? other = null;
-    //    Assert.True(name == other);
-    //    Assert.True(other == name);
-    //    Assert.True(name.Equals(other));
-    //}
-
 
 
     [Theory]
@@ -122,15 +131,15 @@ public class X509NameBuilderTests
     [InlineData("CN=Equality_With_X509Name,O=SMMX,C=AU")]
     public void Equality_With_X509Name(string dn)
     {
-        var name = new X509NameBuilder()
+        var builder = new X500NameBuilder()
             .SetCommonName("Equality_With_X509Name")
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
-        var other = new X509Name(dn);
-        Assert.True(name == other);
-        Assert.True(other == name);
-        Assert.True(name.Equals(other));
+        var name = new X509Name(dn);
+        Assert.True(builder == name);
+        Assert.True(name == builder);
+        Assert.True(builder.Equals(name));
     }
 
 
@@ -139,15 +148,15 @@ public class X509NameBuilderTests
     [InlineData("O=SMMX,CN=Inequality_With_X509Name,C=AU")]
     public void Inequality_With_X509Name(string dn)
     {
-        var name = new X509NameBuilder()
+        var builder = new X500NameBuilder()
             .SetCommonName("Inequality_With_X509Name")
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
-        var other = new X509Name(dn);
-        Assert.True(name != other);
-        Assert.True(other != name);
-        Assert.False(name.Equals(other));
+        var name = new X509Name(dn);
+        Assert.True(builder != name);
+        Assert.True(name != builder);
+        Assert.False(builder.Equals(name));
     }
 
 
@@ -156,15 +165,15 @@ public class X509NameBuilderTests
     [InlineData("CN=Equality_With_X500DistinguishedName,O=SMMX,C=AU")]
     public void Equality_With_X500DistinguishedName(string dn)
     {
-        var name = new X509NameBuilder()
+        var builder = new X500NameBuilder()
             .SetCommonName("Equality_With_X500DistinguishedName")
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
-        var other = new X500DistinguishedName(dn);
-        Assert.True(name == other);
-        Assert.True(other == name);
-        Assert.True(name.Equals(other));
+        var name = new X500DistinguishedName(dn);
+        Assert.True(builder == name);
+        Assert.True(name == builder);
+        Assert.True(builder.Equals(name));
     }
 
 
@@ -173,15 +182,15 @@ public class X509NameBuilderTests
     [InlineData("O=SMMX,CN=Inequality_With_X500DistinguishedName,C=AU")]
     public void Inequality_With_X500DistinguishedName(string dn)
     {
-        var name = new X509NameBuilder()
+        var builder = new X500NameBuilder()
             .SetCommonName("Inequality_With_X500DistinguishedName")
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
-        var other = new X500DistinguishedName(dn);
-        Assert.True(name != other);
-        Assert.True(other != name);
-        Assert.False(name.Equals(other));
+        var name = new X500DistinguishedName(dn);
+        Assert.True(builder != name);
+        Assert.True(name != builder);
+        Assert.False(builder.Equals(name));
     }
 
 
@@ -190,14 +199,14 @@ public class X509NameBuilderTests
     [InlineData("CN=Equality_With_String,O=SMMX,C=AU")]
     public void Equality_With_String(string dn)
     {
-        var name = new X509NameBuilder()
+        var builder = new X500NameBuilder()
             .SetCommonName("Equality_With_String")
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
-        Assert.True(name == dn);
-        Assert.True(dn == name);
-        Assert.True(name.Equals(dn));
+        Assert.True(builder == dn);
+        Assert.True(dn == builder);
+        Assert.True(builder.Equals(dn));
     }
 
 
@@ -206,13 +215,13 @@ public class X509NameBuilderTests
     [InlineData("O=SMMX,CN=Inequality_With_String,C=AU")]
     public void Inequality_With_String(string dn)
     {
-        var name = new X509NameBuilder()
+        var builder = new X500NameBuilder()
             .SetCommonName("Inequality_With_String")
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
-        Assert.True(name != dn);
-        Assert.True(dn != name);
-        Assert.False(name.Equals(dn));
+        Assert.True(builder != dn);
+        Assert.True(dn != builder);
+        Assert.False(builder.Equals(dn));
     }
 }

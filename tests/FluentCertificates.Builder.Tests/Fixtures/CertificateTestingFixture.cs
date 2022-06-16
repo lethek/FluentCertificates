@@ -44,7 +44,7 @@ public class CertificateTestingFixture : IDisposable
         => CertificateBuilder.Create()
             .SetUsage(CertificateUsage.CA)
             .SetFriendlyName($"{CertNamePrefix} {name}")
-            .SetSubject(new X509NameBuilder().SetCommonName($"{CertNamePrefix} {name}"))
+            .SetSubject(new X500NameBuilder().SetCommonName($"{CertNamePrefix} {name}"))
             .SetNotAfter(DateTimeOffset.UtcNow.AddYears(years))
             .SetIssuer(issuer)
             .Build();
