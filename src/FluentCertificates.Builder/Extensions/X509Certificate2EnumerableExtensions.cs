@@ -1,8 +1,10 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+#if NET5_0_OR_GREATER
+using System.Security.Cryptography;
+#endif
 using System.Security.Cryptography.X509Certificates;
 
-using Org.BouncyCastle.OpenSsl;
-using Org.BouncyCastle.Security;
+using FluentCertificates.Internals;
 
 namespace FluentCertificates.Extensions;
 
@@ -63,13 +65,14 @@ public static class X509Certificate2EnumerableExtensions
     {
         var list = enumerable.FilterPrivateKeys(include).ToList();
         using var sw = new StringWriter();
-        var pem = new PemWriter(sw);
-        foreach (var cert in list.Select(DotNetUtilities.FromX509Certificate)) {
-            pem.WriteObject(cert);
+        foreach (var cert in list) {
+            sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
+            sw.Write('\n');
         }
         if (include != ExportKeys.None) {
             foreach (var cert in list.Where(x => x.HasPrivateKey)) {
-                pem.WriteObject(cert.GetBouncyCastleRsaKeyPair().Private);
+                sw.Write(PemEncoding.Write("PRIVATE KEY", cert.GetPrivateKey().ExportPkcs8PrivateKey()));
+                sw.Write('\n');
             }
         }
         return sw.ToString();

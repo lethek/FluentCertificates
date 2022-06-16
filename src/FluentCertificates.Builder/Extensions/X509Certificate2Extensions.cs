@@ -5,7 +5,6 @@ using System.Security.Cryptography.X509Certificates;
 using FluentCertificates.Internals;
 
 using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Security;
 
 namespace FluentCertificates.Extensions
@@ -82,16 +81,16 @@ namespace FluentCertificates.Extensions
             File.WriteAllText(path, cert.ToPemString(include));
             return cert;
         }
-
+        
 
         public static string ToPemString(this X509Certificate2 cert, ExportKeys include = ExportKeys.All)
         {
             using var sw = new StringWriter();
-            var pem = new PemWriter(sw);
-            var bcCert = DotNetUtilities.FromX509Certificate(cert);
-            pem.WriteObject(bcCert);
+            sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
+            sw.Write('\n');
             if (include != ExportKeys.None && cert.HasPrivateKey) {
-                pem.WriteObject(cert.GetBouncyCastleRsaKeyPair().Private);
+                sw.Write(PemEncoding.Write("PRIVATE KEY", cert.GetPrivateKey().ExportPkcs8PrivateKey()));
+                sw.Write('\n');
             }
             return sw.ToString();
         }
@@ -101,13 +100,13 @@ namespace FluentCertificates.Extensions
             => Convert.ToBase64String(cert.Export(X509ContentType.Cert));
 
 
-        public static AsymmetricAlgorithm? GetPrivateKey(this X509Certificate2 cert)
-            => cert.GetKeyAlgorithm() switch {
+        public static AsymmetricAlgorithm GetPrivateKey(this X509Certificate2 cert)
+            => (AsymmetricAlgorithm?)(cert.GetKeyAlgorithm() switch {
                 "1.2.840.113549.1.1.1" => cert.GetRSAPrivateKey(),
                 "1.2.840.10040.4.1" => cert.GetDSAPrivateKey(),
                 "1.2.840.10045.2.1" => cert.GetECDsaPrivateKey(),
-                _ => throw new NotSupportedException($"Unsupported public-key OID {cert.PublicKey.Oid.Value}")
-            };
+                _ => throw new NotSupportedException($"Unsupported key algorithm OID {cert.GetKeyAlgorithm()}")
+            }) ?? throw new Exception($"Private key not found for OID {cert.GetKeyAlgorithm()}");
 
 
         public static bool IsValidNow(this X509Certificate2 cert)

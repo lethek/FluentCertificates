@@ -8,7 +8,7 @@ namespace FluentCertificates.Internals;
 // The .NET Foundation licenses this file to you under the MIT license.
 
 /// <summary>
-/// Sourced under the MIT license from: https://github.com/dotnet/runtime/blob/main/src/libraries/System.Security.Cryptography.X509Certificates/tests/CertificateCreation/DSAX509SignatureGenerator.cs
+/// Sourced under the MIT license from: https://github.com/dotnet/runtime/blob/release/6.0/src/libraries/System.Security.Cryptography.X509Certificates/tests/CertificateCreation/DSAX509SignatureGenerator.cs
 /// </summary>
 internal sealed class DSAX509SignatureGenerator : X509SignatureGenerator
 {
