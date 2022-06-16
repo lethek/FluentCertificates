@@ -74,7 +74,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
         Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert.GetKeyAlgorithm());
         #else
         Assert.Throws<NotImplementedException>(() => {
-            using var cert = CertificateBuilder.Create().GenerateKeyPair(KeyAlgorithm.DSA).Build();
+            using var cert = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
         });
         #endif
     }
@@ -202,7 +202,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     {
         var issuer = Fixture.IntermediateCA;
 
-        using var cert = CertificateBuilder.Create()
+        using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetFriendlyName("FluentCertificates Test Server")
             .SetDnsNames("*.fake.domain", "fake.domain", "another.domain")

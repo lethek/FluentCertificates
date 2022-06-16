@@ -11,20 +11,31 @@ namespace FluentCertificates;
 // ReSharper disable WithExpressionModifiesAllMembers
 public record X500NameBuilder
 {
-    public static X500NameBuilder Create(X500NameBuilder? copy = null)
-        => new(copy);
+    public X500NameBuilder()
+    { }
 
 
-    public X500NameBuilder(X500NameBuilder? copy)
-        => Attributes = (copy == null)
-            ? ImmutableList<(Oid, string)>.Empty
-            : copy.Attributes;
+    public X500NameBuilder(X509Name name) =>
+        Attributes = name.GetOidList()
+            .Cast<DerObjectIdentifier>()
+            .Zip(
+                name.GetValueList().Cast<string>(),
+                (oid, value) => (new Oid(oid.Id), value)
+            )
+            .ToImmutableList();
 
 
-    public X500NameBuilder() : this(null) { }
+    public X500NameBuilder(X500DistinguishedName name)
+        : this(new X509Name(name.Name))
+    { }
 
 
-    public ImmutableList<(Oid OID, string Value)> Attributes { get; init; }
+    public X500NameBuilder(string name)
+        : this(new X509Name(name))
+    { }
+
+
+    public ImmutableList<(Oid OID, string Value)> Attributes { get; init; } = ImmutableList<(Oid, string)>.Empty;
 
 
     public X500DistinguishedName Build()

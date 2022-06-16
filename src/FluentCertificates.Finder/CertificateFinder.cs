@@ -15,10 +15,6 @@ public record CertificateFinder : IQueryable<X509Certificate2>
     public virtual IQueryProvider Provider => Queryable.Provider;
 
 
-    public static CertificateFinder Create()
-        => new();
-
-
     public CertificateFinder ClearStores()
         => this with { Stores = Stores.Clear() };
 

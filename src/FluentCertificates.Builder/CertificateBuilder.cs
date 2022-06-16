@@ -43,14 +43,6 @@ public partial record CertificateBuilder
 
 
     /// <summary>
-    /// Creates a new instance of CertificateBuilder with default values.
-    /// </summary>
-    /// <returns>A new instance of CertificateBuilder with default values.</returns>
-    public static CertificateBuilder Create()
-        => new();
-
-
-    /// <summary>
     /// Use this for a quick and easy way to set some appropriate default extensions for the 
     /// </summary>
     /// <param name="value">What the certificate's primary purpose will be.</param>
