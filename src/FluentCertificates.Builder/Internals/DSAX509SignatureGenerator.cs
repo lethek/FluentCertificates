@@ -1,8 +1,11 @@
-﻿using System.Diagnostics;
+﻿// ReSharper disable SuggestVarOrType_BuiltInTypes
+
+using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography;
 
 namespace FluentCertificates.Internals;
+
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -143,9 +146,9 @@ internal sealed class DSAX509SignatureGenerator : X509SignatureGenerator
         //   g INTEGER
         // }
 
-        byte[] p = EncodeUnsignedInteger(dsaParameters.P);
-        byte[] q = EncodeUnsignedInteger(dsaParameters.Q);
-        byte[] g = EncodeUnsignedInteger(dsaParameters.G);
+        byte[] p = EncodeUnsignedInteger(dsaParameters.P!);
+        byte[] q = EncodeUnsignedInteger(dsaParameters.Q!);
+        byte[] g = EncodeUnsignedInteger(dsaParameters.G!);
 
         byte[] algParameters =
             new byte[] { 0x30 }.
@@ -155,7 +158,7 @@ internal sealed class DSAX509SignatureGenerator : X509SignatureGenerator
                 Concat(g).
                 ToArray();
 
-        byte[] keyValue = EncodeUnsignedInteger(dsaParameters.Y);
+        byte[] keyValue = EncodeUnsignedInteger(dsaParameters.Y!);
 
         return new PublicKey(
             oid,

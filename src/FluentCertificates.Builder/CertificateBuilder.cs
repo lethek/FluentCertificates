@@ -218,7 +218,7 @@ public partial record CertificateBuilder
         Validate();
 
         var builder = KeyPair == null
-            ? GenerateKeyPair(KeyAlgorithm.RSA)
+            ? GenerateKeyPair()
             : this;
 
         Debug.Assert(builder.KeyPair != null);

@@ -8,31 +8,26 @@ namespace FluentCertificates.Fixtures;
 
 public class CertificateTestingFixture : IDisposable
 {
-    public X509Certificate2 RootCA => _rootCA.Value;
-    public X509Certificate2 IntermediateCA => _intermediateCA.Value;
+    public X509Certificate2 RootCA => _rootCa.Value;
+    public X509Certificate2 IntermediateCA => _intermediateCa.Value;
     public X509Chain CAs => _caChain.Value;
-
-    
-    private Lazy<X509Certificate2> _rootCA { get; }
-    private Lazy<X509Certificate2> _intermediateCA { get; }
-    private Lazy<X509Chain> _caChain { get; }
 
 
     public CertificateTestingFixture()
     {
-        _rootCA = new(() => CreateCertificateAuthority("Root CA", 100));
-        _intermediateCA = new(() => CreateCertificateAuthority("Intermediate CA", 99, RootCA));
+        _rootCa = new(() => CreateCertificateAuthority("Root CA", 100));
+        _intermediateCa = new(() => CreateCertificateAuthority("Intermediate CA", 99, RootCA));
         _caChain = new(() => IntermediateCA.BuildChain(new[] { RootCA }, true));
     }
 
 
     public void Dispose()
     {
-        if (_rootCA.IsValueCreated) {
-            _rootCA.Value.Dispose();
+        if (_rootCa.IsValueCreated) {
+            _rootCa.Value.Dispose();
         }
-        if (_intermediateCA.IsValueCreated) {
-            _intermediateCA.Value.Dispose();
+        if (_intermediateCa.IsValueCreated) {
+            _intermediateCa.Value.Dispose();
         }
         if (_caChain.IsValueCreated) {
             _caChain.Value.Dispose();
@@ -50,5 +45,10 @@ public class CertificateTestingFixture : IDisposable
             .Build();
 
 
+    private readonly Lazy<X509Certificate2> _rootCa;
+    private readonly Lazy<X509Certificate2> _intermediateCa;
+    private readonly Lazy<X509Chain> _caChain;
+
+    
     private const string CertNamePrefix = "FluentCertificates Test";
 }

@@ -1,6 +1,8 @@
-﻿using System.Security.Cryptography.X509Certificates;
+﻿using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
-using Org.BouncyCastle.OpenSsl;
+using FluentCertificates.Internals;
+
 using Org.BouncyCastle.Pkcs;
 
 namespace FluentCertificates.Extensions;
@@ -17,8 +19,8 @@ public static class CertificateRequestExtensions
     public static string ToPemString(this CertificateRequest certRequest)
     {
         using var sw = new StringWriter();
-        var pem = new PemWriter(sw);
-        pem.WriteObject(certRequest.ConvertToBouncyCastle());
+        sw.Write(PemEncoding.Write("CERTIFICATE REQUEST", certRequest.CreateSigningRequest()));
+        sw.Write('\n');
         return sw.ToString();
     }
 

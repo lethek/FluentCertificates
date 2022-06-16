@@ -24,7 +24,7 @@ public partial record CertificateBuilder
     {
         var keypair = KeyPair ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to provide a public/private keypair");
         var bouncyKeyPair = DotNetUtilities.GetKeyPair(keypair);
-        var extensions = new X509Extensions(BuildExtensions(this, null).ToDictionary(x => new DerObjectIdentifier(x.Oid.Value), x => x.ConvertToBouncyCastle()));
+        var extensions = new X509Extensions(BuildExtensions(this, null).ToDictionary(x => new DerObjectIdentifier(x.Oid?.Value), x => x.ConvertToBouncyCastle()));
         var attributes = new DerSet(new AttributePkcs(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
         var sigFactory = new Asn1SignatureFactory(GetSignatureAlgorithm(this).Id, bouncyKeyPair.Private);
         return new Pkcs10CertificationRequest(sigFactory, Subject, bouncyKeyPair.Public, attributes);
