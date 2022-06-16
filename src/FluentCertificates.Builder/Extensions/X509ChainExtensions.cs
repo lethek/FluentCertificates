@@ -29,6 +29,13 @@ public static class X509ChainExtensions
     }
 
 
+    public static X509Chain ExportAsPem(this X509Chain chain, TextWriter writer, ExportKeys include = ExportKeys.All)
+    {
+        chain.ToEnumerable().ExportAsPem(writer, include);
+        return chain;
+    }
+
+    
     public static X509Chain ExportAsPem(this X509Chain chain, string path, ExportKeys include = ExportKeys.All)
     {
         chain.ToEnumerable().ExportAsPem(path, include);

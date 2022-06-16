@@ -9,6 +9,13 @@ namespace FluentCertificates.Extensions;
 
 public static class CertificateRequestExtensions
 {
+    public static CertificateRequest ExportAsPem(this CertificateRequest certRequest, TextWriter writer)
+    {
+        writer.Write(certRequest.ToPemString());
+        return certRequest;
+    }
+
+    
     public static CertificateRequest ExportAsPem(this CertificateRequest certRequest, string path)
     {
         File.WriteAllText(path, certRequest.ToPemString());

@@ -76,6 +76,13 @@ namespace FluentCertificates.Extensions
         }
 
 
+        public static X509Certificate2 ExportAsPem(this X509Certificate2 cert, TextWriter writer, ExportKeys include = ExportKeys.All)
+        {
+            writer.Write(cert.ToPemString(include));
+            return cert;
+        }
+
+        
         public static X509Certificate2 ExportAsPem(this X509Certificate2 cert, string path, ExportKeys include = ExportKeys.All)
         {
             File.WriteAllText(path, cert.ToPemString(include));

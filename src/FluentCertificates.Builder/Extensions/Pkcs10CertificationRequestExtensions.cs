@@ -5,6 +5,13 @@ namespace FluentCertificates.Extensions;
 
 public static class Pkcs10CertificationRequestExtensions
 {
+    public static Pkcs10CertificationRequest ExportAsPem(this Pkcs10CertificationRequest csr, TextWriter writer)
+    {
+        writer.Write(csr.ToPemString());
+        return csr;
+    }
+
+    
     public static Pkcs10CertificationRequest ExportAsPem(this Pkcs10CertificationRequest csr, string path)
     {
         File.WriteAllText(path, csr.ToPemString());

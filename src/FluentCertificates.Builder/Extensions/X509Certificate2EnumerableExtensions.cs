@@ -54,6 +54,13 @@ public static class X509Certificate2EnumerableExtensions
     }
 
 
+    public static IEnumerable<X509Certificate2> ExportAsPem(this IEnumerable<X509Certificate2> enumerable, TextWriter writer, ExportKeys include = ExportKeys.All)
+    {
+        writer.Write(enumerable.ToPemString(include));
+        return enumerable;
+    }
+
+    
     public static IEnumerable<X509Certificate2> ExportAsPem(this IEnumerable<X509Certificate2> enumerable, string path, ExportKeys include = ExportKeys.All)
     {
         File.WriteAllText(path, enumerable.ToPemString(include));

@@ -6,6 +6,13 @@ namespace FluentCertificates.Extensions;
 
 public static class AsymmetricAlgorithmExtensions
 {
+    public static AsymmetricAlgorithm ExportAsPrivateKeyPem(this AsymmetricAlgorithm keys, TextWriter writer)
+    {
+        writer.Write(keys.ToPrivateKeyPemString());
+        return keys;
+    }
+
+    
     public static AsymmetricAlgorithm ExportAsPrivateKeyPem(this AsymmetricAlgorithm keys, string path)
     {
         File.WriteAllText(path, keys.ToPrivateKeyPemString());
@@ -22,6 +29,13 @@ public static class AsymmetricAlgorithmExtensions
     }
 
 
+    public static AsymmetricAlgorithm ExportAsPublicKeyPem(this AsymmetricAlgorithm keys, TextWriter writer)
+    {
+        writer.Write(keys.ToPublicKeyPemString());
+        return keys;
+    }
+
+    
     public static AsymmetricAlgorithm ExportAsPublicKeyPem(this AsymmetricAlgorithm keys, string path)
     {
         File.WriteAllText(path, keys.ToPublicKeyPemString());

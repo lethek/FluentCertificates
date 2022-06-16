@@ -26,6 +26,13 @@ public static class X509Certificate2CollectionExtensions
     }
 
 
+    public static X509Certificate2Collection ExportAsPem(this X509Certificate2Collection collection, TextWriter writer, ExportKeys include = ExportKeys.All)
+    {
+        collection.ToEnumerable().ExportAsPem(writer, include);
+        return collection;
+    }
+
+    
     public static X509Certificate2Collection ExportAsPem(this X509Certificate2Collection collection, string path, ExportKeys include = ExportKeys.All)
     {
         collection.ToEnumerable().ExportAsPem(path, include);
