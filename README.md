@@ -19,7 +19,7 @@ This project is published in three NuGet packages:
 ```csharp
 var request = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
-    .SetSubject(new X500NameBuilder().SetCommonName("*.fake.domain"))
+    .SetSubject(b => b.SetCommonName("*.fake.domain"))
     .SetDnsNames("*.fake.domain", "fake.domain")
     .ToCertificateRequest();
 ```
@@ -31,7 +31,7 @@ var request = new CertificateBuilder()
 var cert = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetFriendlyName("Example self-signed web-server certificate")
-    .SetSubject(new X500NameBuilder().SetCommonName("*.fake.domain"))
+    .SetSubject(b => b.SetCommonName("*.fake.domain"))
     .SetDnsNames("*.fake.domain", "fake.domain")
     .SetNotAfter(DateTimeOffset.UtcNow.AddMonths(1))
     .Build();
@@ -54,7 +54,7 @@ var cert = builder.Build();
 var issuer = new CertificateBuilder()
     .SetUsage(CertificateUsage.CA)
     .SetFriendlyName("Example root CA")
-    .SetSubject(new X500NameBuilder().SetCommonName("Example root CA"))
+    .SetSubject(b => b.SetCommonName("Example root CA"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddYears(100))
     .Build();
 ```
@@ -66,7 +66,7 @@ var issuer = new CertificateBuilder()
 var cert = new CertificateBuilder()
     .SetUsage(CertificateUsage.Client)
     .SetFriendlyName("Example client-auth certificate")
-    .SetSubject(new X500NameBuilder().SetCommonName("User: Michael"))
+    .SetSubject(b => b.SetCommonName("User: Michael"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddYears(1))
     .SetIssuer(issuer)
     .Build();
@@ -77,7 +77,7 @@ var cert = new CertificateBuilder()
 ```csharp
 var cert = new CertificateBuilder()
     .SetFriendlyName("Example certificate with customized extensions")
-    .SetSubject(new X500NameBuilder().SetCommonName("Example certificate with customized extensions"))
+    .SetSubject(b => b.SetCommonName("Example certificate with customized extensions"))
     .AddExtension(new X509BasicConstraintsExtension(false, false, 0, true))
     .AddExtension(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DataEncipherment, true))
     .AddExtension(new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.AnyExtendedKeyUsage.Id) }, false))
