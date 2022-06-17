@@ -18,6 +18,8 @@ Unfortunately documentation is incomplete. You may find more examples within the
 
 ## `CertificateBuilder` examples
 
+`CertificateBuilder` requires the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and is found under the `FluentCertificates` namespace.
+
 ### **Create a `CertificateRequest` for signing, exporting and passing to a 3rd party CA:**
 
 ```csharp
@@ -93,11 +95,15 @@ var cert = new CertificateBuilder()
 
 ## `CertificateFinder` examples
 
+`CertificateFinder` requires the [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder) package and is found under the `FluentCertificates` namespace.
+
 *TODO: document this*
 
 ---
 
 ## `X500NameBuilder` examples
+
+`X500NameBuilder` requires the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and is found under the `FluentCertificates` namespace.
 
 *TODO: document this; see unit tests for more examples*
 
@@ -105,68 +111,109 @@ var cert = new CertificateBuilder()
 
 ## `X509Certificate2` extension-methods
 
-*TODO: document this; see unit tests for more examples*
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+
+*TODO: document these; see unit tests for more examples*
 
 |Extension-Method|Description|
 |-|-|
-|BuildChain||
-|ExportAsCert||
-|ExportAsPkcs12||
-|ExportAsPkcs7||
-|ExportAsPem||
-|ToPemString||
-|ToBase64String||
-|GetPrivateKey||
-|IsValidNow||
-|IsValid||
-|IsSelfSigned||
-|IsIssuedBy||
-|VerifyIssuer||
-
----
-
-## `X509Certificate2Collection` extension-methods
-
-*TODO: document this*
-|Extension-Method|Description|
-|-|-|
-|ToEnumerable||
-|ExportAsPkcs7||
-|ExportAsPkcs12||
-|ExportAsPem||
-|ToPemString||
-
----
-
-## `IEnumerable<X509Certificate2>` extension-methods
-
-*TODO: document this*
-|Extension-Method|Description|
-|-|-|
-|ToCollection||
-|FilterPrivateKeys||
-|ExportAsPkcs7||
-|ExportAsPkcs12||
-|ExportAsPem||
-|ToPemString||
+|`BuildChain`||
+|`ExportAsCert`||
+|`ExportAsPkcs12`||
+|`ExportAsPkcs7`||
+|`ExportAsPem`||
+|`ToPemString`||
+|`ToBase64String`||
+|`GetPrivateKey`||
+|`IsValidNow`||
+|`IsValid`||
+|`IsSelfSigned`||
+|`IsIssuedBy`||
+|`VerifyIssuer`||
 
 ---
 
 ## `X509Chain` extension-methods
 
-*TODO: document this*
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+
+*TODO: document these*
+
 |Extension-Method|Description|
 |-|-|
-|ToCollection||
-|ToEnumerable||
-|ExportAsPkcs7||
-|ExportAsPkcs12||
-|ExportAsPem||
-|ToPemString||
+|`ToCollection`||
+|`ToEnumerable`||
+|`ExportAsPkcs7`||
+|`ExportAsPkcs12`||
+|`ExportAsPem`||
+|`ToPemString`||
+
+---
+
+## `X509Certificate2Collection` extension-methods
+
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+
+*TODO: document these*
+
+|Extension-Method|Description|
+|-|-|
+|`ToEnumerable`||
+|`ExportAsPkcs7`||
+|`ExportAsPkcs12`||
+|`ExportAsPem`||
+|`ToPemString`||
+
+---
+
+## `IEnumerable<X509Certificate2>` extension-methods
+
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+
+*TODO: document these*
+
+|Extension-Method|Description|
+|-|-|
+|`ToCollection`||
+|`FilterPrivateKeys`||
+|`ExportAsPkcs7`||
+|`ExportAsPkcs12`||
+|`ExportAsPem`||
+|`ToPemString`||
+
+---
+
+## `AsymmetricAlgorithm` extension-methods
+
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+
+*TODO: document these*
+
+|Extension-Method|Description|
+|-|-|
+|`ToPrivateKeyPemString`||
+|`ToPublicKeyPemString`||
+|`ExportAsPrivateKeyPem`||
+|`ExportAsPublicKeyPem`||
+
+---
+
+## `CertificateRequest` extension-methods
+
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+
+|Extension-Method|Description|
+|-|-|
+|`ToPemString()`|Exports the `CertificateRequest` to a PEM string.|
+|`ExportAsPem(string path)`|Exports the `CertificateRequest` to the specified PEM file.|
+|`ExportAsPem(TextWriter writer)`|Exports the `CertificateRequest` in PEM format to the given `TextWriter`.|
+|`ConvertToBouncyCastle()`|Converts the `CertificateRequest` to a BouncyCastle `Pkcs10CertificationRequest`|
 
 ---
 
 ## `X509Extension` extension-methods
+
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
 
 |Extension-Method|Description|
 |-|-|
@@ -174,12 +221,3 @@ var cert = new CertificateBuilder()
 |`bcExtension.ConvertToDotNet(string oid)`|Converts a BouncyCastle `X509Extension` to a DotNet `X509Extension`. A DotNet `X509Extension` includes an OID, but a BouncyCastle one doesn't, therefore one must be supplied in the parameters here.|
 |`bcExtension.ConvertToDotNet(DerObjectIdentifier oid)`|Converts a BouncyCastle `X509Extension` to a DotNet `X509Extension`. A DotNet `X509Extension` includes an OID, but a BouncyCastle one doesn't, therefore one must be supplied in the parameters here.|
 
----
-
-## `CertificateRequest` extension-methods
-|Extension-Method|Description|
-|-|-|
-|`ToPemString()`|Exports the `CertificateRequest` to a PEM string.|
-|`ExportAsPem(string path)`|Exports the `CertificateRequest` to the specified PEM file.|
-|`ExportAsPem(TextWriter writer)`|Exports the `CertificateRequest` in PEM format to the given `TextWriter`.|
-|`ConvertToBouncyCastle()`|Converts the `CertificateRequest` to a BouncyCastle `Pkcs10CertificationRequest`|
