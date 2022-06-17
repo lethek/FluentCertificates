@@ -128,7 +128,7 @@ public class X509Certificate2ExtensionsTests
     [InlineData(KeyAlgorithm.RSA, ExportKeys.All)]
     public void ExportAsPkcs12_ToFileWithPassword_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include)
     {
-        using var expected = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.ECDsa).Build();
+        using var expected = new CertificateBuilder().GenerateKeyPair(alg).Build();
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "pfx");
         expected.ExportAsPkcs12(tmpFile, TestPassword, include);
 
