@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Meziantou.Xunit.ParallelTestFramework" Version="1.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.2.0" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="6.0.1" />
     <PackageReference Include="xunit" Version="2.4.1" />
