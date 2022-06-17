@@ -3,24 +3,24 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+
 using FluentCertificates.Extensions;
 using FluentCertificates.Internals;
-using FluentCertificates.Fixtures;
+
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1.X9;
+
 using Xunit;
+
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
+
 
 namespace FluentCertificates;
 
-public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
+public class CertificateBuilderTests
 {
-    public CertificateBuilderTests(CertificateTestingFixture fixture)
-        => Fixture = fixture;
-
-
     [Fact]
     public void Build_NewCertificate_HasPrivateKey()
     {
@@ -113,7 +113,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 
         using var rootCA = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(x => x.SetCommonName("Test Root CA"))
+            .SetSubject(x => x.SetCommonName("Root CA Test"))
             .SetNotAfter(now.AddHours(1))
             .GenerateKeyPair(KeyAlgorithm.ECDsa)
             .Build();
@@ -135,7 +135,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 
         using var rootCA = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(x => x.SetCommonName("Test Root CA"))
+            .SetSubject(x => x.SetCommonName("Root CA Test"))
             .SetNotAfter(now.AddHours(1))
             .GenerateKeyPair(KeyAlgorithm.RSA)
             .Build();
@@ -189,13 +189,13 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     [Fact]
     public void Build_RootCA_IsSelfSigned()
     {
-        using var rootCert = new CertificateBuilder()
+        using var rootCa = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(x => x.SetCommonName("Test Root CA"))
+            .SetSubject(x => x.SetCommonName("Root CA Test"))
             .Build();
 
-        Assert.Contains(rootCert.Extensions.OfType<X509BasicConstraintsExtension>(), x => x.CertificateAuthority);
-        Assert.True(rootCert.IsSelfSigned());
+        Assert.Contains(rootCa.Extensions.OfType<X509BasicConstraintsExtension>(), x => x.CertificateAuthority);
+        Assert.True(rootCa.IsSelfSigned());
     }
 
 
@@ -204,40 +204,52 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     {
         var now = DateTimeOffset.UtcNow;
 
-        using var rootCA = new CertificateBuilder()
+        using var rootCa = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(x => x.SetCommonName("Test Root CA"))
+            .SetSubject(x => x.SetCommonName("Root CA Test"))
             .SetNotAfter(now.AddHours(1))
             .Build();
 
-        using var subCA = new CertificateBuilder()
+        using var subCa = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(x => x.SetCommonName("Test Subordinate CA 1"))
+            .SetSubject(x => x.SetCommonName("Subordinate CA Test"))
             .SetNotAfter(now.AddMinutes(1))
-            .SetIssuer(rootCA)
+            .SetIssuer(rootCa)
             .Build();
 
-        Assert.Contains(rootCA.Extensions.OfType<X509BasicConstraintsExtension>(), x => x.CertificateAuthority);
-        Assert.True(subCA.IsIssuedBy(rootCA));
-        Assert.True(subCA.VerifyIssuer(rootCA));
+        Assert.Contains(rootCa.Extensions.OfType<X509BasicConstraintsExtension>(), x => x.CertificateAuthority);
+        Assert.True(subCa.IsIssuedBy(rootCa));
+        Assert.True(subCa.VerifyIssuer(rootCa));
     }
 
 
     [Fact]
     public void Build_WebCertificate_IsValid()
     {
-        var issuer = Fixture.IntermediateCA;
+        using var rootCa = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName("Root CA Test"))
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(7))
+            .Build();
+
+        using var subCa = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName("Intermediate CA Test"))
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(6))
+            .SetIssuer(rootCa)
+            .Build();
 
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
-            .SetFriendlyName("FluentCertificates Test Server")
+            .SetFriendlyName("FluentCertificates Server Test")
             .SetDnsNames("*.fake.domain", "fake.domain", "another.domain")
             .SetSubject(x => x.SetCommonName("*.fake.domain"))
-            .SetIssuer(issuer)
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
+            .SetIssuer(subCa)
             .Build();
 
         Assert.True(cert.IsValidNow());
-        Assert.True(cert.VerifyIssuer(issuer));
+        Assert.True(cert.VerifyIssuer(subCa));
 
         //Assert correct DNS names in the SAN
         var ext = cert.Extensions[X509Extensions.SubjectAlternativeName.Id];
@@ -253,7 +265,4 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
             .GetInstance(extension.ConvertToBouncyCastle().GetParsedValue())
             .Cast<Asn1Encodable>()
             .Select(GeneralName.GetInstance);
-
-
-    private CertificateTestingFixture Fixture { get; }
 }

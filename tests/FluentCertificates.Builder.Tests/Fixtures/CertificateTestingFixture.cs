@@ -35,7 +35,7 @@ public class CertificateTestingFixture : IDisposable
     }
 
 
-    private static X509Certificate2 CreateCertificateAuthority(string name, int years, X509Certificate2? issuer = null)
+    public static X509Certificate2 CreateCertificateAuthority(string name, int years, X509Certificate2? issuer = null)
         => new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
             .SetFriendlyName($"{CertNamePrefix} {name}")
