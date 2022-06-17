@@ -3,18 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-
 using FluentCertificates.Extensions;
 using FluentCertificates.Internals;
 using FluentCertificates.Fixtures;
-
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1.X9;
-
 using Xunit;
-
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
 namespace FluentCertificates;
@@ -55,8 +51,8 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
 
         using var cert5 = new CertificateBuilder().SetSubject(expected).Build();
         Assert.Equal(expected, cert5.Subject);
-        
-        using var cert6 = new CertificateBuilder { Subject = new X500NameBuilder(expected) }.Build();
+
+        using var cert6 = new CertificateBuilder {Subject = new X500NameBuilder(expected)}.Build();
         Assert.Equal(expected, cert6.Subject);
     }
 
@@ -64,33 +60,49 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
     [Fact]
     public void Build_NewCertificate_WithRSAKeys()
     {
-        var keys = RSA.Create();
-        using var cert = new CertificateBuilder().SetKeyPair(keys).Build();
-        Assert.Equal(PkcsObjectIdentifiers.RsaEncryption.Id, cert.GetKeyAlgorithm());
+        using var keys = RSA.Create();
+        using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
+        Assert.Equal(PkcsObjectIdentifiers.RsaEncryption.Id, cert1.GetKeyAlgorithm());
+
+        using var cert2 = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.RSA).Build();
+        Assert.Equal(PkcsObjectIdentifiers.RsaEncryption.Id, cert2.GetKeyAlgorithm());
     }
 
 
     [Fact]
     public void Build_NewCertificate_WithECDsaKeys()
     {
-        var keys = ECDsa.Create();
-        using var cert = new CertificateBuilder().SetKeyPair(keys).Build();
-        Assert.Equal(X9ObjectIdentifiers.IdECPublicKey.Id, cert.GetKeyAlgorithm());
+        using var keys = ECDsa.Create();
+        using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
+        Assert.Equal(X9ObjectIdentifiers.IdECPublicKey.Id, cert1.GetKeyAlgorithm());
+
+        using var cert2 = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.ECDsa).Build();
+        Assert.Equal(X9ObjectIdentifiers.IdECPublicKey.Id, cert2.GetKeyAlgorithm());
     }
 
 
     [Fact]
     public void Build_NewCertificate_WithDSAKeys()
     {
+#if NET6_0_OR_GREATER
         //NOTE: FluentCertificates does not currently support creating DSA certificates on .NET 5 or earlier
-        #if NET6_0_OR_GREATER
-        using var cert = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
-        Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert.GetKeyAlgorithm());
-        #else
+        using var keys = DSA.Create(1024);
+        using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
+        Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert1.GetKeyAlgorithm());
+
+        using var cert2 = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
+        Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert2.GetKeyAlgorithm());
+
+#else
+        Assert.Throws<NotImplementedException>(() => {
+            using var keys = DSA.Create(1024);
+            using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
+        });
+
         Assert.Throws<NotImplementedException>(() => {
             using var cert = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
         });
-        #endif
+#endif
     }
 
 
@@ -210,7 +222,7 @@ public class CertificateBuilderTests : IClassFixture<CertificateTestingFixture>
         Assert.True(subCA.VerifyIssuer(rootCA));
     }
 
-    
+
     [Fact]
     public void Build_WebCertificate_IsValid()
     {
