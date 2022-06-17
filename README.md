@@ -1,4 +1,6 @@
-# FluentCertificates
+# 📖 FluentCertificates Overview
+
+⚠️ **Note:** *while version numbers are v0.x.y, this software is under initial development and there'll be breaking-changes in its API from version to version.*
 
 [![GitHub license](https://img.shields.io/github/license/lethek/FluentCertificates)](https://github.com/lethek/FluentCertificates/blob/main/LICENSE)
 [![NuGet Stats](https://img.shields.io/nuget/v/FluentCertificates.svg)](https://www.nuget.org/packages/FluentCertificates)
@@ -11,6 +13,8 @@ This project is published in three NuGet packages:
 * [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Just brings in both the FluentCertificates.Builder and FluentCertificates.Finder packages.
 * [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension-methods. [Examples below](#certificatebuilder-examples)
 * [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across a collection of X509Stores. [Examples below](#certificatefinder-examples)
+
+Unfortunately documentation is incomplete. You may find more examples within the project's unit tests.
 
 ## `CertificateBuilder` examples
 
@@ -91,21 +95,74 @@ var cert = new CertificateBuilder()
 
 *TODO: document this*
 
+---
+
 ## `X500NameBuilder` examples
 
-*TODO: document this*
+*TODO: document this; see unit tests for more examples*
+
+---
 
 ## `X509Certificate2` extension-methods
 
-*TODO: document this*
+*TODO: document this; see unit tests for more examples*
+
+|Extension-Method|Description|
+|-|-|
+|BuildChain||
+|ExportAsCert||
+|ExportAsPkcs12||
+|ExportAsPkcs7||
+|ExportAsPem||
+|ToPemString||
+|ToBase64String||
+|GetPrivateKey||
+|IsValidNow||
+|IsValid||
+|IsSelfSigned||
+|IsIssuedBy||
+|VerifyIssuer||
+
+---
 
 ## `X509Certificate2Collection` extension-methods
 
 *TODO: document this*
+|Extension-Method|Description|
+|-|-|
+|ToEnumerable||
+|ExportAsPkcs7||
+|ExportAsPkcs12||
+|ExportAsPem||
+|ToPemString||
+
+---
+
+## `IEnumerable<X509Certificate2>` extension-methods
+
+*TODO: document this*
+|Extension-Method|Description|
+|-|-|
+|ToCollection||
+|FilterPrivateKeys||
+|ExportAsPkcs7||
+|ExportAsPkcs12||
+|ExportAsPem||
+|ToPemString||
+
+---
 
 ## `X509Chain` extension-methods
 
 *TODO: document this*
+|Extension-Method|Description|
+|-|-|
+|ToCollection||
+|ToEnumerable||
+|ExportAsPkcs7||
+|ExportAsPkcs12||
+|ExportAsPem||
+|ToPemString||
 
 ---
 
@@ -124,4 +181,5 @@ var cert = new CertificateBuilder()
 |-|-|
 |`ToPemString()`|Exports the `CertificateRequest` to a PEM string.|
 |`ExportAsPem(string path)`|Exports the `CertificateRequest` to the specified PEM file.|
+|`ExportAsPem(TextWriter writer)`|Exports the `CertificateRequest` in PEM format to the given `TextWriter`.|
 |`ConvertToBouncyCastle()`|Converts the `CertificateRequest` to a BouncyCastle `Pkcs10CertificationRequest`|
