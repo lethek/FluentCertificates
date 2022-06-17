@@ -14,8 +14,9 @@ public static class Pkcs10CertificationRequestExtensions
     
     public static Pkcs10CertificationRequest ExportAsPem(this Pkcs10CertificationRequest csr, string path)
     {
-        File.WriteAllText(path, csr.ToPemString());
-        return csr;
+        using var stream = File.OpenWrite(path);
+        using var writer = new StreamWriter(stream);
+        return csr.ExportAsPem(writer);
     }
 
 

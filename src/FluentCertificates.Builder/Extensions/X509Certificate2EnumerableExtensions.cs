@@ -1,8 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using System.IO;
-#if NET5_0_OR_GREATER
 using System.Security.Cryptography;
-#endif
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
@@ -25,6 +22,8 @@ public static class X509Certificate2EnumerableExtensions
         };
 
 
+    #region Export to a Writer
+
     [SuppressMessage("ReSharper", "SuspiciousTypeConversion.Global")]
     public static IEnumerable<X509Certificate2> ExportAsPkcs7(this IEnumerable<X509Certificate2> enumerable, BinaryWriter writer)
     {
@@ -42,23 +41,6 @@ public static class X509Certificate2EnumerableExtensions
     }
 
 
-    [SuppressMessage("ReSharper", "SuspiciousTypeConversion.Global")]
-    public static IEnumerable<X509Certificate2> ExportAsPkcs7(this IEnumerable<X509Certificate2> enumerable, string path)
-    {
-        //In .NET 6 and up, X509Certificate2Collection implements IEnumerable<X509Certificate2>, so no need to allocate & copy
-        var collection = enumerable is X509Certificate2Collection certCollection
-            ? certCollection
-            : enumerable.ToCollection();
-
-        var data = collection
-            .Export(X509ContentType.Pkcs7)
-            ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
-
-        File.WriteAllBytes(path, data);
-        return enumerable;
-    }
-
-
     public static IEnumerable<X509Certificate2> ExportAsPkcs12(this IEnumerable<X509Certificate2> enumerable, BinaryWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
     {
         var data = enumerable
@@ -66,20 +48,8 @@ public static class X509Certificate2EnumerableExtensions
                        .ToCollection()
                        .Export(X509ContentType.Pkcs12, password)
                    ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
+
         writer.Write(data);
-        return enumerable;
-    }
-
-
-    public static IEnumerable<X509Certificate2> ExportAsPkcs12(this IEnumerable<X509Certificate2> enumerable, string path, string? password = null, ExportKeys include = ExportKeys.All)
-    {
-        var data = enumerable
-            .FilterPrivateKeys(include)
-            .ToCollection()
-            .Export(X509ContentType.Pkcs12, password)
-            ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
-
-        File.WriteAllBytes(path, data);
         return enumerable;
     }
 
@@ -90,12 +60,36 @@ public static class X509Certificate2EnumerableExtensions
         return enumerable;
     }
 
-    
+    #endregion
+
+
+    #region Export to a File
+
+    [SuppressMessage("ReSharper", "SuspiciousTypeConversion.Global")]
+    public static IEnumerable<X509Certificate2> ExportAsPkcs7(this IEnumerable<X509Certificate2> enumerable, string path)
+    {
+        using var stream = File.OpenWrite(path);
+        using var writer = new BinaryWriter(stream);
+        return enumerable.ExportAsPkcs7(writer);
+    }
+
+
+    public static IEnumerable<X509Certificate2> ExportAsPkcs12(this IEnumerable<X509Certificate2> enumerable, string path, string? password = null, ExportKeys include = ExportKeys.All)
+    {
+        using var stream = File.OpenWrite(path);
+        using var writer = new BinaryWriter(stream);
+        return enumerable.ExportAsPkcs12(writer, password, include);
+    }
+
+
     public static IEnumerable<X509Certificate2> ExportAsPem(this IEnumerable<X509Certificate2> enumerable, string path, ExportKeys include = ExportKeys.All)
     {
-        File.WriteAllText(path, enumerable.ToPemString(include));
-        return enumerable;
+        using var stream = File.OpenWrite(path);
+        using var writer = new StreamWriter(stream);
+        return enumerable.ExportAsPem(writer, include);
     }
+
+    #endregion
 
 
     public static string ToPemString(this IEnumerable<X509Certificate2> enumerable, ExportKeys include = ExportKeys.All)

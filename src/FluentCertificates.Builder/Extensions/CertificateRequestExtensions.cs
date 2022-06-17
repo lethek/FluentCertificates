@@ -18,8 +18,9 @@ public static class CertificateRequestExtensions
     
     public static CertificateRequest ExportAsPem(this CertificateRequest certRequest, string path)
     {
-        File.WriteAllText(path, certRequest.ToPemString());
-        return certRequest;
+        using var stream = File.OpenWrite(path);
+        using var writer = new StreamWriter(stream);
+        return certRequest.ExportAsPem(writer);
     }
 
 
