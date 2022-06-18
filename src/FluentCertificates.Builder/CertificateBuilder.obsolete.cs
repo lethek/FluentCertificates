@@ -22,7 +22,8 @@ public partial record CertificateBuilder
     [Obsolete("Use the ToCertificateRequest method instead. Note: this method only supports RSA and DSA encryption keys.")]
     internal Pkcs10CertificationRequest ToBouncyCertificateRequest()
     {
-        var keypair = KeyPair ?? throw new ArgumentNullException(nameof(KeyPair), "Call SetKeyPair(key) first to provide a public/private keypair");
+        using var keys = KeyParameters.CreateKeyPair();
+        var keypair = keys ?? throw new ArgumentNullException(nameof(keys), "Call SetKeyPair(key) first to provide a public/private keypair");
         var bouncyKeyPair = DotNetUtilities.GetKeyPair(keypair);
         var extensions = new X509Extensions(BuildExtensions(this, null).ToDictionary(x => new DerObjectIdentifier(x.Oid?.Value), x => x.ConvertToBouncyCastle()));
         var attributes = new DerSet(new AttributePkcs(PkcsObjectIdentifiers.Pkcs9AtExtensionRequest, new DerSet(extensions)));
@@ -41,7 +42,7 @@ public partial record CertificateBuilder
     {
         Validate();
 
-        var builder = KeyPair == null
+        var builder = KeyParameters == null
             ? GenerateKeyPair(KeyAlgorithm.RSA)
             : this;
 
@@ -49,7 +50,8 @@ public partial record CertificateBuilder
             ? DotNetUtilities.FromX509Certificate(builder.Issuer)
             : null;
 
-        var bouncyKeyPair = DotNetUtilities.GetKeyPair(builder.KeyPair);
+        using var keys = KeyParameters.CreateKeyPair();
+        var bouncyKeyPair = DotNetUtilities.GetKeyPair(keys);
 
         var generator = new X509V3CertificateGenerator();
         generator.SetSerialNumber(new BigInteger(GenerateSerialNumber()));
