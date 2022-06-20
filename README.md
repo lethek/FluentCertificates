@@ -34,7 +34,7 @@ var request = new CertificateBuilder()
 
 ```csharp
 //Using a fluent style
-var cert = new CertificateBuilder()
+using var cert = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetFriendlyName("Example self-signed web-server certificate")
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
@@ -43,7 +43,7 @@ var cert = new CertificateBuilder()
     .Build();
 
 //And just to demonstrate using object initializers (I'll use fluent style from now on though)
-var builder = new CertificateBuilder() {
+using var builder = new CertificateBuilder() {
     Usage = CertificateUsage.Server,
     FriendlyName = "Example self-signed web-server certificate",
     Subject = new X500NameBuilder().SetCommonName("*.fake.domain"),
@@ -57,7 +57,7 @@ var cert = builder.Build();
 
 ```csharp
 //A CA's expiry date must be later than that of any certificates it will issue
-var issuer = new CertificateBuilder()
+using var issuer = new CertificateBuilder()
     .SetUsage(CertificateUsage.CA)
     .SetFriendlyName("Example root CA")
     .SetSubject(b => b.SetCommonName("Example root CA"))
@@ -69,7 +69,7 @@ var issuer = new CertificateBuilder()
 
 ```csharp
 //Note: the 'issuer' certificate used must have a private-key attached in order to sign this new certificate
-var cert = new CertificateBuilder()
+using var cert = new CertificateBuilder()
     .SetUsage(CertificateUsage.Client)
     .SetFriendlyName("Example client-auth certificate")
     .SetSubject(b => b.SetCommonName("User: Michael"))
@@ -81,7 +81,7 @@ var cert = new CertificateBuilder()
 ### **Advanced: Build a certificate with customized extensions:**
 
 ```csharp
-var cert = new CertificateBuilder()
+using var cert = new CertificateBuilder()
     .SetFriendlyName("Example certificate with customized extensions")
     .SetSubject(b => b.SetCommonName("Example certificate with customized extensions"))
     .AddExtension(new X509BasicConstraintsExtension(false, false, 0, true))
@@ -220,4 +220,3 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 |`dnExtension.ConvertToBouncyCastle()`|Converts a DotNet `X509Extension` to a BouncyCastle `X509Extension`.|
 |`bcExtension.ConvertToDotNet(string oid)`|Converts a BouncyCastle `X509Extension` to a DotNet `X509Extension`. A DotNet `X509Extension` includes an OID, but a BouncyCastle one doesn't, therefore one must be supplied in the parameters here.|
 |`bcExtension.ConvertToDotNet(DerObjectIdentifier oid)`|Converts a BouncyCastle `X509Extension` to a DotNet `X509Extension`. A DotNet `X509Extension` includes an OID, but a BouncyCastle one doesn't, therefore one must be supplied in the parameters here.|
-
