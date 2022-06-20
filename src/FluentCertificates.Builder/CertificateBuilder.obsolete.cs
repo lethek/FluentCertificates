@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Extensions;
@@ -22,6 +23,10 @@ public partial record CertificateBuilder
     [Obsolete("Use the ToCertificateRequest method instead. Note: this method only supports RSA and DSA encryption keys.")]
     internal Pkcs10CertificationRequest ToBouncyCertificateRequest()
     {
+        if (KeyParameters == null) {
+            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) or {nameof(GenerateKeyPair)}() first to provide a public/private keypair");
+        }
+
         using var keys = KeyParameters.CreateKeyPair();
         var keypair = keys ?? throw new ArgumentNullException(nameof(keys), "Call SetKeyPair(key) first to provide a public/private keypair");
         var bouncyKeyPair = DotNetUtilities.GetKeyPair(keypair);
@@ -46,11 +51,13 @@ public partial record CertificateBuilder
             ? GenerateKeyPair(KeyAlgorithm.RSA)
             : this;
 
+        Debug.Assert(builder.KeyParameters != null);
+
         var issuerCert = (builder.Issuer != null)
             ? DotNetUtilities.FromX509Certificate(builder.Issuer)
             : null;
 
-        using var keys = KeyParameters.CreateKeyPair();
+        using var keys = builder.KeyParameters.CreateKeyPair();
         var bouncyKeyPair = DotNetUtilities.GetKeyPair(keys);
 
         var generator = new X509V3CertificateGenerator();
@@ -86,7 +93,7 @@ public partial record CertificateBuilder
         var pwd = Tools.CreateRandomCharArray(20);
         store.Save(pfxStream, pwd, Tools.SecureRandom);
         pfxStream.Seek(0, SeekOrigin.Begin);
-        var newCert = new X509Certificate2(pfxStream.ToArray(), new string(pwd), X509KeyStorageFlags.Exportable);
+        var newCert = new X509Certificate2(pfxStream.ToArray(), new String(pwd), X509KeyStorageFlags.Exportable);
         if (!String.IsNullOrEmpty(builder.FriendlyName) && Tools.IsWindows) {
             newCert.FriendlyName = builder.FriendlyName;
         }
