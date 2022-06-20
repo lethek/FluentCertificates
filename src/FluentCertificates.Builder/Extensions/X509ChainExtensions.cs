@@ -12,6 +12,7 @@ public static class X509ChainExtensions
         => chain
             .ChainElements
             .Cast<X509ChainElement>()
+            .Reverse()
             .Select(x => x.Certificate);
 
 

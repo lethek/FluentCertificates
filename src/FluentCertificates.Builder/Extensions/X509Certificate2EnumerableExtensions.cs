@@ -13,10 +13,18 @@ public static class X509Certificate2EnumerableExtensions
         => new(enumerable.ToArray());
 
 
+    /// <summary>
+    /// Remove/keep private keys from certificates based on the <paramref name="include"/> parameter. When <paramref name="include"/> is set to <see cref="ExportKeys.Leaf"/>,
+    /// the leaf certificate is assumed to be the final one.
+    /// </summary>
+    /// <param name="enumerable"></param>
+    /// <param name="include"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
     public static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include)
         => include switch {
             ExportKeys.All => enumerable,
-            ExportKeys.Leaf => enumerable.Select((x, i) => x.HasPrivateKey && i > 0 ? new X509Certificate2(x.RawData, "", X509KeyStorageFlags.Exportable) : x),
+            ExportKeys.Leaf => enumerable.Reverse().Select((x, i) => x.HasPrivateKey && i > 0 ? new X509Certificate2(x.RawData, "", X509KeyStorageFlags.Exportable) : x).Reverse(),
             ExportKeys.None => enumerable.Select(x => x.HasPrivateKey ? new X509Certificate2(x.RawData, "", X509KeyStorageFlags.Exportable) : x),
             _ => throw new ArgumentOutOfRangeException(nameof(include))
         };
@@ -43,11 +51,12 @@ public static class X509Certificate2EnumerableExtensions
 
     public static IEnumerable<X509Certificate2> ExportAsPkcs12(this IEnumerable<X509Certificate2> enumerable, BinaryWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
     {
-        var data = enumerable
-                       .FilterPrivateKeys(include)
-                       .ToCollection()
-                       .Export(X509ContentType.Pkcs12, password)
-                   ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
+        var data =
+            enumerable
+                .FilterPrivateKeys(include)
+                .ToCollection()
+                .Export(X509ContentType.Pkcs12, password)
+            ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
 
         writer.Write(data);
         return enumerable;
