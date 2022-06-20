@@ -11,6 +11,13 @@ namespace FluentCertificates.Extensions
 {
     public static class X509Certificate2Extensions
     {
+        /// <summary>
+        /// Builds an X.509 certificate chain with <paramref name="cert"/> as the leaf certificate.
+        /// </summary>
+        /// <param name="cert"></param>
+        /// <param name="extraCerts">An additional collection of certificates that can be searched by the chaining engine when building and validating a certificate chain.</param>
+        /// <param name="customRootTrust">When this value is <code>true</code>, the <see cref="P:System.Security.Cryptography.X509Certificates.X509ChainPolicy.CustomTrustStore" /> will be used instead of the default root trust. This parameter is ignored on .NET Standard.</param>
+        /// <returns>An X509Chain instance.</returns>
         public static X509Chain BuildChain(this X509Certificate2 cert, IEnumerable<X509Certificate2>? extraCerts = null, bool customRootTrust = false)
         {
             var chain = new X509Chain();
@@ -20,18 +27,11 @@ namespace FluentCertificates.Extensions
             #endif
 
             if (extraCerts != null) {
-                if (!customRootTrust) {
-                    chain.ChainPolicy.ExtraStore.AddRange(extraCerts.ToArray());
-                } else {
-                    var certLookup = extraCerts.ToLookup(
-                        c => c.SubjectName.RawData.SequenceEqual(c.IssuerName.RawData)
-                            && c.Extensions.OfType<X509BasicConstraintsExtension>().Any(x => x.CertificateAuthority)
-                    );
-                    #if NET5_0_OR_GREATER
-                    chain.ChainPolicy.CustomTrustStore.AddRange(certLookup[true].ToArray());
-                    #endif
-                    chain.ChainPolicy.ExtraStore.AddRange(certLookup[false].ToArray());
-                }
+                #if NET5_0_OR_GREATER
+                (customRootTrust ? chain.ChainPolicy.CustomTrustStore : chain.ChainPolicy.ExtraStore).AddRange(extraCerts.ToArray());
+                #else
+                chain.ChainPolicy.ExtraStore.AddRange(extraCerts.ToArray());
+                #endif
             }
 
             chain.Build(cert);
