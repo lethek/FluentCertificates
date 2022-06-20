@@ -105,15 +105,15 @@ public static class X509Certificate2EnumerableExtensions
     {
         var list = enumerable.FilterPrivateKeys(include).ToList();
         using var sw = new StringWriter();
-        foreach (var cert in list) {
-            sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
-            sw.Write('\n');
-        }
         if (include != ExportKeys.None) {
             foreach (var cert in list.Where(x => x.HasPrivateKey)) {
                 sw.Write(PemEncoding.Write("PRIVATE KEY", cert.GetPrivateKey().ExportPkcs8PrivateKey()));
                 sw.Write('\n');
             }
+        }
+        foreach (var cert in list) {
+            sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
+            sw.Write('\n');
         }
         return sw.ToString();
     }

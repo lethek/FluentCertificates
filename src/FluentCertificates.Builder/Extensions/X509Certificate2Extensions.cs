@@ -134,12 +134,12 @@ namespace FluentCertificates.Extensions
         public static string ToPemString(this X509Certificate2 cert, ExportKeys include = ExportKeys.All)
         {
             using var sw = new StringWriter();
-            sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
-            sw.Write('\n');
             if (include != ExportKeys.None && cert.HasPrivateKey) {
                 sw.Write(PemEncoding.Write("PRIVATE KEY", cert.GetPrivateKey().ExportPkcs8PrivateKey()));
                 sw.Write('\n');
             }
+            sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
+            sw.Write('\n');
             return sw.ToString();
         }
 
