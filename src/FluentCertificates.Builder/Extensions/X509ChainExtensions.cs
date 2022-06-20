@@ -4,16 +4,16 @@ namespace FluentCertificates.Extensions;
 
 public static class X509ChainExtensions
 {
-    public static X509Certificate2Collection ToCollection(this X509Chain chain, ExportKeys include = ExportKeys.All)
-        => chain.ToEnumerable().FilterPrivateKeys(include).ToCollection();
-
-
     public static IEnumerable<X509Certificate2> ToEnumerable(this X509Chain chain)
         => chain
             .ChainElements
             .Cast<X509ChainElement>()
             .Reverse()
             .Select(x => x.Certificate);
+
+
+    public static X509Certificate2Collection ToCollection(this X509Chain chain, ExportKeys include = ExportKeys.All)
+        => chain.ToEnumerable().FilterPrivateKeys(include).ToCollection();
 
 
     public static X509Chain ExportAsPkcs7(this X509Chain chain, BinaryWriter writer)

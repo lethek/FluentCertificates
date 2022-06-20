@@ -103,7 +103,7 @@ public static class X509Certificate2EnumerableExtensions
 
     public static string ToPemString(this IEnumerable<X509Certificate2> enumerable, ExportKeys include = ExportKeys.All)
     {
-        var list = enumerable.FilterPrivateKeys(include).ToList();
+        var list = enumerable.FilterPrivateKeys(include).Reverse().ToList();
         using var sw = new StringWriter();
         if (include != ExportKeys.None) {
             foreach (var cert in list.Where(x => x.HasPrivateKey)) {
