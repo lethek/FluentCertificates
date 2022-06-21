@@ -22,4 +22,8 @@
     <ProjectReference Include="..\FluentCertificates.Polyfills\FluentCertificates.Polyfills.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
 </Project>
