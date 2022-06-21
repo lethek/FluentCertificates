@@ -1,6 +1,6 @@
 ﻿using System.Security.Cryptography.X509Certificates;
 
-namespace FluentCertificates.Extensions;
+namespace FluentCertificates;
 
 public static class X509ChainExtensions
 {

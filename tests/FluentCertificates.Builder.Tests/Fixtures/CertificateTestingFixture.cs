@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates.Extensions;
+using FluentCertificates;
 
 
 namespace FluentCertificates.Fixtures;

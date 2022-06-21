@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 
-namespace FluentCertificates.Extensions;
+namespace FluentCertificates;
 
 [SuppressMessage("ReSharper", "PossibleMultipleEnumeration")]
 public static class X509Certificate2CollectionExtensions

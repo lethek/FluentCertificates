@@ -1,11 +1,8 @@
 ﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates.Internals;
 
-using Org.BouncyCastle.Pkcs;
-
-namespace FluentCertificates.Extensions;
+namespace FluentCertificates;
 
 public static class CertificateRequestExtensions
 {
@@ -31,8 +28,4 @@ public static class CertificateRequestExtensions
         sw.Write('\n');
         return sw.ToString();
     }
-
-
-    public static Pkcs10CertificationRequest ConvertToBouncyCastle(this CertificateRequest certRequest)
-        => new(certRequest.CreateSigningRequest());
 }

@@ -3,7 +3,7 @@
 using Xunit;
 
 
-namespace FluentCertificates.Extensions;
+namespace FluentCertificates;
 
 public class X509ChainExtensionsTests
 {

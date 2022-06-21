@@ -4,9 +4,9 @@ using Org.BouncyCastle.Asn1;
 
 using X509ExtensionBC = Org.BouncyCastle.Asn1.X509.X509Extension;
 
-namespace FluentCertificates.Extensions;
+namespace FluentCertificates;
 
-internal static class X509ExtensionExtensions
+public static class X509ExtensionExtensions
 {
     public static X509Extension ConvertToDotNet(this X509ExtensionBC ext, string oid)
         => new(oid, ext.Value.GetOctets(), ext.IsCritical);

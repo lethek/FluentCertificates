@@ -1,21 +1,21 @@
-﻿#if NETSTANDARD
+﻿// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+#if NETSTANDARD
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-namespace FluentCertificates.Internals;
 
-// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
+namespace System.Security.Cryptography;
 
 /// <summary>
 /// Provides methods for reading and writing the IETF RFC 7468
 /// subset of PEM (Privacy-Enhanced Mail) textual encodings.
 /// This class cannot be inherited.
-/// 
-/// Sourced under the MIT license, with minor modifications, from: https://github.com/dotnet/runtime/blob/release/6.0/src/libraries/System.Security.Cryptography.Encoding/src/System/Security/Cryptography/PemEncoding.cs
 /// </summary>
-internal static class PemEncoding
+/// <remarks>Original copy sourced under the MIT license from: <see href="https://github.com/dotnet/runtime/blob/425fedc0fb005af24765faa3ed423222a7dbd963/src/libraries/System.Security.Cryptography/src/System/Security/Cryptography/PemEncoding.cs"/></remarks>
+public static class PemEncoding
 {
     private const string PreEBPrefix = "-----BEGIN ";
     private const string PostEBPrefix = "-----END ";

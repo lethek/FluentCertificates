@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net6.0;net5.0;netstandard2.1</TargetFrameworks>
@@ -8,22 +8,18 @@
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Description>FluentCertificates is a library using the Immutable Fluent Builder pattern for easily creating, finding/querying and exporting certificates.</Description>
+    <Description>FluentCertificates.Extensions is part of the FluentCertificates package. This library provides a number of convenient extension-methods for exporting certificates and keys and performing other common operations.</Description>
     <PackageTags>certificate, fluent, x509, pfx, pem, cert, crt, CA</PackageTags>
     <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <RootNamespace>FluentCertificates</RootNamespace>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FluentCertificates.Builder\FluentCertificates.Builder.csproj" />
-    <ProjectReference Include="..\FluentCertificates.Extensions\FluentCertificates.Extensions.csproj" />
-    <ProjectReference Include="..\FluentCertificates.Finder\FluentCertificates.Finder.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <ProjectReference Include="..\FluentCertificates.Polyfills\FluentCertificates.Polyfills.csproj" />
   </ItemGroup>
 
 </Project>

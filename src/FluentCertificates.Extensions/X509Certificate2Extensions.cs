@@ -2,12 +2,8 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates.Internals;
 
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Security;
-
-namespace FluentCertificates.Extensions
+namespace FluentCertificates
 {
     public static class X509Certificate2Extensions
     {
@@ -172,40 +168,6 @@ namespace FluentCertificates.Extensions
         public static bool IsIssuedBy(this X509Certificate2 cert, X509Certificate2 issuer)
             => AreByteSpansEqual(cert.IssuerName.RawData, issuer.SubjectName.RawData);
                
-
-        public static bool VerifyIssuer(this X509Certificate2 cert, X509Certificate2 issuer)
-            => cert.IsIssuedBy(issuer) && VerifyIssuerSignature(cert, issuer);
-
-
-        private static bool VerifyIssuerSignature(X509Certificate2 cert, X509Certificate2 issuer)
-        {
-            //TODO: verify signatures using standard .NET methods rather than BouncyCastle
-
-            var thisCert = DotNetUtilities.FromX509Certificate(cert);
-            var issuerCert = DotNetUtilities.FromX509Certificate(issuer);
-
-            var tbsCert = thisCert.GetTbsCertificate();
-            var sig = thisCert.GetSignature();
-
-            var signer = SignerUtilities.GetSigner(thisCert.SigAlgName);
-            signer.Init(false, issuerCert.GetPublicKey());
-            signer.BlockUpdate(tbsCert, 0, tbsCert.Length);
-            return signer.VerifySignature(sig);
-        }
-
-
-        internal static AsymmetricCipherKeyPair GetBouncyCastleRsaKeyPair(this X509Certificate2 cert)
-        {
-            using var source = cert.GetRSAPrivateKey() ?? throw new KeyException("RSA private key expected but not found");
-            using var rsa = RSA.Create();
-            var pbeParams = new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 1);
-            Span<byte> pwd = stackalloc byte[32];
-            Tools.SecureRandom.NextBytes(pwd);
-            rsa.ImportEncryptedPkcs8PrivateKey(pwd, source.ExportEncryptedPkcs8PrivateKey(pwd, pbeParams), out _);
-            pwd.Clear();
-            return DotNetUtilities.GetRsaKeyPair(rsa);
-        }
-
 
         private static bool AreByteSpansEqual(Span<byte> first, Span<byte> second)
             => first.SequenceEqual(second);

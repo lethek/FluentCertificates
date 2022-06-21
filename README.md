@@ -8,10 +8,11 @@
 
 FluentCertificates is a library using the Immutable Fluent Builder pattern for easily creating, finding and exporting certificates. Makes it simple to generate your own certificate chains, or just stand-alone self-signed certificates.
 
-This project is published in three NuGet packages:
+This project is published in several NuGet packages:
 
-* [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Just brings in both the FluentCertificates.Builder and FluentCertificates.Finder packages.
+* [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Top-level package that doesn't introduce any new functionality, it just imports the FluentCertificates.Builder, FluentCertificates.Extensions and FluentCertificates.Finder packages.
 * [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension-methods. [Examples below](#certificatebuilder-examples)
+* [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides a bunch of convenient extension-methods. [Examples below](#x509certificate2-extension-methods)
 * [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across a collection of X509Stores. [Examples below](#certificatefinder-examples)
 
 Unfortunately documentation is incomplete. You may find more examples within the project's unit tests.
@@ -111,7 +112,7 @@ using var cert = new CertificateBuilder()
 
 ## `X509Certificate2` extension-methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these; see unit tests for more examples*
 
@@ -135,7 +136,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ## `X509Chain` extension-methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these*
 
@@ -152,7 +153,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ## `X509Certificate2Collection` extension-methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these*
 
@@ -168,7 +169,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ## `IEnumerable<X509Certificate2>` extension-methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these*
 
@@ -185,7 +186,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ## `AsymmetricAlgorithm` extension-methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these*
 
@@ -200,7 +201,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ## `CertificateRequest` extension-methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
 |Extension-Method|Description|
 |-|-|
@@ -213,7 +214,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ## `X509Extension` extension-methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates.Extensions` namespace.
+These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
 |Extension-Method|Description|
 |-|-|

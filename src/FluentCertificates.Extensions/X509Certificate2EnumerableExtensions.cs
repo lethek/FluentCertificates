@@ -2,9 +2,8 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates.Internals;
 
-namespace FluentCertificates.Extensions;
+namespace FluentCertificates;
 
 [SuppressMessage("ReSharper", "PossibleMultipleEnumeration")]
 public static class X509Certificate2EnumerableExtensions

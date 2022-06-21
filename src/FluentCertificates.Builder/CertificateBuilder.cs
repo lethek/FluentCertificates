@@ -5,7 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates.Extensions;
+using FluentCertificates;
 using FluentCertificates.Internals;
 
 using Org.BouncyCastle.Asn1.Pkcs;
@@ -270,7 +270,7 @@ public partial record CertificateBuilder
         Span<byte> span = stackalloc byte[18];
         BinaryPrimitives.WriteInt16BigEndian(span[0..2], 0x4D58);
         BinaryPrimitives.WriteInt64BigEndian(span[2..10], DateTime.UtcNow.Ticks);
-        BinaryPrimitives.WriteInt64BigEndian(span[10..18], Tools.SecureRandom.NextLong());
+        RandomNumberGenerator.Fill(span[10..18]);
         return span.ToArray();
     }
 

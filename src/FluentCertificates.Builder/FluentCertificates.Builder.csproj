@@ -23,13 +23,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
     <PackageReference Include="System.Collections.Immutable" Version="6.0.0" Condition="'$(TargetFramework)' == 'netstandard2.1'" />
     <PackageReference Include="System.Formats.Asn1" Version="6.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FluentCertificates.BouncyCastle\FluentCertificates.BouncyCastle.csproj" />
+    <ProjectReference Include="..\FluentCertificates.Extensions\FluentCertificates.Extensions.csproj" />
   </ItemGroup>
 
 </Project>

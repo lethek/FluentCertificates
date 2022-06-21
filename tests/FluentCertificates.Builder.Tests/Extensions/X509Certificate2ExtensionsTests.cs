@@ -6,7 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using Xunit;
 
 
-namespace FluentCertificates.Extensions;
+namespace FluentCertificates;
 
 public class X509Certificate2ExtensionsTests
 {

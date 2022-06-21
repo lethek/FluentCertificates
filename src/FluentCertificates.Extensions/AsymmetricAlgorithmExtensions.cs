@@ -1,15 +1,18 @@
 ﻿using System.Security.Cryptography;
 
-using FluentCertificates.Internals;
 
-namespace FluentCertificates.Extensions;
+namespace FluentCertificates;
 
 public static class AsymmetricAlgorithmExtensions
 {
-    public static string ToPrivateKeyPemString(this AsymmetricAlgorithm keys)
+    public static string ToPrivateKeyPemString(this AsymmetricAlgorithm keys, string? password = null)
     {
         using var sw = new StringWriter();
-        sw.Write(PemEncoding.Write("PRIVATE KEY", keys.ExportPkcs8PrivateKey()));
+        sw.Write(
+            String.IsNullOrEmpty(password)
+                ? PemEncoding.Write("PRIVATE KEY", keys.ExportPkcs8PrivateKey())
+                : PemEncoding.Write("ENCRYPTED PRIVATE KEY", keys.ExportEncryptedPkcs8PrivateKey(password, DefaultPbeParameters))
+        );
         sw.Write('\n');
         return sw.ToString();
     }
@@ -52,4 +55,7 @@ public static class AsymmetricAlgorithmExtensions
         using var writer = new StreamWriter(stream);
         return keys.ExportAsPublicKeyPem(writer);
     }
+
+
+    private static readonly PbeParameters DefaultPbeParameters = new(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 600_000);
 }

@@ -1,14 +1,15 @@
-﻿#if NETSTANDARD
-
-namespace FluentCertificates.Internals;
-
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#if NETSTANDARD
+
+namespace System.Security.Cryptography;
+
 /// <summary>
-/// Sourced under the MIT license from: https://github.com/dotnet/runtime/blob/release/6.0/src/libraries/System.Security.Cryptography.Encoding/src/System/Security/Cryptography/PemFields.cs
+/// Contains information about the location of PEM data.
 /// </summary>
-internal readonly struct PemFields
+/// <remarks>Original copy sourced under the MIT license from: <see href="https://github.com/dotnet/runtime/blob/425fedc0fb005af24765faa3ed423222a7dbd963/src/libraries/System.Security.Cryptography/src/System/Security/Cryptography/PemFields.cs"/></remarks>
+public readonly struct PemFields
 {
     internal PemFields(Range label, Range base64data, Range location, int decodedDataLength)
     {

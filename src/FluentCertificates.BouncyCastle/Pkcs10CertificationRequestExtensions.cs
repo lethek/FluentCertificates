@@ -1,7 +1,7 @@
 ﻿using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.Pkcs;
 
-namespace FluentCertificates.Extensions;
+namespace FluentCertificates;
 
 public static class Pkcs10CertificationRequestExtensions
 {
