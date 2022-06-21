@@ -51,7 +51,7 @@ jobs:
       run: dotnet test -c ${{ env.buildConfiguration }} --no-build -v normal --filter FullyQualifiedName!~IntegrationTests
 
     - name: Pack
-      run: dotnet pack -c ${{ env.buildConfiguration }} --no-build -o "${{ github.workspace }}/artifacts/" -p:PackageVersion=$NUGETVER
+      run: dotnet pack -c ${{ env.buildConfiguration }} -o "${{ github.workspace }}/artifacts/" -p:PackageVersion=$NUGETVER
       env:
         NUGETVER: ${{ steps.gitversion.outputs.nuGetVersion }}
 
