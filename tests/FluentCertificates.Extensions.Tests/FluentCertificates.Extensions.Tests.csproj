@@ -1,7 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net6.0;net5.0;netcoreapp3.1</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <LangVersion>latest</LangVersion>
@@ -26,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FluentCertificates.Builder\FluentCertificates.Builder.csproj" />
+    <ProjectReference Include="..\..\src\FluentCertificates.Extensions\FluentCertificates.Extensions.csproj" />
   </ItemGroup>
 
 </Project>

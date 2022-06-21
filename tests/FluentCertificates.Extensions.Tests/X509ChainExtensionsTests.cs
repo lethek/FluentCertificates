@@ -1,9 +1,4 @@
-﻿using System;
-
-using Xunit;
-
-
-namespace FluentCertificates;
+﻿namespace FluentCertificates;
 
 public class X509ChainExtensionsTests
 {

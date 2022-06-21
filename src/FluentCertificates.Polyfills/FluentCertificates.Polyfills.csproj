@@ -9,7 +9,6 @@
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RootNamespace>FluentCertificates</RootNamespace>
-    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
 </Project>

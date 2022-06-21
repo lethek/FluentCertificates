@@ -15,15 +15,12 @@
     <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <RootNamespace>FluentCertificates</RootNamespace>
+    <IsPackable>true</IsPackable>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\FluentCertificates.Polyfills\FluentCertificates.Polyfills.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

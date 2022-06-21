@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates;
 using FluentCertificates.Internals;
 
 using Org.BouncyCastle.Asn1.Pkcs;
