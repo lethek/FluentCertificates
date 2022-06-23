@@ -1,7 +1,12 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
+﻿// ReSharper disable All
+#pragma warning disable CA1822 // Mark members as static
+#pragma warning disable IDE0007 // Use implicit type
+#pragma warning disable IDE0011 // Add braces
+#pragma warning disable IDE0016 // Use 'throw' expression
+#pragma warning disable IDE0022 // Use expression body for methods
 
-// ReSharper disable SuggestVarOrType_BuiltInTypes
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
@@ -166,3 +171,9 @@ internal sealed class DSAX509SignatureGenerator : X509SignatureGenerator
             new AsnEncodedData(oid, keyValue));
     }
 }
+
+#pragma warning restore CA1822 // Mark members as static
+#pragma warning restore IDE0007 // Use implicit type
+#pragma warning restore IDE0011 // Add braces
+#pragma warning restore IDE0016 // Use 'throw' expression
+#pragma warning restore IDE0022 // Use expression body for methods

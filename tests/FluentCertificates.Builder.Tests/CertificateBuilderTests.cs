@@ -123,8 +123,7 @@ public class CertificateBuilderTests
             .GenerateKeyPair(KeyAlgorithm.RSA)
             .Build();
 
-        Assert.True(cert.IsIssuedBy(rootCA));
-        Assert.True(cert.VerifyIssuer(rootCA));
+        Assert.True(cert.IsIssuedBy(rootCA, true));
     }
 
 
@@ -145,8 +144,7 @@ public class CertificateBuilderTests
             .GenerateKeyPair(KeyAlgorithm.ECDsa)
             .Build();
 
-        Assert.True(cert.IsIssuedBy(rootCA));
-        Assert.True(cert.VerifyIssuer(rootCA));
+        Assert.True(cert.IsIssuedBy(rootCA, true));
     }
 
 
@@ -218,8 +216,7 @@ public class CertificateBuilderTests
             .Build();
 
         Assert.Contains(rootCa.Extensions.OfType<X509BasicConstraintsExtension>(), x => x.CertificateAuthority);
-        Assert.True(subCa.IsIssuedBy(rootCa));
-        Assert.True(subCa.VerifyIssuer(rootCa));
+        Assert.True(subCa.IsIssuedBy(rootCa, true));
     }
 
 
@@ -249,7 +246,9 @@ public class CertificateBuilderTests
             .Build();
 
         Assert.True(cert.IsValidNow());
-        Assert.True(cert.VerifyIssuer(subCa));
+        Assert.True(rootCa.IsIssuedBy(rootCa, true));
+        Assert.True(subCa.IsIssuedBy(rootCa, true));
+        Assert.True(cert.IsIssuedBy(subCa, true));
 
         //Assert correct DNS names in the SAN
         var ext = cert.Extensions[X509Extensions.SubjectAlternativeName.Id];

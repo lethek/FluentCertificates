@@ -130,7 +130,7 @@ public partial record CertificateBuilder
     /// <summary>
     /// Use this to provide a key-pair to use when creating new certificates or certificate-requests.
     /// </summary>
-    /// <param name="value">A public-private keypair. Supported algorithms currently include RSA, ECDsa and the deprecated DSA.</param>
+    /// <param name="value">A public-private keypair. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. Set as null to immediately remove previously supplied/generated key-parameters from the builder.</param>
     /// <returns>A new instance of CertificateBuilder with the specified key-pair set.</returns>
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
         => this with { KeyParameters = value != null ? AsymmetricAlgorithmParameters.Create(value) : null };
@@ -138,6 +138,9 @@ public partial record CertificateBuilder
     /// <summary>
     /// Use this to generate a new key-pair to use when creating new certificates or certificate-requests.
     /// </summary>
+    /// <remarks>
+    /// Note: sensitive key-parameters are generated immediately rather than delayed until build-time, and are available to all subsequent chained instances of that builder. Call the SetKeyPair(null) method if you need to remove those key-parameters immediately.
+    /// </remarks>
     /// <param name="value">The type of algorithm to use for generating the keys. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. The default is RSA.</param>
     /// <returns>A new instance of CertificateBuilder with the new key-pair set.</returns>
     public CertificateBuilder GenerateKeyPair(KeyAlgorithm value = KeyAlgorithm.RSA)
@@ -375,17 +378,6 @@ public partial record CertificateBuilder
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.NonRepudiation, true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.IdKPEmailProtection.Id) }, false),
-        };
-
-
-    private static DerObjectIdentifier GetSignatureAlgorithm(CertificateBuilder builder)
-        => builder.HashAlgorithm.Name switch {
-            nameof(HashAlgorithmName.MD5) => PkcsObjectIdentifiers.MD5WithRsaEncryption,
-            nameof(HashAlgorithmName.SHA1) => PkcsObjectIdentifiers.Sha1WithRsaEncryption,
-            nameof(HashAlgorithmName.SHA256) => PkcsObjectIdentifiers.Sha256WithRsaEncryption,
-            nameof(HashAlgorithmName.SHA384) => PkcsObjectIdentifiers.Sha384WithRsaEncryption,
-            nameof(HashAlgorithmName.SHA512) => PkcsObjectIdentifiers.Sha512WithRsaEncryption,
-            _ => throw new NotSupportedException($"Specified {nameof(HashAlgorithm)} {builder.HashAlgorithm} is not supported.")
         };
 
 

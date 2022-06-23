@@ -8,7 +8,6 @@ using Org.BouncyCastle.Asn1;
 namespace FluentCertificates;
 
 
-// ReSharper disable WithExpressionModifiesAllMembers
 public record X500NameBuilder
 {
     public X500NameBuilder()

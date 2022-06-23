@@ -1,6 +1,10 @@
-﻿using System.Security;
+﻿using System.Formats.Asn1;
+using System.Runtime.ConstrainedExecution;
+using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+
+using FluentCertificates.Internals;
 
 
 namespace FluentCertificates
@@ -153,6 +157,22 @@ namespace FluentCertificates
             }) ?? throw new Exception($"Private key not found for OID {cert.GetKeyAlgorithm()}");
 
 
+        public static byte[] GetTbsData(this X509Certificate2 cert)
+        {
+            var reader = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
+            return reader.ReadEncodedValue().ToArray();
+        }
+
+
+        public static byte[] GetSignatureData(this X509Certificate2 cert)
+        {
+            var reader = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
+            reader.ReadSequence(Asn1Tag.Sequence);
+            reader.ReadSequence(Asn1Tag.Sequence);
+            return reader.ReadBitString(out _, Asn1Tag.PrimitiveBitString);
+        }
+
+
         public static bool IsValidNow(this X509Certificate2 cert)
             => cert.IsValid(DateTime.UtcNow);
 
@@ -161,13 +181,32 @@ namespace FluentCertificates
             => cert.NotBefore.ToUniversalTime() <= atTime && atTime <= cert.NotAfter.ToUniversalTime();
 
 
-        public static bool IsSelfSigned(this X509Certificate2 cert)
-            => cert.IsIssuedBy(cert);
+        public static bool IsSelfSigned(this X509Certificate2 cert, bool verifySignature = false)
+            => cert.IsIssuedBy(cert, verifySignature);
 
 
-        public static bool IsIssuedBy(this X509Certificate2 cert, X509Certificate2 issuer)
-            => AreByteSpansEqual(cert.IssuerName.RawData, issuer.SubjectName.RawData);
-               
+        public static bool IsIssuedBy(this X509Certificate2 cert, X509Certificate2 issuer, bool verifySignature = false)
+            => AreByteSpansEqual(cert.IssuerName.RawData, issuer.SubjectName.RawData) && (!verifySignature || VerifySignature(cert, issuer));
+
+
+        private static bool VerifySignature(X509Certificate2 cert, X509Certificate2 issuer)
+        {
+            var algorithm = SignatureAlgorithm.FromOid(cert.SignatureAlgorithm);
+
+            var tbs = cert.GetTbsData();
+            var sig = cert.GetSignatureData();
+
+            return algorithm.KeyAlgorithm switch {
+                KeyAlgorithm.DSA => issuer.GetDSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm),
+                KeyAlgorithm.RSA =>
+                    //TODO: detect which padding-mode was used
+                    issuer.GetRSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, RSASignaturePadding.Pkcs1) ||
+                    issuer.GetRSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, RSASignaturePadding.Pss),
+                KeyAlgorithm.ECDsa => issuer.GetECDsaPublicKey()!.VerifyData(tbs.AsSpan(), sig.AsSpan(), algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence),
+                _ => false
+            };
+        }
+
 
         private static bool AreByteSpansEqual(Span<byte> first, Span<byte> second)
             => first.SequenceEqual(second);

@@ -2,6 +2,8 @@
 using System.Runtime.InteropServices;
 #endif
 
+#pragma warning disable IDE0022 // Use expression body for methods
+
 namespace FluentCertificates.Internals;
 
 internal static class Tools
@@ -32,3 +34,5 @@ internal static class Tools
         #endif
     }
 }
+
+#pragma warning restore IDE0022 // Use expression body for methods

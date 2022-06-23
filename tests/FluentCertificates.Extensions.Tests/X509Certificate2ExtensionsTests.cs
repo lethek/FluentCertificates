@@ -8,6 +8,27 @@ public class X509Certificate2ExtensionsTests
 {
     [Theory]
     [MemberData(nameof(KeyAlgorithmsTestData))]
+    public void Certificate_IssuedBy_VerifiesIssuerSignature(KeyAlgorithm alg)
+    {
+        var builder = new CertificateBuilder().SetSubject("CN=Test Issuer");
+        using var faker = builder.GenerateKeyPair(alg).Build();
+        using var issuer = builder.GenerateKeyPair(alg).Build();
+
+        using var cert = new CertificateBuilder().SetIssuer(issuer).Build();
+
+        //The fake issuer has the same subject-name as the real issuer
+        Assert.True(cert.IsIssuedBy(faker, verifySignature: false));
+
+        //Signature verification against the fake issuer fails
+        Assert.False(cert.IsIssuedBy(faker, verifySignature: true));
+
+        //Signature verification against the real issuer succeeds
+        Assert.True(cert.IsIssuedBy(issuer, true));
+    }
+
+
+    [Theory]
+    [MemberData(nameof(KeyAlgorithmsTestData))]
     public void ExportAsCert_ToWriter_RawDataIsEqual(KeyAlgorithm alg)
     {
         using var expected = new CertificateBuilder().GenerateKeyPair(alg).Build();
