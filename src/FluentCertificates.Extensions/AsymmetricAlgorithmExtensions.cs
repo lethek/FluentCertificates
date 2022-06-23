@@ -27,7 +27,7 @@ public static class AsymmetricAlgorithmExtensions
 
     public static AsymmetricAlgorithm ExportAsPrivateKeyPem(this AsymmetricAlgorithm keys, TextWriter writer, string? password = null)
     {
-        writer.Write(keys.ToPrivateKeyPemString(), password);
+        writer.Write(keys.ToPrivateKeyPemString(password));
         return keys;
     }
 
