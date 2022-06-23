@@ -13,7 +13,6 @@ public static class AsymmetricAlgorithmExtensions
                 ? PemEncoding.Write("PRIVATE KEY", keys.ExportPkcs8PrivateKey())
                 : PemEncoding.Write("ENCRYPTED PRIVATE KEY", keys.ExportEncryptedPkcs8PrivateKey(password, DefaultPbeParameters))
         );
-        sw.Write('\n');
         return sw.ToString();
     }
 
@@ -22,14 +21,13 @@ public static class AsymmetricAlgorithmExtensions
     {
         using var sw = new StringWriter();
         sw.Write(PemEncoding.Write("PUBLIC KEY", keys.ExportSubjectPublicKeyInfo()));
-        sw.Write('\n');
         return sw.ToString();
     }
 
 
-    public static AsymmetricAlgorithm ExportAsPrivateKeyPem(this AsymmetricAlgorithm keys, TextWriter writer)
+    public static AsymmetricAlgorithm ExportAsPrivateKeyPem(this AsymmetricAlgorithm keys, TextWriter writer, string? password = null)
     {
-        writer.Write(keys.ToPrivateKeyPemString());
+        writer.Write(keys.ToPrivateKeyPemString(), password);
         return keys;
     }
 
@@ -41,11 +39,11 @@ public static class AsymmetricAlgorithmExtensions
     }
 
 
-    public static AsymmetricAlgorithm ExportAsPrivateKeyPem(this AsymmetricAlgorithm keys, string path)
+    public static AsymmetricAlgorithm ExportAsPrivateKeyPem(this AsymmetricAlgorithm keys, string path, string? password = null)
     {
         using var stream = File.OpenWrite(path);
         using var writer = new StreamWriter(stream);
-        return keys.ExportAsPrivateKeyPem(writer);
+        return keys.ExportAsPrivateKeyPem(writer, password);
     }
 
 

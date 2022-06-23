@@ -39,20 +39,20 @@ public static class X509Certificate2CollectionExtensions
     }
 
 
-    public static X509Certificate2Collection ExportAsPem(this X509Certificate2Collection collection, TextWriter writer, ExportKeys include = ExportKeys.All)
+    public static X509Certificate2Collection ExportAsPem(this X509Certificate2Collection collection, TextWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
     {
-        collection.ToEnumerable().ExportAsPem(writer, include);
+        collection.ToEnumerable().ExportAsPem(writer, password, include);
         return collection;
     }
 
     
-    public static X509Certificate2Collection ExportAsPem(this X509Certificate2Collection collection, string path, ExportKeys include = ExportKeys.All)
+    public static X509Certificate2Collection ExportAsPem(this X509Certificate2Collection collection, string path, string? password = null, ExportKeys include = ExportKeys.All)
     {
-        collection.ToEnumerable().ExportAsPem(path, include);
+        collection.ToEnumerable().ExportAsPem(path, password, include);
         return collection;
     }
 
 
-    public static string ToPemString(this X509Certificate2Collection collection, ExportKeys include = ExportKeys.All)
-        => collection.ToEnumerable().ToPemString(include);
+    public static string ToPemString(this X509Certificate2Collection collection, string? password = null, ExportKeys include = ExportKeys.All)
+        => collection.ToEnumerable().ToPemString(password, include);
 }

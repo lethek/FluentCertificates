@@ -1,5 +1,4 @@
 ﻿using System.Formats.Asn1;
-using System.Runtime.ConstrainedExecution;
 using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -48,6 +47,16 @@ namespace FluentCertificates
         }
 
 
+        public static X509Certificate2 ExportAsPkcs7(this X509Certificate2 cert, BinaryWriter writer)
+        {
+            var data = new X509Certificate2Collection(cert).Export(X509ContentType.Pkcs7)
+                       ?? throw new ArgumentException("Nothing to export", nameof(cert));
+
+            writer.Write(data);
+            return cert;
+        }
+
+
         public static X509Certificate2 ExportAsPkcs12(this X509Certificate2 cert, BinaryWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
         {
             var data = FilterPrivateKey(cert, include).Export(X509ContentType.Pfx, password)
@@ -68,19 +77,9 @@ namespace FluentCertificates
         }
 
 
-        public static X509Certificate2 ExportAsPkcs7(this X509Certificate2 cert, BinaryWriter writer)
+        public static X509Certificate2 ExportAsPem(this X509Certificate2 cert, TextWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
         {
-            var data = new X509Certificate2Collection(cert).Export(X509ContentType.Pkcs7)
-                       ?? throw new ArgumentException("Nothing to export", nameof(cert));
-
-            writer.Write(data);
-            return cert;
-        }
-
-
-        public static X509Certificate2 ExportAsPem(this X509Certificate2 cert, TextWriter writer, ExportKeys include = ExportKeys.All)
-        {
-            writer.Write(cert.ToPemString(include));
+            writer.Write(cert.ToPemString(password, include));
             return cert;
         }
 
@@ -94,6 +93,14 @@ namespace FluentCertificates
             using var stream = File.OpenWrite(path);
             using var writer = new BinaryWriter(stream);
             return cert.ExportAsCert(writer);
+        }
+
+
+        public static X509Certificate2 ExportAsPkcs7(this X509Certificate2 cert, string path)
+        {
+            using var stream = File.OpenWrite(path);
+            using var writer = new BinaryWriter(stream);
+            return cert.ExportAsPkcs7(writer);
         }
 
 
@@ -113,33 +120,24 @@ namespace FluentCertificates
         }
 
 
-        public static X509Certificate2 ExportAsPkcs7(this X509Certificate2 cert, string path)
-        {
-            using var stream = File.OpenWrite(path);
-            using var writer = new BinaryWriter(stream);
-            return cert.ExportAsPkcs7(writer);
-        }
-
-
-        public static X509Certificate2 ExportAsPem(this X509Certificate2 cert, string path, ExportKeys include = ExportKeys.All)
+        public static X509Certificate2 ExportAsPem(this X509Certificate2 cert, string path, string? password = null, ExportKeys include = ExportKeys.All)
         {
             using var stream = File.OpenWrite(path);
             using var writer = new StreamWriter(stream);
-            return cert.ExportAsPem(writer, include);
+            return cert.ExportAsPem(writer, password, include);
         }
 
         #endregion
 
 
-        public static string ToPemString(this X509Certificate2 cert, ExportKeys include = ExportKeys.All)
+        public static string ToPemString(this X509Certificate2 cert, string? password = null, ExportKeys include = ExportKeys.All)
         {
             using var sw = new StringWriter();
             if (include != ExportKeys.None && cert.HasPrivateKey) {
-                sw.Write(PemEncoding.Write("PRIVATE KEY", cert.GetPrivateKey().ExportPkcs8PrivateKey()));
+                cert.GetPrivateKey().ExportAsPrivateKeyPem(sw, password);
                 sw.Write('\n');
             }
             sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
-            sw.Write('\n');
             return sw.ToString();
         }
 

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.ConstrainedExecution;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -62,9 +63,9 @@ public static class X509Certificate2EnumerableExtensions
     }
 
 
-    public static IEnumerable<X509Certificate2> ExportAsPem(this IEnumerable<X509Certificate2> enumerable, TextWriter writer, ExportKeys include = ExportKeys.All)
+    public static IEnumerable<X509Certificate2> ExportAsPem(this IEnumerable<X509Certificate2> enumerable, TextWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
     {
-        writer.Write(enumerable.ToPemString(include));
+        writer.Write(enumerable.ToPemString(password, include));
         return enumerable;
     }
 
@@ -90,29 +91,34 @@ public static class X509Certificate2EnumerableExtensions
     }
 
 
-    public static IEnumerable<X509Certificate2> ExportAsPem(this IEnumerable<X509Certificate2> enumerable, string path, ExportKeys include = ExportKeys.All)
+    public static IEnumerable<X509Certificate2> ExportAsPem(this IEnumerable<X509Certificate2> enumerable, string path, string? password = null, ExportKeys include = ExportKeys.All)
     {
         using var stream = File.OpenWrite(path);
         using var writer = new StreamWriter(stream);
-        return enumerable.ExportAsPem(writer, include);
+        return enumerable.ExportAsPem(writer, password, include);
     }
 
     #endregion
 
 
-    public static string ToPemString(this IEnumerable<X509Certificate2> enumerable, ExportKeys include = ExportKeys.All)
+    public static string ToPemString(this IEnumerable<X509Certificate2> enumerable, string? password = null, ExportKeys include = ExportKeys.All)
     {
         var list = enumerable.FilterPrivateKeys(include).Reverse().ToList();
+        if (!list.Any()) {
+            return String.Empty;
+        }
+
         using var sw = new StringWriter();
         if (include != ExportKeys.None) {
             foreach (var cert in list.Where(x => x.HasPrivateKey)) {
-                sw.Write(PemEncoding.Write("PRIVATE KEY", cert.GetPrivateKey().ExportPkcs8PrivateKey()));
+                cert.GetPrivateKey().ExportAsPrivateKeyPem(sw, password);
                 sw.Write('\n');
             }
         }
-        foreach (var cert in list) {
-            sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
+        sw.Write(PemEncoding.Write("CERTIFICATE", list.First().RawData));
+        foreach (var cert in list.Skip(1)) {
             sw.Write('\n');
+            sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
         }
         return sw.ToString();
     }

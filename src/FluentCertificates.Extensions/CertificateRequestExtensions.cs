@@ -25,7 +25,6 @@ public static class CertificateRequestExtensions
     {
         using var sw = new StringWriter();
         sw.Write(PemEncoding.Write("CERTIFICATE REQUEST", certRequest.CreateSigningRequest()));
-        sw.Write('\n');
         return sw.ToString();
     }
 }

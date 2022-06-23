@@ -44,20 +44,20 @@ public static class X509ChainExtensions
     }
 
 
-    public static X509Chain ExportAsPem(this X509Chain chain, TextWriter writer, ExportKeys include = ExportKeys.All)
+    public static X509Chain ExportAsPem(this X509Chain chain, TextWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
     {
-        chain.ToEnumerable().ExportAsPem(writer, include);
+        chain.ToEnumerable().ExportAsPem(writer, password, include);
         return chain;
     }
 
     
-    public static X509Chain ExportAsPem(this X509Chain chain, string path, ExportKeys include = ExportKeys.All)
+    public static X509Chain ExportAsPem(this X509Chain chain, string path, string? password = null, ExportKeys include = ExportKeys.All)
     {
-        chain.ToEnumerable().ExportAsPem(path, include);
+        chain.ToEnumerable().ExportAsPem(path, password, include);
         return chain;
     }
 
 
-    public static string ToPemString(this X509Chain chain, ExportKeys include = ExportKeys.All)
-        => chain.ToEnumerable().ToPemString(include);
+    public static string ToPemString(this X509Chain chain, string? password = null, ExportKeys include = ExportKeys.All)
+        => chain.ToEnumerable().ToPemString(password, include);
 }
