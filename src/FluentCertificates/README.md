@@ -126,11 +126,12 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 |`ToPemString`||
 |`ToBase64String`||
 |`GetPrivateKey`||
+|`GetSignatureData`||
+|`GetTbsData`||
 |`IsValidNow`||
 |`IsValid`||
 |`IsSelfSigned`||
 |`IsIssuedBy`||
-|`VerifyIssuer`||
 
 ---
 
