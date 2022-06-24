@@ -3,8 +3,6 @@ using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates.Internals;
-
 
 namespace FluentCertificates
 {
@@ -171,6 +169,24 @@ namespace FluentCertificates
         }
 
 
+        public static SignatureAlgorithm GetSignatureAlgorithm(this X509Certificate2 cert)
+        {
+            var reader = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
+            reader.ReadSequence(Asn1Tag.Sequence); //Skip TBSCertificate
+            var algIdentifier = reader.ReadSequence(Asn1Tag.Sequence);
+            var algorithm = algIdentifier.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+            if (algorithm == "1.2.840.113549.1.1.10") {
+                var hashAlgorithm = algIdentifier
+                    .ReadSequence(Asn1Tag.Sequence)
+                    .ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0))
+                    .ReadSequence(Asn1Tag.Sequence)
+                    .ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+                return SignatureAlgorithm.ForRsaSsaPss(algorithm, hashAlgorithm);
+            }
+            return SignatureAlgorithm.FromOidValue(algorithm);
+        }
+
+
         public static bool IsValidNow(this X509Certificate2 cert)
             => cert.IsValid(DateTime.UtcNow);
 
@@ -189,17 +205,13 @@ namespace FluentCertificates
 
         private static bool VerifySignature(X509Certificate2 cert, X509Certificate2 issuer)
         {
-            var algorithm = SignatureAlgorithm.FromOid(cert.SignatureAlgorithm);
-
+            var algorithm = cert.GetSignatureAlgorithm();
             var tbs = cert.GetTbsData();
             var sig = cert.GetSignatureData();
 
             return algorithm.KeyAlgorithm switch {
                 KeyAlgorithm.DSA => issuer.GetDSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm),
-                KeyAlgorithm.RSA =>
-                    //TODO: detect which padding-mode was used
-                    issuer.GetRSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, RSASignaturePadding.Pkcs1) ||
-                    issuer.GetRSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, RSASignaturePadding.Pss),
+                KeyAlgorithm.RSA => issuer.GetRSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, algorithm.RSASignaturePadding!),
                 KeyAlgorithm.ECDsa => issuer.GetECDsaPublicKey()!.VerifyData(tbs.AsSpan(), sig.AsSpan(), algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence),
                 _ => false
             };
