@@ -16,7 +16,6 @@
     <RepositoryType>git</RepositoryType>
     <RootNamespace>FluentCertificates</RootNamespace>
     <IsPackable>true</IsPackable>
-    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

@@ -110,7 +110,7 @@ public record CertificateFinder : IQueryable<X509Certificate2>
             StoreName.Root => "Root",
             StoreName.TrustedPeople => "TrustedPeople",
             StoreName.TrustedPublisher => "TrustedPublisher",
-            _ => throw new ArgumentException(nameof(name))
+            _ => throw new ArgumentException($"Unsupported StoreName value: {name}", nameof(name))
         };
 
 

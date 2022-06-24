@@ -1,12 +1,11 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Runtime.ConstrainedExecution;
+﻿// ReSharper disable PossibleMultipleEnumeration
+
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 
 namespace FluentCertificates;
 
-[SuppressMessage("ReSharper", "PossibleMultipleEnumeration")]
 public static class X509Certificate2EnumerableExtensions
 {
     public static X509Certificate2Collection ToCollection(this IEnumerable<X509Certificate2> enumerable)
@@ -32,7 +31,7 @@ public static class X509Certificate2EnumerableExtensions
 
     #region Export to a Writer
 
-    [SuppressMessage("ReSharper", "SuspiciousTypeConversion.Global")]
+    // ReSharper disable once SuspiciousTypeConversion.Global
     public static IEnumerable<X509Certificate2> ExportAsPkcs7(this IEnumerable<X509Certificate2> enumerable, BinaryWriter writer)
     {
         //In .NET 6 and up, X509Certificate2Collection implements IEnumerable<X509Certificate2>, so no need to allocate & copy
@@ -74,7 +73,6 @@ public static class X509Certificate2EnumerableExtensions
 
     #region Export to a File
 
-    [SuppressMessage("ReSharper", "SuspiciousTypeConversion.Global")]
     public static IEnumerable<X509Certificate2> ExportAsPkcs7(this IEnumerable<X509Certificate2> enumerable, string path)
     {
         using var stream = File.OpenWrite(path);

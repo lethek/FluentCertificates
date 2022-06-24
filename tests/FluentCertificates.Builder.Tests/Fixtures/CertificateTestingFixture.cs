@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates;
-
 
 namespace FluentCertificates.Fixtures;
 
-public class CertificateTestingFixture : IDisposable
+public sealed class CertificateTestingFixture : IDisposable
 {
     public X509Certificate2 RootCA => _rootCa.Value;
     public X509Certificate2 IntermediateCA => _intermediateCa.Value;

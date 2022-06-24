@@ -4,7 +4,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates;
 using FluentCertificates.Internals;
 
 using Org.BouncyCastle.Asn1;
@@ -84,25 +83,12 @@ public class CertificateBuilderTests
     [Fact]
     public void Build_NewCertificate_WithDSAKeys()
     {
-#if NET6_0_OR_GREATER
-        //NOTE: FluentCertificates does not currently support creating DSA certificates on .NET 5 or earlier
         using var keys = DSA.Create(1024);
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
         Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert1.GetKeyAlgorithm());
 
         using var cert2 = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
         Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert2.GetKeyAlgorithm());
-
-#else
-        Assert.Throws<NotImplementedException>(() => {
-            using var keys = DSA.Create(1024);
-            using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
-        });
-
-        Assert.Throws<NotImplementedException>(() => {
-            using var cert = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
-        });
-#endif
     }
 
 

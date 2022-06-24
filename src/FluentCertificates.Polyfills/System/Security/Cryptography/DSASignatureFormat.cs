@@ -1,11 +1,11 @@
-﻿#if NETSTANDARD
-// ReSharper disable All
+﻿// ReSharper disable All
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 namespace System.Security.Cryptography
 {
+#if NETSTANDARD
     /// <summary>
     /// Specifies the data format for signatures with the DSA family of algorithms.
     /// </summary>
@@ -38,6 +38,7 @@ namespace System.Security.Cryptography
         /// </remarks>
         Rfc3279DerSequence,
     }
+#endif
 
     internal static class DSASignatureFormatHelpers
     {
@@ -50,4 +51,3 @@ namespace System.Security.Cryptography
     }
 }
 
-#endif

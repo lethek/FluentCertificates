@@ -7,7 +7,6 @@ using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
 
-using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1;
 #if !NET6_0_OR_GREATER
@@ -15,6 +14,7 @@ using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509.Extension;
 #endif
 
+using PublicKeyFactory = FluentCertificates.Internals.PublicKeyFactory;
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 using X509ExtensionBC = Org.BouncyCastle.Asn1.X509.X509Extension;
 
@@ -24,8 +24,6 @@ namespace FluentCertificates;
 public partial record CertificateBuilder
 {
     public CertificateUsage? Usage { get; init; }
-    public int? KeyLength { get; init; }
-    public int? PathLength { get; init; }
     public DateTimeOffset NotBefore { get; init; } = DateTimeOffset.UtcNow.AddHours(-1);
     public DateTimeOffset NotAfter { get; init; } = DateTimeOffset.UtcNow.AddHours(1);
     public X500NameBuilder Subject { get; init; } = EmptyNameBuilder;
@@ -33,6 +31,8 @@ public partial record CertificateBuilder
     public string[] DnsNames { get; init; } = Array.Empty<string>();
     public string? FriendlyName { get; init; }
     public string? Email { get; init; }
+    public int? PathLength { get; init; }
+    public int? KeyLength { get; init; }
     public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
     public RSASignaturePadding RSASignaturePadding { get; init; } = RSASignaturePadding.Pkcs1;
     public ImmutableHashSet<X509Extension> Extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
@@ -192,17 +192,7 @@ public partial record CertificateBuilder
 
         using var keys = KeyParameters.CreateKeyPair();
 
-        var request = keys switch {
-            RSA rsa => new CertificateRequest(dn, rsa, HashAlgorithm, RSASignaturePadding),
-            ECDsa ecdsa => new CertificateRequest(dn, ecdsa, HashAlgorithm),
-            #if NET6_0_OR_GREATER
-            DSA dsa => new CertificateRequest(dn, new PublicKey(dsa), HashAlgorithm),
-            #else
-            DSA dsa => throw new NotImplementedException($"Support for DSA is not yet implemented on .NET 5 or earlier."),
-            #endif
-            null => throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(GenerateKeyPair)}() first to provide a public/private keypair"),
-            _ => throw new NotSupportedException($"Unsupported {nameof(keys)} algorithm: {keys.SignatureAlgorithm}")
-        };
+        var request = new CertificateRequest(dn, PublicKeyFactory.Create(keys), HashAlgorithm);
 
         foreach (var extension in BuildExtensions(this, request)) {
             request.CertificateExtensions.Add(extension);
