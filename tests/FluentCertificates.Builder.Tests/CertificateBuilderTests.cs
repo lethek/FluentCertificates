@@ -63,7 +63,7 @@ public class CertificateBuilderTests
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
         Assert.Equal(PkcsObjectIdentifiers.RsaEncryption.Id, cert1.GetKeyAlgorithm());
 
-        using var cert2 = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.RSA).Build();
+        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.RSA).Build();
         Assert.Equal(PkcsObjectIdentifiers.RsaEncryption.Id, cert2.GetKeyAlgorithm());
     }
 
@@ -75,7 +75,7 @@ public class CertificateBuilderTests
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
         Assert.Equal(X9ObjectIdentifiers.IdECPublicKey.Id, cert1.GetKeyAlgorithm());
 
-        using var cert2 = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.ECDsa).Build();
+        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDsa).Build();
         Assert.Equal(X9ObjectIdentifiers.IdECPublicKey.Id, cert2.GetKeyAlgorithm());
     }
 
@@ -87,7 +87,7 @@ public class CertificateBuilderTests
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
         Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert1.GetKeyAlgorithm());
 
-        using var cert2 = new CertificateBuilder().GenerateKeyPair(KeyAlgorithm.DSA).Build();
+        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.DSA).Build();
         Assert.Equal(X9ObjectIdentifiers.IdDsa.Id, cert2.GetKeyAlgorithm());
     }
 
@@ -101,12 +101,12 @@ public class CertificateBuilderTests
             .SetUsage(CertificateUsage.CA)
             .SetSubject(x => x.SetCommonName("Root CA Test"))
             .SetNotAfter(now.AddHours(1))
-            .GenerateKeyPair(KeyAlgorithm.ECDsa)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
             .Build();
 
         using var cert = new CertificateBuilder()
             .SetIssuer(rootCA)
-            .GenerateKeyPair(KeyAlgorithm.RSA)
+            .SetKeyAlgorithm(KeyAlgorithm.RSA)
             .Build();
 
         Assert.True(cert.IsIssuedBy(rootCA, true));
@@ -122,12 +122,12 @@ public class CertificateBuilderTests
             .SetUsage(CertificateUsage.CA)
             .SetSubject(x => x.SetCommonName("Root CA Test"))
             .SetNotAfter(now.AddHours(1))
-            .GenerateKeyPair(KeyAlgorithm.RSA)
+            .SetKeyAlgorithm(KeyAlgorithm.RSA)
             .Build();
 
         using var cert = new CertificateBuilder()
             .SetIssuer(rootCA)
-            .GenerateKeyPair(KeyAlgorithm.ECDsa)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
             .Build();
 
         Assert.True(cert.IsIssuedBy(rootCA, true));

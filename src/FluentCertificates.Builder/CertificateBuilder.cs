@@ -9,10 +9,6 @@ using FluentCertificates.Internals;
 
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1;
-#if !NET6_0_OR_GREATER
-using Org.BouncyCastle.Security;
-using Org.BouncyCastle.X509.Extension;
-#endif
 
 using PublicKeyFactory = FluentCertificates.Internals.PublicKeyFactory;
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
@@ -33,12 +29,14 @@ public partial record CertificateBuilder
     public string? Email { get; init; }
     public int? PathLength { get; init; }
     public int? KeyLength { get; init; }
+    public KeyAlgorithm KeyAlgorithm { get; init; } = KeyAlgorithm.RSA;
     public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
     public RSASignaturePadding RSASignaturePadding { get; init; } = RSASignaturePadding.Pkcs1;
     public ImmutableHashSet<X509Extension> Extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
 
 
-    private AsymmetricAlgorithmParameters? KeyParameters { get; init; }
+    private PublicKey? PublicKey { get; init; }
+    private AsymmetricAlgorithm? KeyPair { get; init; }
 
 
     /// <summary>
@@ -48,14 +46,6 @@ public partial record CertificateBuilder
     /// <returns>A new instance of CertificateBuilder with the specified Usage set.</returns>
     public CertificateBuilder SetUsage(CertificateUsage value)
         => this with { Usage = value };
-
-    /// <summary>
-    /// Sets the KeyLength for generating new keys. Default is 4096 bits for RSA and is 2048 for DSA. KeyLength is ignored when generating ECDsa keys. 
-    /// </summary>
-    /// <param name="value"></param>
-    /// <returns>A new instance of CertificateBuilder with the specified KeyLength set.</returns>
-    public CertificateBuilder SetKeyLength(int? value)
-        => this with { KeyLength = value };
 
     /// <summary>
     /// Sets the certificate's validity period to begin from the specified timestamp. Default value is 1 hour ago.
@@ -112,6 +102,43 @@ public partial record CertificateBuilder
         => this with { PathLength = value };
 
     /// <summary>
+    /// Sets the KeyLength for generating new keys. Default is 4096 bits for RSA and is 2048 for DSA. KeyLength is ignored when generating ECDsa keys. 
+    /// </summary>
+    /// <param name="value"></param>
+    /// <returns>A new instance of CertificateBuilder with the specified KeyLength set.</returns>
+    public CertificateBuilder SetKeyLength(int? value)
+        => this with { KeyLength = value };
+
+    /// <summary>
+    /// Use this to provide a key-pair to use when creating new certificates or certificate-requests.
+    /// </summary>
+    /// <remarks>
+    /// Keys provided through this method are NOT automatically disposed by the CertificateBuilder so it is the caller's responsibility to manage that.
+    /// </remarks>
+    /// <param name="value">A public-private keypair. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. Set as null to immediately remove a previously supplied key from the builder.</param>
+    /// <returns>A new instance of CertificateBuilder with the specified key-pair set.</returns>
+    public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
+        => this with {
+            KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
+            PublicKey = PublicKeyFactory.Create(value),
+            KeyPair = value
+        };
+
+    /// <summary>
+    /// Use this to specify the algorithm to use when automatically generating new keys for a certificate. If a KeyPair was
+    /// previously been manually supplied, this will remove it from the builder. Each time the Build() method is called, a
+    /// new key-pair will be generated and immediately disposed upon return.
+    /// </summary>
+    /// <param name="value">The type of algorithm to use for generating the keys. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. The default is RSA.</param>
+    /// <returns>A new instance of CertificateBuilder with the specified KeyAlgorithm set.</returns>
+    public CertificateBuilder SetKeyAlgorithm(KeyAlgorithm value)
+        => this with {
+            KeyAlgorithm = value,
+            PublicKey = null,
+            KeyPair = null
+        };
+
+    /// <summary>
     /// Use to change the hashing algorithm. Default is SHA256.
     /// </summary>
     /// <param name="value"></param>
@@ -126,25 +153,7 @@ public partial record CertificateBuilder
     /// <returns>A new instance of CertificateBuilder with the specified RSASignaturePadding set.</returns>
     public CertificateBuilder SetRSASignaturePadding(RSASignaturePadding value)
         => this with { RSASignaturePadding = value };
-
-    /// <summary>
-    /// Use this to provide a key-pair to use when creating new certificates or certificate-requests.
-    /// </summary>
-    /// <param name="value">A public-private keypair. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. Set as null to immediately remove previously supplied/generated key-parameters from the builder.</param>
-    /// <returns>A new instance of CertificateBuilder with the specified key-pair set.</returns>
-    public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
-        => this with { KeyParameters = value != null ? AsymmetricAlgorithmParameters.Create(value) : null };
-
-    /// <summary>
-    /// Use this to generate a new key-pair to use when creating new certificates or certificate-requests.
-    /// </summary>
-    /// <remarks>
-    /// Note: sensitive key-parameters are generated immediately rather than delayed until build-time, and are available to all subsequent chained instances of that builder. Call the SetKeyPair(null) method if you need to remove those key-parameters immediately.
-    /// </remarks>
-    /// <param name="value">The type of algorithm to use for generating the keys. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. The default is RSA.</param>
-    /// <returns>A new instance of CertificateBuilder with the new key-pair set.</returns>
-    public CertificateBuilder GenerateKeyPair(KeyAlgorithm value = KeyAlgorithm.RSA)
-        => this with { KeyParameters = AsymmetricAlgorithmParameters.Create(value, KeyLength) };
+    
 
     public CertificateBuilder AddExtension(X509Extension extension)
         => this with { Extensions = Extensions.Add(extension) };
@@ -167,7 +176,7 @@ public partial record CertificateBuilder
 
     public void Validate()
     {
-        if (KeyLength <= 0 && KeyParameters == null) {
+        if (KeyLength <= 0 && KeyPair == null && KeyAlgorithm != KeyAlgorithm.ECDsa) {
             throw new ArgumentException($"{nameof(KeyLength)} must be greater than zero", nameof(KeyLength));
         }
 
@@ -184,17 +193,15 @@ public partial record CertificateBuilder
     /// <exception cref="ArgumentNullException">Thrown when the SetKeyPair(AsymmetricAlgorithm) method has not been called.</exception>
     public CertificateRequest ToCertificateRequest()
     {
-        if (KeyParameters == null) {
-            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) or {nameof(GenerateKeyPair)}() first to provide a public/private keypair");
+        if (PublicKey == null) {
+            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
         }
 
         var dn = Subject.Build();
 
-        using var keys = KeyParameters.CreateKeyPair();
+        var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
 
-        var request = new CertificateRequest(dn, PublicKeyFactory.Create(keys), HashAlgorithm);
-
-        foreach (var extension in BuildExtensions(this, request)) {
+        foreach (var extension in BuildExtensions(this)) {
             request.CertificateExtensions.Add(extension);
         }
 
@@ -215,45 +222,50 @@ public partial record CertificateBuilder
     {
         Validate();
 
-        var builder = KeyParameters == null
+        bool disposeKeys = (KeyPair == null);
+
+        var builder = KeyPair == null
             ? GenerateKeyPair()
             : this;
 
-        Debug.Assert(builder.KeyParameters != null);
+        try {
+            var request = builder.ToCertificateRequest();
 
-        var request = builder.ToCertificateRequest();
+            var cert = builder.Issuer != null
+                ? request.Create(
+                    builder.Issuer.SubjectName,
+                    builder.CreateSignatureGenerator(builder.Issuer.GetPrivateKey()),
+                    builder.NotBefore,
+                    builder.NotAfter,
+                    builder.GenerateSerialNumber()
+                )
+                : request.Create(
+                    builder.Subject.Build(),
+                    builder.CreateSignatureGenerator(builder.KeyPair),
+                    builder.NotBefore,
+                    builder.NotAfter,
+                    builder.GenerateSerialNumber()
+                );
 
-        using var keys = builder.KeyParameters.CreateKeyPair();
+            cert = builder.KeyPair switch {
+                DSA dsa => cert.CopyWithPrivateKey(dsa),
+                RSA rsa => cert.CopyWithPrivateKey(rsa),
+                ECDsa ecdsa => cert.CopyWithPrivateKey(ecdsa),
+                _ => cert
+            };
 
-        var cert = builder.Issuer != null
-            ? request.Create(
-                builder.Issuer.SubjectName,
-                builder.CreateSignatureGenerator(builder.Issuer.GetPrivateKey()),
-                builder.NotBefore,
-                builder.NotAfter,
-                builder.GenerateSerialNumber()
-            )
-            : request.Create(
-                builder.Subject.Build(),
-                builder.CreateSignatureGenerator(keys),
-                builder.NotBefore,
-                builder.NotAfter,
-                builder.GenerateSerialNumber()
-            );
+            if (!String.IsNullOrEmpty(builder.FriendlyName) && Tools.IsWindows) {
+                //CopyWithPrivateKey doesn't copy FriendlyName so it needs to be set here after the copy is made
+                cert.FriendlyName = builder.FriendlyName;
+            }
 
-        cert = keys switch {
-            DSA dsa => cert.CopyWithPrivateKey(dsa),
-            RSA rsa => cert.CopyWithPrivateKey(rsa),
-            ECDsa ecdsa => cert.CopyWithPrivateKey(ecdsa),
-            _ => cert
-        };
+            return cert;
 
-        if (!String.IsNullOrEmpty(builder.FriendlyName) && Tools.IsWindows) {
-            //CopyWithPrivateKey doesn't copy FriendlyName so it needs to be set here after the copy is made
-            cert.FriendlyName = builder.FriendlyName;
+        } finally {
+            if (disposeKeys) {
+                builder.KeyPair?.Clear();
+            }
         }
-
-        return cert;
     }
 
 
@@ -267,20 +279,31 @@ public partial record CertificateBuilder
     }
 
 
+    private CertificateBuilder GenerateKeyPair()
+        => SetKeyPair(
+            KeyAlgorithm switch {
+                KeyAlgorithm.ECDsa => ECDsa.Create() ?? throw new NotSupportedException("Unsupported ECDSA algorithm"),
+                KeyAlgorithm.RSA => RSA.Create(KeyLength ?? 4096),
+                KeyAlgorithm.DSA => DSA.Create(KeyLength ?? 1024),
+                _ => throw new ArgumentOutOfRangeException(nameof(KeyAlgorithm), KeyAlgorithm, $"Unsupported {nameof(KeyAlgorithm)}")
+            }
+        );
+
+
     private X509SignatureGenerator CreateSignatureGenerator(AsymmetricAlgorithm? keys)
         => keys switch {
             DSA dsa => new DSAX509SignatureGenerator(dsa),
             RSA rsa => X509SignatureGenerator.CreateForRSA(rsa, RSASignaturePadding),
             ECDsa ecdsa => X509SignatureGenerator.CreateForECDsa(ecdsa),
-            null => throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(GenerateKeyPair)}() first to provide a public/private keypair"),
+            null => throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair"),
             _ => throw new NotSupportedException($"Unsupported algorithm: {keys.SignatureAlgorithm}")
         };
 
 
-    private static ImmutableHashSet<X509Extension> BuildExtensions(CertificateBuilder builder, CertificateRequest? req)
+    private static ImmutableHashSet<X509Extension> BuildExtensions(CertificateBuilder builder)
     {
         //Setup default extensions based on selected certificate Usage
-        var extensions = GetCommonExtensions(builder, req);
+        var extensions = GetCommonExtensions(builder);
         extensions.AddRange(builder.Usage switch {
             null => new List<X509Extension>(),
             CertificateUsage.CA => GetCaExtensions(builder),
@@ -310,22 +333,10 @@ public partial record CertificateBuilder
     }
 
 
-    private static List<X509Extension> GetCommonExtensions(CertificateBuilder builder, CertificateRequest? req)
-    {
-        X509Extension extension;
-        if (req != null) {
-            extension = new X509SubjectKeyIdentifierExtension(req.PublicKey, false);
-        } else {
-            using var keys = builder.KeyParameters!.CreateKeyPair();
-            #if NET6_0_OR_GREATER
-            extension = new X509SubjectKeyIdentifierExtension(new PublicKey(keys), false);
-            #else
-            extension = new X509ExtensionBC(false, new DerOctetString(new SubjectKeyIdentifierStructure(DotNetUtilities.GetKeyPair(keys).Public)))
-                .ConvertToDotNet(X509Extensions.SubjectKeyIdentifier);
-            #endif
-        }
-        return new() { extension };
-    }
+    private static List<X509Extension> GetCommonExtensions(CertificateBuilder builder)
+        => new() {
+            new X509SubjectKeyIdentifierExtension(builder.PublicKey, false)
+        };
 
 
     private static List<X509Extension> GetCaExtensions(CertificateBuilder builder)
@@ -368,6 +379,16 @@ public partial record CertificateBuilder
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.NonRepudiation, true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.IdKPEmailProtection.Id) }, false),
+        };
+
+
+    private static KeyAlgorithm? GetKeyAlgorithm(AsymmetricAlgorithm? keys)
+        => keys switch {
+            ECDsa ecdsa => KeyAlgorithm.ECDsa,
+            RSA rsa => KeyAlgorithm.RSA,
+            DSA dsa => KeyAlgorithm.DSA,
+            null => null,
+            _ => throw new NotSupportedException($"Unsupported AsymmetricAlgorithm: {keys.GetType()}")
         };
 
 

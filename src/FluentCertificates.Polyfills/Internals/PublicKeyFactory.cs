@@ -11,13 +11,16 @@ namespace FluentCertificates.Internals
     {
 #if NET6_0_OR_GREATER
 
-        public static PublicKey Create(AsymmetricAlgorithm keys)
-            => new PublicKey(keys);
+        public static PublicKey? Create(AsymmetricAlgorithm? keys)
+            => keys != null ? new PublicKey(keys) : null;
 
 #else
 
-        public static PublicKey Create(AsymmetricAlgorithm keys)
+        public static PublicKey? Create(AsymmetricAlgorithm? keys)
         {
+            if (keys == null) {
+                return null;
+            }
             DecodeSubjectPublicKeyInfo((ReadOnlySpan<byte>)keys.ExportSubjectPublicKeyInfo(), out var oid, out var parameters, out var keyValue);
             return new PublicKey(oid, parameters, keyValue);
         }
