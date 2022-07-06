@@ -21,13 +21,24 @@ Unfortunately documentation is incomplete. You may find more examples within the
 
 `CertificateBuilder` requires the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and is found under the `FluentCertificates` namespace.
 
+### **The absolute minimum needed to create a certificate (although it may not be a very useful one):**
+
+```csharp
+using var cert = new CertificateBuilder().Build();
+```
+
 ### **Create a `CertificateRequest` for signing, exporting and passing to a 3rd party CA:**
 
 ```csharp
+//A public & private keypair must be created first, outside of the CertificateBuilder, otherwise you'd have no way to retrieve the private-key used for the new CertificateRequest object
+using var keys = RSA.Create();
+
+//Creating a CertificateRequest
 var request = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
     .SetDnsNames("*.fake.domain", "fake.domain")
+    .SetKeyPair(keys)
     .ToCertificateRequest();
 ```
 

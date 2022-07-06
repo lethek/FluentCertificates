@@ -194,7 +194,7 @@ public partial record CertificateBuilder
     public CertificateRequest ToCertificateRequest()
     {
         if (PublicKey == null) {
-            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
+            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) first to provide a public/private keypair");
         }
 
         var dn = Subject.Build();
