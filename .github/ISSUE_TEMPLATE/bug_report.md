@@ -11,9 +11,9 @@ assignees: ''
 A clear and concise description of what the bug is.
 
 **To Reproduce**
-Steps to reproduce the behavior.
+Steps to reproduce the behaviour.
 
-**Expected behavior**
+**Expected behaviour**
 A clear and concise description of what you expected to happen.
 
 **Screenshots**
@@ -24,10 +24,9 @@ A code snippet that demonstrates the issue or a link to a code repository the de
 
 Note: Because the developers need to copy and paste the code snippet, including a code snippet as a media file (e.g. gif) is not sufficient.
 
-
 **Environment**
- - SDK Version [e.g. 1.1.0]
-- .NET Framework version
+- Version [e.g. v0.7.1] or commit hash
+- .NET version
 
 **The bug has the severity**
 - [ ] Critical: The defect affects critical functionality or critical data. It does not have a workaround.
