@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -12,6 +13,7 @@ using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1.X9;
 
 using Xunit;
+using Xunit.Abstractions;
 
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
@@ -20,6 +22,11 @@ namespace FluentCertificates;
 
 public class CertificateBuilderTests
 {
+    public CertificateBuilderTests(ITestOutputHelper outputHelper) {
+        OutputHelper = outputHelper;
+    }
+
+
     [Fact]
     public void Build_NewCertificate_HasPrivateKey()
     {
@@ -243,6 +250,22 @@ public class CertificateBuilderTests
         Assert.Contains(san, x => x.Name.ToString() == "fake.domain");
         Assert.Contains(san, x => x.Name.ToString() == "another.domain");
     }
+
+
+    [Fact]
+    public void Build_CertificateSigningRequest_WithExternalKeys()
+    {
+        using var keys = RSA.Create();
+
+        var csr = new CertificateBuilder()
+            .SetKeyPair(keys)
+            .BuildCertificateSigningRequest();
+
+        Assert.NotEmpty(csr);
+    }
+
+
+    private readonly ITestOutputHelper OutputHelper;
 
 
     private static IEnumerable<GeneralName> EnumerateNamesFromSAN(X509Extension extension)
