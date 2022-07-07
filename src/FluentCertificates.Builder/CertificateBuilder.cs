@@ -125,7 +125,7 @@ public partial record CertificateBuilder
 
     /// <summary>
     /// Use this to specify the algorithm to use when automatically generating new keys for a certificate. If a KeyPair was
-    /// previously been manually supplied, this will remove it from the builder. Each time the Build() method is called, a
+    /// previously been manually supplied, this will remove it from the builder. Each time the Create() method is called, a
     /// new key-pair will be generated and immediately disposed upon return.
     /// </summary>
     /// <param name="value">The type of algorithm to use for generating the keys. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. The default is RSA.</param>
@@ -186,17 +186,17 @@ public partial record CertificateBuilder
 
 
     /// <summary>
-    /// Build a CertificateRequest based on the parameters that have been set previously in the builder.
+    /// Create a CertificateRequest based on the parameters that have been set previously in the builder.
     /// </summary>
     /// <returns>A CertificateRequest instance.</returns>
     /// <exception cref="ArgumentNullException">Thrown when the SetKeyPair(AsymmetricAlgorithm) method has not been called.</exception>
-    public CertificateRequest BuildCertificateRequest()
+    public CertificateRequest CreateCertificateRequest()
     {
         if (PublicKey == null) {
             throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) first to provide a public/private keypair");
         }
 
-        var dn = Subject.Build();
+        var dn = Subject.Create();
 
         var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
 
@@ -216,8 +216,8 @@ public partial record CertificateBuilder
     /// Builds a CertificateSigningRequest object bsaed on the parameters that have been set previously in the builder.
     /// </summary>
     /// <returns></returns>
-    public CertificateSigningRequest BuildCertificateSigningRequest()
-        => new(BuildCertificateRequest(), CreateSignatureGenerator(KeyPair));
+    public CertificateSigningRequest CreateCertificateSigningRequest()
+        => new(CreateCertificateRequest(), CreateSignatureGenerator(KeyPair));
 
 
     /// <summary>
@@ -225,7 +225,7 @@ public partial record CertificateBuilder
     /// </summary>
     /// <returns>An X509Certificate2 instance.</returns>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
-    public X509Certificate2 Build()
+    public X509Certificate2 Create()
     {
         Validate();
 
@@ -240,7 +240,7 @@ public partial record CertificateBuilder
                 throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
             }
 
-            var request = builder.BuildCertificateRequest();
+            var request = builder.CreateCertificateRequest();
 
             var cert = builder.Issuer != null
                 ? request.Create(
@@ -251,7 +251,7 @@ public partial record CertificateBuilder
                     builder.GenerateSerialNumber()
                 )
                 : request.Create(
-                    builder.Subject.Build(),
+                    builder.Subject.Create(),
                     builder.CreateSignatureGenerator(builder.KeyPair),
                     builder.NotBefore,
                     builder.NotAfter,

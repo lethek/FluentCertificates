@@ -37,7 +37,7 @@ public record X500NameBuilder
     public ImmutableList<(Oid OID, string Value)> Attributes { get; init; } = ImmutableList<(Oid, string)>.Empty;
 
 
-    public X500DistinguishedName Build()
+    public X500DistinguishedName Create()
         => new(ToX509Name().ToString());
 
     

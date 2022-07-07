@@ -21,14 +21,25 @@ Unfortunately documentation is incomplete. You may find more examples within the
 
 `CertificateBuilder` requires the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and is found under the `FluentCertificates` namespace.
 
+### **The absolute minimum needed to create a certificate (although it may not be a very useful one):**
+
+```csharp
+using var cert = new CertificateBuilder().Create();
+```
+
 ### **Create a `CertificateRequest` for signing, exporting and passing to a 3rd party CA:**
 
 ```csharp
+//A public & private keypair must be created first, outside of the CertificateBuilder, otherwise you'd have no way to retrieve the private-key used for the new CertificateRequest object
+using var keys = RSA.Create();
+
+//Creating a CertificateRequest
 var request = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
     .SetDnsNames("*.fake.domain", "fake.domain")
-    .ToCertificateRequest();
+    .SetKeyPair(keys)
+    .CreateCertificateRequest();
 ```
 
 ### **Build a self-signed web server certificate:**
@@ -41,7 +52,7 @@ using var cert = new CertificateBuilder()
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
     .SetDnsNames("*.fake.domain", "fake.domain")
     .SetNotAfter(DateTimeOffset.UtcNow.AddMonths(1))
-    .Build();
+    .Create();
 
 //And just to demonstrate using object initializers (I'll use fluent style from now on though)
 using var builder = new CertificateBuilder() {
@@ -51,7 +62,7 @@ using var builder = new CertificateBuilder() {
     DnsNames = new[] { "*.fake.domain", "fake.domain" },
     NotAfter = DateTimeOffset.UtcNow.AddMonths(1)
 };
-var cert = builder.Build();
+var cert = builder.Create();
 ```
 
 ### **Build a CA (certificate authority):**
@@ -63,7 +74,7 @@ using var issuer = new CertificateBuilder()
     .SetFriendlyName("Example root CA")
     .SetSubject(b => b.SetCommonName("Example root CA"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddYears(100))
-    .Build();
+    .Create();
 ```
 
 ### **Build a client-auth certificate signed by a CA:**
@@ -76,7 +87,7 @@ using var cert = new CertificateBuilder()
     .SetSubject(b => b.SetCommonName("User: Michael"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddYears(1))
     .SetIssuer(issuer)
-    .Build();
+    .Create();
 ```
 
 ### **Advanced: Build a certificate with customized extensions:**
@@ -89,7 +100,7 @@ using var cert = new CertificateBuilder()
     .AddExtension(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DataEncipherment, true))
     .AddExtension(new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.AnyExtendedKeyUsage.Id) }, false))
     .SetIssuer(issuer)
-    .Build();
+    .Create();
 ```
 
 ---
