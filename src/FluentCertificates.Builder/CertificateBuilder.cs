@@ -1,6 +1,5 @@
 ﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -115,7 +114,7 @@ public partial record CertificateBuilder
     /// <remarks>
     /// Keys provided through this method are NOT automatically disposed by the CertificateBuilder so it is the caller's responsibility to manage that.
     /// </remarks>
-    /// <param name="value">A public-private keypair. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. Set as null to immediately remove a previously supplied key from the builder.</param>
+    /// <param name="value">A public-private keypair. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. Set as <see langword="null" /> to immediately remove a previously supplied key from the builder.</param>
     /// <returns>A new instance of CertificateBuilder with the specified key-pair set.</returns>
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
         => this with {
@@ -213,12 +212,12 @@ public partial record CertificateBuilder
     }
 
 
-    public byte[] BuildCertificateSigningRequest()
-    {
-        var request = BuildCertificateRequest();
-        var sigGenerator = CreateSignatureGenerator(KeyPair);
-        return request.CreateSigningRequest(sigGenerator);
-    }
+    /// <summary>
+    /// Builds a CertificateSigningRequest object bsaed on the parameters that have been set previously in the builder.
+    /// </summary>
+    /// <returns></returns>
+    public CertificateSigningRequest BuildCertificateSigningRequest()
+        => new(BuildCertificateRequest(), CreateSignatureGenerator(KeyPair));
 
 
     /// <summary>

@@ -261,7 +261,9 @@ public class CertificateBuilderTests
             .SetKeyPair(keys)
             .BuildCertificateSigningRequest();
 
-        Assert.NotEmpty(csr);
+        Assert.NotEmpty(csr.GetRawData());
+        
+        //TODO: verify signatures
     }
 
 
