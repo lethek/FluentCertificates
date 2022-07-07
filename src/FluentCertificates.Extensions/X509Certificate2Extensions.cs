@@ -153,14 +153,14 @@ namespace FluentCertificates
             }) ?? throw new Exception($"Private key not found for OID {cert.GetKeyAlgorithm()}");
 
 
-        public static byte[] GetTbsData(this X509Certificate2 cert)
+        public static ReadOnlyMemory<byte> GetToBeSignedData(this X509Certificate2 cert)
         {
             var reader = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
-            return reader.ReadEncodedValue().ToArray();
+            return reader.ReadEncodedValue();
         }
 
 
-        public static byte[] GetSignatureData(this X509Certificate2 cert)
+        public static ReadOnlyMemory<byte> GetSignatureData(this X509Certificate2 cert)
         {
             var reader = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
             reader.ReadSequence(Asn1Tag.Sequence);
@@ -206,13 +206,13 @@ namespace FluentCertificates
         private static bool VerifySignature(X509Certificate2 cert, X509Certificate2 issuer)
         {
             var algorithm = cert.GetSignatureAlgorithm();
-            var tbs = cert.GetTbsData();
-            var sig = cert.GetSignatureData();
+            var tbs = cert.GetToBeSignedData().Span;
+            var sig = cert.GetSignatureData().Span;
 
             return algorithm.KeyAlgorithm switch {
                 KeyAlgorithm.DSA => issuer.GetDSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm),
                 KeyAlgorithm.RSA => issuer.GetRSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, algorithm.RSASignaturePadding!),
-                KeyAlgorithm.ECDsa => issuer.GetECDsaPublicKey()!.VerifyData(tbs.AsSpan(), sig.AsSpan(), algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence),
+                KeyAlgorithm.ECDsa => issuer.GetECDsaPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence),
                 _ => false
             };
         }

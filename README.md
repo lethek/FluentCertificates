@@ -27,19 +27,28 @@ Unfortunately documentation is incomplete. You may find more examples within the
 using var cert = new CertificateBuilder().Create();
 ```
 
-### **Create a `CertificateRequest` for signing, exporting and passing to a 3rd party CA:**
+### **Create a `CertificateSigningRequest` for signing, exporting and passing to a 3rd party CA:**
 
 ```csharp
-//A public & private keypair must be created first, outside of the CertificateBuilder, otherwise you'd have no way to retrieve the private-key used for the new CertificateRequest object
+//A public & private keypair must be created first, outside of the CertificateBuilder, otherwise you'd have no way to retrieve the private-key used for the new CertificateSigningRequest object
 using var keys = RSA.Create();
 
-//Creating a CertificateRequest
-var request = new CertificateBuilder()
+//Creating a CertificateSigningRequest
+var csr = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
     .SetDnsNames("*.fake.domain", "fake.domain")
     .SetKeyPair(keys)
-    .CreateCertificateRequest();
+    .CreateCertificateSigningRequest();
+
+//The CertificateRequest object is accessible here:
+var certRequest = csr.CertificateRequest;
+
+//CSR can be exported to a string
+Console.WriteLine(csr.ToPemString());
+
+//Or to a file or StringWriter instance
+csr.ExportAsPem("csr.pem");
 ```
 
 ### **Build a self-signed web server certificate:**
@@ -138,7 +147,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 |`ToBase64String`||
 |`GetPrivateKey`||
 |`GetSignatureData`||
-|`GetTbsData`||
+|`GetToBeSignedData`||
 |`IsValidNow`||
 |`IsValid`||
 |`IsSelfSigned`||

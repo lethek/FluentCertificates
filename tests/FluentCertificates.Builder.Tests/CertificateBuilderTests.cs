@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -258,12 +257,63 @@ public class CertificateBuilderTests
         using var keys = RSA.Create();
 
         var csr = new CertificateBuilder()
+            .SetHashAlgorithm(HashAlgorithmName.SHA256)
             .SetKeyPair(keys)
             .CreateCertificateSigningRequest();
 
-        Assert.NotEmpty(csr.GetRawData());
+        Assert.False(csr.GetRawData().IsEmpty);
         
-        //TODO: verify signatures
+        var cr = csr.CertificateRequest;
+        var algorithm = csr.GetSignatureAlgorithm();
+        var cri = csr.GetRequestData().Span;
+        var sig = csr.GetSignatureData().Span;
+
+        Assert.Equal(SignatureAlgorithm.SHA256RSA, algorithm);
+        Assert.True(cr.PublicKey.GetRSAPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm, algorithm.RSASignaturePadding!));
+    }
+
+
+    [Fact]
+    public void Build_CertificateSigningRequest_WithDSAKeys()
+    {
+        using var keys = DSA.Create();
+
+        var csr = new CertificateBuilder()
+            .SetHashAlgorithm(HashAlgorithmName.SHA256)
+            .SetKeyPair(keys)
+            .CreateCertificateSigningRequest();
+
+        Assert.False(csr.GetRawData().IsEmpty);
+
+        var cr = csr.CertificateRequest;
+        var algorithm = csr.GetSignatureAlgorithm();
+        var cri = csr.GetRequestData().Span;
+        var sig = csr.GetSignatureData().Span;
+        
+        Assert.Equal(SignatureAlgorithm.SHA256DSA, algorithm);
+        Assert.True(cr.PublicKey.GetDSAPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence));
+    }
+
+
+    [Fact]
+    public void Build_CertificateSigningRequest_WithECDsaKeys()
+    {
+        using var keys = ECDsa.Create();
+
+        var csr = new CertificateBuilder()
+            .SetHashAlgorithm(HashAlgorithmName.SHA256)
+            .SetKeyPair(keys)
+            .CreateCertificateSigningRequest();
+
+        Assert.False(csr.GetRawData().IsEmpty);
+
+        var cr = csr.CertificateRequest;
+        var algorithm = csr.GetSignatureAlgorithm();
+        var cri = csr.GetRequestData().Span;
+        var sig = csr.GetSignatureData().Span;
+
+        Assert.Equal(SignatureAlgorithm.SHA256ECDSA, algorithm);
+        Assert.True(cr.PublicKey.GetECDsaPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence));
     }
 
 

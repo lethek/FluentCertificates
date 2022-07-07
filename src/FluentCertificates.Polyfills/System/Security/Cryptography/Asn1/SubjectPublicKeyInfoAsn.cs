@@ -15,7 +15,7 @@ namespace System.Security.Cryptography.Asn1
     [StructLayout(LayoutKind.Sequential)]
     internal partial struct SubjectPublicKeyInfoAsn
     {
-        internal System.Security.Cryptography.Asn1.AlgorithmIdentifierAsn Algorithm;
+        internal AlgorithmIdentifierAsn Algorithm;
         internal ReadOnlyMemory<byte> SubjectPublicKey;
 
         internal void Encode(AsnWriter writer)
@@ -72,7 +72,7 @@ namespace System.Security.Cryptography.Asn1
             int offset;
             ReadOnlySpan<byte> tmpSpan;
 
-            System.Security.Cryptography.Asn1.AlgorithmIdentifierAsn.Decode(ref sequenceReader, rebind, out decoded.Algorithm);
+            AlgorithmIdentifierAsn.Decode(ref sequenceReader, rebind, out decoded.Algorithm);
 
             if (sequenceReader.TryReadPrimitiveBitString(out _, out tmpSpan)) {
                 decoded.SubjectPublicKey = rebindSpan.Overlaps(tmpSpan, out offset) ? rebind.Slice(offset, tmpSpan.Length) : tmpSpan.ToArray();
