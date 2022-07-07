@@ -117,7 +117,7 @@ public class X500NameBuilderTests
             .Clear();
 
         Assert.Empty(builder.Attributes);
-        Assert.Empty(builder.Build().Name);
+        Assert.Empty(builder.Create().Name);
     }
 
 
@@ -163,7 +163,7 @@ public class X500NameBuilderTests
         Assert.Equal("DC=app,DC=fake",
             new X500NameBuilder()
                 .SetDomainComponents("app", "fake")
-                .Build()
+                .Create()
                 .Name
         );
 
@@ -172,7 +172,7 @@ public class X500NameBuilderTests
                 .AddOrganizationalUnit("services")
                 .AddDomainComponents("old", "domain", "to", "remove")
                 .SetDomainComponents("app", "fake")
-                .Build()
+                .Create()
                 .Name
         );
     }

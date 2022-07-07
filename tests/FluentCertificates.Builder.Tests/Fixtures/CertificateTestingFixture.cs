@@ -40,7 +40,7 @@ public sealed class CertificateTestingFixture : IDisposable
             .SetSubject(new X500NameBuilder().SetCommonName($"{CertNamePrefix} {name}"))
             .SetNotAfter(DateTimeOffset.UtcNow.AddYears(years))
             .SetIssuer(issuer)
-            .Build();
+            .Create();
 
 
     private readonly Lazy<X509Certificate2> _rootCa;

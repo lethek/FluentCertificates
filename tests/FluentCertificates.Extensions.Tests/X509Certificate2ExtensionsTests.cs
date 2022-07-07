@@ -14,10 +14,10 @@ public class X509Certificate2ExtensionsTests
     public void Certificate_IssuedBy_VerifiesIssuerSignature(KeyAlgorithm alg)
     {
         var builder = new CertificateBuilder().SetSubject("CN=Test Issuer");
-        using var faker = builder.SetKeyAlgorithm(alg).Build();
-        using var issuer = builder.SetKeyAlgorithm(alg).Build();
+        using var faker = builder.SetKeyAlgorithm(alg).Create();
+        using var issuer = builder.SetKeyAlgorithm(alg).Create();
 
-        using var cert = new CertificateBuilder().SetIssuer(issuer).Build();
+        using var cert = new CertificateBuilder().SetIssuer(issuer).Create();
 
         //The fake issuer has the same subject-name as the real issuer
         Assert.True(cert.IsIssuedBy(faker, verifySignature: false));
@@ -34,7 +34,7 @@ public class X509Certificate2ExtensionsTests
     [MemberData(nameof(KeyAlgorithmsAndExportKeysTestData))]
     public void ExportAsPem_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string password)
     {
-        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Build();
+        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
         using var stream = new MemoryStream();
         using (var writer = new StreamWriter(stream, Encoding.ASCII, leaveOpen: true)) {
@@ -69,7 +69,7 @@ public class X509Certificate2ExtensionsTests
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "pem");
         try {
-            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Build();
+            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
             expected.ExportAsPem(tmpFile, password, include);
             var parser = new X509CertificateParser();
@@ -101,7 +101,7 @@ public class X509Certificate2ExtensionsTests
     [MemberData(nameof(KeyAlgorithmsTestData))]
     public void ExportAsCert_ToWriter_RawDataIsEqual(KeyAlgorithm alg)
     {
-        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Build();
+        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream)) {
@@ -121,7 +121,7 @@ public class X509Certificate2ExtensionsTests
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "crt");
         try {
-            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Build();
+            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
             expected.ExportAsCert(tmpFile);
             using var actual = new X509Certificate2(tmpFile);
@@ -139,7 +139,7 @@ public class X509Certificate2ExtensionsTests
     [MemberData(nameof(KeyAlgorithmsTestData))]
     public void ExportAsPkcs7_ToWriter_RawDataIsEqual(KeyAlgorithm alg)
     {
-        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Build();
+        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream)) {
@@ -161,7 +161,7 @@ public class X509Certificate2ExtensionsTests
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "p7b");
         try {
-            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Build();
+            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
             expected.ExportAsPkcs7(tmpFile);
             var cms = new SignedCms();
@@ -181,7 +181,7 @@ public class X509Certificate2ExtensionsTests
     [MemberData(nameof(KeyAlgorithmsAndExportKeysTestData))]
     public void ExportAsPkcs12_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string password)
     {
-        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Build();
+        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream)) {
@@ -205,7 +205,7 @@ public class X509Certificate2ExtensionsTests
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "pfx");
         try {
-            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Build();
+            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
             expected.ExportAsPkcs12(tmpFile, password, include);
             using var actual = new X509Certificate2(tmpFile, password);

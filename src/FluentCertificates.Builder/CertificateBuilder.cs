@@ -1,6 +1,5 @@
 ﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -115,7 +114,7 @@ public partial record CertificateBuilder
     /// <remarks>
     /// Keys provided through this method are NOT automatically disposed by the CertificateBuilder so it is the caller's responsibility to manage that.
     /// </remarks>
-    /// <param name="value">A public-private keypair. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. Set as null to immediately remove a previously supplied key from the builder.</param>
+    /// <param name="value">A public-private keypair. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. Set as <see langword="null" /> to immediately remove a previously supplied key from the builder.</param>
     /// <returns>A new instance of CertificateBuilder with the specified key-pair set.</returns>
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
         => this with {
@@ -126,7 +125,7 @@ public partial record CertificateBuilder
 
     /// <summary>
     /// Use this to specify the algorithm to use when automatically generating new keys for a certificate. If a KeyPair was
-    /// previously been manually supplied, this will remove it from the builder. Each time the Build() method is called, a
+    /// previously been manually supplied, this will remove it from the builder. Each time the Create() method is called, a
     /// new key-pair will be generated and immediately disposed upon return.
     /// </summary>
     /// <param name="value">The type of algorithm to use for generating the keys. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. The default is RSA.</param>
@@ -187,17 +186,17 @@ public partial record CertificateBuilder
 
 
     /// <summary>
-    /// Build a CertificateRequest based on the parameters that have been set previously in the builder.
+    /// Create a CertificateRequest based on the parameters that have been set previously in the builder.
     /// </summary>
     /// <returns>A CertificateRequest instance.</returns>
     /// <exception cref="ArgumentNullException">Thrown when the SetKeyPair(AsymmetricAlgorithm) method has not been called.</exception>
-    public CertificateRequest ToCertificateRequest()
+    public CertificateRequest CreateCertificateRequest()
     {
         if (PublicKey == null) {
-            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
+            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) first to provide a public/private keypair");
         }
 
-        var dn = Subject.Build();
+        var dn = Subject.Create();
 
         var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
 
@@ -214,11 +213,19 @@ public partial record CertificateBuilder
 
 
     /// <summary>
+    /// Builds a CertificateSigningRequest object bsaed on the parameters that have been set previously in the builder.
+    /// </summary>
+    /// <returns></returns>
+    public CertificateSigningRequest CreateCertificateSigningRequest()
+        => new(CreateCertificateRequest(), CreateSignatureGenerator(KeyPair));
+
+
+    /// <summary>
     /// Builds an X509Certificate2 instance based on the parameters that have been set previously in the builder.
     /// </summary>
     /// <returns>An X509Certificate2 instance.</returns>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
-    public X509Certificate2 Build()
+    public X509Certificate2 Create()
     {
         Validate();
 
@@ -229,7 +236,11 @@ public partial record CertificateBuilder
             : this;
 
         try {
-            var request = builder.ToCertificateRequest();
+            if (builder.PublicKey == null) {
+                throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
+            }
+
+            var request = builder.CreateCertificateRequest();
 
             var cert = builder.Issuer != null
                 ? request.Create(
@@ -240,7 +251,7 @@ public partial record CertificateBuilder
                     builder.GenerateSerialNumber()
                 )
                 : request.Create(
-                    builder.Subject.Build(),
+                    builder.Subject.Create(),
                     builder.CreateSignatureGenerator(builder.KeyPair),
                     builder.NotBefore,
                     builder.NotAfter,
@@ -269,7 +280,7 @@ public partial record CertificateBuilder
     }
 
 
-    private byte[] GenerateSerialNumber()
+    internal byte[] GenerateSerialNumber()
     {
         Span<byte> span = stackalloc byte[18];
         BinaryPrimitives.WriteInt16BigEndian(span[0..2], 0x4D58);
@@ -277,6 +288,16 @@ public partial record CertificateBuilder
         RandomNumberGenerator.Fill(span[10..18]);
         return span.ToArray();
     }
+
+
+    internal X509SignatureGenerator CreateSignatureGenerator(AsymmetricAlgorithm? keys)
+        => keys switch {
+            DSA dsa => new DSAX509SignatureGenerator(dsa),
+            RSA rsa => X509SignatureGenerator.CreateForRSA(rsa, RSASignaturePadding),
+            ECDsa ecdsa => X509SignatureGenerator.CreateForECDsa(ecdsa),
+            null => throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair"),
+            _ => throw new NotSupportedException($"Unsupported algorithm: {keys.SignatureAlgorithm}")
+        };
 
 
     private CertificateBuilder GenerateKeyPair()
@@ -288,16 +309,6 @@ public partial record CertificateBuilder
                 _ => throw new ArgumentOutOfRangeException(nameof(KeyAlgorithm), KeyAlgorithm, $"Unsupported {nameof(KeyAlgorithm)}")
             }
         );
-
-
-    private X509SignatureGenerator CreateSignatureGenerator(AsymmetricAlgorithm? keys)
-        => keys switch {
-            DSA dsa => new DSAX509SignatureGenerator(dsa),
-            RSA rsa => X509SignatureGenerator.CreateForRSA(rsa, RSASignaturePadding),
-            ECDsa ecdsa => X509SignatureGenerator.CreateForECDsa(ecdsa),
-            null => throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair"),
-            _ => throw new NotSupportedException($"Unsupported algorithm: {keys.SignatureAlgorithm}")
-        };
 
 
     private static ImmutableHashSet<X509Extension> BuildExtensions(CertificateBuilder builder)
@@ -335,7 +346,7 @@ public partial record CertificateBuilder
 
     private static List<X509Extension> GetCommonExtensions(CertificateBuilder builder)
         => new() {
-            new X509SubjectKeyIdentifierExtension(builder.PublicKey, false)
+            new X509SubjectKeyIdentifierExtension(builder.PublicKey!, false)
         };
 
 

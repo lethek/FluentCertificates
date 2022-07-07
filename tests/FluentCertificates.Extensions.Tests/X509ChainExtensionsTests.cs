@@ -9,20 +9,20 @@ public class X509ChainExtensionsTests
             .SetUsage(CertificateUsage.CA)
             .SetNotAfter(DateTimeOffset.UtcNow.AddDays(3))
             .SetSubject("CN=RootCA")
-            .Build();
+            .Create();
 
         using var subCa = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
             .SetNotAfter(DateTimeOffset.UtcNow.AddDays(2))
             .SetIssuer(rootCa)
             .SetSubject("CN=SubCA")
-            .Build();
+            .Create();
 
         using var cert = new CertificateBuilder()
             .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
             .SetIssuer(subCa)
             .SetSubject("CN=Leaf")
-            .Build();
+            .Create();
 
         using var chain = cert.BuildChain(new[] { subCa, rootCa }, true);
 
