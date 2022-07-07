@@ -28,7 +28,7 @@ public class CertificateBuilderTests
 
 
     [Fact]
-    public void Build_NewCertificate_HasPrivateKey()
+    public void Build_Certificate_HasPrivateKey()
     {
         using var cert = new CertificateBuilder().Build();
         Assert.True(cert.HasPrivateKey);
@@ -36,9 +36,9 @@ public class CertificateBuilderTests
 
 
     [Fact]
-    public void Build_NewCertificate_WithSubject()
+    public void Build_Certificate_WithSubject()
     {
-        const string testName = nameof(Build_NewCertificate_WithSubject);
+        const string testName = nameof(Build_Certificate_WithSubject);
         const string expected = $"CN={testName}";
 
         //Test several different, equivalent ways of setting the Subject
@@ -64,7 +64,7 @@ public class CertificateBuilderTests
 
 
     [Fact]
-    public void Build_NewCertificate_WithRSAKeys()
+    public void Build_Certificate_WithRSAKeys()
     {
         using var keys = RSA.Create();
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
@@ -76,7 +76,7 @@ public class CertificateBuilderTests
 
 
     [Fact]
-    public void Build_NewCertificate_WithECDsaKeys()
+    public void Build_Certificate_WithECDsaKeys()
     {
         using var keys = ECDsa.Create();
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
@@ -88,7 +88,7 @@ public class CertificateBuilderTests
 
 
     [Fact]
-    public void Build_NewCertificate_WithDSAKeys()
+    public void Build_Certificate_WithDSAKeys()
     {
         using var keys = DSA.Create(1024);
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Build();
@@ -100,7 +100,7 @@ public class CertificateBuilderTests
 
 
     [Fact]
-    public void Build_NewRSACertificate_WithECDsaIssuer()
+    public void Build_RSACertificate_WithECDsaIssuer()
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -121,7 +121,7 @@ public class CertificateBuilderTests
 
 
     [Fact]
-    public void Build_NewECDsaCertificate_WithRSAIssuer()
+    public void Build_ECDsaCertificate_WithRSAIssuer()
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -253,7 +253,7 @@ public class CertificateBuilderTests
 
 
     [Fact]
-    public void Build_CertificateSigningRequest_WithExternalKeys()
+    public void Build_CertificateSigningRequest_WithRSAKeys()
     {
         using var keys = RSA.Create();
 
