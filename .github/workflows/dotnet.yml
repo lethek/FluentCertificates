@@ -63,7 +63,15 @@ jobs:
           ${{ github.workspace }}/artifacts/*.nupkg
           ${{ github.workspace }}/artifacts/*.snupkg
 
-    - name: Push
+    - name: Push (Pre-release)
+      if: ${{ steps.gitversion.outputs.nuGetPreReleaseTag != '' }}
+      run: dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg" -s $NUGET_SOURCE -k $NUGET_API_KEY --skip-duplicate
+      env:
+        NUGET_SOURCE: ${{ secrets.MYGET_SOURCE }}
+        NUGET_API_KEY: ${{ secrets.MYGET_API_KEY }}
+
+    - name: Push (Release)
+      if: ${{ steps.gitversion.outputs.nuGetPreReleaseTag == '' }}
       run: dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg" -s $NUGET_SOURCE -k $NUGET_API_KEY --skip-duplicate
       env:
         NUGET_SOURCE: ${{ secrets.NUGET_SOURCE }}
