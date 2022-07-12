@@ -9,7 +9,7 @@
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>FluentCertificates.Builder is part of the FluentCertificates package. This library uses the Immutable Fluent Builder pattern for easily creating and exporting certificates.</Description>
-    <PackageTags>certificate, fluent, x509, pfx, pem, cert, crt, CA</PackageTags>
+    <PackageTags>certificate fluent x509 pfx pem cert crt CA</PackageTags>
     <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
