@@ -1,6 +1,7 @@
 ﻿using System.Formats.Asn1;
 using System.Security.Cryptography.X509Certificates;
-using System.Security.Cryptography;
+
+using FluentCertificates.Internals;
 
 
 namespace FluentCertificates;
@@ -8,7 +9,7 @@ namespace FluentCertificates;
 public sealed class X509AuthorityKeyIdentifierExtension : X509Extension
 {
     public X509AuthorityKeyIdentifierExtension(X509Certificate2 certificateAuthority, bool critical)
-        : base(AuthorityKeyIdentifierOid, EncodeExtension(certificateAuthority), critical) { }
+        : base(Oids.AuthorityKeyIdentifierOid, EncodeExtension(certificateAuthority), critical) { }
 
 
     private static byte[] EncodeExtension(X509Certificate2 ca)
@@ -25,7 +26,4 @@ public sealed class X509AuthorityKeyIdentifierExtension : X509Extension
         writer.PopSequence();
         return writer.Encode();
     }
-
-
-    private static readonly Oid AuthorityKeyIdentifierOid = new("2.5.29.35");
 }

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net5.0;netstandard2.1</TargetFrameworks>
+    <TargetFrameworks>net7.0;net6.0;net5.0;netstandard2.1</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -16,6 +16,7 @@
     <InternalsVisibleTo Include="LINQPadQuery" />
     <InternalsVisibleTo Include="FluentCertificates.Builder" />
     <InternalsVisibleTo Include="FluentCertificates.Builder.Tests" />
+    <InternalsVisibleTo Include="FluentCertificates.Extensions" />
   </ItemGroup>
 
   <ItemGroup>

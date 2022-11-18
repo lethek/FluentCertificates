@@ -8,19 +8,23 @@ namespace FluentCertificates.Internals;
 
 internal static class Tools
 {
+    public static bool IsAsciiLetter(char c)
+        => (uint)((c | 0x20) - 97) <= 25u;
+
+    
     internal static bool IsWindows
-        #if NET5_0_OR_GREATER
+#if NET5_0_OR_GREATER
         => OperatingSystem.IsWindows();
-        #else
+#else
         => RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-        #endif
+#endif
 
 
     internal static byte[] ConvertFromHexString(ReadOnlySpan<char> chars)
     {
-        #if NET5_0_OR_GREATER
+#if NET5_0_OR_GREATER
         return Convert.FromHexString(chars);
-        #else
+#else
         int hexStringLength = chars.Length;
         var b = new byte[hexStringLength / 2];
         for (int i = 0; i < hexStringLength; i += 2) {
@@ -31,7 +35,7 @@ internal static class Tools
             b[i / 2] = (byte)(topChar + bottomChar);
         }
         return b;
-        #endif
+#endif
     }
 }
 
