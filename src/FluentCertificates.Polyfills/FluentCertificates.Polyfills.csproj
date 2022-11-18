@@ -9,6 +9,7 @@
     <RootNamespace>FluentCertificates</RootNamespace>
     <Description>A majority of code in this project has been copied from Microsoft's open-source dotnet Git repository under the MIT license. It back-fills core .NET functionality which FluentCertificates relies on, but are missing in earlier versions of .NET.</Description>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
   </PropertyGroup>
 
   <ItemGroup>

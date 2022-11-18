@@ -16,6 +16,7 @@
     <RepositoryType>git</RepositoryType>
     <RootNamespace>FluentCertificates</RootNamespace>
     <IsPackable>true</IsPackable>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
