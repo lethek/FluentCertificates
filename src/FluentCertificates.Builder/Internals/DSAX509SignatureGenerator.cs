@@ -141,7 +141,7 @@ internal sealed class DSAX509SignatureGenerator : X509SignatureGenerator
     protected override PublicKey BuildPublicKey()
     {
         // DSA
-        Oid oid = new Oid("1.2.840.10040.4.1");
+        Oid oid = new Oid(Oids.Dsa);
 
         DSAParameters dsaParameters = _key.ExportParameters(false);
 

@@ -26,7 +26,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Builder"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Extensions", "src\FluentCertificates.Extensions\FluentCertificates.Extensions.csproj", "{6E6427A2-6D42-45D4-8CDB-60908D457BE0}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.BouncyCastle", "src\FluentCertificates.BouncyCastle\FluentCertificates.BouncyCastle.csproj", "{7CF52B3E-5848-4F08-94C5-B3A788B218EC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Builder.BouncyCastle", "src\FluentCertificates.Builder.BouncyCastle\FluentCertificates.Builder.BouncyCastle.csproj", "{7CF52B3E-5848-4F08-94C5-B3A788B218EC}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Polyfills", "src\FluentCertificates.Polyfills\FluentCertificates.Polyfills.csproj", "{ED1C563E-8880-4A13-ACD8-8B203C87D873}"
 EndProject

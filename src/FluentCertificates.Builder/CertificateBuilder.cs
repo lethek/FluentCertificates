@@ -6,12 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
 
-using Org.BouncyCastle.Asn1.X509;
-using Org.BouncyCastle.Asn1;
-
 using PublicKeyFactory = FluentCertificates.Internals.PublicKeyFactory;
-using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
-using X509ExtensionBC = Org.BouncyCastle.Asn1.X509.X509Extension;
 
 
 namespace FluentCertificates;
@@ -64,9 +59,6 @@ public partial record CertificateBuilder
 
     public CertificateBuilder SetSubject(X500NameBuilder value)
         => this with { Subject = value };
-
-    public CertificateBuilder SetSubject(X509Name value)
-        => this with { Subject = new X500NameBuilder(value) };
 
     public CertificateBuilder SetSubject(X500DistinguishedName value)
         => this with { Subject = new X500NameBuilder(value) };
@@ -156,9 +148,6 @@ public partial record CertificateBuilder
 
     public CertificateBuilder AddExtension(X509Extension extension)
         => this with { Extensions = Extensions.Add(extension) };
-
-    public CertificateBuilder AddExtension(DerObjectIdentifier oid, X509ExtensionBC extension)
-        => AddExtension(extension.ConvertToDotNet(oid));
 
     public CertificateBuilder AddExtensions(params X509Extension[] values)
         => this with { Extensions = Extensions.Union(values) };
@@ -361,7 +350,7 @@ public partial record CertificateBuilder
         => new() {
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true),
-            new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.IdKPServerAuth.Id) }, false),
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ServerAuthPurpose) }, false),
         };
 
 
@@ -369,7 +358,7 @@ public partial record CertificateBuilder
         => new() {
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true),
-            new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.IdKPClientAuth.Id) }, false),
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ClientAuthPurpose) }, false),
         };
 
 
@@ -378,9 +367,9 @@ public partial record CertificateBuilder
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true),
             new X509EnhancedKeyUsageExtension(new OidCollection {
-                new(KeyPurposeID.IdKPCodeSigning.Id),
-                new(KeyPurposeID.IdKPTimeStamping.Id),
-                new("1.3.6.1.4.1.311.10.3.13") //Used by Microsoft Authenticode to limit the signature's lifetime to the certificate's expiration
+                new(Oids.CodeSigningPurpose),
+                new(Oids.TimeStampingPurpose),
+                new(Oids.LifetimeSigningPurpose) //Used by Microsoft Authenticode to limit the signature's lifetime to the certificate's expiration
             }, false),
         };
 
@@ -389,7 +378,7 @@ public partial record CertificateBuilder
         => new() {
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.NonRepudiation, true),
-            new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.IdKPEmailProtection.Id) }, false),
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.EmailProtectionPurpose) }, false),
         };
 
 

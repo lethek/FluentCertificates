@@ -26,6 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\FluentCertificates.Builder.BouncyCastle\FluentCertificates.Builder.BouncyCastle.csproj" />
     <ProjectReference Include="..\..\src\FluentCertificates.Builder\FluentCertificates.Builder.csproj" />
   </ItemGroup>
 

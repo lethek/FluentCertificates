@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\FluentCertificates.Builder\FluentCertificates.Builder.csproj" />
     <ProjectReference Include="..\FluentCertificates.Extensions\FluentCertificates.Extensions.csproj" />
   </ItemGroup>
 

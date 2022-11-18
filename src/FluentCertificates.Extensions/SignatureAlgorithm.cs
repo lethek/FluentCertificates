@@ -1,6 +1,9 @@
 ﻿using System.Collections.Immutable;
 using System.Security.Cryptography;
 
+using FluentCertificates.Internals;
+
+
 namespace FluentCertificates;
 
 public sealed record SignatureAlgorithm
@@ -18,7 +21,7 @@ public sealed record SignatureAlgorithm
 
 
     internal static SignatureAlgorithm ForRsaSsaPss(string signatureOid, string hashOid)
-        => new(KeyAlgorithm.RSA, GetHashAlgorithmNameFromOid(hashOid), RSASignaturePadding.Pss, "1.2.840.113549.1.1.10");
+        => new(KeyAlgorithm.RSA, GetHashAlgorithmNameFromOid(hashOid), RSASignaturePadding.Pss, Oids.RsaPss);
 
 
     // ReSharper disable InconsistentNaming
