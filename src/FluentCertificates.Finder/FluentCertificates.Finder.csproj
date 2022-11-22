@@ -9,7 +9,7 @@
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>FluentCertificates.Finder is part of the FluentCertificates package. This library uses the Immutable Fluent Builder pattern for easily finding/querying certificates in X509Stores.</Description>
-    <PackageTags>certificate fluent x509 pfx pem cert crt CA</PackageTags>
+    <PackageTags>certificate certs fluent x509 pfx pem cert crt CA</PackageTags>
     <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
@@ -22,6 +22,14 @@
   <ItemGroup>
     <PackageReference Include="System.Collections.Immutable" Version="6.0.0" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
     <PackageReference Include="System.Collections.Immutable" Version="6.0.0" Condition="'$(TargetFramework)' == 'netstandard2.1'" />
+    <PackageReference Include="System.Collections.Immutable" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="NuGetizer" Version="0.9.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
 </Project>

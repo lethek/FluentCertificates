@@ -2,7 +2,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.X509;
 
 using Xunit;
@@ -32,7 +31,7 @@ public class X500NameBuilderTests
     public void Create_Builder_FromX509Name()
     {
         const string expected = "DC=app,DC=fake";
-        Assert.Equal(expected, new X500NameBuilder(new X509Name(expected)).ToString());
+        Assert.Equal(expected, new X500NameBuilder(new X509Name(expected).ConvertToDotNet()).ToString());
     }
 
 
@@ -124,23 +123,9 @@ public class X500NameBuilderTests
     [Fact]
     public void Converts_Implicitly_To_String()
     {
-        const string expected = "DC=app,DC=fake";
+        const string expected = "DC=app, DC=fake";
 
-        string actual = new X500NameBuilder().SetDomainComponents("app", "fake");
-
-        Assert.Equal(expected, actual);
-    }
-
-
-    [Fact]
-    public void Converts_Implicitly_To_X509Name()
-    {
-        var expected = new X509Name(
-            new List<DerObjectIdentifier> { X509Name.DC, X509Name.DC },
-            new List<string> { "app", "fake" }
-        );
-
-        X509Name actual = new X500NameBuilder().SetDomainComponents("app", "fake");
+        string actual = (string)new X500NameBuilder().SetDomainComponents("app", "fake");
 
         Assert.Equal(expected, actual);
     }
@@ -149,7 +134,7 @@ public class X500NameBuilderTests
     [Fact]
     public void Converts_Implicitly_To_X500DistinguishedName()
     {
-        var expected = new X500DistinguishedName("DC=app,DC=fake");
+        var expected = new X500DistinguishedName("DC=app, DC=fake");
 
         X500DistinguishedName actual = new X500NameBuilder().SetDomainComponents("app", "fake");
 
@@ -160,14 +145,14 @@ public class X500NameBuilderTests
     [Fact]
     public void Set_Removes_Matching_Attributes_Then_Adds()
     {
-        Assert.Equal("DC=app,DC=fake",
+        Assert.Equal("DC=app, DC=fake",
             new X500NameBuilder()
                 .SetDomainComponents("app", "fake")
                 .Create()
                 .Name
         );
 
-        Assert.Equal("OU=services,DC=app,DC=fake",
+        Assert.Equal("OU=services, DC=app, DC=fake",
             new X500NameBuilder()
                 .AddOrganizationalUnit("services")
                 .AddDomainComponents("old", "domain", "to", "remove")
@@ -175,40 +160,6 @@ public class X500NameBuilderTests
                 .Create()
                 .Name
         );
-    }
-
-
-    [Theory]
-    [InlineData($"CN={nameof(Equality_With_X509Name)}, O=SMMX, C=AU")]
-    [InlineData($"CN={nameof(Equality_With_X509Name)},O=SMMX,C=AU")]
-    public void Equality_With_X509Name(string dn)
-    {
-        var builder = new X500NameBuilder()
-            .SetCommonName(nameof(Equality_With_X509Name))
-            .SetOrganization("SMMX")
-            .SetCountry("AU");
-
-        var name = new X509Name(dn);
-        Assert.True(builder == name);
-        Assert.True(name == builder);
-        Assert.True(builder.Equals(name));
-    }
-
-
-    [Theory]
-    [InlineData($"O=SMMX, CN={nameof(Inequality_With_X509Name)}, C=AU")]
-    [InlineData($"O=SMMX,CN={nameof(Inequality_With_X509Name)},C=AU")]
-    public void Inequality_With_X509Name(string dn)
-    {
-        var builder = new X500NameBuilder()
-            .SetCommonName(nameof(Inequality_With_X509Name))
-            .SetOrganization("SMMX")
-            .SetCountry("AU");
-
-        var name = new X509Name(dn);
-        Assert.True(builder != name);
-        Assert.True(name != builder);
-        Assert.False(builder.Equals(name));
     }
 
 

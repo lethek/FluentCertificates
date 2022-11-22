@@ -99,6 +99,14 @@ internal static class Oids
     internal const string Organization = "2.5.4.10";
     internal const string OrganizationalUnit = "2.5.4.11";
     internal const string EmailAddress = "1.2.840.113549.1.9.1";
+    internal const string TelephoneNumber = "2.5.4.20";
+    internal const string StreetAddress = "2.5.4.9";
+    internal const string PostalCode = "2.5.4.17";
+    internal const string SerialNumber = "2.5.4.5";
+    internal const string Surname = "2.5.4.4";
+    internal const string GivenName = "2.5.4.42";
+    internal const string Title = "2.5.4.12";
+    internal const string DnQualifier = "2.5.4.46";
 
     // Cert Extensions
     internal const string BasicConstraints = "2.5.29.10";
@@ -175,6 +183,7 @@ internal static class Oids
 
     // LDAP
     internal const string DomainComponent = "0.9.2342.19200300.100.1.25";
+    internal const string UserId = "0.9.2342.19200300.100.1.1";
 
 
 
@@ -210,6 +219,18 @@ internal static class Oids
     private static volatile Oid? s_organizationOid;
     private static volatile Oid? s_organizationalUnitOid;
     private static volatile Oid? s_emailAddressOid;
+    private static volatile Oid? s_telephoneNumberOid;
+    private static volatile Oid? s_streetAddressOid;
+    private static volatile Oid? s_postalCodeOid;
+    private static volatile Oid? s_userIdOid;
+    private static volatile Oid? s_serialNumberOid;
+    private static volatile Oid? s_givenNameOid;
+    private static volatile Oid? s_surnameOid;
+    private static volatile Oid? s_titleOid;
+    private static volatile Oid? s_dnQualifierOid;
+    private static volatile Oid? s_domainComponentOid;
+
+
 
     internal static Oid RsaOid => s_rsaOid ??= InitializeOid(Rsa);
     internal static Oid EcPublicKeyOid => s_ecPublicKeyOid ??= InitializeOid(EcPublicKey);
@@ -246,6 +267,16 @@ internal static class Oids
     internal static Oid OrganizationOid = s_organizationOid ??= InitializeOid(Organization);
     internal static Oid OrganizationalUnitOid = s_organizationalUnitOid ??= InitializeOid(OrganizationalUnit);
     internal static Oid EmailAddressOid = s_emailAddressOid ??= InitializeOid(EmailAddress);
+    internal static Oid TelephoneNumberOid = s_telephoneNumberOid ??= InitializeOid(TelephoneNumber);
+    internal static Oid StreetAddressOid = s_streetAddressOid ??= InitializeOid(StreetAddress);
+    internal static Oid PostalCodeOid = s_postalCodeOid ??= InitializeOid(PostalCode);
+    internal static Oid UserIdOid = s_userIdOid ??= InitializeOid(UserId);
+    internal static Oid SerialNumberOid = s_serialNumberOid ??= InitializeOid(SerialNumber);
+    internal static Oid GivenNameOid = s_givenNameOid ??= InitializeOid(GivenName);
+    internal static Oid SurnameOid = s_surnameOid ??= InitializeOid(Surname);
+    internal static Oid TitleOid = s_titleOid ??= InitializeOid(Title);
+    internal static Oid DnQualifierOid = s_dnQualifierOid ??= InitializeOid(DnQualifier);
+    internal static Oid DomainComponentOid = s_domainComponentOid ??= InitializeOid(DomainComponent);
 
     private static Oid InitializeOid(string oidValue)
     {

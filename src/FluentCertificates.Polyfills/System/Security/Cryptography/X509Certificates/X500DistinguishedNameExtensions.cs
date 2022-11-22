@@ -2,11 +2,9 @@
 using System.Diagnostics;
 using System.Formats.Asn1;
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
-using System.Security.Cryptography;
 
 
-namespace FluentCertificates.System.Security.Cryptography.X509Certificates;
+namespace System.Security.Cryptography.X509Certificates;
 
 public static class X500DistinguishedNameExtensions
 {

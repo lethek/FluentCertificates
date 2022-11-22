@@ -10,7 +10,7 @@ namespace FluentCertificates;
 public static class CertificateBuilderExtensions
 {
     public static CertificateBuilder SetSubject(this CertificateBuilder builder, X509Name value)
-        => builder with { Subject = new X500NameBuilder(value) };
+        => builder with { Subject = new X500NameBuilder(value.ConvertToDotNet()) };
 
 
     public static CertificateBuilder AddExtension(this CertificateBuilder builder, DerObjectIdentifier oid, X509Extension extension)

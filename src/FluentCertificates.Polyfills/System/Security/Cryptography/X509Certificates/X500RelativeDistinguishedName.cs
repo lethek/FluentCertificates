@@ -1,12 +1,11 @@
 ﻿#if !NET7_0_OR_GREATER
 using System.Diagnostics;
 using System.Formats.Asn1;
-using System.Security.Cryptography;
 
 using FluentCertificates.Internals;
 
 
-namespace FluentCertificates.System.Security.Cryptography.X509Certificates;
+namespace System.Security.Cryptography.X509Certificates;
 
 /// <summary>
 ///   Represents a Relative Distinguished Name component of an X.500 Distinguished Name.

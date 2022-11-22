@@ -1,8 +1,7 @@
 ﻿using System.Formats.Asn1;
-using System.Security.Cryptography;
 
 
-namespace FluentCertificates.System.Security.Cryptography.X509Certificates;
+namespace System.Security.Cryptography.X509Certificates;
 
 internal static class X500DictionaryStringHelper
 {
