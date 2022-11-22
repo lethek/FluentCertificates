@@ -37,7 +37,7 @@ namespace System.Security.Cryptography.X509Certificates;
 ///
 /// Original copy sourced under the MIT license from: https://github.com/dotnet/runtime/blob/d099f075e45d2aa6007a22b71b45a08758559f80/src/libraries/System.Security.Cryptography/src/System/Security/Cryptography/X509Certificates/X500DistinguishedNameBuilder.cs
 /// </remarks>
-internal sealed class X500DistinguishedNameBuilder
+public sealed class X500DistinguishedNameBuilder
 {
     private readonly List<byte[]> _encodedComponents = new List<byte[]>();
     private readonly AsnWriter _writer = new AsnWriter(AsnEncodingRules.DER);

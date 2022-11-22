@@ -25,7 +25,8 @@ internal ref struct AsnValueReader
 
     internal void ThrowIfNotEmpty()
     {
-        if (!_span.IsEmpty) {
+        if (!_span.IsEmpty)
+        {
             new AsnReader(s_singleByte, _ruleSet).ThrowIfNotEmpty();
         }
     }
@@ -33,6 +34,18 @@ internal ref struct AsnValueReader
     internal Asn1Tag PeekTag()
     {
         return Asn1Tag.Decode(_span, out _);
+    }
+
+    internal ReadOnlySpan<byte> PeekContentBytes()
+    {
+        AsnDecoder.ReadEncodedValue(
+            _span,
+            _ruleSet,
+            out int contentOffset,
+            out int contentLength,
+            out _);
+
+        return _span.Slice(contentOffset, contentLength);
     }
 
     internal ReadOnlySpan<byte> PeekEncodedValue()
@@ -162,7 +175,7 @@ internal ref struct AsnValueReader
         return new AsnValueReader(content, _ruleSet);
     }
 
-    internal AsnValueReader ReadSetOf(Asn1Tag? expectedTag = default)
+    internal AsnValueReader ReadSetOf(Asn1Tag? expectedTag = default, bool skipSortOrderValidation = false)
     {
         AsnDecoder.ReadSetOf(
             _span,
@@ -170,6 +183,7 @@ internal ref struct AsnValueReader
             out int contentOffset,
             out int contentLength,
             out int bytesConsumed,
+            skipSortOrderValidation: skipSortOrderValidation,
             expectedTag: expectedTag);
 
         ReadOnlySpan<byte> content = _span.Slice(contentOffset, contentLength);
@@ -194,6 +208,13 @@ internal ref struct AsnValueReader
     internal string ReadCharacterString(UniversalTagNumber encodingType, Asn1Tag? expectedTag = default)
     {
         string ret = AsnDecoder.ReadCharacterString(_span, _ruleSet, encodingType, out int consumed, expectedTag);
+        _span = _span.Slice(consumed);
+        return ret;
+    }
+
+    internal TEnum ReadEnumeratedValue<TEnum>(Asn1Tag? expectedTag = null) where TEnum : Enum
+    {
+        TEnum ret = AsnDecoder.ReadEnumeratedValue<TEnum>(_span, _ruleSet, out int consumed, expectedTag);
         _span = _span.Slice(consumed);
         return ret;
     }
