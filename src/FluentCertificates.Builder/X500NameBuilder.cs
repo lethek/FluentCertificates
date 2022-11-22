@@ -15,7 +15,7 @@ public record X500NameBuilder
 
 
     public X500NameBuilder(X500DistinguishedName name)
-        => Attributes = name
+        => RelativeDistinguishedNames = name
             .EnumerateRelativeDistinguishedNames()
             .Select(x => (x.GetSingleElementType(), x.GetSingleElementValue()))
             .ToImmutableList();
@@ -26,26 +26,26 @@ public record X500NameBuilder
     { }
 
 
-    public ImmutableList<(Oid OID, string? Value)> Attributes { get; init; } = ImmutableList<(Oid, string?)>.Empty;
+    public ImmutableList<(Oid OID, string Value)> RelativeDistinguishedNames { get; init; } = ImmutableList<(Oid, string)>.Empty;
 
 
     public X500DistinguishedName Create()
     {
         var builder = new X500DistinguishedNameBuilder();
-        foreach (var attribute in Attributes) {
-            builder.Add(attribute.OID, attribute.Value);
+        foreach (var rdn in RelativeDistinguishedNames) {
+            builder.Add(rdn.OID, rdn.Value);
         }
         return builder.Build();
     }
 
 
     public X500NameBuilder Clear()
-        => this with { Attributes = Attributes.Clear() };
+        => this with { RelativeDistinguishedNames = RelativeDistinguishedNames.Clear() };
     
 
     public X500NameBuilder Remove(Oid oid)
         => this with {
-            Attributes = Attributes.Where(x => x.OID.Value != oid.Value).ToImmutableList()
+            RelativeDistinguishedNames = RelativeDistinguishedNames.Where(x => x.OID.Value != oid.Value).ToImmutableList()
         };
 
 
@@ -55,7 +55,7 @@ public record X500NameBuilder
 
     public X500NameBuilder Add(Oid oid, params string[] values)
         => this with {
-            Attributes = Attributes.AddRange(values.Where(x => x != null).Select(x => (oid, (string?)x)))
+            RelativeDistinguishedNames = RelativeDistinguishedNames.AddRange(values.Where(x => x != null).Select(x => (oid, (string?)x)))
         };
 
 
@@ -65,7 +65,7 @@ public record X500NameBuilder
 
     public X500NameBuilder Set(Oid oid, params string[] values)
         => this with {
-            Attributes = Attributes
+            RelativeDistinguishedNames = RelativeDistinguishedNames
                 .Where(x => x.OID.Value != oid.Value)
                 .Concat(values.Where(x => x != null).Select(x => (oid, (string?)x)))
                 .ToImmutableList()
@@ -171,21 +171,6 @@ public record X500NameBuilder
     public virtual bool Equals(string? other)
         => other != null && Create().RawData.SequenceEqual(new X500DistinguishedName(other).RawData);
 
-    /*
-    public static bool Equals(X500NameBuilder? left, X500DistinguishedName? right)
-        => (left == null && right == null) || (left != null && left.Equals(right));
-
-    public static bool Equals(X500NameBuilder? left, string? right)
-        => (left == null && right == null) || (left != null && left.Equals(right));
-
-
-    public static bool Equals(X500DistinguishedName? left, X500NameBuilder? right)
-        => (left == null && right == null) || (right != null && right.Equals(left));
-
-    public static bool Equals(string? left, X500NameBuilder? right)
-        => (left == null && right == null) || (right != null && right.Equals(left));
-    */
-
 
     public static bool operator ==(X500NameBuilder? left, X500DistinguishedName? right) => Equals(left, right);
     public static bool operator ==(X500NameBuilder? left, string? right) => Equals(left, right);
@@ -201,6 +186,7 @@ public record X500NameBuilder
 
     public static bool operator !=(X500DistinguishedName left, X500NameBuilder right) => !Equals(left, right);
     public static bool operator !=(string left, X500NameBuilder right) => !Equals(left, right);
+
     
     public static implicit operator X500DistinguishedName(X500NameBuilder builder) => builder.Create();
     public static explicit operator string(X500NameBuilder builder) => builder.ToString();

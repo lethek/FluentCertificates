@@ -14,7 +14,7 @@ public class X500NameBuilderTests
     public void Create_Empty_Builder()
     {
         var builder = new X500NameBuilder();
-        Assert.Empty(builder.Attributes);
+        Assert.Empty(builder.RelativeDistinguishedNames);
         Assert.Empty(builder.ToString());
     }
 
@@ -56,52 +56,52 @@ public class X500NameBuilderTests
 
         Assert.Equal(
             exp, 
-            new X500NameBuilder().AddDomainComponent("app").AddDomainComponent("fake").Attributes,
+            new X500NameBuilder().AddDomainComponent("app").AddDomainComponent("fake").RelativeDistinguishedNames,
             X500AttributeTupleComparer
         );
 
         Assert.Equal(
             exp,
-            new X500NameBuilder().AddDomainComponents("app", "fake").Attributes,
+            new X500NameBuilder().AddDomainComponents("app", "fake").RelativeDistinguishedNames,
             X500AttributeTupleComparer
         );
 
         Assert.Equal(
             exp,
-            new X500NameBuilder().Add(X509Name.DC, "app").Add(X509Name.DC, "fake").Attributes,
+            new X500NameBuilder().Add(X509Name.DC, "app").Add(X509Name.DC, "fake").RelativeDistinguishedNames,
             X500AttributeTupleComparer
         );
 
         Assert.Equal(
             exp,
-            new X500NameBuilder().Add(X509Name.DC, "app", "fake").Attributes,
+            new X500NameBuilder().Add(X509Name.DC, "app", "fake").RelativeDistinguishedNames,
             X500AttributeTupleComparer
         );
 
         Assert.Equal(
             exp,
-            new X500NameBuilder().Add(dcOid, "app").Add(dcOid, "fake").Attributes,
+            new X500NameBuilder().Add(dcOid, "app").Add(dcOid, "fake").RelativeDistinguishedNames,
             X500AttributeTupleComparer
         );
 
         //Specify OID by an Oid instance
         Assert.Equal(
             exp,
-            new X500NameBuilder().Add(dcOid, "app", "fake").Attributes,
+            new X500NameBuilder().Add(dcOid, "app", "fake").RelativeDistinguishedNames,
             X500AttributeTupleComparer
         );
 
         //Specify OID by its friendly-name string
         Assert.Equal(
             exp,
-            new X500NameBuilder().Add("DC", "app", "fake").Attributes,
+            new X500NameBuilder().Add("DC", "app", "fake").RelativeDistinguishedNames,
             X500AttributeTupleComparer
         );
         
         //Specify OID by its value string
         Assert.Equal(
             exp,
-            new X500NameBuilder().Add("0.9.2342.19200300.100.1.25", "app", "fake").Attributes,
+            new X500NameBuilder().Add("0.9.2342.19200300.100.1.25", "app", "fake").RelativeDistinguishedNames,
             X500AttributeTupleComparer
         );
     }
@@ -115,7 +115,7 @@ public class X500NameBuilderTests
             .SetDomainComponents("app", "fake")
             .Clear();
 
-        Assert.Empty(builder.Attributes);
+        Assert.Empty(builder.RelativeDistinguishedNames);
         Assert.Empty(builder.Create().Name);
     }
 

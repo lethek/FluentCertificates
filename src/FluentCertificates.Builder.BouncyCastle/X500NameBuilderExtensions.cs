@@ -15,8 +15,8 @@ public static class X500NameBuilderExtensions
     
     public static X509Name ConvertToBouncyCastle(this X500NameBuilder builder)
         => new(
-            builder.Attributes.Select(x => new DerObjectIdentifier(x.OID.Value)).ToArray(),
-            builder.Attributes.Select(x => x.Value).ToArray()
+            builder.RelativeDistinguishedNames.Select(x => new DerObjectIdentifier(x.OID.Value)).ToArray(),
+            builder.RelativeDistinguishedNames.Select(x => x.Value).ToArray()
         );
 
 
