@@ -1,4 +1,5 @@
 ﻿using System.Collections.Immutable;
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -17,7 +18,7 @@ public record X500NameBuilder
     public X500NameBuilder(X500DistinguishedName name)
         => RelativeDistinguishedNames = name
             .EnumerateRelativeDistinguishedNames()
-            .Select(x => (x.GetSingleElementType(), x.GetSingleElementValue()))
+            .Select(x => (x.GetSingleElementType(), x.GetSingleElementValueEncoding(), x.GetSingleElementValue()!))
             .ToImmutableList();
 
 
@@ -26,14 +27,15 @@ public record X500NameBuilder
     { }
 
 
-    public ImmutableList<(Oid OID, string Value)> RelativeDistinguishedNames { get; init; } = ImmutableList<(Oid, string)>.Empty;
+    public ImmutableList<(Oid OID, UniversalTagNumber ValueEncoding, string Value)> RelativeDistinguishedNames { get; init; }
+        = ImmutableList<(Oid, UniversalTagNumber, string)>.Empty;
 
 
     public X500DistinguishedName Create()
     {
         var builder = new X500DistinguishedNameBuilder();
         foreach (var rdn in RelativeDistinguishedNames) {
-            builder.Add(rdn.OID, rdn.Value);
+            builder.Add(rdn.OID, rdn.Value, rdn.ValueEncoding);
         }
         return builder.Build();
     }
@@ -53,59 +55,83 @@ public record X500NameBuilder
         => Remove(new Oid(oid));
 
 
-    public X500NameBuilder Add(Oid oid, params string[] values)
+    public X500NameBuilder Add(Oid oid, UniversalTagNumber valueEncoding, params string[] values)
         => this with {
-            RelativeDistinguishedNames = RelativeDistinguishedNames.AddRange(values.Where(x => x != null).Select(x => (oid, (string?)x)))
+            RelativeDistinguishedNames = RelativeDistinguishedNames.AddRange(
+                values
+                    .Where(x => x != null)
+                    .Select(x => (oid, valueEncoding, x))
+            )
         };
+
+
+    public X500NameBuilder Add(Oid oid, params string[] values)
+        => Add(oid, UniversalTagNumber.UTF8String, values);
+
+
+    public X500NameBuilder Add(string oid, UniversalTagNumber valueEncoding, params string[] values)
+        => Add(new Oid(oid), valueEncoding, values);
 
 
     public X500NameBuilder Add(string oid, params string[] values)
         => Add(new Oid(oid), values);
 
 
-    public X500NameBuilder Set(Oid oid, params string[] values)
+    public X500NameBuilder Set(Oid oid, UniversalTagNumber valueEncoding = UniversalTagNumber.UTF8String, params string[] values)
         => this with {
             RelativeDistinguishedNames = RelativeDistinguishedNames
                 .Where(x => x.OID.Value != oid.Value)
-                .Concat(values.Where(x => x != null).Select(x => (oid, (string?)x)))
+                .Concat(
+                    values
+                        .Where(x => x != null)
+                        .Select(x => (oid, valueEncoding, x))
+                )
                 .ToImmutableList()
         };
 
 
+    public X500NameBuilder Set(Oid oid, params string[] values)
+        => Set(oid, UniversalTagNumber.UTF8String, values);
+
+
+    public X500NameBuilder Set(string oid, UniversalTagNumber valueEncoding = UniversalTagNumber.UTF8String, params string[] values)
+        => Set(new Oid(oid), valueEncoding, values);
+
+    
     public X500NameBuilder Set(string oid, params string[] values)
         => Set(new Oid(oid), values);
 
-    
+
     public X500NameBuilder SetCommonName(string value)
-        => Set(Oids.CommonNameOid, value);
+        => Set(Oids.CommonNameOid, UniversalTagNumber.UTF8String, value);
 
 
     public X500NameBuilder SetOrganization(string value)
-        => Set(Oids.OrganizationOid, value);
+        => Set(Oids.OrganizationOid, UniversalTagNumber.UTF8String, value);
 
 
     public X500NameBuilder SetCountry(string value)
-        => Set(Oids.CountryOrRegionNameOid, value);
+        => Set(Oids.CountryOrRegionNameOid, UniversalTagNumber.PrintableString, value);
 
 
     public X500NameBuilder SetLocality(string value)
-        => Set(Oids.LocalityNameOid, value);
+        => Set(Oids.LocalityNameOid, UniversalTagNumber.UTF8String, value);
 
 
     public X500NameBuilder SetPhoneNumber(string value)
-        => Set(Oids.TelephoneNumberOid, value);
+        => Set(Oids.TelephoneNumberOid, UniversalTagNumber.PrintableString, value);
 
 
     public X500NameBuilder SetStreetAddress(string value)
-        => Set(Oids.StreetAddressOid, value);
+        => Set(Oids.StreetAddressOid, UniversalTagNumber.PrintableString, value);
 
 
     public X500NameBuilder SetState(string value)
-        => Set(Oids.StateOrProvinceNameOid, value);
+        => Set(Oids.StateOrProvinceNameOid, UniversalTagNumber.UTF8String, value);
 
 
     public X500NameBuilder SetPostalCode(string value)
-        => Set(Oids.PostalCodeOid, value);
+        => Set(Oids.PostalCodeOid, UniversalTagNumber.PrintableString, value);
 
 
     public X500NameBuilder SetUserId(string value)
@@ -113,52 +139,52 @@ public record X500NameBuilder
 
 
     public X500NameBuilder SetSerialNumber(string value)
-        => Set(Oids.SerialNumberOid, value);
+        => Set(Oids.SerialNumberOid, UniversalTagNumber.PrintableString, value);
 
 
     public X500NameBuilder SetGivenName(string value)
-        => Set(Oids.GivenNameOid, value);
+        => Set(Oids.GivenNameOid, UniversalTagNumber.PrintableString, value);
 
 
     public X500NameBuilder SetSurname(string value)
-        => Set(Oids.SurnameOid, value);
+        => Set(Oids.SurnameOid, UniversalTagNumber.PrintableString, value);
 
 
     public X500NameBuilder SetTitle(string value)
-        => Set(Oids.TitleOid, value);
+        => Set(Oids.TitleOid, UniversalTagNumber.UTF8String, value);
 
 
     public X500NameBuilder SetDistinguishedNameQualifier(string value)
-        => Set(Oids.DnQualifierOid, value);
+        => Set(Oids.DnQualifierOid, UniversalTagNumber.PrintableString, value);
 
 
     public X500NameBuilder SetOrganizationalUnits(params string[] values)
-        => Set(Oids.OrganizationalUnitOid, values);
+        => Set(Oids.OrganizationalUnitOid, UniversalTagNumber.UTF8String, values);
 
 
     public X500NameBuilder SetDomainComponents(params string[] values)
-        => Set(Oids.DomainComponentOid, values);
+        => Set(Oids.DomainComponentOid, UniversalTagNumber.IA5String, values);
 
 
     public X500NameBuilder AddOrganizationalUnit(string value)
-        => Add(Oids.OrganizationalUnitOid, value);
+        => Add(Oids.OrganizationalUnitOid, UniversalTagNumber.UTF8String, value);
 
 
     public X500NameBuilder AddOrganizationalUnits(params string[] values)
-        => Add(Oids.OrganizationalUnitOid, values);
+        => Add(Oids.OrganizationalUnitOid, UniversalTagNumber.UTF8String, values);
 
 
     public X500NameBuilder AddDomainComponent(string value)
-        => Add(Oids.DomainComponentOid, value);
+        => Add(Oids.DomainComponentOid, UniversalTagNumber.IA5String, value);
 
 
     public X500NameBuilder AddDomainComponents(params string[] values)
-        => Add(Oids.DomainComponentOid, values);
+        => Add(Oids.DomainComponentOid, UniversalTagNumber.IA5String, values);
 
 
     [Obsolete("Obsolete: use Subject Alternative Name extensions instead. If you're using CertificateBuilder then try its SetEmail method.")]
     public X500NameBuilder SetEmail(string value)
-        => Set(Oids.EmailAddressOid, value);
+        => Set(Oids.EmailAddressOid, UniversalTagNumber.IA5String, value);
 
 
     public override string ToString()
@@ -172,22 +198,43 @@ public record X500NameBuilder
         => other != null && Create().RawData.SequenceEqual(new X500DistinguishedName(other).RawData);
 
 
-    public static bool operator ==(X500NameBuilder? left, X500DistinguishedName? right) => Equals(left, right);
-    public static bool operator ==(X500NameBuilder? left, string? right) => Equals(left, right);
+    public bool Equivalent(X500NameBuilder other, bool orderMatters = false)
+        => orderMatters
+            ? throw new NotImplementedException()
+            : ScrambledEquals(RelativeDistinguishedNames, other.RelativeDistinguishedNames, x => (x.OID.Value, x.Value));
 
 
-    public static bool operator ==(X500DistinguishedName left, X500NameBuilder right) => Equals(left, right);
-    public static bool operator ==(string left, X500NameBuilder right) => Equals(left, right);
+    public bool Equivalent(string other, bool orderMatters = false)
+        => Equivalent(new X500NameBuilder(other), orderMatters);
 
 
-    public static bool operator !=(X500NameBuilder left, X500DistinguishedName right) => !Equals(left, right);
-    public static bool operator !=(X500NameBuilder left, string right) => !Equals(left, right);
+    public bool Equivalent(X500DistinguishedName other, bool orderMatters = false)
+        => Equivalent(new X500NameBuilder(other), orderMatters);
 
 
-    public static bool operator !=(X500DistinguishedName left, X500NameBuilder right) => !Equals(left, right);
-    public static bool operator !=(string left, X500NameBuilder right) => !Equals(left, right);
-
-    
     public static implicit operator X500DistinguishedName(X500NameBuilder builder) => builder.Create();
     public static explicit operator string(X500NameBuilder builder) => builder.ToString();
+
+
+    private static bool ScrambledEquals<T,TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T,TK> keySelector)
+    {
+        var cnt = new Dictionary<TK, int>();
+        foreach (T s in list1) {
+            var k = keySelector(s);
+            if (cnt.ContainsKey(k)) {
+                cnt[k]++;
+            } else {
+                cnt.Add(k, 1);
+            }
+        }
+        foreach (T s in list2) {
+            var k = keySelector(s);
+            if (cnt.ContainsKey(k)) {
+                cnt[k]--;
+            } else {
+                return false;
+            }
+        }
+        return cnt.Values.All(c => c == 0);
+    }
 }

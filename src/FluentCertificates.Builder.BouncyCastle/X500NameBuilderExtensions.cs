@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+﻿using System.Formats.Asn1;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using Org.BouncyCastle.Asn1.X509;
@@ -24,10 +25,18 @@ public static class X500NameBuilderExtensions
         => builder.Remove(new Oid(oid.Id));
 
 
+    public static X500NameBuilder Add(this X500NameBuilder builder, DerObjectIdentifier oid, UniversalTagNumber valueEncoding, params string[] values)
+        => builder.Add(new Oid(oid.Id), valueEncoding, values);
+
+    
     public static X500NameBuilder Add(this X500NameBuilder builder, DerObjectIdentifier oid, params string[] values)
         => builder.Add(new Oid(oid.Id), values);
 
 
+    public static X500NameBuilder Set(this X500NameBuilder builder, DerObjectIdentifier oid, UniversalTagNumber valueEncoding, params string[] values)
+        => builder.Set(new Oid(oid.Id), valueEncoding, values);
+
+    
     public static X500NameBuilder Set(this X500NameBuilder builder, DerObjectIdentifier oid, params string[] values)
         => builder.Set(new Oid(oid.Id), values);
 
