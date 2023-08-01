@@ -43,7 +43,7 @@ public record X500NameBuilder
 
     public X500NameBuilder Clear()
         => this with { RelativeDistinguishedNames = RelativeDistinguishedNames.Clear() };
-    
+
 
     public X500NameBuilder Remove(Oid oid)
         => this with {
@@ -97,7 +97,7 @@ public record X500NameBuilder
     public X500NameBuilder Set(string oid, UniversalTagNumber valueEncoding = UniversalTagNumber.UTF8String, params string[] values)
         => Set(new Oid(oid), valueEncoding, values);
 
-    
+
     public X500NameBuilder Set(string oid, params string[] values)
         => Set(new Oid(oid), values);
 
@@ -193,7 +193,7 @@ public record X500NameBuilder
 
     public virtual bool Equals(X500DistinguishedName? other)
         => other != null && Create().RawData.SequenceEqual(other.RawData);
-    
+
     public virtual bool Equals(string? other)
         => other != null && Create().RawData.SequenceEqual(new X500DistinguishedName(other).RawData);
 
@@ -216,7 +216,7 @@ public record X500NameBuilder
     public static explicit operator string(X500NameBuilder builder) => builder.ToString();
 
 
-    private static bool ScrambledEquals<T,TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T,TK> keySelector)
+    private static bool ScrambledEquals<T, TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T, TK> keySelector) where TK : notnull
     {
         var cnt = new Dictionary<TK, int>();
         foreach (T s in list1) {
