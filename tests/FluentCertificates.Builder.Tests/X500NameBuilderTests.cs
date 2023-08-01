@@ -191,7 +191,7 @@ public class X500NameBuilderTests
             .SetCountry("AU");
 
         var name = new X500DistinguishedName(dn);
-        Assert.True(builder.Equivalent(name));
+        Assert.True(builder.Equivalent(name, false));
     }
 
 
@@ -206,7 +206,7 @@ public class X500NameBuilderTests
             .SetCountry("AU");
 
         var name = new X500DistinguishedName(dn);
-        Assert.False(builder.Equivalent(name));
+        Assert.False(builder.Equivalent(name, true));
     }
 
 

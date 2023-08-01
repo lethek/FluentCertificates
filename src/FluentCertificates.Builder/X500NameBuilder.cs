@@ -200,7 +200,7 @@ public record X500NameBuilder
 
     public bool Equivalent(X500NameBuilder other, bool orderMatters = false)
         => orderMatters
-            ? throw new NotImplementedException()
+            ? Equals(other)
             : ScrambledEquals(RelativeDistinguishedNames, other.RelativeDistinguishedNames, x => (x.OID.Value, x.Value));
 
 
