@@ -154,8 +154,11 @@ public class X500NameBuilderTests
         var expected = new X500DistinguishedName("DC=app, DC=fake");
 
         X500DistinguishedName actual = new X500NameBuilder().SetDomainComponents("app", "fake");
-
-        Assert.Equal(expected.RawData, actual.RawData);
+        
+        Assert.Equal(
+            expected.Decode(X500DistinguishedNameFlags.Reversed),
+            actual.Decode(X500DistinguishedNameFlags.Reversed)
+        );
     }
 
 
