@@ -17,6 +17,7 @@
     <RootNamespace>FluentCertificates</RootNamespace>
     <IsPackable>true</IsPackable>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <GenerateCompatibilitySuppressionFile>true</GenerateCompatibilitySuppressionFile>
   </PropertyGroup>
 
   <ItemGroup>
