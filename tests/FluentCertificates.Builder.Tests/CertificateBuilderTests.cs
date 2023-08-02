@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -11,7 +8,6 @@ using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1.X9;
 
-using Xunit;
 using Xunit.Abstractions;
 
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
@@ -21,9 +17,8 @@ namespace FluentCertificates;
 
 public class CertificateBuilderTests
 {
-    public CertificateBuilderTests(ITestOutputHelper outputHelper) {
-        OutputHelper = outputHelper;
-    }
+    public CertificateBuilderTests(ITestOutputHelper outputHelper)
+        => OutputHelper = outputHelper;
 
 
     [Fact]

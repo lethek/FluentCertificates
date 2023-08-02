@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace FluentCertificates;
+﻿namespace FluentCertificates;
 
 internal class DelegateEqualityComparer<T> : IEqualityComparer<T>
 {

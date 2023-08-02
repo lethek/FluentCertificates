@@ -1,13 +1,9 @@
-﻿using System.Collections.Generic;
-using System.Formats.Asn1;
+﻿using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates.Internals;
-
 using Org.BouncyCastle.Asn1.X509;
 
-using Xunit;
 
 namespace FluentCertificates;
 
@@ -142,7 +138,7 @@ public class X500NameBuilderTests
     {
         const string expected = "DC=app, DC=fake";
 
-        string actual = (string)new X500NameBuilder().SetDomainComponents("app", "fake");
+        var actual = (string)new X500NameBuilder().SetDomainComponents("app", "fake");
 
         Assert.Equal(expected, actual);
     }

@@ -5,6 +5,7 @@ using System.Text;
 using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.X509;
 
+
 namespace FluentCertificates;
 
 public class X509Certificate2ExtensionsTests
