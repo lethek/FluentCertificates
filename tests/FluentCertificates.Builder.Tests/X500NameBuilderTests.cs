@@ -184,28 +184,34 @@ public class X500NameBuilderTests
     [InlineData($"CN={nameof(Equality_With_X500DistinguishedName)},O=SMMX,C=AU")]
     public void Equality_With_X500DistinguishedName(string dn)
     {
-        var builder = new X500NameBuilder()
+        var rightOrder = new X500NameBuilder()
             .SetCommonName(nameof(Equality_With_X500DistinguishedName))
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
+        var wrongOrder = new X500NameBuilder()
+            .SetOrganization("SMMX")
+            .SetCommonName(nameof(Equality_With_X500DistinguishedName))
+            .SetCountry("AU");
+        
         var name = new X500DistinguishedName(dn);
-        Assert.True(builder.EquivalentTo(name, false));
+        Assert.True(rightOrder.EquivalentTo(name, true));
+        Assert.True(wrongOrder.EquivalentTo(name, false));
     }
 
 
     [Theory]
-    [InlineData($"O=SMMX, CN={nameof(Inequality_With_X500DistinguishedName)}, C=AU")]
-    [InlineData($"O=SMMX,CN={nameof(Inequality_With_X500DistinguishedName)},C=AU")]
+    [InlineData($"CN={nameof(Inequality_With_X500DistinguishedName)}, O=SMMX, C=AU")]
+    [InlineData($"CN={nameof(Inequality_With_X500DistinguishedName)},O=SMMX,C=AU")]
     public void Inequality_With_X500DistinguishedName(string dn)
     {
-        var builder = new X500NameBuilder()
-            .SetCommonName(nameof(Inequality_With_X500DistinguishedName))
+        var wrongOrder = new X500NameBuilder()
             .SetOrganization("SMMX")
+            .SetCommonName(nameof(Inequality_With_X500DistinguishedName))
             .SetCountry("AU");
-
+        
         var name = new X500DistinguishedName(dn);
-        Assert.False(builder.EquivalentTo(name, true));
+        Assert.False(wrongOrder.EquivalentTo(name, true));
     }
 
 
@@ -214,26 +220,32 @@ public class X500NameBuilderTests
     [InlineData($"CN={nameof(Equality_With_String)},O=SMMX,C=AU")]
     public void Equality_With_String(string dn)
     {
-        var builder = new X500NameBuilder()
+        var rightOrder = new X500NameBuilder()
             .SetCommonName(nameof(Equality_With_String))
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
-        Assert.True(builder.EquivalentTo(dn, false));
+        var wrongOrder = new X500NameBuilder()
+            .SetOrganization("SMMX")
+            .SetCommonName(nameof(Equality_With_String))
+            .SetCountry("AU");
+
+        Assert.True(rightOrder.EquivalentTo(dn, true));
+        Assert.True(wrongOrder.EquivalentTo(dn, false));
     }
 
 
     [Theory]
-    [InlineData($"O=SMMX, CN={nameof(Inequality_With_String)}, C=AU")]
-    [InlineData($"O=SMMX,CN={nameof(Inequality_With_String)},C=AU")]
+    [InlineData($"CN={nameof(Inequality_With_String)}, O=SMMX, C=AU")]
+    [InlineData($"CN={nameof(Inequality_With_String)},O=SMMX,C=AU")]
     public void Inequality_With_String(string dn)
     {
-        var builder = new X500NameBuilder()
-            .SetCommonName(nameof(Inequality_With_String))
+        var wrongOrder = new X500NameBuilder()
             .SetOrganization("SMMX")
+            .SetCommonName(nameof(Inequality_With_String))
             .SetCountry("AU");
 
-        Assert.False(builder.EquivalentTo(dn, true));
+        Assert.False(wrongOrder.EquivalentTo(dn, true));
     }
 
 

@@ -200,8 +200,8 @@ public record X500NameBuilder
 
     public bool EquivalentTo(X500NameBuilder other, bool orderMatters = false)
         => orderMatters
-            ? Equals(other)
-            : ScrambledEquals(RelativeDistinguishedNames, other.RelativeDistinguishedNames, x => (x.OID.Value, x.Value));
+            ? CheckOrderedEquivalence(RelativeDistinguishedNames, other.RelativeDistinguishedNames, x => (x.OID.Value, x.Value))
+            : CheckUnorderedEquivalence(RelativeDistinguishedNames, other.RelativeDistinguishedNames, x => (x.OID.Value, x.Value));
 
 
     public bool EquivalentTo(string other, bool orderMatters = false)
@@ -216,7 +216,16 @@ public record X500NameBuilder
     public static explicit operator string(X500NameBuilder builder) => builder.ToString();
 
 
-    private static bool ScrambledEquals<T, TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T, TK> keySelector)
+    private static bool CheckOrderedEquivalence<T, TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T, TK> keySelector)
+        where TK : notnull
+    {
+        var list1Keys = list1.Select(keySelector);
+        var list2Keys = list2.Select(keySelector);
+        return list1Keys.SequenceEqual(list2Keys);
+    }
+    
+
+    private static bool CheckUnorderedEquivalence<T, TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T, TK> keySelector)
         where TK : notnull
     {
         var cnt = new Dictionary<TK, int>();
