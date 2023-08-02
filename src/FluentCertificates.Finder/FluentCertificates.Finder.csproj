@@ -37,4 +37,8 @@
     </Otherwise>
   </Choose>
 
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="7.0.2" />
+  </ItemGroup>
+
 </Project>
