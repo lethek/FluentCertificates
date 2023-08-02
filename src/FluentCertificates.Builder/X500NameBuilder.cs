@@ -198,25 +198,26 @@ public record X500NameBuilder
         => other != null && Create().RawData.SequenceEqual(new X500DistinguishedName(other).RawData);
 
 
-    public bool Equivalent(X500NameBuilder other, bool orderMatters = false)
+    public bool EquivalentTo(X500NameBuilder other, bool orderMatters = false)
         => orderMatters
             ? Equals(other)
             : ScrambledEquals(RelativeDistinguishedNames, other.RelativeDistinguishedNames, x => (x.OID.Value, x.Value));
 
 
-    public bool Equivalent(string other, bool orderMatters = false)
-        => Equivalent(new X500NameBuilder(other), orderMatters);
+    public bool EquivalentTo(string other, bool orderMatters = false)
+        => EquivalentTo(new X500NameBuilder(other), orderMatters);
 
 
-    public bool Equivalent(X500DistinguishedName other, bool orderMatters = false)
-        => Equivalent(new X500NameBuilder(other), orderMatters);
+    public bool EquivalentTo(X500DistinguishedName other, bool orderMatters = false)
+        => EquivalentTo(new X500NameBuilder(other), orderMatters);
 
 
     public static implicit operator X500DistinguishedName(X500NameBuilder builder) => builder.Create();
     public static explicit operator string(X500NameBuilder builder) => builder.ToString();
 
 
-    private static bool ScrambledEquals<T, TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T, TK> keySelector) where TK : notnull
+    private static bool ScrambledEquals<T, TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T, TK> keySelector)
+        where TK : notnull
     {
         var cnt = new Dictionary<TK, int>();
         foreach (T s in list1) {

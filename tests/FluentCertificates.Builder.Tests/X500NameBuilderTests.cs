@@ -190,7 +190,7 @@ public class X500NameBuilderTests
             .SetCountry("AU");
 
         var name = new X500DistinguishedName(dn);
-        Assert.True(builder.Equivalent(name, false));
+        Assert.True(builder.EquivalentTo(name, false));
     }
 
 
@@ -205,7 +205,7 @@ public class X500NameBuilderTests
             .SetCountry("AU");
 
         var name = new X500DistinguishedName(dn);
-        Assert.False(builder.Equivalent(name, true));
+        Assert.False(builder.EquivalentTo(name, true));
     }
 
 
@@ -219,7 +219,7 @@ public class X500NameBuilderTests
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
-        Assert.True(builder.Equivalent(dn, false));
+        Assert.True(builder.EquivalentTo(dn, false));
     }
 
 
@@ -233,7 +233,7 @@ public class X500NameBuilderTests
             .SetOrganization("SMMX")
             .SetCountry("AU");
 
-        Assert.False(builder.Equivalent(dn, true));
+        Assert.False(builder.EquivalentTo(dn, true));
     }
 
 
