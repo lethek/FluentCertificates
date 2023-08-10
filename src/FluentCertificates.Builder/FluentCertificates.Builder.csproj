@@ -45,4 +45,8 @@
     <ProjectReference Include="..\FluentCertificates.Extensions\FluentCertificates.Extensions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath="\" />
+  </ItemGroup>
+
 </Project>

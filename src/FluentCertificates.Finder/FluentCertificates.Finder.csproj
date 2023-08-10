@@ -19,6 +19,10 @@
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="7.0.2" />
+  </ItemGroup>
+
   <Choose>
     <When Condition="'$(TargetFramework)' == 'netstandard2.0'">
       <ItemGroup>
@@ -38,7 +42,7 @@
   </Choose>
 
   <ItemGroup>
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="7.0.2" />
+    <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath="\" />
   </ItemGroup>
 
 </Project>
