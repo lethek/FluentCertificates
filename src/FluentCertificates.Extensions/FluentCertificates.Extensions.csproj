@@ -18,6 +18,7 @@
     <IsPackable>true</IsPackable>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <GenerateCompatibilitySuppressionFile>true</GenerateCompatibilitySuppressionFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

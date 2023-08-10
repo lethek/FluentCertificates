@@ -16,6 +16,7 @@
     <RepositoryType>git</RepositoryType>
     <IsPackable>true</IsPackable>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
