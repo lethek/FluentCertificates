@@ -11,7 +11,7 @@ using PublicKeyFactory = FluentCertificates.Internals.PublicKeyFactory;
 
 namespace FluentCertificates;
 
-public partial record CertificateBuilder
+public record CertificateBuilder
 {
     public CertificateUsage? Usage { get; init; }
     public DateTimeOffset NotBefore { get; init; } = DateTimeOffset.UtcNow.AddHours(-1);
@@ -384,9 +384,9 @@ public partial record CertificateBuilder
 
     private static KeyAlgorithm? GetKeyAlgorithm(AsymmetricAlgorithm? keys)
         => keys switch {
-            ECDsa ecdsa => KeyAlgorithm.ECDsa,
-            RSA rsa => KeyAlgorithm.RSA,
-            DSA dsa => KeyAlgorithm.DSA,
+            ECDsa => KeyAlgorithm.ECDsa,
+            RSA => KeyAlgorithm.RSA,
+            DSA => KeyAlgorithm.DSA,
             null => null,
             _ => throw new NotSupportedException($"Unsupported AsymmetricAlgorithm: {keys.GetType()}")
         };
