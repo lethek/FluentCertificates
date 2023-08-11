@@ -394,12 +394,12 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
-# DotNet generated files
-CompatibilitySuppressions.xml
-
 # JetBrains Rider
 *.sln.iml
 
-# Nuke
+# DotNet generated files
+CompatibilitySuppressions.xml
+
+# NUKE
 .nuke/temp/
 build.schema.json
