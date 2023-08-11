@@ -15,6 +15,17 @@ using static Nuke.Common.IO.FileSystemTasks;
 using static Nuke.Common.IO.PathConstruction;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
+[GitHubActions(
+    "ci",
+    GitHubActionsImage.UbuntuLatest,
+    FetchDepth = 0,
+    OnPushBranches = new[] { "main", "master" },
+    OnPushTags = new[] { "v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-[0-9a-ZA-Z-+.]+" },
+    OnWorkflowDispatchOptionalInputs = new [] { "input" },
+    InvokedTargets = new[] { nameof(GitHubBuild) },
+    PublishArtifacts = true,
+    AutoGenerate = false
+)]
 class Build : NukeBuild
 {
     /// Support plugins are available for:
@@ -79,4 +90,9 @@ class Build : NukeBuild
                 .SetOutputDirectory(ArtifactsDirectory)
             );
         });
+    
+    Target GitHubBuild => _ => _
+        .DependsOn(Compile)
+        .DependsOn(Test)
+        .DependsOn(Pack);
 }
