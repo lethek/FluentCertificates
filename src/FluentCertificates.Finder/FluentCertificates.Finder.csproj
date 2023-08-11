@@ -5,19 +5,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>FluentCertificates</RootNamespace>
+
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>FluentCertificates.Finder is part of the FluentCertificates package. This library uses the Immutable Fluent Builder pattern for easily finding/querying certificates in X509Stores.</Description>
-    <PackageTags>certificate certs fluent x509 pfx pem cert crt CA</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>certificate;certs;fluent;x509;pfx;pem;cert;crt;CA</PackageTags>
     <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <RootNamespace>FluentCertificates</RootNamespace>
-    <IsPackable>true</IsPackable>
-    <CheckEolTargetFramework>false</CheckEolTargetFramework>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -43,7 +44,7 @@
   </Choose>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath="README.md" />
+    <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath="" />
   </ItemGroup>
 
 </Project>

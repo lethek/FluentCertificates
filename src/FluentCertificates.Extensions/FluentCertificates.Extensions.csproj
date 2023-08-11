@@ -5,20 +5,21 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GenerateCompatibilitySuppressionFile>true</GenerateCompatibilitySuppressionFile>
+    <RootNamespace>FluentCertificates</RootNamespace>
+
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>FluentCertificates.Extensions is part of the FluentCertificates package. This library provides a number of convenient extension-methods for exporting certificates and keys and performing other common operations.</Description>
-    <PackageTags>certificate certs fluent x509 pfx pem cert crt CA</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>certificate;certs;fluent;x509;pfx;pem;cert;crt;CA</PackageTags>
     <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <RootNamespace>FluentCertificates</RootNamespace>
-    <IsPackable>true</IsPackable>
-    <CheckEolTargetFramework>false</CheckEolTargetFramework>
-    <GenerateCompatibilitySuppressionFile>true</GenerateCompatibilitySuppressionFile>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -48,7 +49,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath="README.md" />
+    <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath="" />
   </ItemGroup>
 
 </Project>

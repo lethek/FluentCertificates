@@ -4,12 +4,22 @@
     <TargetFrameworks>net7.0;net6.0;netstandard2.1</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <LangVersion>preview</LangVersion>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RootNamespace>FluentCertificates</RootNamespace>
-    <Description>A majority of code in this project has been copied from Microsoft's open-source dotnet Git repository under the MIT license. It back-fills core .NET functionality which FluentCertificates relies on, but are missing in earlier versions of .NET.</Description>
-    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>FluentCertificates</RootNamespace>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+
+    <Authors>Michael Monsour</Authors>
+    <Copyright>Copyright © Michael Monsour 2022</Copyright>
+    <Description>A majority of code in this project has been copied from Microsoft's open-source dotnet Git repository under the MIT license. It back-fills core .NET functionality which FluentCertificates relies on, but are missing in earlier versions of .NET.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>certificate;certs;fluent;x509;pfx;pem;cert;crt;CA</PackageTags>
+    <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +31,10 @@
 
   <ItemGroup>
     <PackageReference Include="System.Formats.Asn1" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath="" />
   </ItemGroup>
 
 </Project>

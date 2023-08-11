@@ -5,11 +5,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>FluentCertificates</RootNamespace>
+
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
+    <Description>Provides several extension methods that simplifies some integration with BouncyCastle.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RootNamespace>FluentCertificates</RootNamespace>
-    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <PackageTags>certificate;certs;fluent;x509;pfx;pem;cert;crt;CA</PackageTags>
+    <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
