@@ -32,12 +32,16 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Polyfill
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Extensions.Tests", "tests\FluentCertificates.Extensions.Tests\FluentCertificates.Extensions.Tests.csproj", "{0754E808-B1C4-475B-85A7-D5F210089255}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "_build", "build\_build.csproj", "{88F4BB4F-40C3-42C8-ABFB-E1EE40B8ED68}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{88F4BB4F-40C3-42C8-ABFB-E1EE40B8ED68}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{88F4BB4F-40C3-42C8-ABFB-E1EE40B8ED68}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A4EDD7E4-E245-4717-82BB-B18945649344}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A4EDD7E4-E245-4717-82BB-B18945649344}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A4EDD7E4-E245-4717-82BB-B18945649344}.Release|Any CPU.ActiveCfg = Release|Any CPU

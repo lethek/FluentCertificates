@@ -9,6 +9,7 @@
     <IsTestProject>true</IsTestProject>
     <RootNamespace>FluentCertificates</RootNamespace>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
 
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
@@ -20,10 +21,6 @@
     <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="7.0.2" />
     <PackageReference Include="xunit" Version="2.5.0" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.0">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
     <PackageReference Include="coverlet.collector" Version="6.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -31,9 +28,32 @@
     <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
   </ItemGroup>
 
+  <Choose>
+    <When Condition="'$(TargetFramework)' == 'netcoreapp3.1'">
+      <ItemGroup>
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5">
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+          <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+      </ItemGroup>
+    </When>
+    <Otherwise>
+      <ItemGroup>
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.5.0">
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+          <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+      </ItemGroup>
+    </Otherwise>
+  </Choose>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\FluentCertificates.Builder.BouncyCastle\FluentCertificates.Builder.BouncyCastle.csproj" />
     <ProjectReference Include="..\..\src\FluentCertificates.Builder\FluentCertificates.Builder.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
