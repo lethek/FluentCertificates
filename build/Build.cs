@@ -20,8 +20,7 @@ using static Nuke.Common.Tools.DotNet.DotNetTasks;
     GitHubActionsImage.UbuntuLatest,
     FetchDepth = 0,
     OnPushBranches = new[] { "main", "master" },
-    OnPushTags = new[] { "v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-[0-9a-ZA-Z-+.]+" },
-    OnWorkflowDispatchOptionalInputs = new [] { "input" },
+    OnPushTags = new[] { "v[0-9]+.[0-9]+.[0-9]+" },
     InvokedTargets = new[] { nameof(GitHubBuild) },
     PublishArtifacts = true,
     AutoGenerate = false
@@ -40,7 +39,6 @@ class Build : NukeBuild
     
     [Parameter("Output directory for artifacts generated while packing and publishing.")]
     readonly AbsolutePath ArtifactsDirectory = AbsolutePath.Create(GitHubActions.Instance?.Workspace ?? RootDirectory) / "artifacts"; 
-    
     
     [GitVersion(NoCache=false, NoFetch=true)]
     readonly GitVersion GitVersion;

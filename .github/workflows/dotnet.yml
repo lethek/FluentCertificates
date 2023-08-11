@@ -5,10 +5,8 @@ on:
     branches:
       - main
       - master
-      - ci
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
-  workflow_dispatch:
 
 env:
   buildConfiguration: Release
