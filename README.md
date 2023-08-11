@@ -2,9 +2,9 @@
 
 ⚠️ **Note:** *while version numbers are v0.x.y, this software is under initial development and there'll be breaking-changes in its API from version to version.*
 
-[![GitHub license](https://img.shields.io/github/license/lethek/FluentCertificates)](https://github.com/lethek/FluentCertificates/blob/main/LICENSE)
-[![NuGet Stats](https://img.shields.io/nuget/v/FluentCertificates.svg)](https://www.nuget.org/packages/FluentCertificates)
+[![NuGet](https://img.shields.io/nuget/v/FluentCertificates.svg)](https://www.nuget.org/packages/FluentCertificates)
 [![Build & Publish](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml/badge.svg)](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml)
+[![GitHub license](https://img.shields.io/github/license/lethek/FluentCertificates)](https://github.com/lethek/FluentCertificates/blob/main/LICENSE)
 
 FluentCertificates is a library using the Immutable Fluent Builder pattern for easily creating, finding and exporting certificates. Makes it simple to generate your own certificate chains, or just stand-alone self-signed certificates.
 
@@ -15,7 +15,7 @@ This project is published in several NuGet packages:
 * [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides a bunch of convenient extension-methods. [Examples below](#x509certificate2-extension-methods)
 * [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across a collection of X509Stores. [Examples below](#certificatefinder-examples)
 
-Unfortunately documentation is incomplete. You may find more examples within the project's unit tests.
+Unfortunately documentation is incomplete. You may find more examples within the project's [unit tests](https://github.com/lethek/FluentCertificates/tree/main/tests).
 
 ## `CertificateBuilder` examples
 
