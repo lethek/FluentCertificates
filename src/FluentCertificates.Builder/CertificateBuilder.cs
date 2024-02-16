@@ -27,6 +27,7 @@ public record CertificateBuilder
     public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
     public RSASignaturePadding RSASignaturePadding { get; init; } = RSASignaturePadding.Pkcs1;
     public ImmutableHashSet<X509Extension> Extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
+    public X509KeyStorageFlags KeyStorageFlags { get; init; }
 
 
     private PublicKey? PublicKey { get; init; }
@@ -161,6 +162,10 @@ public record CertificateBuilder
     public CertificateBuilder SetExtensions(IEnumerable<X509Extension> values)
         => this with { Extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
 
+    
+    public CertificateBuilder SetKeyStorageFlags(X509KeyStorageFlags value)
+        => this with { KeyStorageFlags = value };
+
 
     public void Validate()
     {
@@ -259,7 +264,14 @@ public record CertificateBuilder
                 cert.FriendlyName = builder.FriendlyName;
             }
 
-            return cert;
+            if (builder.KeyStorageFlags != X509KeyStorageFlags.DefaultKeySet) {
+                //We have to create a new copy of the certificate to apply the KeyStorageFlags; there doesn't appear to be a better way to do it :(
+                using (cert) {
+                    return new X509Certificate2(cert.Export(X509ContentType.Pkcs12), (string?)null, builder.KeyStorageFlags);
+                }
+            } else {
+                return cert;
+            }
 
         } finally {
             if (disposeKeys) {

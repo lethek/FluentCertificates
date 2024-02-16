@@ -24,8 +24,11 @@ public class CertificateBuilderTests
     [Fact]
     public void Build_Certificate_HasPrivateKey()
     {
-        using var cert = new CertificateBuilder().Create();
-        Assert.True(cert.HasPrivateKey);
+        using var cert1 = new CertificateBuilder().Create();
+        Assert.True(cert1.HasPrivateKey);
+
+        using var cert2 = new CertificateBuilder().SetKeyStorageFlags(X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable).Create();
+        Assert.True(cert2.HasPrivateKey);
     }
 
 
@@ -141,8 +144,12 @@ public class CertificateBuilderTests
         Skip.IfNot(Tools.IsWindows);
 
         const string friendlyName = "A FriendlyName can be set on Windows";
-        using var cert = new CertificateBuilder().SetFriendlyName(friendlyName).Create();
-        Assert.Equal(friendlyName, cert.FriendlyName);
+
+        using var cert1 = new CertificateBuilder().SetFriendlyName(friendlyName).Create();
+        Assert.Equal(friendlyName, cert1.FriendlyName);
+        
+        using var cert2 = new CertificateBuilder().SetFriendlyName(friendlyName).SetKeyStorageFlags(X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable).Create();
+        Assert.Equal(friendlyName, cert2.FriendlyName);
     }
 
 
