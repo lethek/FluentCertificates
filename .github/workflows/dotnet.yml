@@ -27,6 +27,7 @@ jobs:
           3.1
           6.x
           7.x
+          8.x
 
     - name: 'Cache: .nuke/temp, ~/.nuget/packages'
       uses: actions/cache@v3
