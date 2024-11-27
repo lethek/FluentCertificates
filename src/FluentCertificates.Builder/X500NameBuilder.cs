@@ -55,6 +55,87 @@ public record X500NameBuilder
         => Remove(new Oid(oid));
 
 
+    public string? GetCommonName()
+        => GetFirstMatchingValue(Oids.CommonNameOid);
+
+
+    public string? GetOrganization()
+        => GetFirstMatchingValue(Oids.OrganizationOid);
+
+
+    public string? GetCountry()
+        => GetFirstMatchingValue(Oids.CountryOrRegionNameOid);
+
+
+    public string? GetLocality()
+        => GetFirstMatchingValue(Oids.LocalityNameOid);
+
+
+    public string? GetPhoneNumber()
+        => GetFirstMatchingValue(Oids.TelephoneNumberOid);
+
+
+    public string? GetStreetAddress()
+        => GetFirstMatchingValue(Oids.StreetAddressOid);
+
+
+    public string? GetState()
+        => GetFirstMatchingValue(Oids.StateOrProvinceNameOid);
+
+
+    public string? GetPostalCode()
+        => GetFirstMatchingValue(Oids.PostalCodeOid);
+
+
+    public string? GetUserId()
+        => GetFirstMatchingValue(Oids.UserIdOid);
+
+
+    public string? GetSerialNumber()
+        => GetFirstMatchingValue(Oids.SerialNumberOid);
+
+
+    public string? GetGivenName()
+        => GetFirstMatchingValue(Oids.GivenNameOid);
+
+
+    public string? GetSurname()
+        => GetFirstMatchingValue(Oids.SurnameOid);
+
+
+    public string? GetTitle()
+        => GetFirstMatchingValue(Oids.TitleOid);
+
+
+    public string? GetDistinguishedNameQualifier() 
+        => GetFirstMatchingValue(Oids.DnQualifierOid);
+
+
+    public List<string> GetOrganizationalUnits()
+        => GetAllMatchingValues(Oids.OrganizationalUnitOid);
+
+
+    public List<string> GetDomainComponents()
+        => GetAllMatchingValues(Oids.DomainComponentOid);
+
+
+    public string? GetEmail(string value)
+        => GetFirstMatchingValue(Oids.EmailAddressOid);
+
+
+    private List<string> GetAllMatchingValues(Oid oid)
+        => RelativeDistinguishedNames
+            .Where(x => x.OID.Value == oid.Value)
+            .Select(x => x.Value)
+            .ToList();
+
+
+    private string? GetFirstMatchingValue(Oid oid)
+        => RelativeDistinguishedNames
+            .FirstOrDefault(x => x.OID.Value == oid.Value)
+            .Value;
+
+
     public X500NameBuilder Add(Oid oid, UniversalTagNumber valueEncoding, params string[] values)
         => this with {
             RelativeDistinguishedNames = RelativeDistinguishedNames.AddRange(
