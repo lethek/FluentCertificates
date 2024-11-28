@@ -15,8 +15,8 @@ internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirSto
     IEnumerator IEnumerable.GetEnumerator()
         => GetEnumerator();
 
-    private static IEnumerable<CertificateFinderResult> GetCertificatesFromDirectory(CertificateDirectory certDir) {
-        return Directory.EnumerateFiles(certDir.Path)
+    private static IEnumerable<CertificateFinderResult> GetCertificatesFromDirectory(CertificateDirectory certDir)
+        => Directory.EnumerateFiles(certDir.Path)
             .Select(path => new {
                 Path = path,
                 Extension = Path.GetExtension(path)
@@ -29,11 +29,9 @@ internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirSto
                         case ".p7c":
                             var cms = new SignedCms();
                             cms.Decode(File.ReadAllBytes(x.Path));
-                            return cms.Certificates.Cast<X509Certificate2>();
-#if NET5_0_OR_GREATER
+                            return cms.Certificates;
                         case ".pem":
                             return [X509Certificate2.CreateFromPemFile(x.Path)];
-#endif
                         default:
                             return [new X509Certificate2(x.Path)];
                     }
@@ -43,13 +41,8 @@ internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirSto
                 }
             })
             .Select(x => new CertificateFinderResult { Certificate = x, Directory = certDir });
-    }
 
-    private static readonly string[] SupportedFileExtensions = {
-#if NET5_0_OR_GREATER
+    private static readonly string[] SupportedFileExtensions = [
         ".cer", ".der", ".crt", ".pfx", ".p12", ".p7b", ".p7c", ".pem", ".ca-bundle"
-#else
-        ".cer", ".der", ".crt", ".pfx", ".p12", ".p7b", ".p7c"
-#endif
-    };
+    ];
 }

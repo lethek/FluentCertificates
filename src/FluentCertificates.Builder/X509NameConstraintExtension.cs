@@ -7,9 +7,6 @@ namespace FluentCertificates;
 public class X509NameConstraintExtension(GeneralSubtree? permittedSubtrees, GeneralSubtree? excludedSubtrees)
     : X509Extension(Oids.NameConstraints, EncodeExtension(permittedSubtrees, excludedSubtrees), true)
 {
-    private static readonly Asn1Tag PermittedSubtreesTag = new(TagClass.ContextSpecific, 0);
-    private static readonly Asn1Tag ExcludedSubtreesTag = new(TagClass.ContextSpecific, 1);
-
     private static byte[] EncodeExtension(GeneralSubtree? permittedSubtrees, GeneralSubtree? excludedSubtrees)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
@@ -32,4 +29,8 @@ public class X509NameConstraintExtension(GeneralSubtree? permittedSubtrees, Gene
 
         return writer.Encode();
     }
+    
+    
+    private static readonly Asn1Tag PermittedSubtreesTag = new(TagClass.ContextSpecific, 0);
+    private static readonly Asn1Tag ExcludedSubtreesTag = new(TagClass.ContextSpecific, 1);
 }

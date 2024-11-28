@@ -35,13 +35,10 @@ public static class X509Certificate2EnumerableExtensions
     public static IEnumerable<X509Certificate2> ExportAsPkcs7(this IEnumerable<X509Certificate2> enumerable, BinaryWriter writer)
     {
         //In .NET 6 and up, X509Certificate2Collection implements IEnumerable<X509Certificate2>, so no need to allocate & copy
-        var collection = enumerable is X509Certificate2Collection certCollection
-            ? certCollection
-            : enumerable.ToCollection();
+        var collection = enumerable as X509Certificate2Collection ?? enumerable.ToCollection();
 
-        var data = collection
-                       .Export(X509ContentType.Pkcs7)
-                   ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
+        var data = collection.Export(X509ContentType.Pkcs7)
+            ?? throw new ArgumentException("Nothing to export", nameof(enumerable));
 
         writer.Write(data);
         return enumerable;
@@ -102,7 +99,7 @@ public static class X509Certificate2EnumerableExtensions
     public static string ToPemString(this IEnumerable<X509Certificate2> enumerable, string? password = null, ExportKeys include = ExportKeys.All)
     {
         var list = enumerable.FilterPrivateKeys(include).Reverse().ToList();
-        if (!list.Any()) {
+        if (list.Count == 0) {
             return String.Empty;
         }
 

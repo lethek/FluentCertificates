@@ -11,8 +11,7 @@ namespace FluentCertificates;
 
 public record X500NameBuilder
 {
-    public X500NameBuilder()
-    { }
+    public X500NameBuilder() { }
 
 
     public X500NameBuilder(X500DistinguishedName name)
@@ -272,10 +271,10 @@ public record X500NameBuilder
         => Create().Name;
 
 
-    public virtual bool Equals(X500DistinguishedName? other)
+    public bool Equals(X500DistinguishedName? other)
         => other != null && Create().RawData.SequenceEqual(other.RawData);
 
-    public virtual bool Equals(string? other)
+    public bool Equals(string? other)
         => other != null && Create().RawData.SequenceEqual(new X500DistinguishedName(other).RawData);
 
 

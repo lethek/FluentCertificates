@@ -33,11 +33,11 @@ internal sealed class DSAX509SignatureGenerator : X509SignatureGenerator
     public override byte[] GetSignatureAlgorithmIdentifier(HashAlgorithmName hashAlgorithm)
     {
         if (hashAlgorithm == HashAlgorithmName.SHA1) {
-            return Tools.ConvertFromHexString("300906072A8648CE380403");
+            return Convert.FromHexString("300906072A8648CE380403");
         }
 
         if (hashAlgorithm == HashAlgorithmName.SHA256) {
-            return Tools.ConvertFromHexString("300B0609608648016503040302");
+            return Convert.FromHexString("300B0609608648016503040302");
         }
 
         throw new InvalidOperationException();

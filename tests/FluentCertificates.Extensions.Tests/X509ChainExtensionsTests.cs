@@ -24,7 +24,7 @@ public class X509ChainExtensionsTests
             .SetSubject("CN=Leaf")
             .Create();
 
-        using var chain = cert.BuildChain(new[] { subCa, rootCa }, true);
+        using var chain = cert.BuildChain([subCa, rootCa], true);
 
         var expected = new[] { rootCa, subCa, cert };
 

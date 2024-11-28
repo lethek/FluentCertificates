@@ -3,11 +3,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Formats.Asn1;
 using System.Numerics;
 
-namespace System.Formats.Asn1;
+namespace FluentCertificates.Internals;
 
-/// <remarks>Original copy sourced under the MIT license from: https://github.com/dotnet/runtime/blob/425fedc0fb005af24765faa3ed423222a7dbd963/src/libraries/Common/src/System/Security/Cryptography/Asn1Reader/AsnValueReader.cs</remarks>
+/// <remarks>Original copy sourced under the MIT license from: https://github.com/dotnet/runtime/blob/a25130bdd494ca5b009c4738abd1744501869178/src/libraries/Common/src/System/Security/Cryptography/Asn1Reader/AsnValueReader.cs</remarks>
 internal ref struct AsnValueReader
 {
     private static readonly byte[] s_singleByte = new byte[1];
@@ -25,8 +26,7 @@ internal ref struct AsnValueReader
 
     internal void ThrowIfNotEmpty()
     {
-        if (!_span.IsEmpty)
-        {
+        if (!_span.IsEmpty) {
             new AsnReader(s_singleByte, _ruleSet).ThrowIfNotEmpty();
         }
     }

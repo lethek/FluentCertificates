@@ -11,17 +11,10 @@ public record CertificateStore(string Name, StoreLocation Location) : AbstractCe
         : this(GetProperStoreName(name), location) { }
 
     
-    public X509Store Open(OpenFlags flags) {
-#if NETSTANDARD2_0
-        var store = new X509Store(Name, Location);
-        store.Open(flags);
-#else
-        var store = new X509Store(Name, Location, flags);
-#endif
-        return store;
-    }
+    public X509Store Open(OpenFlags flags)
+        => new(Name, Location, flags);
 
-    
+
     private static string GetProperStoreName(StoreName name)
         => name switch {
             StoreName.AddressBook => "AddressBook",

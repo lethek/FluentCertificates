@@ -56,13 +56,13 @@ public class X500NameBuilderTests
         Assert.Equal(
             expected, 
             new X500NameBuilder().AddDomainComponent("app").AddDomainComponent("fake").RelativeDistinguishedNames,
-            X500RDNTupleComparer
+            X500RdnTupleComparer
         );
 
         Assert.Equal(
             expected,
             new X500NameBuilder().AddDomainComponents("app", "fake").RelativeDistinguishedNames,
-            X500RDNTupleComparer
+            X500RdnTupleComparer
         );
 
         Assert.Equal(
@@ -71,7 +71,7 @@ public class X500NameBuilderTests
                 .Add(X509Name.DC, UniversalTagNumber.IA5String, "app")
                 .Add(X509Name.DC, UniversalTagNumber.IA5String, "fake")
                 .RelativeDistinguishedNames,
-            X500RDNTupleComparer
+            X500RdnTupleComparer
         );
 
         Assert.Equal(
@@ -79,7 +79,7 @@ public class X500NameBuilderTests
             new X500NameBuilder()
                 .Add(X509Name.DC, UniversalTagNumber.IA5String, "app", "fake")
                 .RelativeDistinguishedNames,
-            X500RDNTupleComparer
+            X500RdnTupleComparer
         );
 
         Assert.Equal(
@@ -88,7 +88,7 @@ public class X500NameBuilderTests
                 .Add(dcOid, UniversalTagNumber.IA5String, "app")
                 .Add(dcOid, UniversalTagNumber.IA5String, "fake")
                 .RelativeDistinguishedNames,
-            X500RDNTupleComparer
+            X500RdnTupleComparer
         );
 
         //Specify OID by an Oid instance
@@ -97,7 +97,7 @@ public class X500NameBuilderTests
             new X500NameBuilder()
                 .Add(dcOid, UniversalTagNumber.IA5String, "app", "fake")
                 .RelativeDistinguishedNames,
-            X500RDNTupleComparer
+            X500RdnTupleComparer
         );
 
         //Specify OID by its friendly-name string
@@ -106,7 +106,7 @@ public class X500NameBuilderTests
             new X500NameBuilder()
                 .Add("DC", UniversalTagNumber.IA5String, "app", "fake")
                 .RelativeDistinguishedNames,
-            X500RDNTupleComparer
+            X500RdnTupleComparer
         );
         
         //Specify OID by its value string
@@ -115,7 +115,7 @@ public class X500NameBuilderTests
             new X500NameBuilder()
                 .Add("0.9.2342.19200300.100.1.25", UniversalTagNumber.IA5String, "app", "fake")
                 .RelativeDistinguishedNames,
-            X500RDNTupleComparer
+            X500RdnTupleComparer
         );
     }
 
@@ -249,7 +249,7 @@ public class X500NameBuilderTests
     }
 
 
-    private static readonly IEqualityComparer<(Oid, UniversalTagNumber, string)> X500RDNTupleComparer
+    private static readonly IEqualityComparer<(Oid, UniversalTagNumber, string)> X500RdnTupleComparer
         = new DelegateEqualityComparer<(Oid OID, UniversalTagNumber ValueEncoding, string Value)>(
             (x, y) =>
                 x.OID.Value == y.OID.Value &&

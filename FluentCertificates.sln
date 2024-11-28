@@ -27,8 +27,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Extensio
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Builder.BouncyCastle", "src\FluentCertificates.Builder.BouncyCastle\FluentCertificates.Builder.BouncyCastle.csproj", "{7CF52B3E-5848-4F08-94C5-B3A788B218EC}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Polyfills", "src\FluentCertificates.Polyfills\FluentCertificates.Polyfills.csproj", "{ED1C563E-8880-4A13-ACD8-8B203C87D873}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Extensions.Tests", "tests\FluentCertificates.Extensions.Tests\FluentCertificates.Extensions.Tests.csproj", "{0754E808-B1C4-475B-85A7-D5F210089255}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "_build", "build\_build.csproj", "{88F4BB4F-40C3-42C8-ABFB-E1EE40B8ED68}"
@@ -65,10 +63,6 @@ Global
 		{7CF52B3E-5848-4F08-94C5-B3A788B218EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7CF52B3E-5848-4F08-94C5-B3A788B218EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7CF52B3E-5848-4F08-94C5-B3A788B218EC}.Release|Any CPU.Build.0 = Release|Any CPU
-		{ED1C563E-8880-4A13-ACD8-8B203C87D873}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{ED1C563E-8880-4A13-ACD8-8B203C87D873}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{ED1C563E-8880-4A13-ACD8-8B203C87D873}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{ED1C563E-8880-4A13-ACD8-8B203C87D873}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0754E808-B1C4-475B-85A7-D5F210089255}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0754E808-B1C4-475B-85A7-D5F210089255}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0754E808-B1C4-475B-85A7-D5F210089255}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -84,7 +78,6 @@ Global
 		{6DD8E968-AF67-4E6E-9CC2-AC6661527284} = {270F9122-6ED3-43BE-87AE-7291A9EBD123}
 		{6E6427A2-6D42-45D4-8CDB-60908D457BE0} = {270F9122-6ED3-43BE-87AE-7291A9EBD123}
 		{7CF52B3E-5848-4F08-94C5-B3A788B218EC} = {270F9122-6ED3-43BE-87AE-7291A9EBD123}
-		{ED1C563E-8880-4A13-ACD8-8B203C87D873} = {270F9122-6ED3-43BE-87AE-7291A9EBD123}
 		{0754E808-B1C4-475B-85A7-D5F210089255} = {D1107791-8E04-42B0-977E-E2221B0067AC}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution

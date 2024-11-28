@@ -24,10 +24,10 @@ internal sealed class CertificateStoreEnumerable(CertificateStore certStore) : I
     private static IEnumerable<CertificateFinderResult> GetCertificatesFromStore(CertificateStore certStore) {
         try {
             using var store = certStore.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
-            return store.Certificates.Cast<X509Certificate2>().Select(x => new CertificateFinderResult { Store = certStore, Certificate = x });
+            return store.Certificates.Select(x => new CertificateFinderResult { Store = certStore, Certificate = x });
         } catch (CryptographicException) {
             //Thrown if store doesn't exist: we don't want to create a new store or error-out, just return empty results for it
-            return Enumerable.Empty<CertificateFinderResult>();
+            return [];
         }
     }
 }

@@ -1,27 +1,19 @@
-using System;
-using System.Linq;
 using Nuke.Common;
-using Nuke.Common.CI;
 using Nuke.Common.CI.GitHubActions;
-using Nuke.Common.Execution;
 using Nuke.Common.IO;
-using Nuke.Common.ProjectModel;
-using Nuke.Common.Tooling;
 using Nuke.Common.Tools.DotNet;
 using Nuke.Common.Tools.GitVersion;
-using Nuke.Common.Utilities.Collections;
-using static Nuke.Common.EnvironmentInfo;
-using static Nuke.Common.IO.FileSystemTasks;
-using static Nuke.Common.IO.PathConstruction;
+using Octokit;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
+
 
 [GitHubActions(
     "ci",
     GitHubActionsImage.UbuntuLatest,
     FetchDepth = 0,
-    OnPushBranches = new[] { "main", "master" },
-    OnPushTags = new[] { "v[0-9]+.[0-9]+.[0-9]+" },
-    InvokedTargets = new[] { nameof(GitHubBuild) },
+    OnPushBranches = ["main", "master"],
+    OnPushTags = ["v[0-9]+.[0-9]+.[0-9]+"],
+    InvokedTargets = [nameof(GitHubBuild)],
     PublishArtifacts = true,
     AutoGenerate = false
 )]
@@ -47,18 +39,18 @@ class Build : NukeBuild
     Target Clean => _ => _
         .Before(Restore)
         .Executes(() => {
-            DotNetClean(c => c.SetConfiguration(Configuration));
+            DotNetClean(config => config.SetConfiguration(Configuration));
         });
 
     Target Restore => _ => _
         .Executes(() => {
-            DotNetRestore();
+            DotNetRestore(config => config);
         });
 
     Target Compile => _ => _
         .DependsOn(Restore)
         .Executes(() => {
-            DotNetBuild(c => c
+            DotNetBuild(config => config
                 .SetConfiguration(Configuration)
                 .EnableNoRestore()
                 .SetAssemblyVersion(GitVersion.AssemblySemVer)
@@ -70,7 +62,7 @@ class Build : NukeBuild
     Target Test => _ => _
         .After(Compile)
         .Executes(() => {
-            DotNetTest(c => c
+            DotNetTest(config => config
                 .SetConfiguration(Configuration)
                 .EnableNoBuild()
             );
@@ -81,7 +73,7 @@ class Build : NukeBuild
         .Produces(ArtifactsDirectory / "*.nupkg")
         .Produces(ArtifactsDirectory / "*.snupkg")
         .Executes(() => {
-            DotNetPack(settings => settings
+            DotNetPack(config => config
                 .SetConfiguration(Configuration)
                 .EnableNoBuild()
                 .SetProperty("PackageVersion", GitVersion.NuGetVersion)

@@ -6,8 +6,6 @@ using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
 
-using PublicKeyFactory = FluentCertificates.Internals.PublicKeyFactory;
-
 
 namespace FluentCertificates;
 
@@ -18,7 +16,7 @@ public record CertificateBuilder
     public DateTimeOffset NotAfter { get; init; } = DateTimeOffset.UtcNow.AddHours(1);
     public X500NameBuilder Subject { get; init; } = EmptyNameBuilder;
     public X509Certificate2? Issuer { get; init; }
-    public string[] DnsNames { get; init; } = Array.Empty<string>();
+    public string[] DnsNames { get; init; } = [];
     public string? FriendlyName { get; init; }
     public string? Email { get; init; }
     public int? PathLength { get; init; }
@@ -112,7 +110,7 @@ public record CertificateBuilder
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
         => this with {
             KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
-            PublicKey = PublicKeyFactory.Create(value),
+            PublicKey = value != null ? new PublicKey(value) : null,
             KeyPair = value
         };
 
@@ -259,7 +257,7 @@ public record CertificateBuilder
                 _ => cert
             };
 
-            if (!String.IsNullOrEmpty(builder.FriendlyName) && Tools.IsWindows) {
+            if (!String.IsNullOrEmpty(builder.FriendlyName) && OperatingSystem.IsWindows()) {
                 //CopyWithPrivateKey doesn't copy FriendlyName so it needs to be set here after the copy is made
                 cert.FriendlyName = builder.FriendlyName;
             }
@@ -281,7 +279,7 @@ public record CertificateBuilder
     }
 
 
-    internal byte[] GenerateSerialNumber()
+    private byte[] GenerateSerialNumber()
     {
         Span<byte> span = stackalloc byte[18];
         BinaryPrimitives.WriteInt16BigEndian(span[0..2], 0x4D58);
@@ -291,7 +289,7 @@ public record CertificateBuilder
     }
 
 
-    internal X509SignatureGenerator CreateSignatureGenerator(AsymmetricAlgorithm? keys)
+    private X509SignatureGenerator CreateSignatureGenerator(AsymmetricAlgorithm? keys)
         => keys switch {
             DSA dsa => new DSAX509SignatureGenerator(dsa),
             RSA rsa => X509SignatureGenerator.CreateForRSA(rsa, RSASignaturePadding),
@@ -317,7 +315,7 @@ public record CertificateBuilder
         //Setup default extensions based on selected certificate Usage
         var extensions = GetCommonExtensions(builder);
         extensions.AddRange(builder.Usage switch {
-            null => new List<X509Extension>(),
+            null => [],
             CertificateUsage.CA => GetCaExtensions(builder),
             CertificateUsage.Server => GetServerExtensions(builder),
             CertificateUsage.Client => GetClientExtensions(builder),
@@ -346,52 +344,51 @@ public record CertificateBuilder
 
 
     private static List<X509Extension> GetCommonExtensions(CertificateBuilder builder)
-        => new() {
-            new X509SubjectKeyIdentifierExtension(builder.PublicKey!, false)
-        };
+        => [new X509SubjectKeyIdentifierExtension(builder.PublicKey!, false)];
 
 
     private static List<X509Extension> GetCaExtensions(CertificateBuilder builder)
-        => new() {
+        => [
             new X509BasicConstraintsExtension(true, builder.PathLength.HasValue, builder.PathLength ?? 0, true),
-            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true),
-        };
+            new X509KeyUsageExtension(
+                X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true)
+        ];
 
 
     private static List<X509Extension> GetServerExtensions(CertificateBuilder builder)
-        => new() {
+        => [
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true),
-            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ServerAuthPurpose) }, false),
-        };
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ServerAuthPurpose) }, false)
+        ];
 
 
     private static List<X509Extension> GetClientExtensions(CertificateBuilder builder)
-        => new() {
+        => [
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true),
-            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ClientAuthPurpose) }, false),
-        };
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ClientAuthPurpose) }, false)
+        ];
 
 
     private static List<X509Extension> GetCodeSigningExtensions(CertificateBuilder builder)
-        => new() {
+        => [
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true),
             new X509EnhancedKeyUsageExtension(new OidCollection {
                 new(Oids.CodeSigningPurpose),
                 new(Oids.TimeStampingPurpose),
                 new(Oids.LifetimeSigningPurpose) //Used by Microsoft Authenticode to limit the signature's lifetime to the certificate's expiration
-            }, false),
-        };
+            }, false)
+        ];
 
 
     private static List<X509Extension> GetSMimeExtensions(CertificateBuilder builder)
-        => new() {
+        => [
             new X509BasicConstraintsExtension(false, false, 0, true),
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.NonRepudiation, true),
-            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.EmailProtectionPurpose) }, false),
-        };
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.EmailProtectionPurpose) }, false)
+        ];
 
 
     private static KeyAlgorithm? GetKeyAlgorithm(AsymmetricAlgorithm? keys)

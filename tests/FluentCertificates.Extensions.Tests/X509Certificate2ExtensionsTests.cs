@@ -1,7 +1,6 @@
 ﻿using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-
 using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.X509;
 
@@ -33,7 +32,7 @@ public class X509Certificate2ExtensionsTests
 
     [Theory]
     [MemberData(nameof(KeyAlgorithmsAndExportKeysTestData))]
-    public void ExportAsPem_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string password)
+    public void ExportAsPem_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
     {
         using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
@@ -41,9 +40,10 @@ public class X509Certificate2ExtensionsTests
         using (var writer = new StreamWriter(stream, Encoding.ASCII, leaveOpen: true)) {
             expected.ExportAsPem(writer, password, include);
         }
+
         var parser = new X509CertificateParser();
         var bcCert = parser.ReadCertificate(stream.ToArray());
-        using var actual = new X509Certificate2(bcCert.GetEncoded());
+        using var actual = X509CertificateLoader.LoadCertificate(bcCert.GetEncoded());
         //TODO: load the private key if one was in the export
 
         stream.Position = 0;
@@ -54,6 +54,7 @@ public class X509Certificate2ExtensionsTests
         if (include != ExportKeys.None) {
             Assert.Equal(password != null ? "ENCRYPTED PRIVATE KEY" : "PRIVATE KEY", pemReader.ReadPemObject().Type);
         }
+
         Assert.Equal("CERTIFICATE", pemReader.ReadPemObject().Type);
         Assert.Null(pemReader.ReadPemObject());
 
@@ -66,7 +67,7 @@ public class X509Certificate2ExtensionsTests
 
     [Theory]
     [MemberData(nameof(KeyAlgorithmsAndExportKeysTestData))]
-    public void ExportAsPem_ToFile_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string password)
+    public void ExportAsPem_ToFile_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "pem");
         try {
@@ -75,7 +76,7 @@ public class X509Certificate2ExtensionsTests
             expected.ExportAsPem(tmpFile, password, include);
             var parser = new X509CertificateParser();
             var bcCert = parser.ReadCertificate(File.ReadAllBytes(tmpFile));
-            using var actual = new X509Certificate2(bcCert.GetEncoded());
+            using var actual = X509CertificateLoader.LoadCertificate(bcCert.GetEncoded());
             //TODO: load the private key if one was in the export
 
             using var streamReader = new StreamReader(tmpFile, Encoding.ASCII);
@@ -85,6 +86,7 @@ public class X509Certificate2ExtensionsTests
             if (include != ExportKeys.None) {
                 Assert.Equal(password != null ? "ENCRYPTED PRIVATE KEY" : "PRIVATE KEY", pemReader.ReadPemObject().Type);
             }
+
             Assert.Equal("CERTIFICATE", pemReader.ReadPemObject().Type);
             Assert.Null(pemReader.ReadPemObject());
 
@@ -108,7 +110,8 @@ public class X509Certificate2ExtensionsTests
         using (var writer = new BinaryWriter(stream)) {
             expected.ExportAsCert(writer);
         }
-        using var actual = new X509Certificate2(stream.ToArray());
+
+        using var actual = X509CertificateLoader.LoadCertificate(stream.ToArray());
 
         Assert.Equal(expected.RawData, actual.RawData);
         Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
@@ -125,7 +128,7 @@ public class X509Certificate2ExtensionsTests
             using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
             expected.ExportAsCert(tmpFile);
-            using var actual = new X509Certificate2(tmpFile);
+            using var actual = X509CertificateLoader.LoadCertificateFromFile(tmpFile);
 
             Assert.Equal(expected.RawData, actual.RawData);
             Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
@@ -146,6 +149,7 @@ public class X509Certificate2ExtensionsTests
         using (var writer = new BinaryWriter(stream)) {
             expected.ExportAsPkcs7(writer);
         }
+
         var cms = new SignedCms();
         cms.Decode(stream.ToArray());
         using var actual = cms.Certificates[0];
@@ -188,7 +192,8 @@ public class X509Certificate2ExtensionsTests
         using (var writer = new BinaryWriter(stream)) {
             expected.ExportAsPkcs12(writer, password, include);
         }
-        using var actual = new X509Certificate2(stream.ToArray(), password);
+
+        using var actual = X509CertificateLoader.LoadPkcs12(stream.ToArray(), password);
 
         Assert.Equal(expected.RawData, actual.RawData);
         Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
@@ -209,7 +214,7 @@ public class X509Certificate2ExtensionsTests
             using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
             expected.ExportAsPkcs12(tmpFile, password, include);
-            using var actual = new X509Certificate2(tmpFile, password);
+            using var actual = X509CertificateLoader.LoadPkcs12FromFile(tmpFile, password);
 
             Assert.Equal(expected.RawData, actual.RawData);
             Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
@@ -225,26 +230,26 @@ public class X509Certificate2ExtensionsTests
     }
 
 
-    public static IEnumerable<object[]> KeyAlgorithmsTestData => new[] {
-        new object[] { KeyAlgorithm.ECDsa },
-        new object[] { KeyAlgorithm.RSA },
-    };
+    public static IEnumerable<object[]> KeyAlgorithmsTestData => [
+        [KeyAlgorithm.ECDsa],
+        [KeyAlgorithm.RSA]
+    ];
 
 
-    public static IEnumerable<object[]> KeyAlgorithmsAndExportKeysTestData => new[] {
-        new object[] { KeyAlgorithm.ECDsa, ExportKeys.None, TestPassword },
-        new object[] { KeyAlgorithm.ECDsa, ExportKeys.Leaf, TestPassword },
-        new object[] { KeyAlgorithm.ECDsa, ExportKeys.All, TestPassword },
-        new object[] { KeyAlgorithm.ECDsa, ExportKeys.None, null! },
-        new object[] { KeyAlgorithm.ECDsa, ExportKeys.Leaf, null! },
-        new object[] { KeyAlgorithm.ECDsa, ExportKeys.All, null! },
-        new object[] { KeyAlgorithm.RSA, ExportKeys.None, TestPassword },
-        new object[] { KeyAlgorithm.RSA, ExportKeys.Leaf, TestPassword },
-        new object[] { KeyAlgorithm.RSA, ExportKeys.All, TestPassword },
-        new object[] { KeyAlgorithm.RSA, ExportKeys.None, null! },
-        new object[] { KeyAlgorithm.RSA, ExportKeys.Leaf, null! },
-        new object[] { KeyAlgorithm.RSA, ExportKeys.All, null! }
-    };
+    public static IEnumerable<object[]> KeyAlgorithmsAndExportKeysTestData => [
+        [KeyAlgorithm.ECDsa, ExportKeys.None, TestPassword],
+        [KeyAlgorithm.ECDsa, ExportKeys.Leaf, TestPassword],
+        [KeyAlgorithm.ECDsa, ExportKeys.All, TestPassword],
+        [KeyAlgorithm.ECDsa, ExportKeys.None, null!],
+        [KeyAlgorithm.ECDsa, ExportKeys.Leaf, null!],
+        [KeyAlgorithm.ECDsa, ExportKeys.All, null!],
+        [KeyAlgorithm.RSA, ExportKeys.None, TestPassword],
+        [KeyAlgorithm.RSA, ExportKeys.Leaf, TestPassword],
+        [KeyAlgorithm.RSA, ExportKeys.All, TestPassword],
+        [KeyAlgorithm.RSA, ExportKeys.None, null!],
+        [KeyAlgorithm.RSA, ExportKeys.Leaf, null!],
+        [KeyAlgorithm.RSA, ExportKeys.All, null!]
+    ];
 
 
     private const string TestPassword = "nHLYyNcicPsEaV7T";

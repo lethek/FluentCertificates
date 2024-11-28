@@ -21,5 +21,6 @@ internal class X509ExtensionOidEqualityComparer : IEqualityComparer<X509Extensio
         return String.Equals(x.Oid?.Value, y.Oid?.Value);
     }
 
+    
     public int GetHashCode(X509Extension obj) => HashCode.Combine(obj.Oid?.Value);
 }

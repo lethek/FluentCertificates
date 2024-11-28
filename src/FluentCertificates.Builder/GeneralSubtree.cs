@@ -1,6 +1,3 @@
 ﻿namespace FluentCertificates;
 
-public class GeneralSubtree : List<GeneralNameConstraint>
-{
-    public GeneralSubtree(IEnumerable<GeneralNameConstraint> constraints) : base(constraints) { }
-}
+public class GeneralSubtree(IEnumerable<GeneralNameConstraint> constraints) : List<GeneralNameConstraint>(constraints);

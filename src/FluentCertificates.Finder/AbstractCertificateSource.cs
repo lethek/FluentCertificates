@@ -1,3 +1,3 @@
 ﻿namespace FluentCertificates;
 
-public abstract record AbstractCertificateSource { }
+public abstract record AbstractCertificateSource;

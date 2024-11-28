@@ -21,16 +21,10 @@ namespace FluentCertificates
         {
             var chain = new X509Chain();
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-            #if NET5_0_OR_GREATER
             chain.ChainPolicy.TrustMode = customRootTrust ? X509ChainTrustMode.CustomRootTrust : X509ChainTrustMode.System;
-            #endif
 
             if (extraCerts != null) {
-                #if NET5_0_OR_GREATER
                 (customRootTrust ? chain.ChainPolicy.CustomTrustStore : chain.ChainPolicy.ExtraStore).AddRange(extraCerts.ToArray());
-                #else
-                chain.ChainPolicy.ExtraStore.AddRange(extraCerts.ToArray());
-                #endif
             }
 
             chain.Build(cert);

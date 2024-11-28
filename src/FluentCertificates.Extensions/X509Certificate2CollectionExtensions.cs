@@ -5,8 +5,7 @@ namespace FluentCertificates;
 public static class X509Certificate2CollectionExtensions
 {
     public static IEnumerable<X509Certificate2> ToEnumerable(this X509Certificate2Collection collection)
-        => collection
-            .Cast<X509Certificate2>();
+        => collection;
 
 
     public static X509Certificate2Collection ExportAsPkcs7(this X509Certificate2Collection collection, BinaryWriter writer)

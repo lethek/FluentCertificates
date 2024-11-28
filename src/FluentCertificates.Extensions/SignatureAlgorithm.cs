@@ -8,7 +8,7 @@ namespace FluentCertificates;
 
 public sealed record SignatureAlgorithm
 {
-    internal static SignatureAlgorithm FromOidValue(string oidValue)
+    internal static SignatureAlgorithm FromOidValue(string? oidValue)
         => oidValue != null && InstanceLookup.TryGetValue(oidValue, out var algorithm)
             ? algorithm
             : throw new NotSupportedException($"Unsupported signature algorithm: {oidValue}");
@@ -21,7 +21,7 @@ public sealed record SignatureAlgorithm
 
 
     internal static SignatureAlgorithm ForRsaSsaPss(string signatureOid, string hashOid)
-        => new(KeyAlgorithm.RSA, GetHashAlgorithmNameFromOid(hashOid), RSASignaturePadding.Pss, Oids.RsaPss);
+        => new(KeyAlgorithm.RSA, HashAlgorithmName.FromOid(hashOid), RSASignaturePadding.Pss, Oids.RsaPss);
 
 
     // ReSharper disable InconsistentNaming
@@ -58,21 +58,6 @@ public sealed record SignatureAlgorithm
         RSASignaturePadding = padding;
         Oid = oid;
     }
-
-
-    private static HashAlgorithmName GetHashAlgorithmNameFromOid(string oidValue)
-#if NET5_0_OR_GREATER
-        => HashAlgorithmName.FromOid(oidValue);
-#else
-        => oidValue switch {
-            "1.2.840.113549.2.5" => HashAlgorithmName.MD5,
-            "1.3.14.3.2.26" => HashAlgorithmName.SHA1,
-            "2.16.840.1.101.3.4.2.1" => HashAlgorithmName.SHA256,
-            "2.16.840.1.101.3.4.2.2" => HashAlgorithmName.SHA384,
-            "2.16.840.1.101.3.4.2.3" => HashAlgorithmName.SHA512,
-            _ => throw new CryptographicException("The specified OID ({0}) does not represent a known hash algorithm.", oidValue)
-        };
-#endif
 
 
     private static readonly ImmutableDictionary<string, SignatureAlgorithm> InstanceLookup = new Dictionary<string, SignatureAlgorithm> {

@@ -15,12 +15,8 @@ using X509Extension = System.Security.Cryptography.X509Certificates.X509Extensio
 
 namespace FluentCertificates;
 
-public class CertificateBuilderTests
+public class CertificateBuilderTest
 {
-    public CertificateBuilderTests(ITestOutputHelper outputHelper)
-        => OutputHelper = outputHelper;
-
-
     [Fact]
     public void Build_Certificate_HasPrivateKey()
     {
@@ -141,7 +137,7 @@ public class CertificateBuilderTests
     [SkippableFact]
     public void Build_CertificateOnWindows_WithFriendlyName()
     {
-        Skip.IfNot(Tools.IsWindows);
+        Skip.IfNot(OperatingSystem.IsWindows());
 
         const string friendlyName = "A FriendlyName can be set on Windows";
 
@@ -246,7 +242,7 @@ public class CertificateBuilderTests
 
         //Assert correct DNS names in the SAN
         var ext = cert.Extensions[X509Extensions.SubjectAlternativeName.Id];
-        var san = EnumerateNamesFromSAN(ext!).Where(x => x.TagNo == GeneralName.DnsName).ToList();
+        var san = EnumerateNamesFromSan(ext!).Where(x => x.TagNo == GeneralName.DnsName).ToList();
         Assert.Contains(san, x => x.Name.ToString() == "*.fake.domain");
         Assert.Contains(san, x => x.Name.ToString() == "fake.domain");
         Assert.Contains(san, x => x.Name.ToString() == "another.domain");
@@ -319,12 +315,8 @@ public class CertificateBuilderTests
     }
 
 
-    private readonly ITestOutputHelper OutputHelper;
-
-
-    private static IEnumerable<GeneralName> EnumerateNamesFromSAN(X509Extension extension)
+    private static IEnumerable<GeneralName> EnumerateNamesFromSan(X509Extension extension)
         => Asn1Sequence
             .GetInstance(extension.ConvertToBouncyCastle().GetParsedValue())
-            .Cast<Asn1Encodable>()
             .Select(GeneralName.GetInstance);
 }
