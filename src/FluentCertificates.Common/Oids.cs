@@ -1,10 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Formats.Asn1;
 using System.Security.Cryptography;
+using FluentCertificates.Internals;
 
-namespace FluentCertificates.Internals;
+namespace FluentCertificates;
 
-internal static class Oids
+public static class Oids
 {
     // Symmetric encryption algorithms
     internal const string Rc2Cbc = "1.2.840.113549.3.2";

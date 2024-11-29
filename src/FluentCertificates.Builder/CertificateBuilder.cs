@@ -265,7 +265,7 @@ public record CertificateBuilder
             if (builder.KeyStorageFlags != X509KeyStorageFlags.DefaultKeySet) {
                 //We have to create a new copy of the certificate to apply the KeyStorageFlags; there doesn't appear to be a better way to do it :(
                 using (cert) {
-                    return new X509Certificate2(cert.Export(X509ContentType.Pkcs12), (string?)null, builder.KeyStorageFlags);
+                    return Tools.LoadPkcs12(cert.Export(X509ContentType.Pkcs12), (string?)null, builder.KeyStorageFlags);
                 }
             } else {
                 return cert;

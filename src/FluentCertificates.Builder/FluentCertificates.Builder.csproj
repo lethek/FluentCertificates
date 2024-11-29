@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -24,10 +24,6 @@
   <ItemGroup>
     <InternalsVisibleTo Include="LINQPadQuery" />
     <InternalsVisibleTo Include="FluentCertificates.Builder.Tests" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.Collections.Immutable" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>

@@ -33,7 +33,7 @@ internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirSto
                         case ".pem":
                             return [X509Certificate2.CreateFromPemFile(x.Path)];
                         default:
-                            return [new X509Certificate2(x.Path)];
+                            return [Tools.LoadCertificateFromFile(x.Path)];
                     }
                 } catch {
                     //Ignore any certificate files which couldn't be loaded

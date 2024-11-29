@@ -31,6 +31,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FluentCertificates.Extensio
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "_build", "build\_build.csproj", "{88F4BB4F-40C3-42C8-ABFB-E1EE40B8ED68}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FluentCertificates.Common", "src\FluentCertificates.Common\FluentCertificates.Common.csproj", "{8228C6F1-3FFB-4B95-9A44-139DAD372BC1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -67,6 +69,10 @@ Global
 		{0754E808-B1C4-475B-85A7-D5F210089255}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0754E808-B1C4-475B-85A7-D5F210089255}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0754E808-B1C4-475B-85A7-D5F210089255}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8228C6F1-3FFB-4B95-9A44-139DAD372BC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8228C6F1-3FFB-4B95-9A44-139DAD372BC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8228C6F1-3FFB-4B95-9A44-139DAD372BC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8228C6F1-3FFB-4B95-9A44-139DAD372BC1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -79,6 +85,7 @@ Global
 		{6E6427A2-6D42-45D4-8CDB-60908D457BE0} = {270F9122-6ED3-43BE-87AE-7291A9EBD123}
 		{7CF52B3E-5848-4F08-94C5-B3A788B218EC} = {270F9122-6ED3-43BE-87AE-7291A9EBD123}
 		{0754E808-B1C4-475B-85A7-D5F210089255} = {D1107791-8E04-42B0-977E-E2221B0067AC}
+		{8228C6F1-3FFB-4B95-9A44-139DAD372BC1} = {270F9122-6ED3-43BE-87AE-7291A9EBD123}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EB271790-2AD9-4280-A9CA-870E755008F8}

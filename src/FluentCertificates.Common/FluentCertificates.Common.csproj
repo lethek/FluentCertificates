@@ -8,12 +8,11 @@
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <GenerateCompatibilitySuppressionFile>true</GenerateCompatibilitySuppressionFile>
     <RootNamespace>FluentCertificates</RootNamespace>
 
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
-    <Description>FluentCertificates.Extensions is part of the FluentCertificates package. This library provides a number of convenient extension-methods for exporting certificates and keys and performing other common operations.</Description>
+    <Description>FluentCertificates.Common is part of the FluentCertificates package. This library provides common classes and functionality shared with the other FluentCertificates packages.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>certificate;certs;fluent;x509;pfx;pem;cert;crt;CA</PackageTags>
     <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
@@ -23,33 +22,28 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="LINQPadQuery" />
     <InternalsVisibleTo Include="FluentCertificates.Builder" />
+    <InternalsVisibleTo Include="FluentCertificates.Builder.Tests" />
+    <InternalsVisibleTo Include="FluentCertificates.Extensions" />
+    <InternalsVisibleTo Include="FluentCertificates.Extensions.Tests" />
+    <InternalsVisibleTo Include="FluentCertificates.Finder" />
   </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="SideData" Version="0.1.0" />
-  </ItemGroup>
-
+  
   <Choose>
     <When Condition="'$(TargetFramework)' == 'net8.0'">
       <ItemGroup>
-        <PackageReference Include="System.Collections.Immutable" Version="8.0.0" />
+        <PackageReference Include="System.Security.Cryptography.Pkcs" Version="8.0.1" />
       </ItemGroup>
     </When>
     <Otherwise>
       <ItemGroup>
-        <PackageReference Include="System.Collections.Immutable" Version="9.0.0" />
+        <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.0" />
       </ItemGroup>
     </Otherwise>
   </Choose>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath="" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\FluentCertificates.Common\FluentCertificates.Common.csproj" />
   </ItemGroup>
 
 </Project>

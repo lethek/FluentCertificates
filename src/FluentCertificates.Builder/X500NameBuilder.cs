@@ -34,7 +34,7 @@ public record X500NameBuilder
     {
         var builder = new X500DistinguishedNameBuilder();
         foreach (var rdn in RelativeDistinguishedNames) {
-            builder.Add(rdn.OID, rdn.Value, rdn.ValueEncoding);
+            builder.Add(rdn.OID, rdn.Value, (UniversalTagNumber?)rdn.ValueEncoding);
         }
         return builder.Build();
     }
