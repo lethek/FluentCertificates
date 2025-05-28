@@ -2,7 +2,7 @@
 
 namespace FluentCertificates.Internals.GeneralNames;
 
-internal sealed record UriConstraint(Uri Uri) : GeneralNameConstraint
+internal sealed record UriNameAsn(Uri Uri) : GeneralName
 {
     public override Asn1Tag Tag { get; } = new(TagClass.ContextSpecific, 6);
 

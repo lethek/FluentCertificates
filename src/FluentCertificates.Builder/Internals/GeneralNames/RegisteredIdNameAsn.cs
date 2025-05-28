@@ -2,7 +2,7 @@
 
 namespace FluentCertificates.Internals.GeneralNames;
 
-internal sealed record RegisteredIdConstraint(string RegisteredId) : GeneralNameConstraint
+internal sealed record RegisteredIdNameAsn(string RegisteredId) : GeneralName
 {
     public override Asn1Tag Tag { get; } = new(TagClass.ContextSpecific, 8);
 

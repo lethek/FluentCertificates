@@ -4,10 +4,10 @@ using FluentCertificates.Internals;
 
 namespace FluentCertificates;
 
-public class X509NameConstraintExtension(GeneralSubtree? permittedSubtrees, GeneralSubtree? excludedSubtrees)
+public class X509NameConstraintExtension(GeneralNameList? permittedSubtrees, GeneralNameList? excludedSubtrees)
     : X509Extension(Oids.NameConstraints, EncodeExtension(permittedSubtrees, excludedSubtrees), true)
 {
-    private static byte[] EncodeExtension(GeneralSubtree? permittedSubtrees, GeneralSubtree? excludedSubtrees)
+    private static byte[] EncodeExtension(GeneralNameList? permittedSubtrees, GeneralNameList? excludedSubtrees)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
 

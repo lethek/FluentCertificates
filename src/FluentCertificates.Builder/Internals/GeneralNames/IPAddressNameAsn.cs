@@ -3,7 +3,7 @@ using System.Net;
 
 namespace FluentCertificates.Internals.GeneralNames;
 
-internal sealed record IPAddressConstraint(IPAddress IPAddress, IPAddress? SubnetMask = null) : GeneralNameConstraint
+internal sealed record IPAddressNameAsn(IPAddress IPAddress, IPAddress? SubnetMask = null) : GeneralName
 {
     public override Asn1Tag Tag { get; } = new(TagClass.ContextSpecific, 7);
 

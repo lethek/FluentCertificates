@@ -242,7 +242,7 @@ public class CertificateBuilderTest
 
         //Assert correct DNS names in the SAN
         var ext = cert.Extensions[X509Extensions.SubjectAlternativeName.Id];
-        var san = EnumerateNamesFromSan(ext!).Where(x => x.TagNo == GeneralName.DnsName).ToList();
+        var san = EnumerateNamesFromSan(ext!).Where(x => x.TagNo == Org.BouncyCastle.Asn1.X509.GeneralName.DnsName).ToList();
         Assert.Contains(san, x => x.Name.ToString() == "*.fake.domain");
         Assert.Contains(san, x => x.Name.ToString() == "fake.domain");
         Assert.Contains(san, x => x.Name.ToString() == "another.domain");
@@ -315,8 +315,8 @@ public class CertificateBuilderTest
     }
 
 
-    private static IEnumerable<GeneralName> EnumerateNamesFromSan(X509Extension extension)
+    private static IEnumerable<Org.BouncyCastle.Asn1.X509.GeneralName> EnumerateNamesFromSan(X509Extension extension)
         => Asn1Sequence
             .GetInstance(extension.ConvertToBouncyCastle().GetParsedValue())
-            .Select(GeneralName.GetInstance);
+            .Select(Org.BouncyCastle.Asn1.X509.GeneralName.GetInstance);
 }

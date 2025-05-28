@@ -2,7 +2,7 @@
 
 namespace FluentCertificates.Internals.GeneralNames;
 
-internal sealed record DirectoryNameConstraint : GeneralNameConstraint
+internal sealed record DirectoryNameAsn : GeneralName
 {
     public override Asn1Tag Tag { get; } = new(TagClass.ContextSpecific, 4);
 

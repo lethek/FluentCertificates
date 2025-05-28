@@ -2,7 +2,7 @@
 
 namespace FluentCertificates.Internals.GeneralNames;
 
-internal sealed record Rfc822NameConstraint(string EmailAddress) : GeneralNameConstraint
+internal sealed record Rfc822NameAsn(string EmailAddress) : GeneralName
 {
     public override Asn1Tag Tag { get; } = new(TagClass.ContextSpecific, 1);
 

@@ -2,9 +2,9 @@
 
 namespace FluentCertificates.Internals.GeneralNames;
 
-internal sealed record OtherNameConstraint : GeneralNameConstraint
+internal sealed record X400AddressNameAsn : GeneralName
 {
-    public override Asn1Tag Tag { get; } = new(TagClass.ContextSpecific, 0);
+    public override Asn1Tag Tag { get; } = new(TagClass.ContextSpecific, 3);
 
     protected override void EncodeCore(AsnWriter writer)
         => throw new NotImplementedException();
