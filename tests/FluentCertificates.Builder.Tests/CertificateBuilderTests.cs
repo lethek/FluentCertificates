@@ -229,7 +229,7 @@ public class CertificateBuilderTest
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetFriendlyName("FluentCertificates Server Test")
-            .SetDnsNames("*.fake.domain", "fake.domain", "another.domain")
+            .SetSubjectAlternativeNames(x => x.AddDnsNames("*.fake.domain", "fake.domain", "another.domain"))
             .SetSubject(x => x.SetCommonName("*.fake.domain"))
             .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
             .SetIssuer(subCa)

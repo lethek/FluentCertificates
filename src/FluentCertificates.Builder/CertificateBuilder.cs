@@ -16,9 +16,7 @@ public record CertificateBuilder
     public DateTimeOffset NotAfter { get; init; } = DateTimeOffset.UtcNow.AddHours(1);
     public X500NameBuilder Subject { get; init; } = EmptyNameBuilder;
     public X509Certificate2? Issuer { get; init; }
-    public string[] DnsNames { get; init; } = [];
     public string? FriendlyName { get; init; }
-    public string? Email { get; init; }
     public int? PathLength { get; init; }
     public int? KeyLength { get; init; }
     public KeyAlgorithm KeyAlgorithm { get; init; } = KeyAlgorithm.RSA;
@@ -30,6 +28,9 @@ public record CertificateBuilder
 
     private PublicKey? PublicKey { get; init; }
     private AsymmetricAlgorithm? KeyPair { get; init; }
+
+
+    private SubjectAlternativeNameBuilder? SubjectAlternativeNameBuilder { get; init; }
 
 
     /// <summary>
@@ -71,12 +72,6 @@ public record CertificateBuilder
     public CertificateBuilder SetIssuer(X509Certificate2? value)
         => this with { Issuer = value };
 
-    public CertificateBuilder SetDnsNames(IEnumerable<string> values)
-        => this with { DnsNames = values.ToArray() };
-
-    public CertificateBuilder SetDnsNames(params string[] values)
-        => this with { DnsNames = values.ToArray() };
-
     /// <summary>
     /// Use to set a FriendlyName for the certificate. This feature is only supported on Windows and will be ignored on all other platforms.
     /// </summary>
@@ -84,9 +79,6 @@ public record CertificateBuilder
     /// <returns>A new instance of CertificateBuilder with the specified FriendlyName set.</returns>
     public CertificateBuilder SetFriendlyName(string value)
         => this with { FriendlyName = value };
-
-    public CertificateBuilder SetEmail(string value)
-        => this with { Email = value };
 
     public CertificateBuilder SetPathLength(int? value)
         => this with { PathLength = value };
@@ -163,6 +155,14 @@ public record CertificateBuilder
     
     public CertificateBuilder SetKeyStorageFlags(X509KeyStorageFlags value)
         => this with { KeyStorageFlags = value };
+
+
+    public CertificateBuilder SetSubjectAlternativeNames(Action<SubjectAlternativeNameBuilder> configureSan)
+    {
+        var sanBuilder = new SubjectAlternativeNameBuilder();
+        configureSan(sanBuilder);
+        return this with { SubjectAlternativeNameBuilder = sanBuilder };
+    }
 
 
     public void Validate()
@@ -325,15 +325,8 @@ public record CertificateBuilder
         });
 
         //Setup extension for Subject Alternative Name if necessary
-        var sanBuilder = new SubjectAlternativeNameBuilder();
-        foreach (var dnsName in builder.DnsNames) {
-            sanBuilder.AddDnsName(dnsName);
-        }
-        if (!String.IsNullOrEmpty(builder.Email)) {
-            sanBuilder.AddEmailAddress(builder.Email);
-        }
-        if (builder.DnsNames.Any() || !String.IsNullOrEmpty(builder.Email)) {
-            extensions.Add(sanBuilder.Build());
+        if (builder.SubjectAlternativeNameBuilder != null) {
+            extensions.Add(builder.SubjectAlternativeNameBuilder.Build());
         }
 
         //Collate extensions; manually specified ones override those matching ones generated above (e.g. Usage, DnsNames, Email, etc.)

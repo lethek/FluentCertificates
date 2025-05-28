@@ -8,7 +8,6 @@ public abstract record GeneralNameConstraint
 
     public void WriteTo(AsnWriter writer)
     {
-        using var scope = writer.PushSequence();
         EncodeCore(writer);
     }
 
