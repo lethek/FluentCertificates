@@ -154,12 +154,8 @@ public record CertificateBuilder
         => this with { KeyStorageFlags = value };
 
 
-    public CertificateBuilder SetSubjectAlternativeName(Action<GeneralNameListBuilder> configureSan)
-    {
-        var sanBuilder = new GeneralNameListBuilder();
-        configureSan(sanBuilder);
-        return this with { SubjectAlternativeName = sanBuilder.Create() };
-    }
+    public CertificateBuilder SetSubjectAlternativeName(Func<GeneralNameListBuilder, GeneralNameListBuilder> configureSan)
+        => SetSubjectAlternativeName(configureSan(new GeneralNameListBuilder()).Create());
 
 
     public CertificateBuilder SetSubjectAlternativeName(GeneralNameList san)
