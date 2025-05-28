@@ -15,14 +15,18 @@ public class X509NameConstraintExtension(GeneralNameList? permittedSubtrees, Gen
             if (permittedSubtrees != null) {
                 using var permittedSubtreesScope = writer.PushSequence(PermittedSubtreesTag);
                 foreach (var subtree in permittedSubtrees) {
-                    subtree.WriteTo(writer);
+                    using (writer.PushSequence()) {
+                        subtree.WriteTo(writer);
+                    }
                 }
             }
 
             if (excludedSubtrees != null) {
                 using var excludedSubtreesScope = writer.PushSequence(ExcludedSubtreesTag);
                 foreach (var subtree in excludedSubtrees) {
-                    subtree.WriteTo(writer);
+                    using (writer.PushSequence()) {
+                        subtree.WriteTo(writer);
+                    }
                 }
             }
         }
