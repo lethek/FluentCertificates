@@ -24,13 +24,10 @@ public record CertificateBuilder
     public RSASignaturePadding RSASignaturePadding { get; init; } = RSASignaturePadding.Pkcs1;
     public ImmutableHashSet<X509Extension> Extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
     public X509KeyStorageFlags KeyStorageFlags { get; init; }
-
+    public GeneralNameList? SubjectAlternativeName { get; init; }
 
     private PublicKey? PublicKey { get; init; }
     private AsymmetricAlgorithm? KeyPair { get; init; }
-
-
-    private SubjectAlternativeNameBuilder? SubjectAlternativeNameBuilder { get; init; }
 
 
     /// <summary>
@@ -157,12 +154,16 @@ public record CertificateBuilder
         => this with { KeyStorageFlags = value };
 
 
-    public CertificateBuilder SetSubjectAlternativeNames(Action<SubjectAlternativeNameBuilder> configureSan)
+    public CertificateBuilder SetSubjectAlternativeName(Action<GeneralNameListBuilder> configureSan)
     {
-        var sanBuilder = new SubjectAlternativeNameBuilder();
+        var sanBuilder = new GeneralNameListBuilder();
         configureSan(sanBuilder);
-        return this with { SubjectAlternativeNameBuilder = sanBuilder };
+        return this with { SubjectAlternativeName = sanBuilder.Create() };
     }
+
+
+    public CertificateBuilder SetSubjectAlternativeName(GeneralNameList san)
+        => this with { SubjectAlternativeName = san };
 
 
     public void Validate()
@@ -325,8 +326,10 @@ public record CertificateBuilder
         });
 
         //Setup extension for Subject Alternative Name if necessary
-        if (builder.SubjectAlternativeNameBuilder != null) {
-            extensions.Add(builder.SubjectAlternativeNameBuilder.Build());
+        if (builder.SubjectAlternativeName != null && builder.SubjectAlternativeName.Any()) {
+            //Extension must be marked critical if the Subject is empty, as per https://tools.ietf.org/html/rfc5280#section-4.1.2.6
+            bool critical = !builder.Subject.RelativeDistinguishedNames.Any();
+            extensions.Add(new X509SubjectAlternativeNameExtension(builder.SubjectAlternativeName.Encode(), critical));
         }
 
         //Collate extensions; manually specified ones override those matching ones generated above (e.g. Usage, DnsNames, Email, etc.)
