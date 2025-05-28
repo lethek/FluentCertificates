@@ -39,7 +39,7 @@ jobs:
       run: ./build.cmd GitHubBuild --configuration ${{ env.buildConfiguration }}
 
     - name: Upload
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: nuget
         path: |
