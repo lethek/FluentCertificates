@@ -130,12 +130,10 @@ public static class Oids
     public const string EnhancedKeyUsage = "2.5.29.37";
     public const string InhibitAnyPolicyExtension = "2.5.29.54";
 
-    public const string AnyExtendedKeyUsage = "2.5.29.37.0";
-
     // RFC3161 Timestamping
     public const string TstInfo = "1.2.840.113549.1.9.16.1.4";
-    public const string TimeStampingPurpose = "1.3.6.1.5.5.7.3.8";
 
+    public const string AnyExtendedKeyUsage = "2.5.29.37.0";
     public const string ServerAuthPurpose = "1.3.6.1.5.5.7.3.1";
     public const string ClientAuthPurpose = "1.3.6.1.5.5.7.3.2";
     public const string CodeSigningPurpose = "1.3.6.1.5.5.7.3.3";
@@ -143,6 +141,7 @@ public static class Oids
     public const string IpsecEndSystemPurpose = "1.3.6.1.5.5.7.3.5";
     public const string IpsecTunnelPurpose = "1.3.6.1.5.5.7.3.6";
     public const string IpsecUserPurpose = "1.3.6.1.5.5.7.3.7";
+    public const string TimeStampingPurpose = "1.3.6.1.5.5.7.3.8";
     public const string OcspSigningPurpose = "1.3.6.1.5.5.7.3.9";
     public const string SmartCardLogonPurpose = "1.3.6.1.4.1.311.20.2.2";
     public const string MacAddressPurpose = "1.3.6.1.1.1.1.22";
