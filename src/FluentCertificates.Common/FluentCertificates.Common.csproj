@@ -37,7 +37,7 @@
     </When>
     <Otherwise>
       <ItemGroup>
-        <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.0" />
+        <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.5" />
       </ItemGroup>
     </Otherwise>
   </Choose>
