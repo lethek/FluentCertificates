@@ -157,7 +157,35 @@ using var webCert = new CertificateBuilder()
 
 `CertificateFinder` requires the [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder) package and is found under the `FluentCertificates` namespace.
 
-*TODO: document this*
+The CertificateFinder class allows you to configure, add, and query certificate sources (stores and directories) in a fluent and immutable manner. It supports LINQ queries for flexible certificate searching.
+
+### **Find a Specific Certificate by Thumbprint**
+
+_The "common stores" include the CurrentUser and LocalMachine certificate stores, such as "My", "Root", "CA", etc. You can also add custom directories or other X509 stores to search for certificates._
+
+```csharp
+const string thumbprint = "622A2B8374D9BBE3969B91EDBC8F5152783AFC78";
+
+var cert = new CertificateFinder()
+    .AddCommonStores()
+    .FirstOrDefault(x => x.Certificate.Thumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
+```
+
+### **Find a Valid Certificate with Matching Subject, Giving Preference to Included Private Keys**
+
+```csharp
+var subject = new X500NameBuilder()
+    .SetOrganization("My Org")
+    .SetCountry("AU")
+    .SetCommonName("fake.domain");
+
+var cert = new CertificateFinder()
+    .AddCommonStores()
+    .Select(x => x.Certificate)
+    .Where(x => x.IsValidNow())
+    .OrderBy(x => !x.HasPrivateKey) //Ensure certs with private keys are listed before those without
+    .FirstOrDefault(x => subject.EquivalentTo(x.SubjectName, false));
+```
 
 ---
 
