@@ -2,34 +2,38 @@
 
 namespace FluentCertificates;
 
-public class GeneralNameList(IEnumerable<GeneralName> constraints) : List<GeneralName>(constraints)
+public static class GeneralNameListExtensions
 {
     /// <summary>
     /// Return a byte array containing the encoded representation of the data.
     /// </summary>
+    /// <param name="generalNames">The collection of <see cref="GeneralName"/> objects to encode.</param>
     /// <returns>A precisely-sized array containing the encoded values.</returns>
-    public byte[] Encode()
+    public static byte[] Encode<T>(this IEnumerable<T> generalNames)
+        where T : GeneralName
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
         using (writer.PushSequence()) {
-            foreach (var gn in this) {
+            foreach (var gn in generalNames) {
                 gn.WriteTo(writer);
             }
         }
         return writer.Encode();
     }
-    
+
 
     /// <summary>
     /// Writes the encoded representation of the data to destination.
     /// </summary>
+    /// <param name="generalNames">The collection of <see cref="GeneralName"/> objects to encode.</param>
     /// <param name="destination">The buffer in which to write.</param>
     /// <returns>The number of bytes written to destination.</returns>
-    public int Encode(Span<byte> destination)
+    public static int Encode<T>(this IEnumerable<T> generalNames, Span<byte> destination)
+        where T : GeneralName
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
         using (writer.PushSequence()) {
-            foreach (var gn in this) {
+            foreach (var gn in generalNames) {
                 gn.WriteTo(writer);
             }
         }
