@@ -130,11 +130,12 @@ public static class Oids
     public const string EnhancedKeyUsage = "2.5.29.37";
     public const string InhibitAnyPolicyExtension = "2.5.29.54";
 
+    public const string AnyExtendedKeyUsage = "2.5.29.37.0";
+
     // RFC3161 Timestamping
     public const string TstInfo = "1.2.840.113549.1.9.16.1.4";
     public const string TimeStampingPurpose = "1.3.6.1.5.5.7.3.8";
 
-    //public static readonly KeyPurposeID AnyExtendedKeyUsage = new KeyPurposeID(X509Extensions.ExtendedKeyUsage.Id + ".0");
     public const string ServerAuthPurpose = "1.3.6.1.5.5.7.3.1";
     public const string ClientAuthPurpose = "1.3.6.1.5.5.7.3.2";
     public const string CodeSigningPurpose = "1.3.6.1.5.5.7.3.3";

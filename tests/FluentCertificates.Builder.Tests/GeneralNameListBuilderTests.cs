@@ -133,6 +133,49 @@ public class GeneralNameListBuilderTests
 
     
     [Fact]
+    public void AddIPAddress_String_AddsSingleIp()
+    {
+        var builder = new GeneralNameListBuilder()
+            .AddIPAddress("10.0.0.1");
+        var result = builder.Create();
+
+        Assert.Single(result);
+        var ipName = Assert.IsType<IPAddressNameAsn>(result[0]);
+        Assert.Equal(IPAddress.Parse("10.0.0.1"), ipName.IPAddress);
+        Assert.Null(ipName.SubnetMask);
+    }
+
+    
+    [Fact]
+    public void AddIPAddress_StringWithSubnet_AddsIpWithMask()
+    {
+        var builder = new GeneralNameListBuilder()
+            .AddIPAddress("192.168.0.0", "255.255.255.0");
+        var result = builder.Create();
+
+        Assert.Single(result);
+        var ipName = Assert.IsType<IPAddressNameAsn>(result[0]);
+        Assert.Equal(IPAddress.Parse("192.168.0.0"), ipName.IPAddress);
+        Assert.Equal(IPAddress.Parse("255.255.255.0"), ipName.SubnetMask);
+    }
+
+    
+    [Fact]
+    public void AddIPAddresses_String_AddsMultipleIps()
+    {
+        var builder = new GeneralNameListBuilder()
+            .AddIPAddresses("8.8.8.8", "8.8.4.4");
+        var result = builder.Create();
+
+        Assert.Equal(2, result.Count);
+        Assert.All(result, x => Assert.IsType<IPAddressNameAsn>(x));
+        Assert.Equal(IPAddress.Parse("8.8.8.8"), ((IPAddressNameAsn)result[0]).IPAddress);
+        Assert.Equal(IPAddress.Parse("8.8.4.4"), ((IPAddressNameAsn)result[1]).IPAddress);
+        Assert.All(result, x => Assert.Null(((IPAddressNameAsn)x).SubnetMask));
+    }
+    
+    
+    [Fact]
     public void ImplicitConversion_ReturnsSameAsCreate()
     {
         var builder = new GeneralNameListBuilder()

@@ -73,6 +73,16 @@ public record GeneralNameListBuilder
     
     
     /// <summary>
+    /// Adds an IP address (as a string) and an optional subnet mask (as a string) to the list.
+    /// </summary>
+    /// <param name="ipAddress">The IP address to add, in string format.</param>
+    /// <param name="subnetMask">The optional subnet mask to add, in string format. If null, no subnet mask is used.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP address (and optional subnet mask) added.</returns>
+    public GeneralNameListBuilder AddIPAddress(string ipAddress, string? subnetMask = null)
+        => Add(new IPAddressNameAsn(IPAddress.Parse(ipAddress), subnetMask != null ? IPAddress.Parse(subnetMask) : null));
+
+    
+    /// <summary>
     /// Adds an IP address (optionally with subnet mask) to the list.
     /// </summary>
     /// <param name="ipAddress">The IP address to add.</param>
@@ -81,9 +91,18 @@ public record GeneralNameListBuilder
     public GeneralNameListBuilder AddIPAddress(IPAddress ipAddress, IPAddress? subnetMask = null)
         => Add(new IPAddressNameAsn(ipAddress, subnetMask));
 
-    
+
     /// <summary>
-    /// Adds multiple IP addresses to the list.
+    /// Adds multiple IP addresses (as strings) to the list. Subnet masks are not supported in this method.
+    /// </summary>
+    /// <param name="ipAddresses">The IP addresses to add, each in string format.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP addresses added.</returns>
+    public GeneralNameListBuilder AddIPAddresses(params string[] ipAddresses)
+        => AddRange(ipAddresses.Select(x => new IPAddressNameAsn(IPAddress.Parse(x))));
+
+
+    /// <summary>
+    /// Adds multiple IP addresses to the list. Subnet masks are not supported in this method.
     /// </summary>
     /// <param name="ipAddresses">The IP addresses to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP addresses added.</returns>

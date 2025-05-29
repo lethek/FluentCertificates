@@ -62,9 +62,9 @@ csr.ExportAsPem("csr.pem");
 _Using the fluent style:_
 
 ```csharp
-using var cert = new CertificateBuilder()
-    .SetUsage(CertificateUsage.Server)
+using var webCert = new CertificateBuilder()
     .SetFriendlyName("Example self-signed web-server certificate")
+    .SetUsage(CertificateUsage.Server)
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
     .SetSubjectAlternativeNames(x => x.AddDnsNames("*.fake.domain", "fake.domain"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddMonths(1))
@@ -74,13 +74,13 @@ using var cert = new CertificateBuilder()
 _Or alternatively using object initializers (other examples will use fluent style from now on though):_
 ```csharp
 using var builder = new CertificateBuilder() {
-    Usage = CertificateUsage.Server,
     FriendlyName = "Example self-signed web-server certificate",
+    Usage = CertificateUsage.Server,
     Subject = new X500NameBuilder().SetCommonName("*.fake.domain"),
     SubjectAlternativeNames = new GeneralNameListBuilder().AddDnsNames("*.fake.domain", "fake.domain"),
     NotAfter = DateTimeOffset.UtcNow.AddMonths(1)
 };
-var cert = builder.Create();
+var webCert = builder.Create();
 ```
 
 ### **Build a Certificate Authority (CA)**
@@ -88,8 +88,8 @@ var cert = builder.Create();
 ```csharp
 //A CA's expiry date must be later than that of any certificates it will issue
 using var issuer = new CertificateBuilder()
-    .SetUsage(CertificateUsage.CA)
     .SetFriendlyName("Example root CA")
+    .SetUsage(CertificateUsage.CA)
     .SetSubject(b => b.SetCommonName("Example root CA"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddYears(100))
     .Create();
@@ -99,9 +99,9 @@ using var issuer = new CertificateBuilder()
 
 ```csharp
 //Note: the 'issuer' certificate used must have a private-key attached in order to sign this new certificate
-using var cert = new CertificateBuilder()
-    .SetUsage(CertificateUsage.Client)
+using var clientAuthCert = new CertificateBuilder()
     .SetFriendlyName("Example client-auth certificate")
+    .SetUsage(CertificateUsage.Client)
     .SetSubject(b => b.SetCommonName("User: Michael"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddYears(1))
     .SetIssuer(issuer)
@@ -111,13 +111,43 @@ using var cert = new CertificateBuilder()
 ### **Advanced: Certificate with Customized Extensions**
 
 ```csharp
-using var cert = new CertificateBuilder()
+using var customCert = new CertificateBuilder()
     .SetFriendlyName("Example certificate with customized extensions")
     .SetSubject(b => b.SetCommonName("Example certificate with customized extensions"))
     .AddExtension(new X509BasicConstraintsExtension(false, false, 0, true))
     .AddExtension(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.DataEncipherment, true))
-    .AddExtension(new X509EnhancedKeyUsageExtension(new OidCollection { new(KeyPurposeID.AnyExtendedKeyUsage.Id) }, false))
+    .AddExtension(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid(Oids.AnyExtendedKeyUsage) }, false))
     .SetIssuer(issuer)
+    .Create();
+```
+
+### **Advanced: Certificates with Custom Name Constraints and CRL Distribution Points**
+
+```csharp
+//Permit the CA cert to issue certificates for specific names and IP addresses
+var permittedNames = new GeneralNameListBuilder()
+    .AddDnsName(".mydomain.local")
+    .AddEmailAddress("@mydomain.local")
+    .AddIPAddress(ipAddress: "192.168.0.0", subnetMask: "255.255.255.0")
+    .Create();
+
+using var issuer = new CertificateBuilder()
+    .SetFriendlyName("Example constrained root CA")
+    .SetUsage(CertificateUsage.CA)
+    .SetSubject(b => b.SetCommonName("Example constrained root CA"))
+    .SetNotAfter(DateTimeOffset.UtcNow.AddMonths(1))
+    .SetPathLength(1)
+    .AddExtension(new X509NameConstraintExtension(permittedNames, null))
+    .Create();
+
+using var webCert = new CertificateBuilder()
+    .SetFriendlyName("Example certificate with a CRL distribution point")
+    .SetUsage(CertificateUsage.Server)
+    .SetIssuer(issuer)
+    .SetSubject(b => b.SetCommonName("*.mydomain.local"))
+    .SetSubjectAlternativeNames(x => x.AddDnsName("*.mydomain.local"))
+    //Extension specifies CRL URLs
+    .AddExtension(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([$"http://crl.mydomain.local/"]))
     .Create();
 ```
 
