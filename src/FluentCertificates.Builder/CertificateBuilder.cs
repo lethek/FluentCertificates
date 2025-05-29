@@ -24,7 +24,7 @@ public record CertificateBuilder
     public RSASignaturePadding RSASignaturePadding { get; init; } = RSASignaturePadding.Pkcs1;
     public ImmutableHashSet<X509Extension> Extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
     public X509KeyStorageFlags KeyStorageFlags { get; init; }
-    public IEnumerable<GeneralName>? SubjectAlternativeNames { get; init; }
+    public ImmutableList<GeneralName>? SubjectAlternativeNames { get; init; }
 
     private PublicKey? PublicKey { get; init; }
     private AsymmetricAlgorithm? KeyPair { get; init; }
@@ -232,7 +232,7 @@ public record CertificateBuilder
     /// <param name="san">The subject alternative names.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified SANs.</returns>
     public CertificateBuilder SetSubjectAlternativeNames(IEnumerable<GeneralName> san)
-        => this with { SubjectAlternativeNames = san };
+        => this with { SubjectAlternativeNames = san.ToImmutableList() };
 
 
     /// <summary>

@@ -89,7 +89,18 @@ public record GeneralNameListBuilder
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP addresses added.</returns>
     public GeneralNameListBuilder AddIPAddresses(params IPAddress[] ipAddresses)
         => AddRange(ipAddresses.Select(x => new IPAddressNameAsn(x)));
-    
+
+
+    /// <summary>
+    /// Implicitly converts a <see cref="GeneralNameListBuilder"/> instance to an <see cref="ImmutableList{GeneralName}"/>.
+    /// This allows a <see cref="GeneralNameListBuilder"/> to be used wherever an <see cref="ImmutableList{GeneralName}"/> is expected,
+    /// by returning the list of <see cref="GeneralName"/> objects built by the builder.
+    /// </summary>
+    /// <param name="builder">The <see cref="GeneralNameListBuilder"/> instance to convert.</param>
+    /// <returns>An <see cref="ImmutableList{GeneralName}"/> containing all added <see cref="GeneralName"/> instances.</returns>
+    public static implicit operator ImmutableList<GeneralName>(GeneralNameListBuilder builder)
+        => builder.Create();
+
     
     /// <summary>
     /// Adds a <see cref="GeneralName"/> to the list.
