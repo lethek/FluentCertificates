@@ -282,6 +282,7 @@ public static class Oids
     public static Oid DnQualifierOid = s_dnQualifierOid ??= InitializeOid(DnQualifier);
     public static Oid DomainComponentOid = s_domainComponentOid ??= InitializeOid(DomainComponent);
 
+    
     private static Oid InitializeOid(string oidValue)
     {
         Debug.Assert(oidValue != null);
@@ -295,6 +296,7 @@ public static class Oids
         return oid;
     }
 
+    
     internal static Oid GetSharedOrNewOid(ref AsnValueReader asnValueReader)
     {
         Oid? ret = GetSharedOrNullOid(ref asnValueReader);
@@ -307,6 +309,7 @@ public static class Oids
         return new Oid(oidValue, null);
     }
 
+    
     internal static Oid? GetSharedOrNullOid(ref AsnValueReader asnValueReader, Asn1Tag? expectedTag = null)
     {
 #if NET
@@ -358,6 +361,7 @@ public static class Oids
 #endif
     }
 
+    
     public static bool ValueEquals(this Oid oid, Oid? other)
     {
         Debug.Assert(oid is not null);
