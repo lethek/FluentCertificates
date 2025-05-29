@@ -14,8 +14,8 @@ public record GeneralNameListBuilder
     /// Creates a list of the current <see cref="GeneralName"/> constraints.
     /// </summary>
     /// <returns>A list containing all added <see cref="GeneralName"/> instances.</returns>
-    public List<GeneralName> Create()
-        => [..NameConstraints];
+    public ImmutableList<GeneralName> Create()
+        => NameConstraints;
 
     
     /// <summary>
