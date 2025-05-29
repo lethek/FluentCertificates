@@ -1,33 +1,39 @@
 # 📖 FluentCertificates Overview
 
-⚠️ **Note:** *while version numbers are v0.x.y, this software is under initial development and there'll be breaking-changes in its API from version to version.*
+⚠️ **Note:** *while version numbers are v0.x.y, this software is under initial development and there there may be breaking-changes in its API between minor versions.* ⚠️
 
 [![NuGet](https://img.shields.io/nuget/v/FluentCertificates.svg)](https://www.nuget.org/packages/FluentCertificates)
 [![Build & Publish](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml/badge.svg)](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml)
 [![GitHub license](https://img.shields.io/github/license/lethek/FluentCertificates)](https://github.com/lethek/FluentCertificates/blob/main/LICENSE)
 
-FluentCertificates is a library using the Immutable Fluent Builder pattern for easily creating, finding and exporting certificates. Makes it simple to generate your own certificate chains, or just stand-alone self-signed certificates.
+FluentCertificates is a library using the Immutable Fluent Builder pattern for easily creating, finding, and exporting certificates. It makes it simple to generate your own certificate chains or just stand-alone self-signed certificates.
+
+## NuGet Packages
 
 This project is published in several NuGet packages:
 
-* [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Top-level package that doesn't introduce any new functionality, it just imports the FluentCertificates.Builder, FluentCertificates.Extensions and FluentCertificates.Finder packages.
-* [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension-methods. [Examples below](#certificatebuilder-examples)
-* [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides a bunch of convenient extension-methods. [Examples below](#x509certificate2-extension-methods)
-* [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across a collection of X509Stores. [Examples below](#certificatefinder-examples)
+* [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Top-level package that imports the Builder, Extensions, and Finder packages.
+* [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension methods. [Examples below](#certificatebuilder-examples)
+* [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides additional extension methods. [Examples below](#x509certificate2-extension-methods)
+* [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across X509Stores and directories. [Examples below](#certificatefinder-examples)
 
-Unfortunately documentation is incomplete. You may find more examples within the project's [unit tests](https://github.com/lethek/FluentCertificates/tree/main/tests).
+Documentation is incomplete. More examples can be found in the project's [unit tests](https://github.com/lethek/FluentCertificates/tree/main/tests).
 
-## `CertificateBuilder` examples
+## CertificateBuilder Examples
 
 `CertificateBuilder` requires the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and is found under the `FluentCertificates` namespace.
 
-### **The absolute minimum needed to create a certificate (although it may not be a very useful one):**
+### **Minimum Example**
+
+_The absolute minimum needed to create a certificate, whether it's useful or not._
 
 ```csharp
 using var cert = new CertificateBuilder().Create();
 ```
 
-### **Create a `CertificateSigningRequest` for signing, exporting and passing to a 3rd party CA:**
+### **Create a Certificate Signing Request**
+
+_For signing, exporting and passing to a 3rd party CA._
 
 ```csharp
 //A public & private keypair must be created first, outside of the CertificateBuilder, otherwise you'd have no way to retrieve the private-key used for the new CertificateSigningRequest object
@@ -37,7 +43,7 @@ using var keys = RSA.Create();
 var csr = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
-    .SetDnsNames("*.fake.domain", "fake.domain")
+    .SetSubjectAlternativeNames(x => x.AddDnsNames("*.fake.domain", "fake.domain"))
     .SetKeyPair(keys)
     .CreateCertificateSigningRequest();
 
@@ -51,30 +57,33 @@ Console.WriteLine(csr.ToPemString());
 csr.ExportAsPem("csr.pem");
 ```
 
-### **Build a self-signed web server certificate:**
+### **Build a Self-Signed Web Server Certificate**
+
+_Using the fluent style:_
 
 ```csharp
-//Using a fluent style
 using var cert = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetFriendlyName("Example self-signed web-server certificate")
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
-    .SetDnsNames("*.fake.domain", "fake.domain")
+    .SetSubjectAlternativeNames(x => x.AddDnsNames("*.fake.domain", "fake.domain"))
     .SetNotAfter(DateTimeOffset.UtcNow.AddMonths(1))
     .Create();
+```
 
-//And just to demonstrate using object initializers (I'll use fluent style from now on though)
+_Or alternatively using object initializers (other examples will use fluent style from now on though):_
+```csharp
 using var builder = new CertificateBuilder() {
     Usage = CertificateUsage.Server,
     FriendlyName = "Example self-signed web-server certificate",
     Subject = new X500NameBuilder().SetCommonName("*.fake.domain"),
-    DnsNames = new[] { "*.fake.domain", "fake.domain" },
+    SubjectAlternativeNames = new GeneralNameListBuilder().AddDnsNames("*.fake.domain", "fake.domain"),
     NotAfter = DateTimeOffset.UtcNow.AddMonths(1)
 };
 var cert = builder.Create();
 ```
 
-### **Build a CA (certificate authority):**
+### **Build a Certificate Authority (CA)**
 
 ```csharp
 //A CA's expiry date must be later than that of any certificates it will issue
@@ -86,7 +95,7 @@ using var issuer = new CertificateBuilder()
     .Create();
 ```
 
-### **Build a client-auth certificate signed by a CA:**
+### **Build a Client-Auth Certificate Signed by a CA**
 
 ```csharp
 //Note: the 'issuer' certificate used must have a private-key attached in order to sign this new certificate
@@ -99,7 +108,7 @@ using var cert = new CertificateBuilder()
     .Create();
 ```
 
-### **Advanced: Build a certificate with customized extensions:**
+### **Advanced: Certificate with Customized Extensions**
 
 ```csharp
 using var cert = new CertificateBuilder()
@@ -114,7 +123,7 @@ using var cert = new CertificateBuilder()
 
 ---
 
-## `CertificateFinder` examples
+## CertificateFinder Examples
 
 `CertificateFinder` requires the [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder) package and is found under the `FluentCertificates` namespace.
 
@@ -122,7 +131,7 @@ using var cert = new CertificateBuilder()
 
 ---
 
-## `X500NameBuilder` examples
+## X500NameBuilder Examples
 
 `X500NameBuilder` requires the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and is found under the `FluentCertificates` namespace.
 
@@ -130,7 +139,7 @@ using var cert = new CertificateBuilder()
 
 ---
 
-## `X509Certificate2` extension-methods
+## X509Certificate2 Extension Methods
 
 These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
@@ -155,7 +164,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ---
 
-## `X509Chain` extension-methods
+## X509Chain Extension Methods
 
 These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
@@ -172,7 +181,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ---
 
-## `X509Certificate2Collection` extension-methods
+## X509Certificate2Collection Extension Methods
 
 These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
@@ -188,7 +197,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ---
 
-## `IEnumerable<X509Certificate2>` extension-methods
+## IEnumerable<X509Certificate2> Extension Methods
 
 These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
@@ -205,7 +214,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ---
 
-## `AsymmetricAlgorithm` extension-methods
+## AsymmetricAlgorithm Extension Methods
 
 These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
@@ -220,7 +229,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ---
 
-## `CertificateRequest` extension-methods
+## CertificateRequest Extension Methods
 
 These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
@@ -233,7 +242,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ---
 
-## `X509Extension` extension-methods
+## X509Extension Extension Methods
 
 These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
 
