@@ -73,14 +73,14 @@ using var webCert = new CertificateBuilder()
 
 _Or alternatively using object initializers (other examples will use fluent style from now on though):_
 ```csharp
-using var builder = new CertificateBuilder() {
+var builder = new CertificateBuilder() {
     FriendlyName = "Example self-signed web-server certificate",
     Usage = CertificateUsage.Server,
     Subject = new X500NameBuilder().SetCommonName("*.fake.domain"),
     SubjectAlternativeNames = new GeneralNameListBuilder().AddDnsNames("*.fake.domain", "fake.domain"),
     NotAfter = DateTimeOffset.UtcNow.AddMonths(1)
 };
-var webCert = builder.Create();
+using var webCert = builder.Create();
 ```
 
 ### **Build a Certificate Authority (CA)**
