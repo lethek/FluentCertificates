@@ -130,7 +130,7 @@ public static class Oids
     public const string EnhancedKeyUsage = "2.5.29.37";
     public const string InhibitAnyPolicyExtension = "2.5.29.54";
 
-    // RFC3161 Timestamping
+    //RFC3161: Internet X.509 Public Key Infrastructure Time-Stamp Protocol (TSP)
     public const string TstInfo = "1.2.840.113549.1.9.16.1.4";
 
     public const string AnyExtendedKeyUsage = "2.5.29.37.0";
@@ -143,6 +143,39 @@ public static class Oids
     public const string IpsecUserPurpose = "1.3.6.1.5.5.7.3.7";
     public const string TimeStampingPurpose = "1.3.6.1.5.5.7.3.8";
     public const string OcspSigningPurpose = "1.3.6.1.5.5.7.3.9";
+    //RFC3029: Internet X.509 Public Key Infrastructure Data Validation and Certification Server Protocols
+    public const string DvcsPurpose = "1.3.6.1.5.5.7.3.10";
+    //"Reserved and Obsolete"
+    public const string SbgpCertAaServerAuthPurpose = "1.3.6.1.5.5.7.3.11";
+    public const string ScvpResponderPurpose = "1.3.6.1.5.5.7.3.12";
+    //RFC4334: Certificate Extensions and Attributes Supporting Authentication in Point-to-Point Protocol (PPP) and Wireless Local Area Networks (WLAN)
+    public const string EapOverPppPurpose = "1.3.6.1.5.5.7.3.13";
+    public const string EapOverLanPurpose = "1.3.6.1.5.5.7.3.14";
+    //RFC5055: Server-Based Certificate Validation Protocol (SCVP)
+    public const string ScvpServerPurpose = "1.3.6.1.5.5.7.3.15";
+    public const string ScvpClientPurpose = "1.3.6.1.5.5.7.3.16";
+    //RFC4945: PKI Profile for IKE, ISAKMP and PKIX
+    public const string IpsecIkePurpose = "1.3.6.1.5.5.7.3.17";
+    //RFC5415: Control And Provisioning of Wireless Access Points (CAPWAP) Protocol Specification
+    public const string CapwapAcPurpose = "1.3.6.1.5.5.7.3.18";
+    public const string CapwapWtpPurpose = "1.3.6.1.5.5.7.3.19";
+    //RFC5924: Extended Key Usage (EKU) for Session Initiation Protocol (SIP) X.509 Certificates
+    public const string SipDomainPurpose = "1.3.6.1.5.5.7.3.20";
+    //RFC6187: X.509v3 Certificates for Secure Shell Authentication
+    public const string SecureShellClientPurpose = "1.3.6.1.5.5.7.3.21";
+    public const string SecureShellServerPurpose = "1.3.6.1.5.5.7.3.22";
+    //RFC6494: Certificate Profile and Certificate Management for SEcure Neighbor Discovery (SEND)
+    public const string SendRouterPurpose = "1.3.6.1.5.5.7.3.23";
+    public const string SendProxiedRouterPurpose = "1.3.6.1.5.5.7.3.24";
+    public const string SendOwnerPurpose = "1.3.6.1.5.5.7.3.25";
+    public const string SendProxiedOwnerPurpose = "1.3.6.1.5.5.7.3.26";
+    //RFC6402: Certificate Management over CMS (CMC) Updates
+    public const string CmcCaPurpose = "1.3.6.1.5.5.7.3.27";
+    public const string CmcRaPurpose = "1.3.6.1.5.5.7.3.28";
+    public const string CmcArchivePurpose = "1.3.6.1.5.5.7.3.29";
+    //RFC8209: A Profile for BGPsec Router Certificates, Certificate Revocation Lists, and Certification Requests
+    public const string BgpSecRouterPurpose = "1.3.6.1.5.5.7.3.30";
+
     public const string SmartCardLogonPurpose = "1.3.6.1.4.1.311.20.2.2";
     public const string MacAddressPurpose = "1.3.6.1.1.1.1.22";
     public const string LifetimeSigningPurpose = "1.3.6.1.4.1.311.10.3.13";
