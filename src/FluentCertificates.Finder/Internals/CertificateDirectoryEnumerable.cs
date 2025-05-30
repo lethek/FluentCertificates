@@ -10,14 +10,16 @@ namespace FluentCertificates.Internals;
 /// yielding <see cref="CertificateFinderResult"/> for each successfully loaded certificate.
 /// </summary>
 /// <param name="dirStore">The certificate directory source.</param>
-internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirStore) : IEnumerable<CertificateFinderResult>
+/// <param name="recurse">Indicates whether to search subdirectories.</param>
+internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirStore, bool recurse = false) : IEnumerable<CertificateFinderResult>
 {
     /// <summary>
     /// Initializes a new instance of <see cref="CertificateDirectoryEnumerable"/> using a directory path.
     /// </summary>
     /// <param name="directory">The directory path containing certificate files.</param>
-    public CertificateDirectoryEnumerable(string directory)
-        : this(new CertificateDirectory(directory)) { }
+    /// <param name="recurse">Indicates whether to search subdirectories.</param>
+    public CertificateDirectoryEnumerable(string directory, bool recurse = false)
+        : this(new CertificateDirectory(directory), recurse) { }
 
     
     /// <summary>
@@ -25,7 +27,7 @@ internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirSto
     /// </summary>
     /// <returns>An enumerator of <see cref="CertificateFinderResult"/>.</returns>
     public IEnumerator<CertificateFinderResult> GetEnumerator()
-        => GetCertificatesFromDirectory(dirStore).GetEnumerator();
+        => GetCertificatesFromDirectory(dirStore, recurse).GetEnumerator();
 
     
     /// <summary>
@@ -41,9 +43,11 @@ internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirSto
     /// Supports multiple file formats and handles errors gracefully by skipping unreadable files.
     /// </summary>
     /// <param name="certDir">The certificate directory to enumerate.</param>
+    /// <param name="recurse">Indicates whether to search subdirectories.</param>
     /// <returns>An enumerable of <see cref="CertificateFinderResult"/>.</returns>
-    private static IEnumerable<CertificateFinderResult> GetCertificatesFromDirectory(CertificateDirectory certDir)
-        => Directory.EnumerateFiles(certDir.Path)
+    private static IEnumerable<CertificateFinderResult> GetCertificatesFromDirectory(CertificateDirectory certDir, bool recurse)
+        => Directory
+            .EnumerateFiles(certDir.Path, "*", recurse ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
             .Select(path => new {
                 Path = path,
                 Extension = Path.GetExtension(path)
@@ -69,11 +73,11 @@ internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirSto
             })
             .Select(x => new CertificateFinderResult { Certificate = x, Directory = certDir });
 
-    
+
     /// <summary>
     /// The list of supported certificate file extensions.
     /// </summary>
     private static readonly string[] SupportedFileExtensions = [
-        ".cer", ".der", ".crt", ".pfx", ".p12", ".p7b", ".p7c", ".pem", ".ca-bundle"
+        ".crt", ".cer", ".der", ".pfx", ".p12", ".p7b", ".p7c", ".pem", ".ca-bundle"
     ];
 }

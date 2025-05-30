@@ -16,8 +16,11 @@ public record CertificateFinderResult {
     /// Gets the directory from which the certificate was found, if applicable.
     /// </summary>    
     public CertificateDirectory? Directory { get; init; }
-    
-    
+
+
+    public AbstractCertificateSource? CustomSource { get; init; }
+
+
     /// <summary>
     /// Gets the found X.509 certificate.
     /// </summary>
