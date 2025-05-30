@@ -21,6 +21,11 @@
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="LINQPadQuery" />
+    <InternalsVisibleTo Include="FluentCertificates.Finder.Tests" />
+  </ItemGroup>
+
   <Choose>
     <When Condition="'$(TargetFramework)' == 'net8.0'">
       <ItemGroup>
@@ -40,6 +45,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FluentCertificates.Common\FluentCertificates.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="TestableIO.System.IO.Abstractions" Version="22.0.14" />
+    <PackageReference Include="TestableIO.System.IO.Abstractions.Wrappers" Version="22.0.14" />
   </ItemGroup>
 
 </Project>

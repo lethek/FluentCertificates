@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Immutable;
+using System.IO.Abstractions;
 using System.Linq.Expressions;
 using System.Security.Cryptography.X509Certificates;
 
@@ -14,6 +15,10 @@ namespace FluentCertificates;
 /// </summary>
 public record CertificateFinder : IQueryable<CertificateFinderResult>
 {
+    public CertificateFinder(IFileSystem? fileSystem = null)
+        => _fileSystem = fileSystem ?? new FileSystem();
+
+
     /// <inheritdoc/>    
     public virtual Type ElementType => Queryable.ElementType;
 
@@ -132,7 +137,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="recurse">Indicates whether to search subdirectories.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directory added.</returns>
     public CertificateFinder AddDirectory(string dir, bool recurse = false)
-        => this with { Stores = Stores.Add(new CertificateDirectoryEnumerable(dir, recurse)) };
+        => this with { Stores = Stores.Add(new CertificateDirectoryEnumerable(_fileSystem, dir, recurse)) };
 
     
     /// <summary>
@@ -146,7 +151,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="dirs">The directory paths.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>
     public CertificateFinder AddDirectories(params string[] dirs)
-        => this with { Stores = Stores.AddRange(dirs.Select(dir => new CertificateDirectoryEnumerable(dir))) };
+        => this with { Stores = Stores.AddRange(dirs.Select(dir => new CertificateDirectoryEnumerable(_fileSystem, dir, false))) };
 
     
     /// <summary>
@@ -156,7 +161,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="recurse">Indicates whether to search subdirectories.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>
     public CertificateFinder AddDirectories(IEnumerable<string> dirs, bool recurse = false)
-        => this with { Stores = Stores.AddRange(dirs.Select(dir => new CertificateDirectoryEnumerable(dir, recurse))) };
+        => this with { Stores = Stores.AddRange(dirs.Select(dir => new CertificateDirectoryEnumerable(_fileSystem, dir, recurse))) };
 
 
     /// <summary>
@@ -203,7 +208,10 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <summary>
     /// Gets the list of certificate sources (stores or directories).
     /// </summary>
-    private ImmutableList<IEnumerable<CertificateFinderResult>> Stores { get; init; } = ImmutableList<IEnumerable<CertificateFinderResult>>.Empty;
+    internal protected ImmutableList<IEnumerable<CertificateFinderResult>> Stores { get; init; } = ImmutableList<IEnumerable<CertificateFinderResult>>.Empty;
+
+
+    private readonly IFileSystem _fileSystem; 
 
 
     /// <summary>

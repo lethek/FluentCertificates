@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.IO.Abstractions;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 
@@ -9,17 +10,19 @@ namespace FluentCertificates.Internals;
 /// Supports loading certificates from various file formats within a directory,
 /// yielding <see cref="CertificateFinderResult"/> for each successfully loaded certificate.
 /// </summary>
-/// <param name="dirStore">The certificate directory source.</param>
+/// <param name="fileSystem">The file system abstraction to use for file operations.</param>
+/// <param name="directory">The certificate directory source.</param>
 /// <param name="recurse">Indicates whether to search subdirectories.</param>
-internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirStore, bool recurse = false) : IEnumerable<CertificateFinderResult>
+internal sealed class CertificateDirectoryEnumerable(IFileSystem fileSystem, CertificateDirectory directory, bool recurse = false) : IEnumerable<CertificateFinderResult>
 {
     /// <summary>
     /// Initializes a new instance of <see cref="CertificateDirectoryEnumerable"/> using a directory path.
     /// </summary>
+    /// <param name="fileSystem">The file system abstraction to use for file operations.</param>
     /// <param name="directory">The directory path containing certificate files.</param>
     /// <param name="recurse">Indicates whether to search subdirectories.</param>
-    public CertificateDirectoryEnumerable(string directory, bool recurse = false)
-        : this(new CertificateDirectory(directory), recurse) { }
+    public CertificateDirectoryEnumerable(IFileSystem fileSystem, string directory, bool recurse = false)
+        : this(fileSystem, new CertificateDirectory(directory), recurse) { }
 
     
     /// <summary>
@@ -27,7 +30,7 @@ internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirSto
     /// </summary>
     /// <returns>An enumerator of <see cref="CertificateFinderResult"/>.</returns>
     public IEnumerator<CertificateFinderResult> GetEnumerator()
-        => GetCertificatesFromDirectory(dirStore, recurse).GetEnumerator();
+        => GetCertificatesFromDirectory(fileSystem, directory, recurse).GetEnumerator();
 
     
     /// <summary>
@@ -42,11 +45,12 @@ internal sealed class CertificateDirectoryEnumerable(CertificateDirectory dirSto
     /// Retrieves certificates from the specified <see cref="CertificateDirectory"/>.
     /// Supports multiple file formats and handles errors gracefully by skipping unreadable files.
     /// </summary>
+    /// <param name="fileSystem">The file system abstraction to use for file operations.</param>
     /// <param name="certDir">The certificate directory to enumerate.</param>
     /// <param name="recurse">Indicates whether to search subdirectories.</param>
-    /// <returns>An enumerable of <see cref="CertificateFinderResult"/>.</returns>
-    private static IEnumerable<CertificateFinderResult> GetCertificatesFromDirectory(CertificateDirectory certDir, bool recurse)
-        => Directory
+    /// <returns>An Enumerable of <see cref="CertificateFinderResult"/>.</returns>
+    private static IEnumerable<CertificateFinderResult> GetCertificatesFromDirectory(IFileSystem fileSystem, CertificateDirectory certDir, bool recurse)
+        => fileSystem.Directory
             .EnumerateFiles(certDir.Path, "*", recurse ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
             .Select(path => new {
                 Path = path,

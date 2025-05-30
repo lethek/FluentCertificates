@@ -17,7 +17,7 @@ public record CertificateStore(string Name, StoreLocation Location) : AbstractCe
     public CertificateStore(X509Store store)
         : this(store.Name!, store.Location) { }
 
-    
+
     /// <summary>
     /// Initializes a new instance of the <see cref="CertificateStore"/> class from a <see cref="StoreName"/> and <see cref="StoreLocation"/>.
     /// </summary>
