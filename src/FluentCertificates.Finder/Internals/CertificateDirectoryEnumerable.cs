@@ -63,10 +63,10 @@ internal sealed class CertificateDirectoryEnumerable(IFileSystem fileSystem, Cer
                         case ".p7b":
                         case ".p7c":
                             var cms = new SignedCms();
-                            cms.Decode(File.ReadAllBytes(x.Path));
+                            cms.Decode(fileSystem.File.ReadAllBytes(x.Path));
                             return cms.Certificates;
                         case ".pem":
-                            return [X509Certificate2.CreateFromPemFile(x.Path)];
+                            return [X509Certificate2.CreateFromPem(fileSystem.File.ReadAllText(x.Path))];
                         default:
                             return [Tools.LoadCertificateFromFile(x.Path)];
                     }

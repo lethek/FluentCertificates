@@ -33,8 +33,8 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// Removes all currently configured certificate stores.
     /// </summary>
     /// <returns>A new <see cref="CertificateFinder"/> instance with no stores.</returns>    
-    public CertificateFinder ClearStores()
-        => this with { Stores = Stores.Clear() };
+    public CertificateFinder ClearSources()
+        => this with { Sources = Sources.Clear() };
 
 
     /// <summary>
@@ -43,7 +43,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="stores">The stores to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(params X509Store[] stores)
-        => this with { Stores = Stores.AddRange(stores.Select(x => new CertificateStoreEnumerable(x))) };
+        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreEnumerable(x))) };
 
     
     /// <summary>
@@ -52,7 +52,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="stores">The stores to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(IEnumerable<X509Store> stores)
-        => this with { Stores = Stores.AddRange(stores.Select(x => new CertificateStoreEnumerable(x))) };
+        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreEnumerable(x))) };
 
     
     /// <summary>
@@ -61,7 +61,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="stores">The store names and locations to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(params (string Name, StoreLocation Location)[] stores)
-        => this with { Stores = Stores.AddRange(stores.Select(x => new CertificateStoreEnumerable(x.Name, x.Location))) };
+        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreEnumerable(x.Name, x.Location))) };
 
     
     /// <summary>
@@ -70,7 +70,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="stores">The store names and locations to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(IEnumerable<(string Name, StoreLocation Location)> stores)
-        => this with { Stores = Stores.AddRange(stores.Select(x => new CertificateStoreEnumerable(x.Name, x.Location))) };
+        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreEnumerable(x.Name, x.Location))) };
 
     
     /// <summary>
@@ -79,7 +79,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="stores">The store names and locations to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(params (StoreName Name, StoreLocation Location)[] stores)
-        => this with { Stores = Stores.AddRange(stores.Select(x => new CertificateStoreEnumerable(x.Name, x.Location))) };
+        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreEnumerable(x.Name, x.Location))) };
 
     
     /// <summary>
@@ -88,7 +88,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="stores">The store names and locations to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(IEnumerable<(StoreName Name, StoreLocation Location)> stores)
-        => this with { Stores = Stores.AddRange(stores.Select(x => new CertificateStoreEnumerable(x.Name, x.Location))) };
+        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreEnumerable(x.Name, x.Location))) };
 
 
     /// <summary>
@@ -97,7 +97,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="store">The store to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional store.</returns>
     public CertificateFinder AddStore(X509Store store)
-        => this with { Stores = Stores.Add(new CertificateStoreEnumerable(store)) };
+        => this with { Sources = Sources.Add(new CertificateStoreEnumerable(store)) };
 
     
     /// <summary>
@@ -107,7 +107,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="location">The store location.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional store.</returns>
     public CertificateFinder AddStore(string name, StoreLocation location)
-        => this with { Stores = Stores.Add(new CertificateStoreEnumerable(name, location)) };
+        => this with { Sources = Sources.Add(new CertificateStoreEnumerable(name, location)) };
 
     
     /// <summary>
@@ -117,7 +117,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="location">The store location.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional store.</returns>
     public CertificateFinder AddStore(StoreName name, StoreLocation location)
-        => this with { Stores = Stores.Add(new CertificateStoreEnumerable(name, location)) };
+        => this with { Sources = Sources.Add(new CertificateStoreEnumerable(name, location)) };
     
     
     /// <summary>
@@ -126,7 +126,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the common stores added.</returns>
     public CertificateFinder AddCommonStores()
         => this with {
-            Stores = Stores.AddRange(CommonStores)
+            Sources = Sources.AddRange(CommonStores)
         };
 
 
@@ -137,7 +137,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="recurse">Indicates whether to search subdirectories.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directory added.</returns>
     public CertificateFinder AddDirectory(string dir, bool recurse = false)
-        => this with { Stores = Stores.Add(new CertificateDirectoryEnumerable(_fileSystem, dir, recurse)) };
+        => this with { Sources = Sources.Add(new CertificateDirectoryEnumerable(_fileSystem, dir, recurse)) };
 
     
     /// <summary>
@@ -151,7 +151,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="dirs">The directory paths.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>
     public CertificateFinder AddDirectories(params string[] dirs)
-        => this with { Stores = Stores.AddRange(dirs.Select(dir => new CertificateDirectoryEnumerable(_fileSystem, dir, false))) };
+        => this with { Sources = Sources.AddRange(dirs.Select(dir => new CertificateDirectoryEnumerable(_fileSystem, dir, false))) };
 
     
     /// <summary>
@@ -161,7 +161,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="recurse">Indicates whether to search subdirectories.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>
     public CertificateFinder AddDirectories(IEnumerable<string> dirs, bool recurse = false)
-        => this with { Stores = Stores.AddRange(dirs.Select(dir => new CertificateDirectoryEnumerable(_fileSystem, dir, recurse))) };
+        => this with { Sources = Sources.AddRange(dirs.Select(dir => new CertificateDirectoryEnumerable(_fileSystem, dir, recurse))) };
 
 
     /// <summary>
@@ -170,7 +170,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="customSource">An <see cref="IEnumerable{CertificateFinderResult}"/> representing a custom source of certificates.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the custom source added.</returns>
     public CertificateFinder AddCustomSource(IEnumerable<CertificateFinderResult> customSource)
-        => this with { Stores = Stores.Add(customSource) };
+        => this with { Sources = Sources.Add(customSource) };
 
 
     /// <summary>
@@ -179,7 +179,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <param name="customSources">An <see cref="IEnumerable"/> of <see cref="IEnumerable{CertificateFinderResult}"/> representing multiple custom sources of certificates.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the custom sources added.</returns>
     public CertificateFinder AddCustomSources(IEnumerable<IEnumerable<CertificateFinderResult>> customSources)
-        => this with { Stores = Stores.AddRange(customSources) };
+        => this with { Sources = Sources.AddRange(customSources) };
 
 
     /// <summary>
@@ -199,7 +199,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// Gets the underlying LINQ queryable for the current set of stores.
     /// </summary>
     protected IQueryable<CertificateFinderResult> Queryable
-        => Stores
+        => Sources
             .Distinct()
             .SelectMany(x => x)
             .AsQueryable();
@@ -208,7 +208,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <summary>
     /// Gets the list of certificate sources (stores or directories).
     /// </summary>
-    internal protected ImmutableList<IEnumerable<CertificateFinderResult>> Stores { get; init; } = ImmutableList<IEnumerable<CertificateFinderResult>>.Empty;
+    internal protected ImmutableList<IEnumerable<CertificateFinderResult>> Sources { get; init; } = ImmutableList<IEnumerable<CertificateFinderResult>>.Empty;
 
 
     private readonly IFileSystem _fileSystem; 

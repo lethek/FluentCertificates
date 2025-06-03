@@ -1,8 +1,7 @@
 ﻿using System.IO.Abstractions.TestingHelpers;
-using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 
-namespace FluentCertificates.Finder.Tests;
+namespace FluentCertificates;
 
 public class CertificateFinderTests
 {
@@ -11,6 +10,7 @@ public class CertificateFinderTests
     {
         var finder = new CertificateFinder(MockFileSystem);
         var result = finder.AddStores(Array.Empty<X509Store>());
+
         Assert.NotNull(result);
         Assert.NotSame(finder, result);
     }
@@ -21,27 +21,30 @@ public class CertificateFinderTests
     {
         var finder = new CertificateFinder(MockFileSystem);
         var result = finder.AddDirectories(Enumerable.Empty<string>());
+
         Assert.NotNull(result);
         Assert.NotSame(finder, result);
     }
 
     
     [Fact]
-    public void ClearStores_OnEmptyFinder_ReturnsNewInstanceWithNoStores()
+    public void ClearSources_ReturnsNewInstanceWithNoSources()
     {
         var finder = new CertificateFinder(MockFileSystem);
-        var cleared = finder.ClearStores();
+        var cleared = finder.ClearSources();
+
         Assert.NotNull(cleared);
         Assert.NotSame(finder, cleared);
-        Assert.Empty(cleared.Stores);
+        Assert.Empty(cleared.Sources);
     }
 
     
     [Fact]
-    public void AddCommonStores_AddsExpectedNumberOfStores()
+    public void AddCommonStores_AddsExpectedNumberOfSources()
     {
         var finder = new CertificateFinder(MockFileSystem).AddCommonStores();
-        Assert.Equal(7, finder.Stores.Count);
+
+        Assert.Equal(7, finder.Sources.Count);
     }
 
 
@@ -51,7 +54,7 @@ public class CertificateFinderTests
         var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
         var finder = new CertificateFinder(MockFileSystem).AddStore(store);
 
-        Assert.Single(finder.Stores);
+        Assert.Single(finder.Sources);
     }
 
     
@@ -60,7 +63,7 @@ public class CertificateFinderTests
     {
         var finder = new CertificateFinder(MockFileSystem).AddStore(StoreName.My, StoreLocation.LocalMachine);
 
-        Assert.Single(finder.Stores);
+        Assert.Single(finder.Sources);
     }
 
     
@@ -71,7 +74,7 @@ public class CertificateFinderTests
         var store2 = new X509Store(StoreName.Root, StoreLocation.LocalMachine);
         var finder = new CertificateFinder(MockFileSystem).AddStores(store1, store2);
 
-        Assert.Equal(2, finder.Stores.Count);
+        Assert.Equal(2, finder.Sources.Count);
     }
 
     
@@ -80,48 +83,7 @@ public class CertificateFinderTests
     {
         var finder = new CertificateFinder(MockFileSystem).AddDirectory(@"/certs");
 
-        Assert.Single(finder.Stores);
-    }
-
-    
-    [Fact]
-    public void AddDirectories_WithMultiplePaths_AddsAllDirectories()
-    {
-        var dirs = new[] { "/certs", "/backup/certs" };
-        var finder = new CertificateFinder(MockFileSystem).AddDirectories(dirs);
-
-        Assert.Equal(2, finder.Stores.Count);
-    }
-
-    
-    [Fact]
-    public void AddCustomSource_WithValidSource_AddsCustomSource()
-    {
-        var customSource = new List<CertificateFinderResult>();
-        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(customSource);
-        
-        Assert.Single(finder.Stores);
-        Assert.Collection(finder.Stores, x => customSource.Equals(x));
-    }
-
-    
-    [Fact]
-    public void ClearStores_RemovesAllStores()
-    {
-        var finder = new CertificateFinder(MockFileSystem)
-            .AddStore(StoreName.My, StoreLocation.CurrentUser)
-            .ClearStores();
-
-        Assert.Empty(finder);
-    }
-
-    
-    [Fact]
-    public void AddCommonStores_AddsExpectedStores()
-    {
-        var finder = new CertificateFinder(MockFileSystem).AddCommonStores();
-
-        Assert.Equal(7, finder.Stores.Count);
+        Assert.Single(finder.Sources);
     }
 
     
@@ -136,45 +98,82 @@ public class CertificateFinderTests
 
     
     [Fact]
-    public void AddCustomSources_WithEmptyEnumerable_DoesNotThrow()
+    public void AddDirectories_WithMultiplePaths_AddsAllDirectories()
+    {
+        var dirs = new[] { "/certs", "/backup/certs" };
+        var finder = new CertificateFinder(MockFileSystem).AddDirectories(dirs);
+
+        Assert.Equal(2, finder.Sources.Count);
+    }
+
+
+    [Fact]
+    public void AddCustomSource_WithEmptyList_AddsCustomSource()
+    {
+        var customSource = new List<CertificateFinderResult>();
+        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(customSource);
+        
+        Assert.Single(finder.Sources);
+        Assert.Collection(finder.Sources, x => customSource.Equals(x));
+    }
+
+
+    [Fact]
+    public void AddCommonStores_AddsExpectedStores()
+    {
+        var finder = new CertificateFinder(MockFileSystem).AddCommonStores();
+
+        Assert.Equal(7, finder.Sources.Count);
+    }
+
+
+    [Fact]
+    public void EnumerateCertificates_WithValidPath_ReturnsExpectedResults()
+    {
+        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/certs");
+        var results = finder.ToList();
+
+        Assert.Equal(2, results.Count);
+        Assert.All(results, r => Assert.NotNull(r.Certificate));
+        Assert.All(results, r => Assert.NotNull(r.Directory));
+    }
+
+    
+    [Fact]
+    public void EnumerateCertificates_WithNonExistentPath_ThrowsDirectoryNotFoundException()
+    {
+        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/nonexistent");
+        var ex = Record.Exception(() => finder.ToList());
+
+        Assert.IsType<DirectoryNotFoundException>(ex);
+    }
+    
+    
+    [Fact]
+    public void EnumerateCertificates_FromEmptyFinder_ReturnsEmpty()
     {
         var finder = new CertificateFinder(MockFileSystem);
-        var ex = Record.Exception(() => finder.AddCustomSources(Enumerable.Empty<IEnumerable<CertificateFinderResult>>()));
+        var results = finder.ToList();
 
-        Assert.Null(ex);
+        Assert.Empty(results);
     }
 
-
-    private static readonly MockFileSystem MockFileSystem = CreateMockFileSystemWithCerts();
-
-
-    private static MockFileSystem CreateMockFileSystemWithCerts() 
-    {
-        const string certsDir = "/certs";
-
-        var fs = new MockFileSystem();
-        fs.AddDirectory(certsDir);
-
-        // Add some mock certificate files
-        fs.AddFile(fs.Path.Combine(certsDir, "ecdsa-no-key.pem"), new MockFileData(ReadResource("ecdsa-no-key.pem")));
-        fs.AddFile(fs.Path.Combine(certsDir, "ecdsa-with-key.pem"), new MockFileData(ReadResource("ecdsa-with-key.pem")));
-        
-        return fs;
-    }
     
-    
-    private static byte[] ReadResource(string fileName)
+    [Fact]
+    public void EnumerateCertificates_FromCustomSource_ReturnsAllResults()
     {
-        var resourceName = $"{ResourcePrefix}.{fileName}";
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName);
-        if (stream is null) {
-            throw new InvalidOperationException($"Could not load resource {resourceName}");
-        }
-        using var memoryStream = new MemoryStream();
-        stream.CopyTo(memoryStream);
-        return memoryStream.ToArray();
-    }
+        var certResult1 = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-no-key.pem");
+        var certResult2 = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-with-key.pem");
+        var customSource = new[] { certResult1, certResult2 };
 
+        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(customSource);
+        var results = finder.ToList();
 
-    const string ResourcePrefix = "FluentCertificates.TestData";
+        Assert.Equal(2, results.Count);
+        Assert.Contains(certResult1, results);
+        Assert.Contains(certResult2, results);
+    }    
+
+  
+    private static readonly MockFileSystem MockFileSystem = TestTools.CreateMockFileSystemWithCerts();
 }
