@@ -39,7 +39,11 @@
     <ProjectReference Include="..\..\src\FluentCertificates.Builder\FluentCertificates.Builder.csproj" />
     <ProjectReference Include="..\..\src\FluentCertificates.Extensions\FluentCertificates.Extensions.csproj" />
   </ItemGroup>
-  
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

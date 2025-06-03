@@ -31,21 +31,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Using Include="Xunit" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\src\FluentCertificates.Finder\FluentCertificates.Finder.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="TestData\" />
+    <Using Include="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="TestData\ecdsa-no-key.pem" />
-    <None Remove="TestData\ecdsa-with-key.pem" />
+    <None Remove="TestData\*" />
     <EmbeddedResource Include="TestData\*.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
