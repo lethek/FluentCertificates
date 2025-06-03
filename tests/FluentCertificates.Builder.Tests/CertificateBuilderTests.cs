@@ -11,7 +11,7 @@ using X509Extension = System.Security.Cryptography.X509Certificates.X509Extensio
 
 namespace FluentCertificates;
 
-public class CertificateBuilderTest
+public class CertificateBuilderTests
 {
     [Fact]
     public void Build_Certificate_HasPrivateKey()
