@@ -9,22 +9,62 @@ using FluentCertificates.Internals;
 
 namespace FluentCertificates;
 
+/// <summary>
+/// Provides a fluent API for building and creating X.509 certificates and certificate requests.
+/// </summary>
+/// <remarks>
+/// The <c>CertificateBuilder</c> record allows configuration of certificate properties, key generation,
+/// extensions, and other parameters. It supports both self-signed and CA-signed certificates,
+/// and can generate Certificate Signing Requests (CSRs).
+/// </remarks>
 public record CertificateBuilder
 {
+    /// <summary>Gets the primary usage of the certificate, which determines default extensions.</summary>
     public CertificateUsage? Usage { get; init; }
+
+    /// <summary>Gets the start time for certificate validity. Defaults to 1 hour ago (UTC).</summary>
     public DateTimeOffset NotBefore { get; init; } = DateTimeOffset.UtcNow.AddHours(-1);
+
+    /// <summary>Gets the end time for certificate validity. Defaults to 1 hour in the future (UTC).</summary>
     public DateTimeOffset NotAfter { get; init; } = DateTimeOffset.UtcNow.AddHours(1);
+    
+    /// <summary>Gets the Subject Name Builder for the certificate.</summary>
     public X500NameBuilder Subject { get; init; } = EmptyNameBuilder;
+    
+    /// <summary>Gets the issuer certificate, or <see langword="null"/> for self-signed certificates.</summary>
     public X509Certificate2? Issuer { get; init; }
+    
+    /// <summary>Gets the friendly name for the certificate (Windows only; this property is ignored on other platforms).</summary>
     public string? FriendlyName { get; init; }
+    
+    /// <summary>Gets the path length constraint for CA certificates.</summary>
     public int? PathLength { get; init; }
+    
+    /// <summary>Gets the key length for new key generation.</summary>
     public int? KeyLength { get; init; }
+    
+    /// <summary>Gets the key algorithm for automatic key generation.</summary>
     public KeyAlgorithm KeyAlgorithm { get; init; } = KeyAlgorithm.RSA;
+    
+    /// <summary>Gets the hash algorithm for signing.</summary>
     public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
+    
+    /// <summary>Gets the RSA signature padding mode. Ignored for non-RSA algorithms.</summary>
     public RSASignaturePadding RSASignaturePadding { get; init; } = RSASignaturePadding.Pkcs1;
-    public ImmutableHashSet<X509Extension> Extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
+    
+    /// <summary>Gets the key storage flags for the certificate.</summary>
     public X509KeyStorageFlags KeyStorageFlags { get; init; }
-    public ImmutableList<GeneralName>? SubjectAlternativeNames { get; init; }
+    
+    /// <summary>Gets the custom serial number generator function for certificate creation.</summary>
+    public Func<byte[]>? SerialNumberGenerator { get; init; }
+
+    /// <summary>Gets the collection of certificate extensions.</summary>
+    public IReadOnlyCollection<X509Extension> Extensions => _extensions;
+    private ImmutableHashSet<X509Extension> _extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
+    
+    /// <summary>Gets the list of subject alternative names, or <see langword="null"/> if not set.</summary>
+    public IReadOnlyList<GeneralName>? SubjectAlternativeNames => _subjectAlternativeNames;
+    private ImmutableList<GeneralName>? _subjectAlternativeNames { get; init; }
 
     private PublicKey? PublicKey { get; init; }
     private AsymmetricAlgorithm? KeyPair { get; init; }
@@ -173,7 +213,7 @@ public record CertificateBuilder
     /// <param name="extension">The extension to add.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the extension added.</returns>
     public CertificateBuilder AddExtension(X509Extension extension)
-        => this with { Extensions = Extensions.Add(extension) };
+        => this with { _extensions = _extensions.Add(extension) };
 
     /// <summary>
     /// Adds multiple extensions to the certificate.
@@ -181,7 +221,7 @@ public record CertificateBuilder
     /// <param name="values">The extensions to add.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the extensions added.</returns>
     public CertificateBuilder AddExtensions(params X509Extension[] values)
-        => this with { Extensions = Extensions.Union(values) };
+        => this with { _extensions = _extensions.Union(values) };
 
     /// <summary>
     /// Adds multiple extensions to the certificate.
@@ -189,7 +229,7 @@ public record CertificateBuilder
     /// <param name="values">The extensions to add.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the extensions added.</returns>
     public CertificateBuilder AddExtensions(IEnumerable<X509Extension> values)
-        => this with { Extensions = Extensions.Union(values) };
+        => this with { _extensions = _extensions.Union(values) };
 
     /// <summary>
     /// Sets the certificate extensions, replacing any existing ones.
@@ -197,7 +237,7 @@ public record CertificateBuilder
     /// <param name="values">The extensions to set.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified extensions.</returns>
     public CertificateBuilder SetExtensions(params X509Extension[] values)
-        => this with { Extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
+        => this with { _extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
 
     /// <summary>
     /// Sets the certificate extensions, replacing any existing ones.
@@ -205,7 +245,7 @@ public record CertificateBuilder
     /// <param name="values">The extensions to set.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified extensions.</returns>
     public CertificateBuilder SetExtensions(IEnumerable<X509Extension> values)
-        => this with { Extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
+        => this with { _extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
 
     
     /// <summary>
@@ -215,6 +255,15 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified flags.</returns>
     public CertificateBuilder SetKeyStorageFlags(X509KeyStorageFlags value)
         => this with { KeyStorageFlags = value };
+
+
+    /// <summary>
+    /// Sets a custom serial number generator function for certificate creation.
+    /// </summary>
+    /// <param name="generator">A delegate that returns a <see cref="T:System.Byte[]"/> representing the serial number to use for the certificate.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified serial number generator.</returns>
+    public CertificateBuilder SetSerialNumberGenerator(Func<byte[]> generator)
+        => this with { SerialNumberGenerator = generator };
 
 
     /// <summary>
@@ -232,7 +281,7 @@ public record CertificateBuilder
     /// <param name="san">The subject alternative names.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified SANs.</returns>
     public CertificateBuilder SetSubjectAlternativeNames(IEnumerable<GeneralName> san)
-        => this with { SubjectAlternativeNames = san.ToImmutableList() };
+        => this with { _subjectAlternativeNames = san.ToImmutableList() };
 
 
     /// <summary>
@@ -354,6 +403,10 @@ public record CertificateBuilder
 
 
     private byte[] GenerateSerialNumber()
+        => SerialNumberGenerator?.Invoke() ?? DefaultGenerateSerialNumber();
+
+    
+    private static byte[] DefaultGenerateSerialNumber()
     {
         Span<byte> span = stackalloc byte[18];
         BinaryPrimitives.WriteInt16BigEndian(span[0..2], 0x4D58);
@@ -405,10 +458,10 @@ public record CertificateBuilder
             extensions.Add(new X509SubjectAlternativeNameExtension(builder.SubjectAlternativeNames.Encode(), critical));
         }
 
-        //Collate extensions; manually specified ones override those matching ones generated above (e.g. Usage, DnsNames, Email, etc.)
+        //Collate extensions; manually specified ones in the `builder` may override matching generated ones above (e.g. Usage, DnsNames, Email, etc.)
         return extensions.Any()
-            ? builder.Extensions.Union(extensions)
-            : builder.Extensions;
+            ? builder._extensions.Union(extensions)
+            : builder._extensions;
     }
 
 

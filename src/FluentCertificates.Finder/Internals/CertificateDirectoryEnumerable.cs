@@ -68,6 +68,7 @@ internal sealed class CertificateDirectoryEnumerable(IFileSystem fileSystem, Cer
                         case ".pem":
                             return [X509Certificate2.CreateFromPem(fileSystem.File.ReadAllText(x.Path))];
                         default:
+                            //TODO: this should be replaced with a loading method that uses IFileSystem
                             return [CertTools.LoadCertificateFromFile(x.Path)];
                     }
                 } catch {

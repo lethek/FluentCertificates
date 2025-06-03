@@ -15,6 +15,13 @@ namespace FluentCertificates;
 /// </summary>
 public record CertificateFinder : IQueryable<CertificateFinderResult>
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CertificateFinder"/> class.
+    /// </summary>
+    /// <param name="fileSystem">
+    /// An optional <see cref="IFileSystem"/> implementation to use for directory operations.
+    /// If <see langword="null"/>, a default <see cref="FileSystem"/> is used.
+    /// </param>
     public CertificateFinder(IFileSystem? fileSystem = null)
         => _fileSystem = fileSystem ?? new FileSystem();
 

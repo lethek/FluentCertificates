@@ -6,6 +6,14 @@ using FluentCertificates.Internals;
 
 namespace FluentCertificates;
 
+/// <summary>
+/// Provides a collection of constants and helper methods for common Object Identifier (OID) values
+/// used in cryptographic operations, X.509 certificates, and related protocols.
+/// </summary>
+/// <remarks>
+/// The <c>Oids</c> class defines string constants for well-known OIDs, as well as static properties
+/// for commonly used <see cref="Oid"/> instances.
+/// </remarks>
 public static class Oids
 {
     // Symmetric encryption algorithms
