@@ -25,8 +25,8 @@ public static class X509Certificate2EnumerableExtensions
     public static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include)
         => include switch {
             ExportKeys.All => enumerable,
-            ExportKeys.Leaf => enumerable.Reverse().Select((x, i) => x.HasPrivateKey && i > 0 ? Tools.LoadPkcs12(x.RawData, "", X509KeyStorageFlags.Exportable) : x).Reverse(),
-            ExportKeys.None => enumerable.Select(x => x.HasPrivateKey ? Tools.LoadPkcs12(x.RawData, "", X509KeyStorageFlags.Exportable) : x),
+            ExportKeys.Leaf => enumerable.Reverse().Select((x, i) => x.HasPrivateKey && i > 0 ? CertTools.LoadCertificate(x.GetRawCertData()) : x).Reverse(),
+            ExportKeys.None => enumerable.Select(x => x.HasPrivateKey ? CertTools.LoadCertificate(x.GetRawCertData()) : x),
             _ => throw new ArgumentOutOfRangeException(nameof(include))
         };
 

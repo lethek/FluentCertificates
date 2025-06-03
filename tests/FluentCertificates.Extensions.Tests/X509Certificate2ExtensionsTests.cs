@@ -45,7 +45,7 @@ public class X509Certificate2ExtensionsTests
 
         var parser = new X509CertificateParser();
         var bcCert = parser.ReadCertificate(stream.ToArray());
-        using var actual = Tools.LoadCertificate(bcCert.GetEncoded());
+        using var actual = CertTools.LoadCertificate(bcCert.GetEncoded());
         //TODO: load the private key if one was in the export
 
         stream.Position = 0;
@@ -78,7 +78,7 @@ public class X509Certificate2ExtensionsTests
             expected.ExportAsPem(tmpFile, password, include);
             var parser = new X509CertificateParser();
             var bcCert = parser.ReadCertificate(File.ReadAllBytes(tmpFile));
-            using var actual = Tools.LoadCertificate(bcCert.GetEncoded());
+            using var actual = CertTools.LoadCertificate(bcCert.GetEncoded());
             //TODO: load the private key if one was in the export
 
             using var streamReader = new StreamReader(tmpFile, Encoding.ASCII);
@@ -113,7 +113,7 @@ public class X509Certificate2ExtensionsTests
             expected.ExportAsCert(writer);
         }
 
-        using var actual = Tools.LoadCertificate(stream.ToArray());
+        using var actual = CertTools.LoadCertificate(stream.ToArray());
 
         Assert.Equal(expected.RawData, actual.RawData);
         Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
@@ -130,7 +130,7 @@ public class X509Certificate2ExtensionsTests
             using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
             expected.ExportAsCert(tmpFile);
-            using var actual = Tools.LoadCertificateFromFile(tmpFile);
+            using var actual = CertTools.LoadCertificateFromFile(tmpFile);
 
             Assert.Equal(expected.RawData, actual.RawData);
             Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
@@ -195,7 +195,7 @@ public class X509Certificate2ExtensionsTests
             expected.ExportAsPkcs12(writer, password, include);
         }
 
-        using var actual = Tools.LoadPkcs12(stream.ToArray(), password);
+        using var actual = CertTools.LoadPkcs12(stream.ToArray(), password);
 
         Assert.Equal(expected.RawData, actual.RawData);
         Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
@@ -216,11 +216,10 @@ public class X509Certificate2ExtensionsTests
             using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
             expected.ExportAsPkcs12(tmpFile, password, include);
-            using var actual = Tools.LoadPkcs12FromFile(tmpFile, password);
+            using var actual = CertTools.LoadPkcs12FromFile(tmpFile, password);
 
             Assert.Equal(expected.RawData, actual.RawData);
             Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
-
             if (include == ExportKeys.None) {
                 Assert.False(actual.HasPrivateKey, "Loaded X509Certificate2 should not have a private key attached");
             } else {

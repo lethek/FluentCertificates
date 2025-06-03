@@ -364,6 +364,7 @@ public static class X509Certificate2Extensions
         => first.SequenceEqual(second);
 
 
+    
     /// <summary>
     /// Filters the private key from the certificate based on the <see cref="ExportKeys"/> option.
     /// </summary>
@@ -374,7 +375,7 @@ public static class X509Certificate2Extensions
         => include switch {
             ExportKeys.All => cert,
             ExportKeys.Leaf => cert,
-            ExportKeys.None => cert.HasPrivateKey ? Tools.LoadPkcs12(cert.RawData, "", X509KeyStorageFlags.Exportable) : cert,
+            ExportKeys.None => cert.HasPrivateKey ? CertTools.LoadCertificate(cert.GetRawCertData()) : cert,
             _ => throw new ArgumentOutOfRangeException(nameof(include))
         };
 }
