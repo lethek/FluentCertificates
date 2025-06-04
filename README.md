@@ -216,7 +216,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 |`GetSignatureData`||
 |`GetToBeSignedData`||
 |`IsValidNow`||
-|`IsValid`||
+|`IsValidAt`||
 |`IsSelfSigned`||
 |`IsIssuedBy`||
 

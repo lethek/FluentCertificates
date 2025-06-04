@@ -5,6 +5,10 @@ namespace FluentCertificates.Internals;
 #pragma warning disable SYSLIB0057
 internal static class CertTools
 {
+    /*
+     * https://github.com/dotnet/runtime/blob/main/src/libraries/System.Security.Cryptography/docs/X509CertificateLoader.SecurityDesign.md
+     */
+    
     internal static X509Certificate2 LoadCertificate(ReadOnlySpan<byte> data)
 #if NET9_0_OR_GREATER
         => X509CertificateLoader.LoadCertificate(data);

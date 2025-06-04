@@ -14,7 +14,7 @@ public sealed class CertificateTestingFixture : IDisposable
     {
         _rootCa = new(() => CreateCertificateAuthority("Root CA", 100));
         _intermediateCa = new(() => CreateCertificateAuthority("Intermediate CA", 99, RootCA));
-        _caChain = new(() => IntermediateCA.BuildChain([RootCA], true));
+        _caChain = new(() => IntermediateCA.BuildChain([RootCA], true).Chain);
     }
 
 

@@ -24,10 +24,12 @@ public class X509ChainExtensionsTests
             .SetSubject("CN=Leaf")
             .Create();
 
-        using var chain = cert.BuildChain([subCa, rootCa], true);
+        var chainResult = cert.BuildChain([subCa, rootCa], true); 
+        using var chain = chainResult.Chain;
 
         var expected = new[] { rootCa, subCa, cert };
 
+        Assert.True(chainResult.Verified);
         Assert.Equal(expected, chain.ToEnumerable());
         Assert.Equal(expected, chain.ToCollection().ToEnumerable());
     }

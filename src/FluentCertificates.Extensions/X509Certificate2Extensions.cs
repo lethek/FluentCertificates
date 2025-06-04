@@ -15,13 +15,14 @@ namespace FluentCertificates;
 public static class X509Certificate2Extensions
 {
     /// <summary>
-    /// Builds an X.509 certificate chain with <paramref name="cert"/> as the leaf certificate.
+    /// Builds an <see cref="X509Chain"/> for the given certificate, optionally including extra certificates and custom root trust.
     /// </summary>
-    /// <param name="cert"></param>
-    /// <param name="extraCerts">An additional collection of certificates that can be searched by the chaining engine when building and validating a certificate chain.</param>
-    /// <param name="customRootTrust">When this value is <code>true</code>, the <see cref="P:System.Security.Cryptography.X509Certificates.X509ChainPolicy.CustomTrustStore" /> will be used instead of the default root trust. This parameter is ignored on .NET Standard.</param>
-    /// <returns>An X509Chain instance.</returns>
-    public static X509Chain BuildChain(this X509Certificate2 cert, IEnumerable<X509Certificate2>? extraCerts = null, bool customRootTrust = false)
+    /// <param name="cert">The certificate to build the chain for.</param>
+    /// <param name="extraCerts">Optional additional certificates to include in the chain.</param>
+    /// <param name="customRootTrust">If true, uses a custom root trust store; otherwise, uses the system trust store.</param>
+    /// <returns>A tuple containing a boolean indicating if the chain is valid (<c>Verified</c>), and the built <see cref="X509Chain"/>.</returns>
+    /// <remarks>No revocation checks are performed on the certificates.</remarks>
+    public static (bool Verified, X509Chain Chain) BuildChain(this X509Certificate2 cert, IEnumerable<X509Certificate2>? extraCerts = null, bool customRootTrust = false)
     {
         var chain = new X509Chain();
         chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
@@ -31,8 +32,9 @@ public static class X509Certificate2Extensions
             (customRootTrust ? chain.ChainPolicy.CustomTrustStore : chain.ChainPolicy.ExtraStore).AddRange(extraCerts.ToArray());
         }
 
-        chain.Build(cert);
-        return chain;
+        var result = chain.Build(cert);
+
+        return (result, chain);
     }
 
 
@@ -299,7 +301,7 @@ public static class X509Certificate2Extensions
     /// <param name="cert">The certificate.</param>
     /// <returns>True if valid now; otherwise, false.</returns>
     public static bool IsValidNow(this X509Certificate2 cert)
-        => cert.IsValid(DateTime.UtcNow);
+        => cert.IsValidAt(DateTime.UtcNow);
 
 
     /// <summary>
@@ -308,7 +310,7 @@ public static class X509Certificate2Extensions
     /// <param name="cert">The certificate.</param>
     /// <param name="atTime">The time to check validity for.</param>
     /// <returns>True if valid at the specified time; otherwise, false.</returns>
-    public static bool IsValid(this X509Certificate2 cert, DateTime atTime)
+    public static bool IsValidAt(this X509Certificate2 cert, DateTime atTime)
         => cert.NotBefore.ToUniversalTime() <= atTime && atTime <= cert.NotAfter.ToUniversalTime();
 
 
