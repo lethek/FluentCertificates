@@ -387,7 +387,7 @@ public static class X509Certificate2Extensions
         => include switch {
             ExportKeys.All => cert,
             ExportKeys.Leaf => cert,
-            ExportKeys.None => cert.HasPrivateKey ? CertTools.LoadCertificate(cert.GetRawCertData()) : cert,
+            ExportKeys.None => cert.HasPrivateKey ? CertTools.LoadCertificate(cert.RawDataMemory.Span) : cert,
             _ => throw new ArgumentOutOfRangeException(nameof(include))
         };
 }
