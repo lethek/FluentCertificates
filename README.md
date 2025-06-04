@@ -219,6 +219,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 |`IsValidAt`||
 |`IsSelfSigned`||
 |`IsIssuedBy`||
+|`VerifyChain`||
 
 ---
 

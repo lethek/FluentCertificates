@@ -15,11 +15,21 @@ namespace FluentCertificates;
 public static class X509Certificate2Extensions
 {
     /// <summary>
+    /// Verifies the certificate chain for the given certificate, optionally including extra certificates.
+    /// </summary>
+    /// <param name="cert">The certificate to verify.</param>
+    /// <param name="extraCerts">Optional additional certificates to include in the chain and trust.</param>
+    /// <returns><c>True</c> if the certificate chain is valid; otherwise, <c>False</c>.</returns>
+    public static bool VerifyChain(this X509Certificate2 cert, IEnumerable<X509Certificate2>? extraCerts = null)
+        => cert.BuildChain(extraCerts, true).Verified;
+
+
+    /// <summary>
     /// Builds an <see cref="X509Chain"/> for the given certificate, optionally including extra certificates and custom root trust.
     /// </summary>
     /// <param name="cert">The certificate to build the chain for.</param>
-    /// <param name="extraCerts">Optional additional certificates to include in the chain.</param>
-    /// <param name="customRootTrust">If true, uses a custom root trust store; otherwise, uses the system trust store.</param>
+    /// <param name="extraCerts">Optional additional certificates to include in the chain. If <paramref name="customRootTrust"/> is <c>true</c>, these extra certificates are automatically trusted within the returned <see cref="X509Chain"/>.</param>
+    /// <param name="customRootTrust">If true, uses a custom root trust store in the returned chain; otherwise, uses the system trust store.</param>
     /// <returns>A tuple containing a boolean indicating if the chain is valid (<c>Verified</c>), and the built <see cref="X509Chain"/>.</returns>
     /// <remarks>No revocation checks are performed on the certificates.</remarks>
     public static (bool Verified, X509Chain Chain) BuildChain(this X509Certificate2 cert, IEnumerable<X509Certificate2>? extraCerts = null, bool customRootTrust = false)

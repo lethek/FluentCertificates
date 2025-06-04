@@ -57,7 +57,7 @@ internal sealed class CertificateStoreEnumerable(CertificateStore certStore) : I
     /// Handles exceptions if the store does not exist, returning an empty result in such cases.
     /// </summary>
     /// <param name="certStore">The certificate store to enumerate.</param>
-    /// <returns>An enumerable of <see cref="CertificateFinderResult"/>.</returns>
+    /// <returns>An IEnumerable of <see cref="CertificateFinderResult"/>.</returns>
     private static IEnumerable<CertificateFinderResult> GetCertificatesFromStore(CertificateStore certStore) {
         try {
             using var store = certStore.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
