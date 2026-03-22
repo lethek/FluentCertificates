@@ -119,4 +119,13 @@ public static class X509Certificate2EnumerableExtensions
         }
         return sw.ToString();
     }
+
+
+    /// <summary>
+    /// Creates a <see cref="CertificateExportBuilder"/> initialised with the certificates in this sequence.
+    /// </summary>
+    /// <param name="enumerable">The certificates to export.</param>
+    /// <returns>A new <see cref="CertificateExportBuilder"/> containing all certificates in the sequence.</returns>
+    public static CertificateExportBuilder Export(this IEnumerable<X509Certificate2> enumerable)
+        => new(enumerable);
 }

@@ -25,6 +25,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="LINQPadQuery" />
     <InternalsVisibleTo Include="FluentCertificates.Builder" />
+    <InternalsVisibleTo Include="FluentCertificates.Extensions.Tests" />
   </ItemGroup>
 
   <ItemGroup>

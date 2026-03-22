@@ -390,4 +390,15 @@ public static class X509Certificate2Extensions
             ExportKeys.None => cert.HasPrivateKey ? CertTools.LoadCertificate(cert.RawDataMemory.Span) : cert,
             _ => throw new ArgumentOutOfRangeException(nameof(include))
         };
+
+
+    /// <summary>
+    /// Creates a <see cref="CertificateExportBuilder"/> initialised with this certificate.
+    /// Chain configuration and format-selection methods on the returned builder allow you to
+    /// build a fully configured export operation.
+    /// </summary>
+    /// <param name="cert">The certificate to export.</param>
+    /// <returns>A new <see cref="CertificateExportBuilder"/> containing this certificate.</returns>
+    public static CertificateExportBuilder Export(this X509Certificate2 cert)
+        => new(new[] { cert });
 }
