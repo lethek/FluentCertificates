@@ -53,9 +53,11 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate in DER format to a <see cref="BinaryWriter"/>.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().AsCert().ToStream(writer.BaseStream)</c> instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="writer">The binary writer to write to.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().AsCert().ToStream(writer.BaseStream) instead.")]
     public static X509Certificate2 ExportAsCert(this X509Certificate2 cert, BinaryWriter writer)
     {
         writer.Write(cert.Export(X509ContentType.Cert));
@@ -66,9 +68,11 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate as a PKCS#7 blob to a <see cref="BinaryWriter"/>.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().AsPkcs7().ToStream(writer.BaseStream)</c> instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="writer">The binary writer to write to.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().AsPkcs7().ToStream(writer.BaseStream) instead.")]
     public static X509Certificate2 ExportAsPkcs7(this X509Certificate2 cert, BinaryWriter writer)
     {
         var data = new X509Certificate2Collection(cert).Export(X509ContentType.Pkcs7)
@@ -82,11 +86,13 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate as a PKCS#12 (PFX) file to a <see cref="BinaryWriter"/>.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().WithPassword(password).AsPkcs12().ToStream(writer.BaseStream)</c> instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="writer">The binary writer to write to.</param>
     /// <param name="password">The password for the PFX file.</param>
     /// <param name="include">Specifies which keys to include.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().WithPassword(password).AsPkcs12().ToStream(writer.BaseStream) instead.")]
     public static X509Certificate2 ExportAsPkcs12(this X509Certificate2 cert, BinaryWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
     {
         var data = FilterPrivateKey(cert, include).Export(X509ContentType.Pfx, password)
@@ -100,11 +106,13 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate as a PKCS#12 (PFX) file to a <see cref="BinaryWriter"/> using a <see cref="SecureString"/> password.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().WithPassword(password).AsPkcs12().ToStream(writer.BaseStream)</c> instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="writer">The binary writer to write to.</param>
     /// <param name="password">The password for the PFX file as a <see cref="SecureString"/>.</param>
     /// <param name="include">Specifies which keys to include.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().WithPassword(password).AsPkcs12().ToStream(writer.BaseStream) instead.")]
     public static X509Certificate2 ExportAsPkcs12(this X509Certificate2 cert, BinaryWriter writer, SecureString password, ExportKeys include = ExportKeys.All)
     {
         var data = FilterPrivateKey(cert, include).Export(X509ContentType.Pfx, password)
@@ -118,11 +126,13 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate as PEM to a <see cref="TextWriter"/>.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().AsPem().ToPemString()</c> and write the result to the TextWriter instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="writer">The text writer to write to.</param>
     /// <param name="password">The password for encrypting the private key, if included.</param>
     /// <param name="include">Specifies which keys to include.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().AsPem().ToPemString() and write the result to the TextWriter instead.")]
     public static X509Certificate2 ExportAsPem(this X509Certificate2 cert, TextWriter writer, string? password = null, ExportKeys include = ExportKeys.All)
     {
         writer.Write(cert.ToPemString(password, include));
@@ -137,9 +147,11 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate in DER format to a file.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().AsCert().ToFile(path)</c> instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="path">The file path to write to.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().AsCert().ToFile(path) instead.")]
     public static X509Certificate2 ExportAsCert(this X509Certificate2 cert, string path)
     {
         using var stream = File.OpenWrite(path);
@@ -151,9 +163,11 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate as a PKCS#7 blob to a file.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().AsPkcs7().ToFile(path)</c> instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="path">The file path to write to.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().AsPkcs7().ToFile(path) instead.")]
     public static X509Certificate2 ExportAsPkcs7(this X509Certificate2 cert, string path)
     {
         using var stream = File.OpenWrite(path);
@@ -165,11 +179,13 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate as a PKCS#12 (PFX) file to a file.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().WithPassword(password).AsPkcs12().ToFile(path)</c> instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="path">The file path to write to.</param>
     /// <param name="password">The password for the PFX file.</param>
     /// <param name="include">Specifies which keys to include.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().WithPassword(password).AsPkcs12().ToFile(path) instead.")]
     public static X509Certificate2 ExportAsPkcs12(this X509Certificate2 cert, string path, string? password = null, ExportKeys include = ExportKeys.All)
     {
         using var stream = File.OpenWrite(path);
@@ -181,11 +197,13 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate as a PKCS#12 (PFX) file to a file using a <see cref="SecureString"/> password.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().WithPassword(password).AsPkcs12().ToFile(path)</c> instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="path">The file path to write to.</param>
     /// <param name="password">The password for the PFX file as a <see cref="SecureString"/>.</param>
     /// <param name="include">Specifies which keys to include.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().WithPassword(password).AsPkcs12().ToFile(path) instead.")]
     public static X509Certificate2 ExportAsPkcs12(this X509Certificate2 cert, string path, SecureString password, ExportKeys include = ExportKeys.All)
     {
         using var stream = File.OpenWrite(path);
@@ -197,11 +215,13 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Exports the certificate as PEM to a file.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().AsPem().ToFile(path)</c> instead.</remarks>
     /// <param name="cert">The certificate to export.</param>
     /// <param name="path">The file path to write to.</param>
     /// <param name="password">The password for encrypting the private key, if included.</param>
     /// <param name="include">Specifies which keys to include.</param>
     /// <returns>The original certificate.</returns>
+    [Obsolete("Use cert.Export().AsPem().ToFile(path) instead.")]
     public static X509Certificate2 ExportAsPem(this X509Certificate2 cert, string path, string? password = null, ExportKeys include = ExportKeys.All)
     {
         using var stream = File.OpenWrite(path);
@@ -215,10 +235,12 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Converts the certificate to a PEM-encoded string, optionally including the private key.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>cert.Export().AsPem().ToPemString()</c> instead.</remarks>
     /// <param name="cert">The certificate to convert.</param>
     /// <param name="password">The password for encrypting the private key, if included.</param>
     /// <param name="include">Specifies which keys to include.</param>
     /// <returns>The PEM-encoded string.</returns>
+    [Obsolete("Use cert.Export().AsPem().ToPemString() instead.")]
     public static string ToPemString(this X509Certificate2 cert, string? password = null, ExportKeys include = ExportKeys.All)
     {
         using var sw = new StringWriter();
@@ -234,8 +256,10 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Converts the certificate to a Base64-encoded string.
     /// </summary>
+    /// <remarks>Deprecated. Use <c>Convert.ToBase64String(cert.RawData)</c> instead.</remarks>
     /// <param name="cert">The certificate to convert.</param>
     /// <returns>The Base64-encoded string.</returns>
+    [Obsolete("Use Convert.ToBase64String(cert.RawData) instead.")]
     public static string ToBase64String(this X509Certificate2 cert)
         => Convert.ToBase64String(cert.Export(X509ContentType.Cert));
 
