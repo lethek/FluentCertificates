@@ -130,11 +130,10 @@ public class CertificateBuilderTests
     }
 
 
-    [SkippableFact]
+    [Fact]
+    [SupportedOS(SupportedOS.Windows)]
     public void Build_CertificateOnWindows_WithFriendlyName()
     {
-        Skip.IfNot(OperatingSystem.IsWindows());
-
         const string friendlyName = "A FriendlyName can be set on Windows";
 
         using var cert1 = new CertificateBuilder().SetFriendlyName(friendlyName).Create();

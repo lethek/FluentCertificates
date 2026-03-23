@@ -16,19 +16,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
           8.x
           9.x
+          10.x
 
     - name: 'Cache: .nuke/temp, ~/.nuget/packages'
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: |
           .nuke/temp
@@ -42,11 +43,15 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: nuget
+        compression-level: 0
         path: |
           ${{ github.workspace }}/artifacts/*.nupkg
           ${{ github.workspace }}/artifacts/*.snupkg
 
     - name: Push
+      env:
+        NUGET_SOURCE: ${{ secrets.NUGET_SOURCE }}
+      if: ${{ env.NUGET_SOURCE != '' }}
       uses: lethek/os-specific-run@v1.0.6
       with:
         linux: dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg" -s ${{ secrets.NUGET_SOURCE }} -k ${{ secrets.NUGET_API_KEY }} --skip-duplicate

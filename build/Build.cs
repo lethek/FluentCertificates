@@ -3,7 +3,6 @@ using Nuke.Common.CI.GitHubActions;
 using Nuke.Common.IO;
 using Nuke.Common.Tools.DotNet;
 using Nuke.Common.Tools.GitVersion;
-using Octokit;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 
 
