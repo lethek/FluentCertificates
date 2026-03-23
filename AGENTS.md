@@ -1,0 +1,182 @@
+# AGENTS.md
+
+## Project Overview
+
+FluentCertificates is a .NET library for working with X.509 certificates using an immutable fluent builder pattern. It's published as multiple NuGet packages and supports certificate creation, finding/querying, and export operations.
+
+**Important:** The API is under initial development (v0.x.y) and may include breaking changes between minor versions.
+
+## Build System
+
+This project uses **NUKE** as its build system. All build operations should use the NUKE build scripts.
+
+### Common Build Commands
+
+```bash
+# Build the solution (default)
+./build.cmd              # Windows
+./build.sh               # Linux/macOS
+
+# Run tests
+./build.cmd Test         # Windows
+./build.sh Test          # Linux/macOS
+
+# Create NuGet packages (outputs to artifacts/ directory)
+./build.cmd Pack         # Windows
+./build.sh Pack          # Linux/macOS
+
+# Clean build artifacts
+./build.cmd Clean        # Windows
+./build.sh Clean         # Linux/macOS
+```
+
+The build script will:
+- Automatically install the correct .NET SDK if not present
+- Use GitVersion for versioning
+- Output packages to the `artifacts/` directory
+
+### Direct dotnet Commands
+
+While NUKE is preferred for full builds, you can also use dotnet CLI directly:
+
+```bash
+# Build
+dotnet build
+
+# Run all tests
+dotnet test
+
+# Run tests for a specific project
+dotnet test tests/FluentCertificates.Builder.Tests/FluentCertificates.Builder.Tests.csproj
+
+# Run a single test by name
+dotnet test --filter "FullyQualifiedName~TestMethodName"
+```
+
+## Architecture
+
+### Package Structure
+
+The solution is organized into multiple NuGet packages with clear separation of concerns:
+
+1. **FluentCertificates** (meta-package)
+   - Top-level package that imports Builder, Extensions, and Finder
+   - Location: `src/FluentCertificates/`
+
+2. **FluentCertificates.Builder**
+   - Core certificate building functionality via `CertificateBuilder`
+   - Subject name building via `X500NameBuilder`
+   - Subject Alternative Names via `GeneralNameListBuilder`
+   - Certificate Signing Request (CSR) support
+   - Location: `src/FluentCertificates.Builder/`
+   - Depends on: FluentCertificates.Extensions
+
+3. **FluentCertificates.Extensions**
+   - Extension methods for X509Certificate2, X509Chain, X509Certificate2Collection
+   - Export methods (PEM, PKCS7, PKCS12, CER)
+   - Certificate validation and verification helpers
+   - AsymmetricAlgorithm and CertificateRequest extensions
+   - Location: `src/FluentCertificates.Extensions/`
+   - Depends on: FluentCertificates.Common
+
+4. **FluentCertificates.Finder**
+   - Certificate discovery via `CertificateFinder` (implements IQueryable)
+   - Searches X509Store instances and file system directories
+   - LINQ support for flexible querying
+   - Location: `src/FluentCertificates.Finder/`
+   - Depends on: FluentCertificates.Common
+
+5. **FluentCertificates.Common**
+   - Shared internal utilities and OID constants
+   - Location: `src/FluentCertificates.Common/`
+   - Not typically referenced directly by consumers
+
+6. **FluentCertificates.Builder.BouncyCastle**
+   - Interoperability with BouncyCastle library
+   - Conversion extensions between .NET and BouncyCastle types
+   - Location: `src/FluentCertificates.Builder.BouncyCastle/`
+
+### Key Design Patterns
+
+**Immutable Fluent Builder Pattern:**
+All builder classes (CertificateBuilder, X500NameBuilder, GeneralNameListBuilder, CertificateFinder) are implemented as C# records with immutability. Each builder method returns a new instance rather than mutating state.
+
+Example:
+```csharp
+var builder = new CertificateBuilder()
+    .SetUsage(CertificateUsage.Server)
+    .SetSubject(b => b.SetCommonName("example.com"));
+// 'builder' is unchanged, methods return new instances
+```
+
+**Extension Methods for Export:**
+Certificate export functionality is implemented as extension methods rather than instance methods, providing a consistent API across X509Certificate2, X509Chain, and collections.
+
+### Target Frameworks
+
+All projects target:
+- .NET 8.0 (net8.0)
+- .NET 9.0 (net9.0)
+
+Some dependencies use conditional package references based on target framework (see .csproj files).
+
+### Test Framework
+
+Tests use:
+- **xUnit** as the testing framework
+- **Meziantou.Xunit.ParallelTestFramework** for parallel execution
+- **Xunit.SkippableFact** for conditionally skipped tests
+- Test projects target both net8.0 and net9.0
+
+Test projects are located in `tests/` directory with naming pattern `{ProjectName}.Tests`.
+
+## Code Conventions
+
+### Namespace
+All code uses the root namespace `FluentCertificates` regardless of which sub-package it belongs to. This provides a consistent API surface for consumers.
+
+### Immutability
+Builder classes use C# records with init-only properties. Internal state is stored in immutable collections (ImmutableHashSet, ImmutableList). Use `with` expressions for modifications.
+
+### XML Documentation
+All public APIs require XML documentation comments (`///`). Documentation is generated for all packable projects (`GenerateDocumentationFile = true`).
+
+### Internals Visibility
+Several projects expose internals to test projects and LINQPad via `InternalsVisibleTo`. Check .csproj files before making members internal.
+
+## Working with Certificates
+
+### CertificateBuilder
+The main API for creating certificates. Supports:
+- Self-signed certificates
+- CA-signed certificates
+- Certificate Authorities (with path length constraints)
+- Certificate Signing Requests (CSRs)
+- Custom extensions
+- Subject Alternative Names (SAN)
+- Custom serial number generation
+
+### CertificateFinder
+Provides LINQ-queryable interface for finding certificates across:
+- X509Store instances (CurrentUser, LocalMachine, etc.)
+- File system directories
+- Supports filtering, ordering, and projection via standard LINQ operators
+
+### Extension Methods
+Extensive extension methods provide export capabilities:
+- `ExportAsPem()` / `ToPemString()` - PEM format
+- `ExportAsPkcs12()` - PFX format (with private keys)
+- `ExportAsPkcs7()` - P7B format (certificate chains)
+- `ExportAsCert()` - DER/CER format
+- `BuildChain()` - Build certificate chains
+- `VerifyChain()` - Verify certificate chains
+- `IsValidNow()` / `IsValidAt()` - Validity checks
+- `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks
+
+## Additional Notes
+
+- The project uses GitVersion for semantic versioning
+- GitHub Actions CI is configured for automated builds and publishing
+- Source Link is enabled for debugging into the library
+- Symbol packages (snupkg) are generated alongside NuGet packages
+- The solution includes .editorconfig for consistent code style

@@ -403,3 +403,17 @@ CompatibilitySuppressions.xml
 # NUKE
 .nuke/temp/
 build.schema.json
+
+# Claude Code
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+
+.beads/
+
+.serena/
+
