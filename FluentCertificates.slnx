@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".github/workflows/dotnet.yml" />
+    <File Path="Directory.Build.props" />
+    <File Path="LICENSE" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/FluentCertificates.Builder.BouncyCastle/FluentCertificates.Builder.BouncyCastle.csproj" />
+    <Project Path="src/FluentCertificates.Builder/FluentCertificates.Builder.csproj" />
+    <Project Path="src/FluentCertificates.Common/FluentCertificates.Common.csproj" />
+    <Project Path="src/FluentCertificates.Extensions/FluentCertificates.Extensions.csproj" />
+    <Project Path="src/FluentCertificates.Finder/FluentCertificates.Finder.csproj" />
+    <Project Path="src/FluentCertificates/FluentCertificates.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FluentCertificates.Builder.Tests/FluentCertificates.Builder.Tests.csproj" />
+    <Project Path="tests/FluentCertificates.Extensions.Tests/FluentCertificates.Extensions.Tests.csproj" />
+    <Project Path="tests/FluentCertificates.Finder.Tests/FluentCertificates.Finder.Tests.csproj" />
+  </Folder>
+  <Project Path="build/_build.csproj">
+    <Build Project="false" />
+  </Project>
+</Solution>
