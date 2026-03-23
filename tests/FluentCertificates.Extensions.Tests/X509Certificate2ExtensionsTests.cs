@@ -40,7 +40,7 @@ public class X509Certificate2ExtensionsTests
 
         using var stream = new MemoryStream();
         using (var writer = new StreamWriter(stream, Encoding.ASCII, leaveOpen: true)) {
-            writer.Write(expected.Export().AsPem().ToPemString(password, include));
+            writer.Write(expected.Export().WithPassword(password).WithKeys(include).AsPem().ToPemString());
         }
 
         var parser = new X509CertificateParser();
@@ -75,7 +75,7 @@ public class X509Certificate2ExtensionsTests
         try {
             using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
-            expected.Export().AsPem().ToFile(tmpFile, password, include);
+            expected.Export().WithPassword(password).WithKeys(include).AsPem().ToFile(tmpFile);
             var parser = new X509CertificateParser();
             var bcCert = parser.ReadCertificate(File.ReadAllBytes(tmpFile));
             using var actual = CertTools.LoadCertificate(bcCert.GetEncoded());
