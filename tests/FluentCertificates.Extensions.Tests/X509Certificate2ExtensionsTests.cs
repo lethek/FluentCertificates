@@ -192,7 +192,7 @@ public class X509Certificate2ExtensionsTests
 
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream)) {
-            expected.Export().WithPassword(password).AsPkcs12().ToStream(writer.BaseStream);
+            expected.Export().WithKeys(include).WithPassword(password).AsPkcs12().ToStream(writer.BaseStream);
         }
 
         using var actual = CertTools.LoadPkcs12(stream.ToArray(), password);
@@ -215,7 +215,7 @@ public class X509Certificate2ExtensionsTests
         try {
             using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
-            expected.Export().WithPassword(password).AsPkcs12().ToFile(tmpFile);
+            expected.Export().WithKeys(include).WithPassword(password).AsPkcs12().ToFile(tmpFile);
             using var actual = CertTools.LoadPkcs12FromFile(tmpFile, password);
 
             Assert.Equal(expected.RawData, actual.RawData);
