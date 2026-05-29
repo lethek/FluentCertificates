@@ -9,7 +9,7 @@ public enum KeyAlgorithm
     RSA,
     
     /// <summary>DSA (Digital Signature Algorithm).</summary>
-    DSA,
+    [Obsolete] DSA,
 
     /// <summary>ECDsa (Elliptic Curve Digital Signature Algorithm).</summary>
     ECDsa

@@ -516,7 +516,9 @@ public record CertificateBuilder
         => keys switch {
             ECDsa => KeyAlgorithm.ECDsa,
             RSA => KeyAlgorithm.RSA,
+            #pragma warning disable CS0612 // Type or member is obsolete
             DSA => KeyAlgorithm.DSA,
+            #pragma warning restore CS0612 // Type or member is obsolete
             null => null,
             _ => throw new NotSupportedException($"Unsupported AsymmetricAlgorithm: {keys.GetType()}")
         };

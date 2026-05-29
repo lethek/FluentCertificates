@@ -4,7 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
 
-using SideData.LowLevel;
+using SideData;
 
 
 namespace FluentCertificates;
@@ -12,7 +12,7 @@ namespace FluentCertificates;
 public static class X500RelativeDistinguishedNameExtensions
 {
     public static UniversalTagNumber GetSingleElementValueEncoding(this X500RelativeDistinguishedName self)
-        => self.TypedSideData().GetOrAdd(ParseValueEncoding);
+        => self.SideDataBag().GetOrAdd("SingleElementValueEncoding", () => ParseValueEncoding(self));
 
 
     private static UniversalTagNumber ParseValueEncoding(X500RelativeDistinguishedName self)

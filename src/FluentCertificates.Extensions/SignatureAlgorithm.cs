@@ -12,9 +12,11 @@ public sealed record SignatureAlgorithm
 {
     // ReSharper disable InconsistentNaming
     /// <summary>SHA-1 with DSA signature algorithm.</summary>
+    [Obsolete("Obsolete")]
     public static readonly SignatureAlgorithm SHA1DSA = new(KeyAlgorithm.DSA, HashAlgorithmName.SHA1, null, Oids.DsaWithSha1);
 
     /// <summary>SHA-256 with DSA signature algorithm.</summary>
+    [Obsolete("Obsolete")]
     public static readonly SignatureAlgorithm SHA256DSA = new(KeyAlgorithm.DSA, HashAlgorithmName.SHA256, null, Oids.DsaWithSha256);
 
     /// <summary>SHA-1 with ECDSA signature algorithm.</summary>
@@ -123,6 +125,7 @@ public sealed record SignatureAlgorithm
     /// <summary>
     /// Immutable lookup dictionary mapping OID strings to <see cref="SignatureAlgorithm"/> instances.
     /// </summary>
+#pragma warning disable CS0618 // Type or member is obsolete
     private static readonly ImmutableDictionary<string, SignatureAlgorithm> InstanceLookup = new Dictionary<string, SignatureAlgorithm> {
         [SHA1DSA.Oid] = SHA1DSA,
         [SHA256DSA.Oid] = SHA256DSA,
@@ -136,4 +139,5 @@ public sealed record SignatureAlgorithm
         [SHA384RSA.Oid] = SHA384RSA,
         [SHA512RSA.Oid] = SHA512RSA
     }.ToImmutableDictionary();
+#pragma warning restore CS0618 // Type or member is obsolete
 }
