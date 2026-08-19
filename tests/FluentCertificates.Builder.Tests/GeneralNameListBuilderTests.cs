@@ -298,6 +298,69 @@ public class GeneralNameListBuilderTests
     }
 
 
+    [Test]
+    [Arguments("m\u00FCnchen.de")]
+    [Arguments("caf\u00E9.example.com")]
+    [Arguments("example.com\u0000")]
+    [Arguments("exam	ple.com")]
+    public async Task AddDnsName_NonAsciiOrControlCharacter_Throws(string dnsName)
+        => await Assert.That(() => new GeneralNameListBuilder().AddDnsName(dnsName)).ThrowsExactly<ArgumentException>();
+
+
+    [Test]
+    [Arguments("user@m\u00FCnchen.de")]
+    [Arguments("us\u00E9r@example.com")]
+    [Arguments("user@example.com\u0000")]
+    public async Task AddEmailAddress_NonAsciiOrControlCharacter_Throws(string emailAddress)
+        => await Assert.That(() => new GeneralNameListBuilder().AddEmailAddress(emailAddress)).ThrowsExactly<ArgumentException>();
+
+
+    [Test]
+    public async Task AddDnsName_TooLong_Throws()
+    {
+        //253 characters is the limit for the whole name, 63 for a single label
+        var maxLabel = new String('a', 63);
+        var atLimit = String.Join(".", maxLabel, maxLabel, maxLabel, new String('a', 61));
+        await Assert.That(atLimit.Length).IsEqualTo(253);
+
+        await Assert.That(() => new GeneralNameListBuilder().AddDnsName(atLimit)).ThrowsNothing();
+        await Assert.That(() => new GeneralNameListBuilder().AddDnsName(atLimit + "a")).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => new GeneralNameListBuilder().AddDnsName(new String('a', 64) + ".com")).ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task AddEmailAddress_TooLong_Throws()
+    {
+        var maxLocal = new String('a', 64);
+
+        await Assert.That(() => new GeneralNameListBuilder().AddEmailAddress($"{maxLocal}@example.com")).ThrowsNothing();
+        await Assert.That(() => new GeneralNameListBuilder().AddEmailAddress($"{maxLocal}a@example.com")).ThrowsExactly<ArgumentException>();
+
+        var tooLong = new String('a', 64) + "@" + String.Join(".", new String('b', 63), new String('b', 63), new String('b', 62));
+        await Assert.That(tooLong.Length).IsEqualTo(255);
+        await Assert.That(() => new GeneralNameListBuilder().AddEmailAddress(tooLong)).ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    [Arguments("")]
+    [Arguments(".example.com")]
+    [Arguments("example.com")]
+    [Arguments("*.example.com")]
+    public async Task AddDnsName_NameConstraintForms_AreAccepted(string dnsName)
+        => await Assert.That(() => new GeneralNameListBuilder().AddDnsName(dnsName)).ThrowsNothing();
+
+
+    [Test]
+    [Arguments("")]
+    [Arguments(".example.com")]
+    [Arguments("example.com")]
+    [Arguments("user@example.com")]
+    public async Task AddEmailAddress_NameConstraintForms_AreAccepted(string emailAddress)
+        => await Assert.That(() => new GeneralNameListBuilder().AddEmailAddress(emailAddress)).ThrowsNothing();
+
+
     private static byte[] EncodeSingleIPAddress(GeneralNameListBuilder builder)
         => new AsnReader(builder.Create().Encode(), AsnEncodingRules.DER)
             .ReadSequence()
