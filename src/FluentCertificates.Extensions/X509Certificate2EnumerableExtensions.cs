@@ -1,6 +1,5 @@
 // ReSharper disable PossibleMultipleEnumeration
 
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
@@ -42,11 +41,6 @@ public static class X509Certificate2EnumerableExtensions
     #region Export to a Writer
 
     // ReSharper disable once SuspiciousTypeConversion.Global
-
-    #endregion
-
-
-    #region Export to a File
 
     #endregion
 

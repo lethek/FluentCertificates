@@ -1,5 +1,4 @@
 using System.Formats.Asn1;
-using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -14,16 +13,6 @@ namespace FluentCertificates;
 /// </summary>
 public static class X509Certificate2Extensions
 {
-    /// <summary>
-    /// Verifies the certificate chain for the given certificate, optionally including extra certificates.
-    /// </summary>
-    /// <param name="cert">The certificate to verify.</param>
-    /// <param name="extraCerts">Optional additional certificates to include in the chain and trust.</param>
-    /// <returns><c>True</c> if the certificate chain is valid; otherwise, <c>False</c>.</returns>
-    public static bool VerifyChain(this X509Certificate2 cert, IEnumerable<X509Certificate2>? extraCerts = null)
-        => cert.BuildChain(extraCerts, true).Verified;
-
-
     /// <summary>
     /// Builds an <see cref="X509Chain"/> for the given certificate, optionally including extra certificates and custom root trust.
     /// </summary>
@@ -74,16 +63,6 @@ public static class X509Certificate2Extensions
 
         return (result, chain);
     }
-
-
-    #region Export to a Writer
-
-    #endregion
-
-
-    #region Export to a File
-
-    #endregion
 
 
     /// <summary>
@@ -265,5 +244,5 @@ public static class X509Certificate2Extensions
     /// <param name="cert">The certificate to export.</param>
     /// <returns>A new <see cref="CertificateExportBuilder"/> containing this certificate.</returns>
     public static CertificateExportBuilder Export(this X509Certificate2 cert)
-        => new(new[] { cert });
+        => new([cert]);
 }

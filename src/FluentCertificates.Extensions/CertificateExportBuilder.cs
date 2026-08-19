@@ -44,7 +44,7 @@ public record CertificateExportBuilder
     /// </summary>
     /// <param name="certs">The initial set of certificates to export.</param>
     internal CertificateExportBuilder(IEnumerable<X509Certificate2> certs)
-        => Certificates = certs.ToImmutableList();
+        => Certificates = [.. certs];
 
 
     /// <summary>

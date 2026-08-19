@@ -224,7 +224,7 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <summary>
     /// Gets a list of common certificate stores used by <see cref="AddCommonStores"/>.
     /// </summary>
-    private static readonly ImmutableList<CertificateStoreEnumerable> CommonStores = new CertificateStoreEnumerable[] {
+    private static readonly ImmutableList<CertificateStoreEnumerable> CommonStores = [
         new("My", StoreLocation.CurrentUser),
         new("CA", StoreLocation.CurrentUser),
         new("Root", StoreLocation.CurrentUser),
@@ -232,5 +232,5 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
         new("CA", StoreLocation.LocalMachine),
         new("Root", StoreLocation.LocalMachine),
         new("WebHosting", StoreLocation.LocalMachine)
-    }.ToImmutableList();
+    ];
 }

@@ -147,7 +147,7 @@ public class CertificateExportBuilderTests
 
         // leafCert already in the initial list; WithChain adds leafCert again + rootCert
         var bytes = leafCert.Export()
-            .WithChain(new[] { leafCert, rootCert })
+            .WithChain([leafCert, rootCert])
             .AsPkcs12()
             .ToByteArray();
 

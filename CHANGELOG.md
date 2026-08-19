@@ -66,6 +66,11 @@ they summarise each release rather than record it as it happened.
   `X509Chain` and `IEnumerable<X509Certificate2>`. Use `Export()` and the
   `CertificateExportBuilder` it returns. The similarly named methods on `CertificateRequest` and
   `AsymmetricAlgorithm` are unaffected and remain supported.
+- The `VerifyChain` extension method on `X509Certificate2`. It only wrapped
+  `BuildChain(extraCerts, true).Verified`, while hiding the fact that it always built with custom
+  root trust, so any `extraCerts` were treated as trusted roots rather than as untrusted
+  intermediates. Call `BuildChain` and read `Verified` from the result instead, which makes the
+  trust mode explicit and keeps the chain available for inspecting why verification failed.
 
 ### Fixed
 

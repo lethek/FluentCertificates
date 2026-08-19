@@ -61,7 +61,7 @@ public class X509ChainExtensionsTests
         var empty = customRootTrust ? chain.ChainPolicy.ExtraStore : chain.ChainPolicy.CustomTrustStore;
 
         await Assert.That(chain.ChainPolicy.TrustMode).IsEqualTo(expectedTrustMode);
-        await Assert.That(populated).IsEquivalentTo(new[] { rootCa }, comparer);
+        await Assert.That(populated).IsEquivalentTo([rootCa], comparer);
         await Assert.That(empty).IsEmpty();
 
         //Revocation is off by default on both overloads, so a chain build never reaches the network

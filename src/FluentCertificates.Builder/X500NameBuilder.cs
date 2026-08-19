@@ -22,10 +22,11 @@ public record X500NameBuilder
     /// Initializes a new, empty instance of the <see cref="X500NameBuilder"/> class.
     /// </summary>
     public X500NameBuilder(X500DistinguishedName name)
-        => RelativeDistinguishedNames = name
-            .EnumerateRelativeDistinguishedNames()
-            .Select(x => (x.GetSingleElementType(), x.GetSingleElementValueEncoding(), x.GetSingleElementValue()!))
-            .ToImmutableList();
+        => RelativeDistinguishedNames = [
+            .. name
+                .EnumerateRelativeDistinguishedNames()
+                .Select(x => (x.GetSingleElementType(), x.GetSingleElementValueEncoding(), x.GetSingleElementValue()!))
+        ];
 
 
     /// <summary>
@@ -71,7 +72,7 @@ public record X500NameBuilder
     /// <param name="oid">The OID to remove.</param>
     public X500NameBuilder Remove(Oid oid)
         => this with {
-            RelativeDistinguishedNames = RelativeDistinguishedNames.Where(x => x.OID.Value != oid.Value).ToImmutableList()
+            RelativeDistinguishedNames = [.. RelativeDistinguishedNames.Where(x => x.OID.Value != oid.Value)]
         };
 
 
@@ -207,10 +208,11 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="oid">The OID to match.</param>
     private List<string> GetAllMatchingValues(Oid oid)
-        => RelativeDistinguishedNames
-            .Where(x => x.OID.Value == oid.Value)
-            .Select(x => x.Value)
-            .ToList();
+        => [
+            .. RelativeDistinguishedNames
+                .Where(x => x.OID.Value == oid.Value)
+                .Select(x => x.Value)
+        ];
 
 
     /// <summary>
@@ -275,14 +277,15 @@ public record X500NameBuilder
     /// <param name="values">The values to set.</param>
     public X500NameBuilder Set(Oid oid, UniversalTagNumber valueEncoding = UniversalTagNumber.UTF8String, params string[] values)
         => this with {
-            RelativeDistinguishedNames = RelativeDistinguishedNames
-                .Where(x => x.OID.Value != oid.Value)
-                .Concat(
-                    values
-                        .Where(x => x != null)
-                        .Select(x => (oid, valueEncoding, x))
-                )
-                .ToImmutableList()
+            RelativeDistinguishedNames = [
+                .. RelativeDistinguishedNames
+                    .Where(x => x.OID.Value != oid.Value),
+
+
+                .. values
+                    .Where(x => x != null)
+                    .Select(x => (oid, valueEncoding, x))
+            ]
         };
 
 

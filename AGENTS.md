@@ -189,8 +189,9 @@ Export, via `Export()` and the `CertificateExportBuilder` it returns:
 - Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
 
 Chain and validity helpers on `X509Certificate2` / `X509Chain`:
-- `BuildChain()` - Build certificate chains
-- `VerifyChain()` - Verify certificate chains
+- `BuildChain()` - Build certificate chains. Two overloads: `(IEnumerable<X509Certificate2>?, bool)` and
+  `(Action<X509ChainPolicy>)`. Both leave revocation set to `NoCheck`. Read `Verified` from the returned
+  tuple to check the result; the old `VerifyChain()` wrapper has been removed.
 - `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. `IsValidAt(DateTime)` is `[Obsolete]`: a
   `DateTime` carries no offset, so its `DateTimeKind` silently changes the answer.
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks

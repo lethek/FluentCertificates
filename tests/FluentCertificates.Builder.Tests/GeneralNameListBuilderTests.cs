@@ -41,7 +41,7 @@ public class GeneralNameListBuilderTests
 
         await Assert
             .That(result.Cast<Rfc822NameAsn>().Select(x => x.EmailAddress))
-            .IsEquivalentTo(new[] { "a@b.com", "c@d.com" }, CollectionOrdering.Matching);
+            .IsEquivalentTo(["a@b.com", "c@d.com"], CollectionOrdering.Matching);
     }
 
 
@@ -67,7 +67,7 @@ public class GeneralNameListBuilderTests
 
         await Assert
             .That(result.Cast<DnsNameAsn>().Select(x => x.DnsName))
-            .IsEquivalentTo(new[] { "a.com", "b.com" }, CollectionOrdering.Matching);
+            .IsEquivalentTo(["a.com", "b.com"], CollectionOrdering.Matching);
     }
 
 
@@ -181,7 +181,7 @@ public class GeneralNameListBuilderTests
 
         await Assert
             .That(result.Cast<IPAddressNameAsn>().Select(x => x.IPAddress.ToString()))
-            .IsEquivalentTo(new[] { "8.8.8.8", "8.8.4.4" }, CollectionOrdering.Matching);
+            .IsEquivalentTo(["8.8.8.8", "8.8.4.4"], CollectionOrdering.Matching);
         await Assert.That(result.Cast<IPAddressNameAsn>()).All(x => x.SubnetMask == null);
     }
 

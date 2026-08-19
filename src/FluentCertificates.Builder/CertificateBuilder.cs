@@ -330,7 +330,7 @@ public record CertificateBuilder
     /// <param name="san">The subject alternative names.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified SANs.</returns>
     public CertificateBuilder SetSubjectAlternativeNames(IEnumerable<GeneralName> san)
-        => this with { _subjectAlternativeNames = san.ToImmutableList() };
+        => this with { _subjectAlternativeNames = [.. san]};
 
 
     /// <summary>
@@ -467,7 +467,7 @@ public record CertificateBuilder
         BinaryPrimitives.WriteInt16BigEndian(span[0..2], 0x4D58);
         BinaryPrimitives.WriteInt64BigEndian(span[2..10], DateTime.UtcNow.Ticks);
         RandomNumberGenerator.Fill(span[10..18]);
-        return span.ToArray();
+        return [.. span];
     }
 
 

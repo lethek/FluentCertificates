@@ -1,5 +1,4 @@
 using System.Formats.Asn1;
-using System.Security.Cryptography.X509Certificates;
 
 namespace FluentCertificates;
 
@@ -22,7 +21,7 @@ public class X509NameConstraintExtensionTests
         var ext = new X509NameConstraintExtension(Dns("permitted.example.com"), null);
         var outer = new AsnReader(ext.RawData, AsnEncodingRules.DER).ReadSequence();
 
-        await Assert.That(ReadSubtreeDnsNames(outer, 0)).IsEquivalentTo(new[] { "permitted.example.com" });
+        await Assert.That(ReadSubtreeDnsNames(outer, 0)).IsEquivalentTo(["permitted.example.com"]);
         await Assert.That(outer.HasData).IsFalse().Because("no excludedSubtrees were supplied");
     }
 
@@ -35,7 +34,7 @@ public class X509NameConstraintExtensionTests
 
         //With no permitted subtrees the [0] element is absent entirely, not empty
         await Assert.That(outer.PeekTag()).IsEqualTo(new Asn1Tag(TagClass.ContextSpecific, 1, true));
-        await Assert.That(ReadSubtreeDnsNames(outer, 1)).IsEquivalentTo(new[] { "excluded.example.com" });
+        await Assert.That(ReadSubtreeDnsNames(outer, 1)).IsEquivalentTo(["excluded.example.com"]);
     }
 
 
@@ -48,8 +47,8 @@ public class X509NameConstraintExtensionTests
 
         var outer = new AsnReader(ext.RawData, AsnEncodingRules.DER).ReadSequence();
 
-        await Assert.That(ReadSubtreeDnsNames(outer, 0)).IsEquivalentTo(new[] { "a.permitted.com", "b.permitted.com" });
-        await Assert.That(ReadSubtreeDnsNames(outer, 1)).IsEquivalentTo(new[] { "a.excluded.com" });
+        await Assert.That(ReadSubtreeDnsNames(outer, 0)).IsEquivalentTo(["a.permitted.com", "b.permitted.com"]);
+        await Assert.That(ReadSubtreeDnsNames(outer, 1)).IsEquivalentTo(["a.excluded.com"]);
         await Assert.That(outer.HasData).IsFalse();
     }
 

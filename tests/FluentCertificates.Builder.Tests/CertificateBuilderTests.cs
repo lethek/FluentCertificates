@@ -324,7 +324,7 @@ public class CertificateBuilderTests
             .SetSubject(x => x.SetCommonName("Client Test"))
             .Create();
 
-        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.2" });
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(["1.3.6.1.5.5.7.3.2"]);
         await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.DigitalSignature);
         await Assert.That(cert.Extensions.OfType<X509BasicConstraintsExtension>().Single().CertificateAuthority).IsFalse();
     }
@@ -338,7 +338,7 @@ public class CertificateBuilderTests
             .SetSubject(x => x.SetCommonName("CodeSign Test"))
             .Create();
 
-        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.3" });
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(["1.3.6.1.5.5.7.3.3"]);
         await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.DigitalSignature);
     }
 
@@ -351,7 +351,7 @@ public class CertificateBuilderTests
             .SetSubject(x => x.SetCommonName("OCSP Responder Test"))
             .Create();
 
-        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.9" });
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(["1.3.6.1.5.5.7.3.9"]);
         await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.DigitalSignature);
         await Assert.That(cert.Extensions.OfType<X509EnhancedKeyUsageExtension>().Single().Critical).IsFalse();
         await Assert.That(cert.Extensions.OfType<X509BasicConstraintsExtension>().Single().CertificateAuthority).IsFalse();
@@ -366,7 +366,7 @@ public class CertificateBuilderTests
             .SetSubject(x => x.SetCommonName("TSA Test"))
             .Create();
 
-        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.8" });
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(["1.3.6.1.5.5.7.3.8"]);
         await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.DigitalSignature);
 
         //RFC 3161 s2.3 requires the extended key usage extension on a TSA certificate to be critical
@@ -386,7 +386,7 @@ public class CertificateBuilderTests
             .SetSubject(x => x.SetCommonName("SMime Test"))
             .Create();
 
-        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.4" });
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(["1.3.6.1.5.5.7.3.4"]);
         await Assert.That(GetKeyUsages(cert)).IsEqualTo(expectedUsages);
     }
 
@@ -403,7 +403,7 @@ public class CertificateBuilderTests
             .Create();
 
         //keyEncipherment is only meaningful for RSA: an EC key cannot do key transport
-        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.1" });
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(["1.3.6.1.5.5.7.3.1"]);
         await Assert.That(GetKeyUsages(cert)).IsEqualTo(expectedUsages);
     }
 

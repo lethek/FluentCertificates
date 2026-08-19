@@ -52,7 +52,7 @@ public class CertificateFinderTests
 
         await Assert
             .That(StoresOf(finder))
-            .IsEquivalentTo(new[] { ("My", StoreLocation.CurrentUser) }, CollectionOrdering.Matching);
+            .IsEquivalentTo([("My", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
     }
 
 
@@ -63,7 +63,7 @@ public class CertificateFinderTests
 
         await Assert
             .That(StoresOf(finder))
-            .IsEquivalentTo(new[] { ("My", StoreLocation.LocalMachine) }, CollectionOrdering.Matching);
+            .IsEquivalentTo([("My", StoreLocation.LocalMachine)], CollectionOrdering.Matching);
     }
 
 
@@ -76,10 +76,10 @@ public class CertificateFinderTests
 
         await Assert
             .That(StoresOf(finder))
-            .IsEquivalentTo(new[] {
+            .IsEquivalentTo([
                 ("My", StoreLocation.CurrentUser),
                 ("Root", StoreLocation.LocalMachine)
-            }, CollectionOrdering.Matching);
+            ], CollectionOrdering.Matching);
     }
 
 
@@ -90,7 +90,7 @@ public class CertificateFinderTests
 
         await Assert
             .That(DirectoryPathsOf(finder))
-            .IsEquivalentTo(new[] { "/certs" }, CollectionOrdering.Matching);
+            .IsEquivalentTo(["/certs"], CollectionOrdering.Matching);
     }
 
 
@@ -131,7 +131,7 @@ public class CertificateFinderTests
 
         await Assert
             .That(StoresOf(finder))
-            .IsEquivalentTo(new[] {
+            .IsEquivalentTo([
                 ("My", StoreLocation.CurrentUser),
                 ("CA", StoreLocation.CurrentUser),
                 ("Root", StoreLocation.CurrentUser),
@@ -139,7 +139,7 @@ public class CertificateFinderTests
                 ("CA", StoreLocation.LocalMachine),
                 ("Root", StoreLocation.LocalMachine),
                 ("WebHosting", StoreLocation.LocalMachine)
-            }, CollectionOrdering.Matching);
+            ], CollectionOrdering.Matching);
     }
 
 
@@ -217,7 +217,7 @@ public class CertificateFinderTests
         using var cert = CreateSelfSignedCertificate("Mixed");
         var fs = CreateEmptyMockFileSystem();
         fs.AddFile("/mixed/notes.txt", new MockFileData("this is not a certificate"));
-        fs.AddFile("/mixed/image.png", new MockFileData(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }));
+        fs.AddFile("/mixed/image.png", new MockFileData([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
         fs.AddFile("/mixed/cert.pem", new MockFileData(cert.ExportCertificatePem()));
 
         var finder = new CertificateFinder(fs).AddDirectory("/mixed");
@@ -317,7 +317,7 @@ public class CertificateFinderTests
 
         await Assert
             .That(StoresOf(finder))
-            .IsEquivalentTo(new[] { (expected, StoreLocation.CurrentUser) }, CollectionOrdering.Matching);
+            .IsEquivalentTo([(expected, StoreLocation.CurrentUser)], CollectionOrdering.Matching);
     }
 
 
@@ -391,17 +391,19 @@ public class CertificateFinderTests
 
 
     private static List<(string Name, StoreLocation Location)> StoresOf(CertificateFinder finder)
-        => finder.Sources
-            .Cast<CertificateStoreEnumerable>()
-            .Select(x => (x.Store.Name, x.Store.Location))
-            .ToList();
+        => [
+            .. finder.Sources
+                .Cast<CertificateStoreEnumerable>()
+                .Select(x => (x.Store.Name, x.Store.Location))
+        ];
 
 
     private static List<string> DirectoryPathsOf(CertificateFinder finder)
-        => finder.Sources
-            .Cast<CertificateDirectoryEnumerable>()
-            .Select(x => x.Directory.Path)
-            .ToList();
+        => [
+            .. finder.Sources
+                .Cast<CertificateDirectoryEnumerable>()
+                .Select(x => x.Directory.Path)
+        ];
 
 
     private static readonly MockFileSystem MockFileSystem = TestTools.CreateMockFileSystemWithCerts();
