@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
@@ -53,6 +54,10 @@ public class CertificateExportBuilderTests
         await Assert.That(result).Contains("-----BEGIN CERTIFICATE-----");
         await Assert.That(result).Contains("-----END CERTIFICATE-----");
         await Assert.That(result).DoesNotContain("PRIVATE KEY");
+
+        using var parsed = X509Certificate2.CreateFromPem(result);
+        await Assert.That(parsed.RawData).IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
+        await Assert.That(parsed.HasPrivateKey).IsFalse();
     }
 
     [Test]
@@ -67,6 +72,14 @@ public class CertificateExportBuilderTests
             .IsTrue()
             .Because("a PRIVATE KEY block is expected in the PEM output");
         await Assert.That(result).Contains("-----BEGIN CERTIFICATE-----");
+
+        using var parsed = X509Certificate2.CreateFromPem(result, result);
+        await Assert.That(parsed.RawData).IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
+        await Assert.That(parsed.Thumbprint).IsEqualTo(cert.Thumbprint);
+        await Assert.That(parsed.HasPrivateKey).IsTrue();
+        await Assert.That(SignedByPrivateKeyVerifiesAgainst(parsed, cert, algorithm))
+            .IsTrue()
+            .Because("the exported private key must pair with the exported certificate's public key");
     }
 
     [Test]
@@ -191,9 +204,41 @@ public class CertificateExportBuilderTests
     public async Task ExportBuilder_Collection_EntryPoint_Works(KeyAlgorithm algorithm)
     {
         using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
-        var coll = new X509Certificate2Collection(cert);
+        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        var coll = new X509Certificate2Collection(new[] { cert, cert2 });
         var pem = coll.Export().WithoutPrivateKeys().AsPem().ToPemString();
-        await Assert.That(pem).Contains("-----BEGIN CERTIFICATE-----");
+
+        var parsed = new X509Certificate2Collection();
+        parsed.ImportFromPem(pem);
+        try {
+            //PEM output is leaf-first: the last certificate in the source collection is treated as the leaf
+            await Assert.That(parsed.Count).IsEqualTo(2);
+            await Assert.That(parsed[0].RawData).IsEquivalentTo(cert2.RawData, CollectionOrdering.Matching);
+            await Assert.That(parsed[1].RawData).IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
+        } finally {
+            foreach (var c in parsed) c.Dispose();
+        }
+    }
+
+
+    private static bool SignedByPrivateKeyVerifiesAgainst(X509Certificate2 signer, X509Certificate2 verifier, KeyAlgorithm algorithm)
+    {
+        var data = "FluentCertificates"u8.ToArray();
+        switch (algorithm) {
+            case KeyAlgorithm.ECDsa: {
+                using var priv = signer.GetECDsaPrivateKey()!;
+                using var pub = verifier.GetECDsaPublicKey()!;
+                return pub.VerifyData(data, priv.SignData(data, HashAlgorithmName.SHA256), HashAlgorithmName.SHA256);
+            }
+            case KeyAlgorithm.RSA: {
+                using var priv = signer.GetRSAPrivateKey()!;
+                using var pub = verifier.GetRSAPublicKey()!;
+                var sig = priv.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                return pub.VerifyData(data, sig, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            }
+            default:
+                throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, null);
+        }
     }
 
 
