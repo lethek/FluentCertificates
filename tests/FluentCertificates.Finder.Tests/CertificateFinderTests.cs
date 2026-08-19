@@ -254,16 +254,35 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task EnumerateCertificates_UppercaseFileExtension_IsSkipped()
+    [Arguments("cert.PEM")]
+    [Arguments("cert.Pem")]
+    [Arguments("cert.pem")]
+    public async Task EnumerateCertificates_ExtensionCaseIsIgnored(string fileName)
     {
-        using var cert = CreateSelfSignedCertificate("Uppercase");
+        using var cert = CreateSelfSignedCertificate("AnyCase");
         var fs = CreateEmptyMockFileSystem();
-        fs.AddFile("/case/cert.PEM", new MockFileData(cert.ExportCertificatePem()));
+        fs.AddFile($"/case/{fileName}", new MockFileData(cert.ExportCertificatePem()));
 
         var finder = new CertificateFinder(fs).AddDirectory("/case");
+        var results = finder.ToList();
 
-        //Documents current behaviour: the supported-extension check is case-sensitive, so
-        //an otherwise valid certificate with an uppercase extension is not found
+        await Assert.That(results.Count).IsEqualTo(1);
+        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+    }
+
+
+    [Test]
+    public async Task EnumerateCertificates_UnsupportedExtension_IsStillSkipped()
+    {
+        using var cert = CreateSelfSignedCertificate("Unsupported");
+        var fs = CreateEmptyMockFileSystem();
+
+        //Valid certificate content, but an extension the finder does not claim to support
+        fs.AddFile("/unsupported/cert.txt", new MockFileData(cert.ExportCertificatePem()));
+        fs.AddFile("/unsupported/cert.PEMX", new MockFileData(cert.ExportCertificatePem()));
+
+        var finder = new CertificateFinder(fs).AddDirectory("/unsupported");
+
         await Assert.That(finder.ToList()).IsEmpty();
     }
 

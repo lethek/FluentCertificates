@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.IO.Abstractions;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
@@ -86,9 +86,11 @@ internal sealed class CertificateDirectoryEnumerable(IFileSystem fileSystem, Cer
 
 
     /// <summary>
-    /// The list of supported certificate file extensions.
+    /// The set of supported certificate file extensions. Compared case-insensitively:
+    /// file systems commonly preserve whatever case the file was created with, so a
+    /// certificate named "SERVER.PFX" must be found just as "server.pfx" is.
     /// </summary>
-    private static readonly string[] SupportedFileExtensions = [
+    private static readonly HashSet<string> SupportedFileExtensions = new(StringComparer.OrdinalIgnoreCase) {
         ".crt", ".cer", ".der", ".pfx", ".p12", ".p7b", ".p7c", ".pem", ".ca-bundle"
-    ];
+    };
 }
