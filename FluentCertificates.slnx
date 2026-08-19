@@ -1,4 +1,4 @@
-<Solution>
+﻿<Solution>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".github/workflows/dotnet.yml" />
@@ -19,7 +19,4 @@
     <Project Path="tests/FluentCertificates.Extensions.Tests/FluentCertificates.Extensions.Tests.csproj" />
     <Project Path="tests/FluentCertificates.Finder.Tests/FluentCertificates.Finder.Tests.csproj" />
   </Folder>
-  <Project Path="build/_build.csproj">
-    <Build Project="false" />
-  </Project>
 </Solution>

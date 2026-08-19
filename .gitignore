@@ -400,9 +400,9 @@ FodyWeavers.xsd
 # DotNet generated files
 CompatibilitySuppressions.xml
 
-# NUKE
-.nuke/temp/
-build.schema.json
+# Local build outputs (dotnet pack / dotnet test --results-directory)
+artifacts/
+coverage/
 
 # Claude Code
 .claude/settings.local.json

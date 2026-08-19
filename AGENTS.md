@@ -8,36 +8,15 @@ FluentCertificates is a .NET library for working with X.509 certificates using a
 
 ## Build System
 
-This project uses **NUKE** as its build system. All build operations should use the NUKE build scripts.
+Plain `dotnet` CLI. There is no build-system wrapper: the NUKE build (`build.cmd` / `build.sh` /
+`build/`) was removed, and CI in `.github/workflows/dotnet.yml` calls `dotnet` directly.
+
+Versioning is supplied by GitVersion, which runs as a GitHub Action step in CI (`gittools/actions`,
+`versionSpec: 6.x`, configured by `GitVersion.yml`) and passes the result to `dotnet build`/`dotnet pack`
+via `-p:` properties. A local `dotnet build` with no properties produces a default version; that is
+expected and only CI-produced packages carry real version numbers.
 
 ### Common Build Commands
-
-```bash
-# Build the solution (default)
-./build.cmd              # Windows
-./build.sh               # Linux/macOS
-
-# Run tests
-./build.cmd Test         # Windows
-./build.sh Test          # Linux/macOS
-
-# Create NuGet packages (outputs to artifacts/ directory)
-./build.cmd Pack         # Windows
-./build.sh Pack          # Linux/macOS
-
-# Clean build artifacts
-./build.cmd Clean        # Windows
-./build.sh Clean         # Linux/macOS
-```
-
-The build script will:
-- Automatically install the correct .NET SDK if not present
-- Use GitVersion for versioning
-- Output packages to the `artifacts/` directory
-
-### Direct dotnet Commands
-
-While NUKE is preferred for full builds, you can also use dotnet CLI directly:
 
 ```bash
 # Build
@@ -56,6 +35,12 @@ dotnet test -f net9.0 --project tests/FluentCertificates.Builder.Tests/FluentCer
 # pass TUnit's tree-node filter after `--` instead. Scope it to the owning project: a project
 # that matches zero tests is reported as a failure, so a solution-wide filter looks like it failed.
 dotnet test --project tests/FluentCertificates.Builder.Tests/FluentCertificates.Builder.Tests.csproj -- --treenode-filter "/*/*/*/TestMethodName*"
+
+# Run tests with coverage (Microsoft.Testing.Extensions.CodeCoverage, referenced transitively by TUnit)
+dotnet test --coverage --coverage-output-format cobertura --results-directory ./coverage
+
+# Create NuGet packages
+dotnet pack -c Release -p:PackageOutputPath="$PWD/artifacts/"
 ```
 
 ## Architecture

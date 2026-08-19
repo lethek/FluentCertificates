@@ -1,5 +1,8 @@
 assembly-versioning-scheme: MajorMinorPatch
-mode: ContinuousDeployment
+# GitVersion 6 renamed the deployment modes. This "ContinuousDelivery" is what v5 called
+# "ContinuousDeployment" (a prerelease that increments per commit), which is the behaviour
+# the NUKE build produced when it pinned GitVersion.Tool to 5.12.0.
+mode: ContinuousDelivery
 branches:
   master:
     regex: ^main$|^master$
