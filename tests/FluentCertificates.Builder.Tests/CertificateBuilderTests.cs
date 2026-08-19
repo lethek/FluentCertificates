@@ -409,6 +409,60 @@ public class CertificateBuilderTests
     }
 
 
+    [Test]
+    public async Task Validate_NotBeforeNotEarlierThanNotAfter_Throws()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        await Assert
+            .That(() => new CertificateBuilder().SetNotBefore(now).SetNotAfter(now.AddHours(-1)).Validate())
+            .ThrowsExactly<ArgumentException>();
+
+        //The bound is exclusive: equal timestamps are rejected too
+        await Assert
+            .That(() => new CertificateBuilder().SetNotBefore(now).SetNotAfter(now).Validate())
+            .ThrowsExactly<ArgumentException>();
+
+        await Assert
+            .That(() => new CertificateBuilder().SetNotBefore(now).SetNotAfter(now.AddSeconds(1)).Validate())
+            .ThrowsNothing();
+    }
+
+
+    [Test]
+    public async Task CreateCertificateRequest_WithoutKeyPair_Throws()
+        => await Assert
+            .That(() => new CertificateBuilder().CreateCertificateRequest())
+            .ThrowsExactly<ArgumentNullException>();
+
+
+    [Test]
+    public async Task Create_WithUnsupportedKeyAlgorithm_Throws()
+        => await Assert
+            .That(() => new CertificateBuilder().SetKeyAlgorithm((KeyAlgorithm)999).Create())
+            .ThrowsExactly<ArgumentOutOfRangeException>();
+
+
+    [Test]
+    public async Task Build_CallerSuppliedExtension_OverridesGeneratedOneWithSameOid()
+    {
+        //The builder de-duplicates extensions by OID, preferring the caller's own
+        var basicConstraints = new X509BasicConstraintsExtension(true, true, 7, true);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject(x => x.SetCommonName("Override Test"))
+            .AddExtension(basicConstraints)
+            .Create();
+
+        var actual = cert.Extensions.OfType<X509BasicConstraintsExtension>().Single();
+
+        await Assert.That(actual.CertificateAuthority).IsTrue();
+        await Assert.That(actual.HasPathLengthConstraint).IsTrue();
+        await Assert.That(actual.PathLengthConstraint).IsEqualTo(7);
+    }
+
+
     private static IEnumerable<string> GetEkuOids(X509Certificate2 cert)
         => cert.Extensions
             .OfType<X509EnhancedKeyUsageExtension>()

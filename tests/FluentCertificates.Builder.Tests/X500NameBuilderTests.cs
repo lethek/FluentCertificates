@@ -1,4 +1,4 @@
-﻿using System.Formats.Asn1;
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -218,6 +218,30 @@ public class X500NameBuilderTests
             .SetCountry("AU");
 
         await Assert.That(wrongOrder.EquivalentTo(dn, true)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Equals_Null_ReturnsFalse()
+    {
+        var builder = new X500NameBuilder().SetCommonName("Null Test");
+
+        await Assert.That(builder.Equals((X500DistinguishedName?)null)).IsFalse();
+        await Assert.That(builder.Equals((string?)null)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task EquivalentTo_RepeatedRelativeDistinguishedNames_ComparesMultiplicity()
+    {
+        var twice = new X500NameBuilder().AddOrganizationalUnits("Eng", "Eng");
+        var alsoTwice = new X500NameBuilder().AddOrganizationalUnits("Eng", "Eng");
+        var once = new X500NameBuilder().AddOrganizationalUnit("Eng");
+
+        //A repeated RDN is not the same as a single one: the comparison counts occurrences
+        await Assert.That(twice.EquivalentTo(alsoTwice)).IsTrue();
+        await Assert.That(twice.EquivalentTo(once)).IsFalse();
+        await Assert.That(once.EquivalentTo(twice)).IsFalse();
     }
 
 
