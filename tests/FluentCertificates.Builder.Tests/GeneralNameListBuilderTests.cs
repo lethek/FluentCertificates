@@ -26,7 +26,8 @@ public class GeneralNameListBuilderTests
         var result = builder.Create();
 
         await Assert.That(result).HasSingleItem();
-        await Assert.That(result[0]).IsTypeOf<Rfc822NameAsn>();
+        var name = (await Assert.That(result[0]).IsTypeOf<Rfc822NameAsn>())!;
+        await Assert.That(name.EmailAddress).IsEqualTo("user@example.com");
     }
 
 
@@ -37,8 +38,9 @@ public class GeneralNameListBuilderTests
             .AddEmailAddresses("a@b.com", "c@d.com");
         var result = builder.Create();
 
-        await Assert.That(result.Count).IsEqualTo(2);
-        await Assert.That(result).All(x => x is Rfc822NameAsn);
+        await Assert
+            .That(result.Cast<Rfc822NameAsn>().Select(x => x.EmailAddress))
+            .IsEquivalentTo(new[] { "a@b.com", "c@d.com" }, CollectionOrdering.Matching);
     }
 
 
@@ -50,7 +52,8 @@ public class GeneralNameListBuilderTests
         var result = builder.Create();
 
         await Assert.That(result).HasSingleItem();
-        await Assert.That(result[0]).IsTypeOf<DnsNameAsn>();
+        var name = (await Assert.That(result[0]).IsTypeOf<DnsNameAsn>())!;
+        await Assert.That(name.DnsName).IsEqualTo("example.com");
     }
 
 
@@ -61,8 +64,9 @@ public class GeneralNameListBuilderTests
             .AddDnsNames("a.com", "b.com");
         var result = builder.Create();
 
-        await Assert.That(result.Count).IsEqualTo(2);
-        await Assert.That(result).All(x => x is DnsNameAsn);
+        await Assert
+            .That(result.Cast<DnsNameAsn>().Select(x => x.DnsName))
+            .IsEquivalentTo(new[] { "a.com", "b.com" }, CollectionOrdering.Matching);
     }
 
 
@@ -75,7 +79,8 @@ public class GeneralNameListBuilderTests
         var result = builder.Create();
 
         await Assert.That(result).HasSingleItem();
-        await Assert.That(result[0]).IsTypeOf<UriNameAsn>();
+        var name = (await Assert.That(result[0]).IsTypeOf<UriNameAsn>())!;
+        await Assert.That(name.Uri).IsEqualTo(uri);
     }
 
 
@@ -87,8 +92,9 @@ public class GeneralNameListBuilderTests
             .AddUris(uris);
         var result = builder.Create();
 
-        await Assert.That(result.Count).IsEqualTo(2);
-        await Assert.That(result).All(x => x is UriNameAsn);
+        await Assert
+            .That(result.Cast<UriNameAsn>().Select(x => x.Uri))
+            .IsEquivalentTo(uris, CollectionOrdering.Matching);
     }
 
 
@@ -101,7 +107,9 @@ public class GeneralNameListBuilderTests
         var result = builder.Create();
 
         await Assert.That(result).HasSingleItem();
-        await Assert.That(result[0]).IsTypeOf<IPAddressNameAsn>();
+        var ipName = (await Assert.That(result[0]).IsTypeOf<IPAddressNameAsn>())!;
+        await Assert.That(ipName.IPAddress).IsEqualTo(ip);
+        await Assert.That(ipName.SubnetMask).IsNull();
     }
 
 
@@ -129,8 +137,9 @@ public class GeneralNameListBuilderTests
             .AddIPAddresses(ips);
         var result = builder.Create();
 
-        await Assert.That(result.Count).IsEqualTo(2);
-        await Assert.That(result).All(x => x is IPAddressNameAsn);
+        await Assert
+            .That(result.Cast<IPAddressNameAsn>().Select(x => x.IPAddress.ToString()))
+            .IsEquivalentTo(ips.Select(x => x.ToString()), CollectionOrdering.Matching);
     }
 
 
@@ -169,11 +178,10 @@ public class GeneralNameListBuilderTests
             .AddIPAddresses("8.8.8.8", "8.8.4.4");
         var result = builder.Create();
 
-        await Assert.That(result.Count).IsEqualTo(2);
-        await Assert.That(result).All(x => x is IPAddressNameAsn);
-        await Assert.That(((IPAddressNameAsn)result[0]).IPAddress).IsEqualTo(IPAddress.Parse("8.8.8.8"));
-        await Assert.That(((IPAddressNameAsn)result[1]).IPAddress).IsEqualTo(IPAddress.Parse("8.8.4.4"));
-        await Assert.That(result).All(x => ((IPAddressNameAsn)x).SubnetMask == null);
+        await Assert
+            .That(result.Cast<IPAddressNameAsn>().Select(x => x.IPAddress.ToString()))
+            .IsEquivalentTo(new[] { "8.8.8.8", "8.8.4.4" }, CollectionOrdering.Matching);
+        await Assert.That(result.Cast<IPAddressNameAsn>()).All(x => x.SubnetMask == null);
     }
 
 
