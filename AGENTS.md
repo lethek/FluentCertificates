@@ -47,7 +47,7 @@ dotnet pack -c Release -p:PackageOutputPath="$PWD/artifacts/"
 
 ### Package Structure
 
-The solution is organized into multiple NuGet packages with clear separation of concerns. All five are published; `src/FluentCertificates.Builder.BouncyCastle/` is not a package (see below).
+The solution is organized into five NuGet packages with clear separation of concerns. Every project under `src/` is published; there are no internal-only projects.
 
 1. **FluentCertificates** (meta-package)
    - Top-level package that imports Builder, Extensions, and Finder
@@ -81,22 +81,17 @@ The solution is organized into multiple NuGet packages with clear separation of 
    - Location: `src/FluentCertificates.Common/`
    - Not typically referenced directly by consumers
 
-### Not a Package: FluentCertificates.Builder.BouncyCastle
+### BouncyCastle
 
-`src/FluentCertificates.Builder.BouncyCastle/` is **internal test-support only** and is never published
-(`IsPackable=false`). Its sole consumer is `tests/FluentCertificates.Builder.Tests`; no `src/` project
-references it.
+**BouncyCastle is not a dependency of any shipped package.** `CertificateBuilder` used it internally in
+the past but no longer does; nothing under `src/` references `Org.BouncyCastle`.
 
-It holds only what the tests actually call, to move between BouncyCastle and .NET types:
-`CertificateBuilder.SetSubject(X509Name)`, `X509Name.ConvertToDotNet()`,
-`X500NameBuilder.Add(DerObjectIdentifier, UniversalTagNumber, params string[])` and
-`X509Extension.ConvertToBouncyCastle()`. Do not add methods here expecting consumers to reach them:
-nothing in this assembly is reachable outside the test projects.
-
-**BouncyCastle is not a dependency of the shipped packages.** `CertificateBuilder` used it internally
-in the past but no longer does; nothing under `src/` outside this project references `Org.BouncyCastle`.
-The test projects that use BouncyCastle directly get it from their own `BouncyCastle.Cryptography`
-package reference, not from this project.
+Some tests still use BouncyCastle as a tool, to construct inputs and to pick apart output for assertions.
+Those projects take their own `BouncyCastle.Cryptography` package reference, and the two conversion
+helpers they need (`X509Name.ConvertToDotNet()`, `X509Extension.ConvertToBouncyCastle()`) live in
+`tests/FluentCertificates.Builder.Tests/BouncyCastleTestExtensions.cs`. There was previously a
+`src/FluentCertificates.Builder.BouncyCastle` project for this; it was never published and has been
+removed. Do not reintroduce a BouncyCastle dependency under `src/`.
 
 ### Key Design Patterns
 
@@ -126,9 +121,7 @@ exist but are `[Obsolete]`; each carries a message naming its `Export()` replace
 
 ### Target Frameworks
 
-Targets vary by project:
-- Library projects (`FluentCertificates`, `.Builder`, `.Extensions`, `.Finder`, `.Common`): net8.0 and net9.0
-- `FluentCertificates.Builder.BouncyCastle`: net8.0 only
+- All five library projects under `src/`: net8.0 and net9.0
 - Test projects: net8.0, net9.0 and net10.0
 
 Some dependencies use conditional package references based on target framework (see .csproj files).

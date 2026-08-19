@@ -41,9 +41,6 @@ public class CertificateBuilderTests
         using var cert3 = new CertificateBuilder().SetSubject(new X500DistinguishedName(expected)).Create();
         await Assert.That(cert3.Subject).IsEqualTo(expected);
 
-        using var cert4 = new CertificateBuilder().SetSubject(new X509Name(expected)).Create();
-        await Assert.That(cert4.Subject).IsEqualTo(expected);
-
         using var cert5 = new CertificateBuilder().SetSubject(expected).Create();
         await Assert.That(cert5.Subject).IsEqualTo(expected);
 

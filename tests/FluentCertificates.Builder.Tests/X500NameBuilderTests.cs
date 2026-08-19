@@ -65,19 +65,6 @@ public class X500NameBuilderTests
 
         await Assert
             .That(new X500NameBuilder()
-                .Add(X509Name.DC, UniversalTagNumber.IA5String, "app")
-                .Add(X509Name.DC, UniversalTagNumber.IA5String, "fake")
-                .RelativeDistinguishedNames)
-            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
-
-        await Assert
-            .That(new X500NameBuilder()
-                .Add(X509Name.DC, UniversalTagNumber.IA5String, "app", "fake")
-                .RelativeDistinguishedNames)
-            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
-
-        await Assert
-            .That(new X500NameBuilder()
                 .Add(dcOid, UniversalTagNumber.IA5String, "app")
                 .Add(dcOid, UniversalTagNumber.IA5String, "fake")
                 .RelativeDistinguishedNames)

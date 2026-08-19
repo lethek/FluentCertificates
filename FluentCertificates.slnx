@@ -7,7 +7,6 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/FluentCertificates.Builder.BouncyCastle/FluentCertificates.Builder.BouncyCastle.csproj" />
     <Project Path="src/FluentCertificates.Builder/FluentCertificates.Builder.csproj" />
     <Project Path="src/FluentCertificates.Common/FluentCertificates.Common.csproj" />
     <Project Path="src/FluentCertificates.Extensions/FluentCertificates.Extensions.csproj" />
