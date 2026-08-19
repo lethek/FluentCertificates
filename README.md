@@ -161,6 +161,37 @@ using var timeStampingAuthority = new CertificateBuilder()
     .Create();
 ```
 
+### **Advanced: Signing with a Key Held in an HSM, TPM or Cloud KMS**
+
+When the private key can't leave the device, supply the public key to certify with `SetPublicKey` and
+an `X509SignatureGenerator` to do the signing with `SetSignatureGenerator`. The builder never needs
+the private key, and the certificate it returns has none attached.
+
+```csharp
+//Your implementation, calling out to the HSM/TPM/KMS to sign
+var remoteSigner = new MyRemoteSignatureGenerator(keyId);
+
+//Issuing from a CA whose key is remote: the issuer certificate needs no private key
+using var issuedCert = new CertificateBuilder()
+    .SetUsage(CertificateUsage.Server)
+    .SetSubject(b => b.SetCommonName("*.fake.domain"))
+    .SetIssuer(caCertWithoutPrivateKey)
+    .SetSignatureGenerator(remoteSigner)
+    .Create();
+
+//Self-signing a root whose key is remote: supply both halves of that key
+using var rootCert = new CertificateBuilder()
+    .SetUsage(CertificateUsage.CA)
+    .SetSubject(b => b.SetCommonName("Example HSM-backed root CA"))
+    .SetPublicKey(remotePublicKey)
+    .SetSignatureGenerator(remoteSigner)
+    .Create();
+```
+
+Nothing checks that the generator matches the public key you supplied; that pairing is yours to get
+right. What is checked is that you supply both when self-signing, since either one alone produces a
+certificate that cannot verify.
+
 ### **Advanced: Certificate with Customized Extensions**
 
 ```csharp

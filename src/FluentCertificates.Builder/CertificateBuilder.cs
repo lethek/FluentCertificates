@@ -55,6 +55,12 @@ public record CertificateBuilder
     /// <summary>Gets the RSA signature padding mode. Ignored for non-RSA algorithms.</summary>
     public RSASignaturePadding RSASignaturePadding { get; init; } = RSASignaturePadding.Pkcs1;
     
+    /// <summary>
+    /// Gets the signature generator used to sign the certificate or certificate-request, or <see langword="null"/>
+    /// to derive one from the signing key.
+    /// </summary>
+    public X509SignatureGenerator? SignatureGenerator { get; init; }
+
     /// <summary>Gets the key storage flags for the certificate.</summary>
     public X509KeyStorageFlags KeyStorageFlags { get; init; }
     
@@ -204,6 +210,39 @@ public record CertificateBuilder
         };
 
     /// <summary>
+    /// Sets the public key to certify, without supplying the matching private key.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the counterpart to <see cref="SetSignatureGenerator"/> for keys this process cannot use
+    /// directly, such as those held in an HSM, a TPM or a cloud KMS: the public key goes into the
+    /// certificate while the private key never leaves the device.
+    /// </para>
+    /// <para>
+    /// It is mutually exclusive with <see cref="SetKeyPair"/>, which it clears, and it suppresses the
+    /// automatic key generation that would otherwise happen during <see cref="Create"/>. The resulting
+    /// certificate has no private key attached.
+    /// </para>
+    /// <para>
+    /// Self-signing a certificate this way also requires <see cref="SetSignatureGenerator"/>, since the
+    /// builder holds no key it could sign with. Nothing checks that the generator actually corresponds to
+    /// this public key; that pairing is the caller's to get right.
+    /// </para>
+    /// <para>
+    /// <see cref="KeyAlgorithm"/> is updated to match the key where the algorithm is recognised, and left
+    /// unchanged otherwise.
+    /// </para>
+    /// </remarks>
+    /// <param name="value">The public key to certify, or <see langword="null"/> to remove it.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified public key.</returns>
+    public CertificateBuilder SetPublicKey(PublicKey? value)
+        => this with {
+            KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
+            PublicKey = value,
+            KeyPair = null
+        };
+
+    /// <summary>
     /// Sets the key algorithm for automatic key generation. This is mutually exclusive with the SetKeyPair method, so if a KeyPair
     /// was previously specified, setting the KeyAlgorithm will remove it from the builder. Whenever the build's Create() method is
     /// called, a new key-pair will be generated and immediately disposed upon return.
@@ -254,7 +293,34 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified padding.</returns>
     public CertificateBuilder SetRSASignaturePadding(RSASignaturePadding value)
         => this with { RSASignaturePadding = value };
-    
+
+
+    /// <summary>
+    /// Sets a signature generator to sign with, instead of deriving one from the signing key.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the extension point for keys this process cannot use directly, such as those held in an HSM,
+    /// a TPM or a cloud KMS: implement <see cref="X509SignatureGenerator"/> against the remote key and the
+    /// builder never needs the private key itself.
+    /// </para>
+    /// <para>
+    /// The generator replaces whichever signature would otherwise have been produced. When
+    /// <see cref="Issuer"/> is set that is the issuer's signature, and the issuer certificate no longer needs
+    /// an attached private key. Otherwise it is the self-signature, which requires the matching key pair from
+    /// <see cref="SetKeyPair"/> so the certificate's own public key agrees with the signature.
+    /// </para>
+    /// <para>
+    /// <see cref="HashAlgorithm"/> and <see cref="RSASignaturePadding"/> are not applied to a supplied
+    /// generator; it determines its own signature algorithm.
+    /// </para>
+    /// </remarks>
+    /// <param name="value">The signature generator to sign with, or <see langword="null"/> to derive one from the signing key.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified signature generator.</returns>
+    public CertificateBuilder SetSignatureGenerator(X509SignatureGenerator? value)
+        => this with { SignatureGenerator = value };
+
+
 
     /// <summary>
     /// Adds an extension to the certificate.
@@ -351,6 +417,20 @@ public record CertificateBuilder
         if (ECCurve != null && KeyPair == null && KeyAlgorithm != KeyAlgorithm.ECDsa) {
             throw new ArgumentException($"{nameof(ECCurve)} only applies when {nameof(KeyAlgorithm)} is {nameof(KeyAlgorithm.ECDsa)}, but it is {KeyAlgorithm}", nameof(ECCurve));
         }
+
+        //Self-signing means the subject key and the signing key are the same key, so with no KeyPair in hand
+        //the caller has to describe both halves of it or neither: a public key to certify AND a generator to
+        //sign with. Supplying only one half would pair a generated key with an unrelated signature, or leave
+        //nothing able to sign at all.
+        if (Issuer == null && KeyPair == null) {
+            if (PublicKey == null && SignatureGenerator != null) {
+                throw new ArgumentException($"{nameof(SignatureGenerator)} without an {nameof(Issuer)} signs the certificate with itself, so the key it signs with must also be supplied through {nameof(SetKeyPair)} or {nameof(SetPublicKey)}", nameof(SignatureGenerator));
+            }
+
+            if (PublicKey != null && SignatureGenerator == null) {
+                throw new ArgumentException($"{nameof(SetPublicKey)} supplies no private key, so a self-signed certificate also needs a {nameof(SignatureGenerator)} to sign with, or an {nameof(Issuer)} to sign it", nameof(SignatureGenerator));
+            }
+        }
     }
 
 
@@ -387,7 +467,7 @@ public record CertificateBuilder
     /// </summary>
     /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
     public CertificateSigningRequest CreateCertificateSigningRequest()
-        => new(CreateCertificateRequest(), CreateSignatureGenerator(KeyPair));
+        => new(CreateCertificateRequest(), SignatureGenerator ?? CreateSignatureGenerator(KeyPair));
 
 
     /// <summary>
@@ -399,34 +479,32 @@ public record CertificateBuilder
     {
         Validate();
 
-        bool disposeKeys = (KeyPair == null);
+        //A public key supplied on its own is enough to certify, so only generate when nothing was provided
+        bool generateKeys = KeyPair == null && PublicKey == null;
 
-        var builder = KeyPair == null
+        var builder = generateKeys
             ? GenerateKeyPair()
             : this;
 
         try {
             if (builder.PublicKey == null) {
-                throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
+                throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...), {nameof(SetPublicKey)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a key to certify");
             }
 
             var request = builder.CreateCertificateRequest();
 
-            var cert = builder.Issuer != null
-                ? request.Create(
-                    builder.Issuer.SubjectName,
-                    builder.CreateSignatureGenerator(builder.Issuer.GetPrivateKey()),
-                    builder.NotBefore,
-                    builder.NotAfter,
-                    builder.GenerateSerialNumber()
-                )
-                : request.Create(
-                    builder.Subject.Create(),
-                    builder.CreateSignatureGenerator(builder.KeyPair),
-                    builder.NotBefore,
-                    builder.NotAfter,
-                    builder.GenerateSerialNumber()
-                );
+            //A supplied generator is used as-is, which also means an Issuer certificate with no attached
+            //private key is enough: the key it stands for lives wherever the generator can reach it
+            var generator = builder.SignatureGenerator
+                ?? builder.CreateSignatureGenerator(builder.Issuer != null ? builder.Issuer.GetPrivateKey() : builder.KeyPair);
+
+            var cert = request.Create(
+                builder.Issuer?.SubjectName ?? builder.Subject.Create(),
+                generator,
+                builder.NotBefore,
+                builder.NotAfter,
+                builder.GenerateSerialNumber()
+            );
 
             cert = builder.KeyPair switch {
                 DSA dsa => cert.CopyWithPrivateKey(dsa),
@@ -450,7 +528,7 @@ public record CertificateBuilder
             }
 
         } finally {
-            if (disposeKeys) {
+            if (generateKeys) {
                 builder.KeyPair?.Clear();
             }
         }
@@ -598,6 +676,22 @@ public record CertificateBuilder
         => builder.PublicKey?.Oid.Value == Oids.Rsa
             ? X509KeyUsageFlags.KeyEncipherment
             : X509KeyUsageFlags.None;
+
+
+    /// <summary>
+    /// Maps a public key's algorithm OID onto a <see cref="KeyAlgorithm"/>, or <see langword="null"/> when it is
+    /// not one the builder knows how to generate. Unlike the key-pair overload an unrecognised algorithm is not
+    /// an error here: the builder only has to put the key in the certificate, not produce one like it.
+    /// </summary>
+    private static KeyAlgorithm? GetKeyAlgorithm(PublicKey? key)
+        => key?.Oid.Value switch {
+            Oids.Rsa => KeyAlgorithm.RSA,
+            Oids.EcPublicKey => KeyAlgorithm.ECDsa,
+            #pragma warning disable CS0618 // Type or member is obsolete
+            Oids.Dsa => KeyAlgorithm.DSA,
+            #pragma warning restore CS0618 // Type or member is obsolete
+            _ => null
+        };
 
 
     private static KeyAlgorithm? GetKeyAlgorithm(AsymmetricAlgorithm? keys)

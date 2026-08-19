@@ -626,6 +626,197 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task SetSignatureGenerator_SignsWithAnIssuerThatHasNoPrivateKey()
+    {
+        //The scenario the feature exists for: the CA's key is unreachable, only the generator can use it
+        using var rootCa = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=HSM Root CA")
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
+            .Create();
+
+        using var rootPublicOnly = Internals.CertTools.LoadCertificate(rootCa.RawData);
+        await Assert.That(rootPublicOnly.HasPrivateKey).IsFalse();
+
+        using var rootKey = rootCa.GetRSAPrivateKey()!;
+        var generator = new RecordingSignatureGenerator(X509SignatureGenerator.CreateForRSA(rootKey, RSASignaturePadding.Pkcs1));
+
+        using var leaf = new CertificateBuilder()
+            .SetSubject("CN=Leaf")
+            .SetIssuer(rootPublicOnly)
+            .SetSignatureGenerator(generator)
+            .Create();
+
+        await Assert.That(generator.SignCount).IsEqualTo(1);
+        await Assert.That(leaf.Issuer).IsEqualTo(rootCa.Subject);
+        await Assert.That(leaf.IsIssuedBy(rootCa, true)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task SetSignatureGenerator_SelfSigns_AndItsAlgorithmWinsOverTheBuilderDefault()
+    {
+        using var keys = RSA.Create(2048);
+
+        //The builder's own default is Pkcs1, so a PSS signature can only have come from the generator
+        var generator = new RecordingSignatureGenerator(X509SignatureGenerator.CreateForRSA(keys, RSASignaturePadding.Pss));
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Self Signed By Generator")
+            .SetKeyPair(keys)
+            .SetSignatureGenerator(generator)
+            .Create();
+
+        await Assert.That(generator.SignCount).IsEqualTo(1);
+        await Assert.That(cert.SignatureAlgorithm.Value).IsEqualTo(Oids.RsaPss);
+        await Assert.That(cert.IsSelfSigned(true)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task SetSignatureGenerator_SignsACertificateSigningRequest()
+    {
+        using var keys = RSA.Create(2048);
+        var generator = new RecordingSignatureGenerator(X509SignatureGenerator.CreateForRSA(keys, RSASignaturePadding.Pss));
+
+        var csr = new CertificateBuilder()
+            .SetSubject("CN=Generated CSR")
+            .SetKeyPair(keys)
+            .SetSignatureGenerator(generator)
+            .CreateCertificateSigningRequest();
+
+        var pem = csr.ToPemString();
+
+        await Assert.That(generator.SignCount).IsGreaterThan(0);
+        await Assert.That(pem).Contains("BEGIN CERTIFICATE REQUEST");
+    }
+
+
+    [Test]
+    public async Task SetSignatureGenerator_WithoutIssuerOrKeyPair_Throws()
+    {
+        using var keys = RSA.Create(2048);
+        var generator = X509SignatureGenerator.CreateForRSA(keys, RSASignaturePadding.Pkcs1);
+
+        //Nothing ties the generated key to the generator, so the self-signature could not verify
+        await Assert
+            .That(() => new CertificateBuilder().SetSignatureGenerator(generator).Validate())
+            .ThrowsExactly<ArgumentException>();
+
+        //Either an issuer or a supplied key pair resolves it
+        await Assert
+            .That(() => new CertificateBuilder().SetSignatureGenerator(generator).SetKeyPair(keys).Validate())
+            .ThrowsNothing();
+    }
+
+
+    [Test]
+    public async Task SetSignatureGenerator_Null_FallsBackToTheDerivedGenerator()
+    {
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=No Generator")
+            .SetSignatureGenerator(null)
+            .Create();
+
+        await Assert.That(cert.SignatureAlgorithm.Value).IsEqualTo(Oids.RsaPkcs1Sha256);
+        await Assert.That(cert.IsSelfSigned(true)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task SetPublicKey_CertifiesThatKeyWithoutGeneratingOrAttachingAPrivateKey()
+    {
+        using var issuer = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Issuer")
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
+            .Create();
+
+        //Stands in for a key whose private half never leaves the device
+        using var remoteKeys = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+        var publicKey = new PublicKey(remoteKeys);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Remote Key")
+            .SetPublicKey(publicKey)
+            .SetIssuer(issuer)
+            .Create();
+
+        //The certified key is the supplied one, not a freshly generated stand-in
+        using var certified = cert.GetECDsaPublicKey()!;
+        await Assert.That(certified.ExportSubjectPublicKeyInfo()).IsEquivalentTo(remoteKeys.ExportSubjectPublicKeyInfo());
+        await Assert.That(cert.HasPrivateKey).IsFalse();
+        await Assert.That(cert.IsIssuedBy(issuer, true)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task SetPublicKey_UpdatesKeyAlgorithmAndClearsAnyKeyPair()
+    {
+        using var rsaKeys = RSA.Create(2048);
+        using var ecKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var builder = new CertificateBuilder()
+            .SetKeyPair(rsaKeys)
+            .SetPublicKey(new PublicKey(ecKeys));
+
+        await Assert.That(builder.KeyAlgorithm).IsEqualTo(KeyAlgorithm.ECDsa);
+
+        //With the key pair cleared there is nothing left to self-sign with
+        await Assert.That(() => builder.Validate()).ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task SetPublicKey_WithSignatureGenerator_SelfSignsWithoutAPrivateKeyInHand()
+    {
+        using var remoteKeys = RSA.Create(2048);
+
+        //Both halves describe the same external key: the public half to certify, the generator to sign
+        var generator = new RecordingSignatureGenerator(X509SignatureGenerator.CreateForRSA(remoteKeys, RSASignaturePadding.Pkcs1));
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=HSM Backed Root")
+            .SetPublicKey(new PublicKey(remoteKeys))
+            .SetSignatureGenerator(generator)
+            .Create();
+
+        await Assert.That(generator.SignCount).IsEqualTo(1);
+        await Assert.That(cert.HasPrivateKey).IsFalse();
+        await Assert.That(cert.IsSelfSigned(true)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task SetPublicKey_SelfSignedWithoutASignatureGenerator_Throws()
+    {
+        using var remoteKeys = RSA.Create(2048);
+
+        //Nothing here can produce a signature
+        await Assert
+            .That(() => new CertificateBuilder().SetPublicKey(new PublicKey(remoteKeys)).Validate())
+            .ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task SetPublicKey_Null_RestoresAutomaticKeyGeneration()
+    {
+        using var remoteKeys = RSA.Create(2048);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Regenerated")
+            .SetPublicKey(new PublicKey(remoteKeys))
+            .SetPublicKey(null)
+            .Create();
+
+        await Assert.That(cert.HasPrivateKey).IsTrue();
+        await Assert.That(cert.IsSelfSigned(true)).IsTrue();
+    }
+
+
+    [Test]
     public async Task CreateCertificateRequest_WithoutKeyPair_Throws()
         => await Assert
             .That(() => new CertificateBuilder().CreateCertificateRequest())
@@ -729,4 +920,26 @@ public class CertificateBuilderTests
         => Asn1Sequence
             .GetInstance(extension.ConvertToBouncyCastle().GetParsedValue())
             .Select(Org.BouncyCastle.Asn1.X509.GeneralName.GetInstance);
+
+
+    /// <summary>
+    /// Stands in for a generator backed by a key this process cannot use directly (an HSM, TPM or cloud KMS),
+    /// by delegating to a local one and counting the signatures it is asked for.
+    /// </summary>
+    private sealed class RecordingSignatureGenerator(X509SignatureGenerator inner) : X509SignatureGenerator
+    {
+        public int SignCount { get; private set; }
+
+        protected override PublicKey BuildPublicKey()
+            => inner.PublicKey;
+
+        public override byte[] GetSignatureAlgorithmIdentifier(HashAlgorithmName hashAlgorithm)
+            => inner.GetSignatureAlgorithmIdentifier(hashAlgorithm);
+
+        public override byte[] SignData(byte[] data, HashAlgorithmName hashAlgorithm)
+        {
+            SignCount++;
+            return inner.SignData(data, hashAlgorithm);
+        }
+    }
 }

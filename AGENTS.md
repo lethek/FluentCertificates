@@ -173,6 +173,10 @@ The main API for creating certificates. Supports:
 - Custom extensions
 - Subject Alternative Names (SAN)
 - Custom serial number generation
+- External signing keys, via `SetPublicKey` (certify a key whose private half is unreachable) and
+  `SetSignatureGenerator` (sign with a supplied `X509SignatureGenerator`). Used together they cover
+  HSM/TPM/KMS keys. `Validate()` requires both when self-signing, since either alone yields a
+  certificate that cannot verify.
 
 ### CertificateFinder
 Provides LINQ-queryable interface for finding certificates across:

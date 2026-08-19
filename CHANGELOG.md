@@ -23,6 +23,14 @@ they summarise each release rather than record it as it happened.
   issued with the `ocspSigning` extended key usage and the `digitalSignature` key usage; a
   time-stamping certificate is issued with the `timeStamping` extended key usage marked critical, as
   RFC 3161 section 2.3 requires.
+- `CertificateBuilder.SetSignatureGenerator(X509SignatureGenerator?)`, signing with a supplied
+  generator instead of one derived from the signing key. When an `Issuer` is set, that issuer
+  certificate no longer needs an attached private key.
+- `CertificateBuilder.SetPublicKey(PublicKey?)`, certifying a public key whose private half the
+  process cannot reach. It clears any `SetKeyPair`, suppresses automatic key generation, and produces
+  a certificate with no private key attached.
+- Together the two cover keys held in an HSM, a TPM or a cloud KMS, for both CA-issued and
+  self-signed certificates and for certificate signing requests.
 - `BuildChain(Action<X509ChainPolicy>)` overload on `X509Certificate2`, giving full control of the
   chain policy: custom root trust, extra stores, revocation checking, verification flags and so on.
   The policy is pre-set to `X509RevocationMode.NoCheck` before the action runs, matching the other
