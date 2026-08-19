@@ -80,9 +80,9 @@ public class CertificateBuilderTests
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Create();
         await Assert.That(cert1.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdDsa.Id);
 
-#pragma warning disable CS0612 // Type or member is obsolete
+#pragma warning disable CS0618 // Type or member is obsolete
         using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.DSA).Create();
-#pragma warning restore CS0612 // Type or member is obsolete
+#pragma warning restore CS0618 // Type or member is obsolete
         await Assert.That(cert2.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdDsa.Id);
     }
 

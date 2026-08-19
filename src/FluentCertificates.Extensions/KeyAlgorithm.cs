@@ -1,4 +1,4 @@
-﻿namespace FluentCertificates;
+namespace FluentCertificates;
 
 /// <summary>
 /// Specifies the supported key algorithms for cryptographic operations.
@@ -9,7 +9,8 @@ public enum KeyAlgorithm
     RSA,
     
     /// <summary>DSA (Digital Signature Algorithm).</summary>
-    [Obsolete] DSA,
+    [Obsolete("DSA is deprecated for certificate use. Consider using ECDsa or RSA instead.")]
+    DSA,
 
     /// <summary>ECDsa (Elliptic Curve Digital Signature Algorithm).</summary>
     ECDsa

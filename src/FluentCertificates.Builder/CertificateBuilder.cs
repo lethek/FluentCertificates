@@ -431,9 +431,9 @@ public record CertificateBuilder
             KeyAlgorithm switch {
                 KeyAlgorithm.ECDsa => ECDsa.Create() ?? throw new NotSupportedException("Unsupported ECDSA algorithm"),
                 KeyAlgorithm.RSA => RSA.Create(KeyLength ?? 4096),
-#pragma warning disable CS0612 // Type or member is obsolete
+#pragma warning disable CS0618 // Type or member is obsolete
                 KeyAlgorithm.DSA => DSA.Create(KeyLength ?? 1024),
-#pragma warning restore CS0612 // Type or member is obsolete
+#pragma warning restore CS0618 // Type or member is obsolete
                 _ => throw new ArgumentOutOfRangeException(nameof(KeyAlgorithm), KeyAlgorithm, $"Unsupported {nameof(KeyAlgorithm)}")
             }
         );
@@ -514,9 +514,9 @@ public record CertificateBuilder
         => keys switch {
             ECDsa => KeyAlgorithm.ECDsa,
             RSA => KeyAlgorithm.RSA,
-            #pragma warning disable CS0612 // Type or member is obsolete
+            #pragma warning disable CS0618 // Type or member is obsolete
             DSA => KeyAlgorithm.DSA,
-            #pragma warning restore CS0612 // Type or member is obsolete
+            #pragma warning restore CS0618 // Type or member is obsolete
             null => null,
             _ => throw new NotSupportedException($"Unsupported AsymmetricAlgorithm: {keys.GetType()}")
         };

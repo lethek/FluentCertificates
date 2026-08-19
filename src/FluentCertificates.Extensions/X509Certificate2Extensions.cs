@@ -1,4 +1,4 @@
-﻿using System.Formats.Asn1;
+using System.Formats.Asn1;
 using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -382,9 +382,9 @@ public static class X509Certificate2Extensions
         var sig = cert.GetSignatureData().Span;
 
         return algorithm.KeyAlgorithm switch {
-            #pragma warning disable CS0612 // Type or member is obsolete
+            #pragma warning disable CS0618 // Type or member is obsolete
             KeyAlgorithm.DSA => issuer.GetDSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm),
-            #pragma warning restore CS0612 // Type or member is obsolete
+            #pragma warning restore CS0618 // Type or member is obsolete
             KeyAlgorithm.RSA => issuer.GetRSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, algorithm.RSASignaturePadding!),
             KeyAlgorithm.ECDsa => issuer.GetECDsaPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence),
             _ => false
