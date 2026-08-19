@@ -165,7 +165,8 @@ public class CertificateBuilderTests
     {
         using var cert = new CertificateBuilder().Create();
 
-        await Assert.That(cert).IsNotNull();
+        await Assert.That(cert.Subject).IsEmpty();
+        await Assert.That(cert.SerialNumberBytes.Length).IsEqualTo(18);
         await Assert.That(cert.IsValidNow()).IsTrue();
     }
 
