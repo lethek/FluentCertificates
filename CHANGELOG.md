@@ -1,0 +1,392 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+While the version number remains below 1.0.0 this library is under initial development, and
+breaking changes may occur between minor versions.
+
+Entries for v0.14.0 and earlier were reconstructed from the release history after the fact, so
+they summarise each release rather than record it as it happened.
+
+## [Unreleased]
+
+### Added
+
+- `IsValidAt(DateTimeOffset)` extension method on `X509Certificate2`.
+
+### Changed
+
+- `CertificateUsage.CodeSign` certificates are now issued with the `codeSigning` extended key usage
+  only. The `timeStamping` and Microsoft `lifetimeSigning` usages are no longer included: the former
+  granted timestamp-authority capability a code signer does not need, and the latter caused the
+  signature to expire with the certificate, defeating the purpose of timestamping it.
+- The `keyEncipherment` key usage is now asserted only when the certificate's public key is RSA. It
+  is no longer set on EC or DSA certificates, where it claims a capability the key does not have.
+  RFC 8813 section 3 prohibits it for EC keys, as do the CA/Browser Forum TLS and S/MIME Baseline
+  Requirements. Affects `CertificateUsage.Server` and `CertificateUsage.SMime`.
+- `GeneralNameListBuilder` now rejects DNS names and email addresses that cannot be encoded, at the
+  point they are added rather than when the certificate is built. Non-ASCII characters, control
+  characters and over-length values throw `ArgumentException`. Name-constraint forms such as an
+  empty name, a leading-dot subtree and a bare domain remain valid.
+- `GeneralNameListBuilder.AddIPAddress` now validates that the address and subnet mask share an
+  address family when they are added, instead of failing later during encoding.
+
+### Deprecated
+
+- `IsValidAt(DateTime)`. A `DateTime` carries no offset, so its `DateTimeKind` changes the result.
+  Use the `DateTimeOffset` overload.
+- `KeyAlgorithm.DSA` now carries guidance on its existing `[Obsolete]` attribute, recommending
+  ECDsa or RSA. DSA support itself is unchanged.
+
+### Removed
+
+- The deprecated `ExportAsCert`, `ExportAsPem`, `ExportAsPkcs7`, `ExportAsPkcs12`, `ToPemString`
+  and `ToBase64String` extension methods on `X509Certificate2`, `X509Certificate2Collection`,
+  `X509Chain` and `IEnumerable<X509Certificate2>`. Use `Export()` and the
+  `CertificateExportBuilder` it returns. The similarly named methods on `CertificateRequest` and
+  `AsymmetricAlgorithm` are unaffected and remain supported.
+
+### Fixed
+
+- `CertificateFinder` silently skipped PKCS#12 files (`.pfx`, `.p12`) on .NET 9 and later. They were
+  listed as supported but failed to load and the error was swallowed, so a directory of PKCS#12
+  files returned nothing. .NET 8 was unaffected.
+- `CertificateFinder` ignored certificate files whose extension was not lowercase, so `SERVER.PFX`
+  was never found. Extensions are now matched case-insensitively.
+- `IsValidAt(DateTime)` compared the supplied time against the certificate's UTC bounds without
+  converting it, so a local or unspecified `DateTime` gave results wrong by the local UTC offset.
+
+## [0.14.0] - 2026-08-19
+
+### Added
+
+- Fluent certificate export API: `Export()` on `X509Certificate2`, `X509Certificate2Collection`,
+  `X509Chain` and `IEnumerable<X509Certificate2>` returns a `CertificateExportBuilder`, configured
+  with `With*`, given a format with `As*`, and terminated with `To*`.
+
+### Changed
+
+- Test suite migrated from xUnit to TUnit, and the solution moved to the `.slnx` format.
+- Build moved from NUKE to the `dotnet` CLI directly.
+
+### Deprecated
+
+- The legacy `ExportAs*`, `ToPemString` and `ToBase64String` export extension methods, each with a
+  message naming its `Export()` replacement.
+- `KeyAlgorithm.DSA`.
+
+### Removed
+
+- The `FluentCertificates.Builder.BouncyCastle` project. It was never published; the two conversion
+  helpers it provided now live in the Builder test project.
+
+## [0.13.0] - 2025-06-04
+
+### Added
+
+- `VerifyChain` extension method on `X509Certificate2`.
+- `CertificateBuilder.SetSerialNumberGenerator`, for supplying a custom serial number generator.
+
+### Changed
+
+- `CertificateBuilder.Extensions` and `SubjectAlternativeNames` now return interfaces rather than
+  concrete collection types.
+- Certificate chain building and validity check signatures clarified.
+
+## [0.12.0] - 2025-06-03
+
+### Added
+
+- `CertificateFinder` can recurse into subdirectories, and accepts custom certificate sources for
+  searching stores other than the file system or an `X509Store`.
+- File system access in `CertificateFinder` is abstracted, making it mockable in tests.
+
+### Changed
+
+- `CertificateFinder.Stores` renamed to `Sources`, and `ClearStores` to `ClearSources`.
+- Migrated away from deprecated .NET cryptography APIs.
+
+### Removed
+
+- `CertificateFinder.SetStore` methods, made redundant by `ClearSources` plus `AddStore`.
+
+## [0.11.0] - 2025-05-29
+
+### Added
+
+- `GeneralNameListBuilder`, which converts implicitly to `ImmutableList<GeneralName>`.
+- `Oids` is now public.
+
+### Changed
+
+- `CertificateBuilder.SetSubjectAlternativeName` renamed to `SetSubjectAlternativeNames`, since it
+  sets the contents of the extension rather than the extension itself.
+- General name handling generalised across the library.
+
+### Removed
+
+- `SubjectAlternativeNameBuilderExtensions` and `GeneralNameList`, superseded by
+  `GeneralNameListBuilder`.
+
+### Fixed
+
+- Subject Alternative Name handling, and `X509NameConstraintExtension` after the general name
+  changes.
+
+## [0.10.1] - 2024-11-29
+
+### Fixed
+
+- Multi-targeting issues in the published packages.
+
+## [0.10.0] - 2024-11-28
+
+### Added
+
+- .NET 8 target.
+- A range of `Get` methods on `X500NameBuilder`.
+- `CertificateBuilder.SetKeyStorageFlags`.
+- Experimental `X509NameConstraintExtension`.
+
+### Changed
+
+- `CertificateFinder` overhauled, including breaking changes.
+
+### Removed
+
+- Support for target frameworks older than .NET 8.
+
+## [0.9.1] - 2023-08-11
+
+### Removed
+
+- `FluentCertificates.Builder`'s dependency on Portable.BouncyCastle.
+
+## [0.9.0] - 2023-08-10
+
+### Added
+
+- `CertificateFinder` can include file system directories in a search.
+- String encoding types can be specified when building X.500 names.
+- An internal `Oids` class, and a polyfill of .NET 7's `X500DistinguishedNameBuilder`.
+- XML documentation is now included in the NuGet packages.
+
+### Changed
+
+- `X500NameBuilder.Attributes` renamed to `RelativeDistinguishedNames`, and `Equivalent` renamed to
+  `EquivalentTo`.
+- `X500NameBuilder` no longer exposes BouncyCastle types, and several operator overloads were
+  removed.
+
+### Removed
+
+- Support for .NET 5 and .NET Core 3.1.
+
+### Fixed
+
+- `X500NameBuilder.EquivalentTo` compared raw encoded data when `orderMatters` was true; it now
+  compares the individual RDN values regardless of how they were encoded.
+
+## [0.8.0] - 2022-07-07
+
+### Added
+
+- `CertificateSigningRequest` class, and the ability to create a CSR directly from
+  `CertificateBuilder`.
+
+### Changed
+
+- All `Build` methods renamed to `Create`.
+
+## [0.7.1] - 2022-06-24
+
+### Fixed
+
+- The padding mode is now detected when verifying RSA certificate signatures.
+
+## [0.7.0] - 2022-06-24
+
+### Changed
+
+- Private and public key handling reworked, removing further BouncyCastle dependencies.
+
+## [0.6.0] - 2022-06-23
+
+### Added
+
+- Basic support for encrypting private keys exported to PEM. The encryption options are not yet
+  configurable.
+- `GetTbsData` and `GetSignatureData` extension methods on `X509Certificate2`.
+- A `verifySignature` parameter on `IsIssuedBy` and `IsSelfSigned`.
+
+### Changed
+
+- Certificate signatures are verified without relying on BouncyCastle.
+- Trailing newline characters removed from PEM exports, to match the .NET 7 export methods.
+
+### Removed
+
+- The `X509Certificate2.VerifyIssuer` extension method, replaced by `IsIssuedBy` with
+  `verifySignature`.
+
+### Fixed
+
+- The PEM password was passed to the wrong method during export.
+
+## [0.5.4] - 2022-06-20
+
+### Fixed
+
+- Certificate collection order when exporting to PEM.
+
+## [0.5.3] - 2022-06-20
+
+### Fixed
+
+- Private keys are now written before certificates when exporting to PEM.
+- `X509Chain.ToEnumerable()` and `ToCollection()` return the chain leaf last.
+- Certificate chain building on .NET Standard 2.1.
+
+## [0.5.2] - 2022-06-18
+
+### Fixed
+
+- A potential resource leak: keys are now created from their parameters only when needed, and
+  disposed immediately.
+
+## [0.5.1] - 2022-06-17
+
+### Changed
+
+- Documentation updates.
+
+## [0.5.0] - 2022-06-17
+
+### Added
+
+- Overloads for exporting to PKCS#12 and PKCS#7 via a `BinaryWriter`, and `ExportAsPem` overloads
+  taking a `TextWriter`.
+- Extension methods for exporting keys to PEM.
+- Constructor overloads on `X500NameBuilder` for an `X500DistinguishedName`, a BouncyCastle
+  `X509Name`, or a string, plus further `CertificateBuilder.SetSubject` overloads.
+
+### Changed
+
+- `X509NameBuilder` renamed to `X500NameBuilder`, and its attribute collection now holds `Oid`
+  instances instead of BouncyCastle `DerObjectIdentifier` instances.
+- PEM files and strings are written without BouncyCastle.
+
+### Removed
+
+- All static factory methods named `Create`, replaced by constructor overloads.
+
+## [0.4.1] - 2022-06-10
+
+### Added
+
+- Support for signing a certificate whose key algorithm differs from the issuer's.
+- Partial support for DSA certificates, on .NET 6 and later.
+- `CertificateBuilder.GenerateKeyPair()`.
+- README included in the NuGet packages.
+
+## [0.4.0] - 2022-06-02
+
+### Added
+
+- Basic support for ECDsa keys.
+
+## [0.3.2] - 2022-05-31
+
+### Changed
+
+- CI version stamping.
+
+## [0.3.1] - 2022-05-30
+
+### Added
+
+- `FluentCertificates.Finder` targets netstandard2.0, so it can be used from .NET Framework
+  projects.
+
+## [0.3.0] - 2022-05-30
+
+### Added
+
+- Split into `FluentCertificates.Builder` and `FluentCertificates.Finder`, with `FluentCertificates`
+  as a meta-package pulling in both.
+- Certificate signing request support, including extension methods for exporting a
+  `CertificateRequest` to a PEM string or file.
+- Extension methods for S/MIME certificates.
+- `IsValidNow`, `IsValid(DateTime)`, `IsSelfSigned`, `IsIssuedBy` and `VerifyIssuerSignature`
+  extension methods on `X509Certificate2`.
+- Options for selecting the hash algorithm and RSA signature padding.
+- Methods for customising and overriding certificate extensions, and for supplying an existing key
+  pair for renewal scenarios.
+
+### Changed
+
+- X.509 extension handling uses the native .NET `X509Extension` class rather than the BouncyCastle
+  equivalent, with extension methods for converting between the two.
+
+### Removed
+
+- `CertificateBuilder.GenerateKey()`, replaced by `SetKey(AsymmetricAlgorithm)`. A key pair must be
+  supplied explicitly when creating a CSR.
+
+### Fixed
+
+- `FriendlyName` was lost on newly generated certificates.
+
+## [0.2.0] - 2022-05-12
+
+### Added
+
+- `X509NameBuilder` gains `Add`, `Set`, `Remove`, `AddOrganizationalUnit(s)`,
+  `SetOrganizationalUnits`, `AddDomainComponent(s)` and `SetDomainComponents`, converts implicitly
+  to `string`, and exposes an immutable attribute collection.
+
+### Changed
+
+- `CertificateBuilder.Subject` and `Usage` now have defaults and are optional.
+- `X509NameBuilder` uses the immutable builder pattern.
+- Default key length reduced to 2048 bits.
+
+### Fixed
+
+- Certificate creation on .NET Core 3.1 running on Linux.
+
+## [0.1.0] - 2022-05-06
+
+### Added
+
+- Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
+  including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
+
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/lethek/FluentCertificates/compare/v0.13.0...v0.14.0
+[0.13.0]: https://github.com/lethek/FluentCertificates/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/lethek/FluentCertificates/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/lethek/FluentCertificates/compare/v0.10.1...v0.11.0
+[0.10.1]: https://github.com/lethek/FluentCertificates/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/lethek/FluentCertificates/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/lethek/FluentCertificates/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/lethek/FluentCertificates/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/lethek/FluentCertificates/compare/v0.7.1...v0.8.0
+[0.7.1]: https://github.com/lethek/FluentCertificates/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/lethek/FluentCertificates/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/lethek/FluentCertificates/compare/v0.5.4...v0.6.0
+[0.5.4]: https://github.com/lethek/FluentCertificates/compare/v0.5.3...v0.5.4
+[0.5.3]: https://github.com/lethek/FluentCertificates/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/lethek/FluentCertificates/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/lethek/FluentCertificates/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/lethek/FluentCertificates/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/lethek/FluentCertificates/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/lethek/FluentCertificates/compare/v0.3.2...v0.4.0
+[0.3.2]: https://github.com/lethek/FluentCertificates/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/lethek/FluentCertificates/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/lethek/FluentCertificates/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/lethek/FluentCertificates/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/lethek/FluentCertificates/releases/tag/v0.1.0
