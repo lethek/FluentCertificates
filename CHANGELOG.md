@@ -23,6 +23,10 @@ they summarise each release rather than record it as it happened.
   issued with the `ocspSigning` extended key usage and the `digitalSignature` key usage; a
   time-stamping certificate is issued with the `timeStamping` extended key usage marked critical, as
   RFC 3161 section 2.3 requires.
+- `BuildChain(Action<X509ChainPolicy>)` overload on `X509Certificate2`, giving full control of the
+  chain policy: custom root trust, extra stores, revocation checking, verification flags and so on.
+  The policy is pre-set to `X509RevocationMode.NoCheck` before the action runs, matching the other
+  overload rather than the framework's online default.
 - `CertificateBuilder.SetECCurve(ECCurve)`, selecting the curve used when the builder generates an
   ECDsa key. A key supplied through `SetKeyPair` already carries its own curve and takes precedence.
   Setting a curve alongside any other `KeyAlgorithm` is rejected by `Validate` rather than ignored.
