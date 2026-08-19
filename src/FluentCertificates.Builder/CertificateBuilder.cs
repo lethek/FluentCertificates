@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
@@ -497,12 +497,8 @@ public record CertificateBuilder
     private static List<X509Extension> GetCodeSigningExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true),
-            new X509EnhancedKeyUsageExtension(new OidCollection {
-                new(Oids.CodeSigningPurpose),
-                new(Oids.TimeStampingPurpose),
-                new(Oids.LifetimeSigningPurpose) //Used by Microsoft Authenticode to limit the signature's lifetime to the certificate's expiration
-            }, false)
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true),
+            new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.CodeSigningPurpose) }, false)
         ];
 
 

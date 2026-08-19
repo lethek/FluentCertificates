@@ -336,11 +336,8 @@ public class CertificateBuilderTests
             .SetSubject(x => x.SetCommonName("CodeSign Test"))
             .Create();
 
-        //CodeSigning, TimeStamping and Microsoft Authenticode LifetimeSigning
-        await Assert.That(GetEkuOids(cert))
-            .IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.3", "1.3.6.1.5.5.7.3.8", "1.3.6.1.4.1.311.10.3.13" });
-        await Assert.That(GetKeyUsages(cert))
-            .IsEqualTo(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment);
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.3" });
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.DigitalSignature);
     }
 
 
