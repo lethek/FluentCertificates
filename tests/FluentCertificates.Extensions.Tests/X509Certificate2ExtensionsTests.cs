@@ -272,13 +272,35 @@ public class X509Certificate2ExtensionsTests
             .SetNotAfter(to)
             .Create();
 
-        await Assert.That(cert.IsValidAt(from.UtcDateTime.AddDays(30))).IsTrue();
-        await Assert.That(cert.IsValidAt(from.UtcDateTime.AddSeconds(-1))).IsFalse();
-        await Assert.That(cert.IsValidAt(to.UtcDateTime.AddSeconds(1))).IsFalse();
+        await Assert.That(cert.IsValidAt(from.AddDays(30))).IsTrue();
+        await Assert.That(cert.IsValidAt(from.AddSeconds(-1))).IsFalse();
+        await Assert.That(cert.IsValidAt(to.AddSeconds(1))).IsFalse();
 
         //Both bounds are inclusive
-        await Assert.That(cert.IsValidAt(from.UtcDateTime)).IsTrue();
-        await Assert.That(cert.IsValidAt(to.UtcDateTime)).IsTrue();
+        await Assert.That(cert.IsValidAt(from)).IsTrue();
+        await Assert.That(cert.IsValidAt(to)).IsTrue();
+
+    }
+
+
+    [Test]
+    public async Task IsValidAt_SameInstantInDifferentOffsets_GivesTheSameAnswer()
+    {
+        //A window narrow enough that mistaking the offset for part of the value crosses a bound
+        var instant = new DateTimeOffset(2030, 6, 1, 12, 0, 0, TimeSpan.Zero);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("Offset Test"))
+            .SetNotBefore(instant.AddMinutes(-5))
+            .SetNotAfter(instant.AddMinutes(5))
+            .Create();
+
+        await Assert.That(cert.IsValidAt(instant)).IsTrue();
+        await Assert.That(cert.IsValidAt(instant.ToOffset(TimeSpan.FromHours(10)))).IsTrue();
+        await Assert.That(cert.IsValidAt(instant.ToOffset(TimeSpan.FromHours(-8)))).IsTrue();
+
+        //Shifting the instant itself, rather than its representation, does leave the window
+        await Assert.That(cert.IsValidAt(instant.AddHours(10))).IsFalse();
     }
 
 
@@ -312,7 +334,7 @@ public class X509Certificate2ExtensionsTests
 
 
     [Test]
-    public async Task IsValidAt_LocalDateTime_IsComparedAgainstUtcBounds()
+    public async Task IsValidAt_ObsoleteDateTimeOverload_ConvertsToUniversalTime()
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -322,18 +344,18 @@ public class X509Certificate2ExtensionsTests
             .SetNotAfter(now.AddMinutes(5))
             .Create();
 
-        //IsValidAt converts the certificate's bounds to UTC but uses atTime as given, so the
-        //result depends on the DateTimeKind of the argument. A UTC instant is correct; the
-        //identical moment expressed as local time is compared against UTC bounds unconverted.
+        //The same instant must give the same answer however its DateTimeKind expresses it
+        #pragma warning disable CS0618 // Type or member is obsolete
         await Assert.That(cert.IsValidAt(DateTime.UtcNow)).IsTrue();
+        await Assert
+            .That(cert.IsValidAt(DateTime.Now))
+            .IsTrue()
+            .Because("a local DateTime is converted to UTC before being compared");
 
-        var offset = TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow);
-        if (offset != TimeSpan.Zero) {
-            await Assert
-                .That(cert.IsValidAt(DateTime.Now))
-                .IsFalse()
-                .Because("the local wall-clock value is compared against UTC bounds without conversion");
-        }
+        //Unspecified is treated as local time, matching DateTime.ToUniversalTime
+        var unspecified = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
+        await Assert.That(cert.IsValidAt(unspecified)).IsTrue();
+        #pragma warning restore CS0618 // Type or member is obsolete
     }
 
 

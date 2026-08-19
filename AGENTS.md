@@ -191,7 +191,8 @@ Export, via `Export()` and the `CertificateExportBuilder` it returns:
 Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `BuildChain()` - Build certificate chains
 - `VerifyChain()` - Verify certificate chains
-- `IsValidNow()` / `IsValidAt()` - Validity checks
+- `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. `IsValidAt(DateTime)` is `[Obsolete]`: a
+  `DateTime` carries no offset, so its `DateTimeKind` silently changes the answer.
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks
 
 

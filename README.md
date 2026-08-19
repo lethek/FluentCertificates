@@ -246,7 +246,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`GetSignatureData`||
 |`GetToBeSignedData`||
 |`IsValidNow`||
-|`IsValidAt`||
+|`IsValidAt`|Takes a `DateTimeOffset`. The `DateTime` overload is **deprecated** because the result depends on the value's `DateTimeKind`.|
 |`IsSelfSigned`||
 |`IsIssuedBy`||
 |`VerifyChain`||

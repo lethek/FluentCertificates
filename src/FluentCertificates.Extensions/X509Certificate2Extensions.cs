@@ -129,17 +129,34 @@ public static class X509Certificate2Extensions
     /// <param name="cert">The certificate.</param>
     /// <returns>True if valid now; otherwise, false.</returns>
     public static bool IsValidNow(this X509Certificate2 cert)
-        => cert.IsValidAt(DateTime.UtcNow);
+        => cert.IsValidAt(DateTimeOffset.UtcNow);
 
 
     /// <summary>
-    /// Determines if the certificate is valid at a specific time.
+    /// Determines if the certificate is valid at a specific time. Both bounds are inclusive.
     /// </summary>
+    /// <param name="cert">The certificate.</param>
+    /// <param name="atTime">The instant to check validity for.</param>
+    /// <returns>True if valid at the specified time; otherwise, false.</returns>
+    public static bool IsValidAt(this X509Certificate2 cert, DateTimeOffset atTime)
+        => cert.NotBefore.ToUniversalTime() <= atTime.UtcDateTime && atTime.UtcDateTime <= cert.NotAfter.ToUniversalTime();
+
+
+    /// <summary>
+    /// Determines if the certificate is valid at a specific time. Both bounds are inclusive.
+    /// </summary>
+    /// <remarks>
+    /// Deprecated. A <see cref="DateTime"/> does not carry an offset, so the result depends on its
+    /// <see cref="DateTimeKind"/>: <see cref="DateTimeKind.Unspecified"/> is treated as local time,
+    /// following the behaviour of <see cref="DateTime.ToUniversalTime"/>. Use the
+    /// <see cref="IsValidAt(X509Certificate2,DateTimeOffset)"/> overload, which is unambiguous.
+    /// </remarks>
     /// <param name="cert">The certificate.</param>
     /// <param name="atTime">The time to check validity for.</param>
     /// <returns>True if valid at the specified time; otherwise, false.</returns>
+    [Obsolete("Use the IsValidAt(DateTimeOffset) overload instead: a DateTime has no offset, so the result depends on its DateTimeKind.")]
     public static bool IsValidAt(this X509Certificate2 cert, DateTime atTime)
-        => cert.NotBefore.ToUniversalTime() <= atTime && atTime <= cert.NotAfter.ToUniversalTime();
+        => cert.IsValidAt(new DateTimeOffset(atTime.ToUniversalTime()));
 
 
     /// <summary>
