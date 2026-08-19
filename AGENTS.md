@@ -47,7 +47,7 @@ dotnet pack -c Release -p:PackageOutputPath="$PWD/artifacts/"
 
 ### Package Structure
 
-The solution is organized into multiple NuGet packages with clear separation of concerns:
+The solution is organized into multiple NuGet packages with clear separation of concerns. All five are published; `src/FluentCertificates.Builder.BouncyCastle/` is not a package (see below).
 
 1. **FluentCertificates** (meta-package)
    - Top-level package that imports Builder, Extensions, and Finder
@@ -81,10 +81,22 @@ The solution is organized into multiple NuGet packages with clear separation of 
    - Location: `src/FluentCertificates.Common/`
    - Not typically referenced directly by consumers
 
-6. **FluentCertificates.Builder.BouncyCastle**
-   - Interoperability with BouncyCastle library
-   - Conversion extensions between .NET and BouncyCastle types
-   - Location: `src/FluentCertificates.Builder.BouncyCastle/`
+### Not a Package: FluentCertificates.Builder.BouncyCastle
+
+`src/FluentCertificates.Builder.BouncyCastle/` is **internal test-support only** and is never published
+(`IsPackable=false`). Its sole consumer is `tests/FluentCertificates.Builder.Tests`; no `src/` project
+references it.
+
+It holds only what the tests actually call, to move between BouncyCastle and .NET types:
+`CertificateBuilder.SetSubject(X509Name)`, `X509Name.ConvertToDotNet()`,
+`X500NameBuilder.Add(DerObjectIdentifier, UniversalTagNumber, params string[])` and
+`X509Extension.ConvertToBouncyCastle()`. Do not add methods here expecting consumers to reach them:
+nothing in this assembly is reachable outside the test projects.
+
+**BouncyCastle is not a dependency of the shipped packages.** `CertificateBuilder` used it internally
+in the past but no longer does; nothing under `src/` outside this project references `Org.BouncyCastle`.
+The test projects that use BouncyCastle directly get it from their own `BouncyCastle.Cryptography`
+package reference, not from this project.
 
 ### Key Design Patterns
 

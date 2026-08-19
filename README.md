@@ -330,23 +330,11 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 ## CertificateRequest Extension Methods
 
-`ToPemString` and `ExportAsPem` require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package; `ConvertToBouncyCastle` requires [FluentCertificates.Builder.BouncyCastle](https://www.nuget.org/packages/FluentCertificates.Builder.BouncyCastle). All are found under the `FluentCertificates` namespace.
+These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
 |Extension-Method|Description|
 |-|-|
 |`ToPemString()`|Exports the `CertificateRequest` to a PEM string.|
 |`ExportAsPem(string path)`|Exports the `CertificateRequest` to the specified PEM file.|
 |`ExportAsPem(TextWriter writer)`|Exports the `CertificateRequest` in PEM format to the given `TextWriter`.|
-|`ConvertToBouncyCastle()`|Converts the `CertificateRequest` to a BouncyCastle `Pkcs10CertificationRequest`. Requires the BouncyCastle package.|
 
----
-
-## X509Extension Extension Methods
-
-These extension methods require the [FluentCertificates.Builder.BouncyCastle](https://www.nuget.org/packages/FluentCertificates.Builder.BouncyCastle) package and are found under the `FluentCertificates` namespace.
-
-|Extension-Method|Description|
-|-|-|
-|`dnExtension.ConvertToBouncyCastle()`|Converts a DotNet `X509Extension` to a BouncyCastle `X509Extension`.|
-|`bcExtension.ConvertToDotNet(string oid)`|Converts a BouncyCastle `X509Extension` to a DotNet `X509Extension`. A DotNet `X509Extension` includes an OID, but a BouncyCastle one doesn't, therefore one must be supplied in the parameters here.|
-|`bcExtension.ConvertToDotNet(DerObjectIdentifier oid)`|Converts a BouncyCastle `X509Extension` to a DotNet `X509Extension`. A DotNet `X509Extension` includes an OID, but a BouncyCastle one doesn't, therefore one must be supplied in the parameters here.|
