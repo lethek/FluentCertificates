@@ -515,6 +515,9 @@ public record CertificateBuilder
     /// actually perform key transport, which in practice means RSA. An EC key cannot encrypt key material
     /// (it uses key agreement instead, which is <see cref="X509KeyUsageFlags.KeyAgreement"/>), and DSA is
     /// signature-only, so asserting keyEncipherment for either claims a capability the key does not have.
+    /// RFC 8813 s3 makes this a MUST NOT for id-ecPublicKey keys; the CA/Browser Forum TLS Baseline
+    /// Requirements s7.1.2.7.11 list keyEncipherment as not permitted for ECC public keys, and the S/MIME
+    /// Baseline Requirements s7.1.2.3 reach the same result via "Other bit positions SHALL NOT be set".
     /// </summary>
     private static X509KeyUsageFlags KeyEnciphermentIfSupported(CertificateBuilder builder)
         => builder.PublicKey?.Oid.Value == Oids.Rsa
