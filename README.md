@@ -132,7 +132,9 @@ using var skewTolerant = new CertificateBuilder()
 ### **Choose an Elliptic Curve**
 
 When the builder generates an ECDsa key it uses nistP256 unless told otherwise. A key supplied
-through `SetKeyPair` already carries its own curve, so `SetECCurve` has no effect on it.
+through `SetKeyPair` already carries its own curve, so `SetECCurve` has no effect on it. Setting a
+curve while the key algorithm is RSA or DSA throws, rather than quietly generating a key you didn't
+ask for.
 
 ```csharp
 using var cert = new CertificateBuilder()

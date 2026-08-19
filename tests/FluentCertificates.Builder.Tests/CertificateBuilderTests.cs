@@ -572,6 +572,44 @@ public class CertificateBuilderTests
 
 
     [Test]
+    [Arguments(KeyAlgorithm.RSA)]
+#pragma warning disable CS0618 // Type or member is obsolete
+    [Arguments(KeyAlgorithm.DSA)]
+#pragma warning restore CS0618 // Type or member is obsolete
+    public async Task Validate_ECCurveWithNonECDsaKeyAlgorithm_Throws(KeyAlgorithm algorithm)
+    {
+        //Silently ignoring the curve would leave the caller with a key they did not ask for
+        var builder = new CertificateBuilder()
+            .SetKeyAlgorithm(algorithm)
+            .SetECCurve(ECCurve.NamedCurves.nistP384);
+
+        await Assert.That(() => builder.Validate()).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => {
+            using var cert = builder.Create();
+        }).ThrowsExactly<ArgumentException>();
+
+        //The same curve is fine once the algorithm agrees, and either ordering of the two calls behaves alike
+        await Assert.That(() => builder.SetKeyAlgorithm(KeyAlgorithm.ECDsa).Validate()).ThrowsNothing();
+        await Assert
+            .That(() => new CertificateBuilder().SetECCurve(ECCurve.NamedCurves.nistP384).SetKeyAlgorithm(algorithm).Validate())
+            .ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task Validate_ECCurveWithSuppliedKeyPair_DoesNotThrow()
+    {
+        //A supplied key overrides generation settings rather than conflicting with them, matching KeyLength
+        using var keys = RSA.Create(2048);
+        var builder = new CertificateBuilder()
+            .SetECCurve(ECCurve.NamedCurves.nistP384)
+            .SetKeyPair(keys);
+
+        await Assert.That(() => builder.Validate()).ThrowsNothing();
+    }
+
+
+    [Test]
     public async Task SetECCurve_IsIgnoredWhenAKeyPairIsSupplied()
     {
         //A supplied key already carries its own curve; the builder must not try to regenerate it

@@ -24,8 +24,8 @@ they summarise each release rather than record it as it happened.
   time-stamping certificate is issued with the `timeStamping` extended key usage marked critical, as
   RFC 3161 section 2.3 requires.
 - `CertificateBuilder.SetECCurve(ECCurve)`, selecting the curve used when the builder generates an
-  ECDsa key. It has no effect on a key supplied through `SetKeyPair`, which already carries its own
-  curve.
+  ECDsa key. A key supplied through `SetKeyPair` already carries its own curve and takes precedence.
+  Setting a curve alongside any other `KeyAlgorithm` is rejected by `Validate` rather than ignored.
 
 ### Changed
 
