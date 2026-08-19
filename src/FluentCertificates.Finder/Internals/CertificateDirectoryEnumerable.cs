@@ -71,6 +71,11 @@ internal sealed class CertificateDirectoryEnumerable(IFileSystem fileSystem, Cer
                             var cms = new SignedCms();
                             cms.Decode(fileSystem.File.ReadAllBytes(x.Path));
                             return cms.Certificates;
+                        case ".pfx":
+                        case ".p12":
+                            //X509CertificateLoader.LoadCertificateFromFile rejects PKCS#12, so these
+                            //must go through the PKCS#12 loader rather than the default branch
+                            return [CertTools.LoadPkcs12(fileSystem.File.ReadAllBytes(x.Path), null)];
                         case ".pem":
                             return [X509Certificate2.CreateFromPem(fileSystem.File.ReadAllText(x.Path))];
                         default:

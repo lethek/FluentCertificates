@@ -1,5 +1,6 @@
 using System.IO.Abstractions.TestingHelpers;
 using System.Security.Cryptography;
+using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
@@ -297,6 +298,83 @@ public class CertificateFinderTests
 
         await Assert.That(cleared.Sources).IsEmpty();
         await Assert.That(cleared.ToList()).IsEmpty();
+    }
+
+
+    [Test]
+    [Arguments(StoreName.AddressBook, "AddressBook")]
+    [Arguments(StoreName.AuthRoot, "AuthRoot")]
+    [Arguments(StoreName.CertificateAuthority, "CA")]
+    [Arguments(StoreName.Disallowed, "Disallowed")]
+    [Arguments(StoreName.My, "My")]
+    [Arguments(StoreName.Root, "Root")]
+    [Arguments(StoreName.TrustedPeople, "TrustedPeople")]
+    [Arguments(StoreName.TrustedPublisher, "TrustedPublisher")]
+    public async Task AddStore_MapsStoreNameToStoreString(StoreName name, string expected)
+    {
+        //CertificateAuthority maps to "CA": the enum name and the store name deliberately differ
+        var finder = new CertificateFinder(MockFileSystem).AddStore(name, StoreLocation.CurrentUser);
+
+        await Assert
+            .That(StoresOf(finder))
+            .IsEquivalentTo(new[] { (expected, StoreLocation.CurrentUser) }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AddStore_UnsupportedStoreName_Throws()
+        => await Assert
+            .That(() => new CertificateFinder(MockFileSystem).AddStore((StoreName)999, StoreLocation.CurrentUser))
+            .ThrowsExactly<ArgumentException>();
+
+
+    [Test]
+    [Arguments("cert.pem", "pem")]
+    [Arguments("cert.ca-bundle", "pem")]
+    [Arguments("cert.crt", "der")]
+    [Arguments("cert.cer", "der")]
+    [Arguments("cert.der", "der")]
+    [Arguments("cert.pfx", "pkcs12")]
+    [Arguments("cert.p12", "pkcs12")]
+    [Arguments("cert.p7b", "pkcs7")]
+    [Arguments("cert.p7c", "pkcs7")]
+    public async Task EnumerateCertificates_EachSupportedExtension_IsLoaded(string fileName, string format)
+    {
+        using var cert = CreateSelfSignedCertificate("Formats");
+        var dir = CreateRealTempDirectory();
+        try {
+            var path = Path.Combine(dir, fileName);
+            switch (format) {
+                case "pem": File.WriteAllText(path, cert.ExportCertificatePem()); break;
+                case "der": File.WriteAllBytes(path, cert.RawData); break;
+                case "pkcs12": File.WriteAllBytes(path, cert.Export(X509ContentType.Pkcs12)!); break;
+                case "pkcs7": File.WriteAllBytes(path, BuildPkcs7(cert)); break;
+                default: throw new ArgumentOutOfRangeException(nameof(format), format, null);
+            }
+
+            var results = new CertificateFinder().AddDirectory(dir).ToList();
+
+            await Assert.That(results.Count).IsEqualTo(1);
+            await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+        } finally {
+            Directory.Delete(dir, true);
+        }
+    }
+
+
+    private static byte[] BuildPkcs7(X509Certificate2 cert)
+    {
+        var cms = new SignedCms(new ContentInfo([0]), false);
+        cms.ComputeSignature(new CmsSigner(cert));
+        return cms.Encode();
+    }
+
+
+    private static string CreateRealTempDirectory()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "fluentcerts-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        return dir;
     }
 
 
