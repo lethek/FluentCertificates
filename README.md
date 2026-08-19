@@ -228,7 +228,117 @@ var cert = new CertificateFinder()
 
 `X500NameBuilder` requires the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and is found under the `FluentCertificates` namespace.
 
-*TODO: document this; see unit tests for more examples*
+`X500NameBuilder` builds the distinguished names used for a certificate's subject and issuer. Like
+the other builders it is immutable: every method returns a new instance, so a builder can be shared
+and used as a template safely.
+
+### **Building a subject name**
+
+```csharp
+var subject = new X500NameBuilder()
+    .SetCommonName("*.fake.domain")
+    .SetOrganization("Example Pty Ltd")
+    .SetOrganizationalUnits("Engineering", "Platform")
+    .SetCountry("AU")
+    .SetState("Victoria")
+    .SetLocality("Melbourne")
+    .SetEmail("admin@fake.domain");
+
+//Renders as a string in the usual RFC 4514 form
+Console.WriteLine(subject.ToString());
+
+//Converts to X500DistinguishedName explicitly or implicitly
+var dn = subject.Create();
+X500DistinguishedName implicitly = subject;
+```
+
+`CertificateBuilder.SetSubject` and `SetIssuer` take a delegate, so the same methods are usually
+used inline:
+
+```csharp
+using var cert = new CertificateBuilder()
+    .SetSubject(b => b.SetCommonName("*.fake.domain").SetOrganization("Example Pty Ltd"))
+    .Create();
+```
+
+### **Reading values back**
+
+Every `Set*` method has a matching `Get*`. Single-valued attributes return `null` when absent, and
+multi-valued ones return an empty sequence.
+
+```csharp
+string? cn = subject.GetCommonName();                       //"*.fake.domain"
+string? org = subject.GetOrganization();                    //"Example Pty Ltd"
+IEnumerable<string> ous = subject.GetOrganizationalUnits();  //"Engineering", "Platform"
+string? missing = new X500NameBuilder().GetCommonName();     //null
+```
+
+### **Starting from an existing name**
+
+```csharp
+var fromString = new X500NameBuilder("CN=example.com, O=Example Pty Ltd");
+var fromDn = new X500NameBuilder(cert.SubjectName);
+
+//Builders are immutable, so this leaves fromString untouched
+var renamed = fromString.SetCommonName("other.example.com");
+```
+
+### **Attributes without a dedicated method**
+
+Use `Add` or `Set` with an OID, optionally choosing the ASN.1 string encoding. `Add` appends another
+RDN with the same OID; `Set` replaces any existing ones.
+
+```csharp
+var custom = new X500NameBuilder()
+    .SetCommonName("example.com")
+    .Add("0.9.2342.19200300.100.1.25", UniversalTagNumber.IA5String, "example", "com")
+    .Remove(Oids.EmailAddressOid);
+```
+
+### **Comparing names**
+
+`EquivalentTo` compares the attributes themselves and ignores ordering by default, which is usually
+what you want when asking whether two names describe the same entity.
+
+```csharp
+var a = new X500NameBuilder().SetCommonName("example.com").SetCountry("AU");
+var b = new X500NameBuilder().SetCountry("AU").SetCommonName("example.com");
+
+a.EquivalentTo(b);                          //true: same attributes, different order
+a.EquivalentTo(b, orderMatters: true);      //false
+a.EquivalentTo("CN=example.com, C=AU");     //true
+```
+
+`Equals` is a different question: it compares the **encoded bytes**. Two names that render as the
+same string can still differ, because the ASN.1 string encoding is part of the encoding. The
+`Set*` methods use `UTF8String`, whereas parsing a string into an `X500DistinguishedName` yields
+`PrintableString` for values that fit it:
+
+```csharp
+var built = new X500NameBuilder().SetCommonName("example.com").SetCountry("AU");
+
+built.ToString();                           //"CN=example.com, C=AU"
+built.Equals("CN=example.com, C=AU");       //false: UTF8String vs PrintableString
+built.EquivalentTo("CN=example.com, C=AU"); //true
+```
+
+Reach for `EquivalentTo` unless you specifically need byte-for-byte identity. If you do need the
+encoding to match, set it explicitly with `Set(oid, UniversalTagNumber.PrintableString, value)`.
+
+### **Method summary**
+
+|Method|Description|
+|-|-|
+|`SetCommonName`, `SetCountry`, `SetLocality`, `SetState`, `SetOrganization`, `SetStreetAddress`, `SetPostalCode`, `SetEmail`, `SetPhoneNumber`, `SetGivenName`, `SetSurname`, `SetTitle`, `SetSerialNumber`, `SetUserId`, `SetDistinguishedNameQualifier`|Set a single-valued attribute, replacing any existing value.|
+|`SetOrganizationalUnits`, `SetDomainComponents`|Replace all values of a multi-valued attribute.|
+|`AddOrganizationalUnit(s)`, `AddDomainComponent(s)`|Append to a multi-valued attribute.|
+|`Add(oid, ...)`, `Set(oid, ...)`|Append or replace by OID, with an optional `UniversalTagNumber` encoding. The OID may be an `Oid` or a string.|
+|`Remove(oid)`, `Clear()`|Remove attributes by OID, or all of them.|
+|`GetCommonName`, `GetCountry`, ... `GetOrganizationalUnits`, `GetDomainComponents`|Read attribute values back.|
+|`Create()`|Build the `X500DistinguishedName`. Also available as an implicit conversion.|
+|`EquivalentTo(other, orderMatters = false)`|Compare attributes against another builder, an `X500DistinguishedName` or a string.|
+|`Equals(other)`|Compare encoded bytes against an `X500DistinguishedName` or a string.|
+|`RelativeDistinguishedNames`|The attributes as `(Oid, UniversalTagNumber, string)` tuples.|
 
 ---
 
@@ -236,21 +346,19 @@ var cert = new CertificateFinder()
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
-*TODO: document these; see unit tests for more examples*
-
 |Extension-Method|Description|
 |-|-|
-|`BuildChain`||
-|`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
-|`GetPrivateKey`||
-|`GetSignatureAlgorithm`||
-|`GetSignatureData`||
-|`GetToBeSignedData`||
-|`IsValidNow`||
-|`IsValidAt`|Takes a `DateTimeOffset`. The `DateTime` overload is **deprecated** because the result depends on the value's `DateTimeKind`.|
-|`IsSelfSigned`||
-|`IsIssuedBy`||
-|`VerifyChain`||
+|`BuildChain(IEnumerable<X509Certificate2>? extraCerts = null, bool customRootTrust = false)`|Builds an `X509Chain`, returning a `(bool Verified, X509Chain Chain)` tuple. `extraCerts` supplies intermediates that are not installed; `customRootTrust` treats them as the only trusted roots.|
+|`VerifyChain(IEnumerable<X509Certificate2>? extraCerts = null)`|Builds the chain and returns only whether it verified. Note this always builds with custom root trust, so any `extraCerts` are treated as trusted roots, unlike `BuildChain`, which defaults to `false`. Use `BuildChain` when you need the chain itself to inspect why verification failed.|
+|`IsValidNow()`|Whether the current UTC time falls within the certificate's validity period.|
+|`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. The `DateTime` overload is **deprecated**, because a `DateTime` carries no offset and its `DateTimeKind` changes the result.|
+|`IsSelfSigned(bool verifySignature = false)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key.|
+|`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name.|
+|`GetPrivateKey()`|Returns the private key as an `AsymmetricAlgorithm`, whatever its algorithm.|
+|`GetSignatureAlgorithm()`|Returns the `SignatureAlgorithm` the certificate was signed with, combining key algorithm, hash and padding.|
+|`GetToBeSignedData()`|The raw "to be signed" (TBS) bytes, i.e. what the issuer's signature covers.|
+|`GetSignatureData()`|The raw signature bytes. Together with `GetToBeSignedData()` this allows verifying a signature yourself.|
+|`Export()`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
 
 ---
 
@@ -258,13 +366,11 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
-*TODO: document these*
-
 |Extension-Method|Description|
 |-|-|
-|`ToCollection`||
-|`ToEnumerable`||
-|`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
+|`ToEnumerable()`|Returns the chain's certificates in **root-first** order, which is the reverse of `X509Chain.ChainElements`. The leaf is therefore last.|
+|`ToCollection(ExportKeys include = ExportKeys.All)`|As `ToEnumerable()`, but returns an `X509Certificate2Collection` and applies `FilterPrivateKeys(include)`.|
+|`Export()`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
 
 ---
 
@@ -272,12 +378,10 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
-*TODO: document these*
-
 |Extension-Method|Description|
 |-|-|
-|`ToEnumerable`||
-|`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
+|`ToEnumerable()`|Exposes the collection as an `IEnumerable<X509Certificate2>`, so the LINQ operators and the extension methods below can be used against it.|
+|`Export()`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
 
 ---
 
@@ -285,13 +389,11 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
-*TODO: document these*
-
 |Extension-Method|Description|
 |-|-|
-|`ToCollection`||
-|`FilterPrivateKeys`||
-|`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
+|`ToCollection()`|Copies the sequence into a new `X509Certificate2Collection`.|
+|`FilterPrivateKeys(ExportKeys include)`|Returns the sequence with private keys kept or stripped according to `include`. `ExportKeys.Leaf` keeps only the last certificate's private key, as the leaf is assumed to come last.|
+|`Export()`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
 
 ---
 
@@ -299,14 +401,14 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
-*TODO: document these*
-
 |Extension-Method|Description|
 |-|-|
-|`ToPrivateKeyPemString`||
-|`ToPublicKeyPemString`||
-|`ExportAsPrivateKeyPem`||
-|`ExportAsPublicKeyPem`||
+|`ToPrivateKeyPemString(string? password = null)`|Returns the private key as a PEM-encoded string. When a password is supplied the key is encrypted.|
+|`ToPublicKeyPemString()`|Returns the public key as a PEM-encoded string.|
+|`ExportAsPrivateKeyPem(TextWriter writer, string? password = null)`|Writes the private key as PEM to a `TextWriter`, encrypting it when a password is supplied. Returns the key for chaining.|
+|`ExportAsPrivateKeyPem(string path, string? password = null)`|Writes the private key as PEM to a file, encrypting it when a password is supplied. Returns the key for chaining.|
+|`ExportAsPublicKeyPem(TextWriter writer)`|Writes the public key as PEM to a `TextWriter`. Returns the key for chaining.|
+|`ExportAsPublicKeyPem(string path)`|Writes the public key as PEM to a file. Returns the key for chaining.|
 
 ---
 
