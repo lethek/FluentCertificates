@@ -1,29 +1,32 @@
-﻿using System.IO.Abstractions.TestingHelpers;
+using System.IO.Abstractions.TestingHelpers;
 using System.Security.Cryptography.X509Certificates;
+
+using FluentCertificates.Internals;
+
+using TUnit.Assertions.Enums;
+
 
 namespace FluentCertificates;
 
 public class CertificateFinderTests
 {
     [Test]
-    public async Task AddStores_WithEmptyArray_DoesNotThrowAndReturnsNewInstance()
+    public async Task AddStores_WithEmptyArray_AddsNoSources()
     {
         var finder = new CertificateFinder(MockFileSystem);
         var result = finder.AddStores(Array.Empty<X509Store>());
 
-        await Assert.That(result).IsNotNull();
-        await Assert.That(result).IsNotSameReferenceAs(finder);
+        await Assert.That(result.Sources).IsEmpty();
     }
 
 
     [Test]
-    public async Task AddDirectories_WithEmptyEnumerable_ReturnsNewInstance()
+    public async Task AddDirectories_WithEmptyEnumerable_AddsNoSources()
     {
         var finder = new CertificateFinder(MockFileSystem);
         var result = finder.AddDirectories(Enumerable.Empty<string>());
 
-        await Assert.That(result).IsNotNull();
-        await Assert.That(result).IsNotSameReferenceAs(finder);
+        await Assert.That(result.Sources).IsEmpty();
     }
 
 
@@ -40,21 +43,14 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task AddCommonStores_AddsExpectedNumberOfSources()
-    {
-        var finder = new CertificateFinder(MockFileSystem).AddCommonStores();
-
-        await Assert.That(finder.Sources.Count).IsEqualTo(7);
-    }
-
-
-    [Test]
     public async Task AddStore_WithValidX509Store_AddsStoreToFinder()
     {
         var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
         var finder = new CertificateFinder(MockFileSystem).AddStore(store);
 
-        await Assert.That(finder.Sources).HasSingleItem();
+        await Assert
+            .That(StoresOf(finder))
+            .IsEquivalentTo(new[] { ("My", StoreLocation.CurrentUser) }, CollectionOrdering.Matching);
     }
 
 
@@ -63,7 +59,9 @@ public class CertificateFinderTests
     {
         var finder = new CertificateFinder(MockFileSystem).AddStore(StoreName.My, StoreLocation.LocalMachine);
 
-        await Assert.That(finder.Sources).HasSingleItem();
+        await Assert
+            .That(StoresOf(finder))
+            .IsEquivalentTo(new[] { ("My", StoreLocation.LocalMachine) }, CollectionOrdering.Matching);
     }
 
 
@@ -74,16 +72,23 @@ public class CertificateFinderTests
         var store2 = new X509Store(StoreName.Root, StoreLocation.LocalMachine);
         var finder = new CertificateFinder(MockFileSystem).AddStores(store1, store2);
 
-        await Assert.That(finder.Sources.Count).IsEqualTo(2);
+        await Assert
+            .That(StoresOf(finder))
+            .IsEquivalentTo(new[] {
+                ("My", StoreLocation.CurrentUser),
+                ("Root", StoreLocation.LocalMachine)
+            }, CollectionOrdering.Matching);
     }
 
 
     [Test]
     public async Task AddDirectory_WithValidPath_AddsDirectorySource()
     {
-        var finder = new CertificateFinder(MockFileSystem).AddDirectory(@"/certs");
+        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/certs");
 
-        await Assert.That(finder.Sources).HasSingleItem();
+        await Assert
+            .That(DirectoryPathsOf(finder))
+            .IsEquivalentTo(new[] { "/certs" }, CollectionOrdering.Matching);
     }
 
 
@@ -102,7 +107,7 @@ public class CertificateFinderTests
         var dirs = new[] { "/certs", "/backup/certs" };
         var finder = new CertificateFinder(MockFileSystem).AddDirectories(dirs);
 
-        await Assert.That(finder.Sources.Count).IsEqualTo(2);
+        await Assert.That(DirectoryPathsOf(finder)).IsEquivalentTo(dirs, CollectionOrdering.Matching);
     }
 
 
@@ -122,7 +127,17 @@ public class CertificateFinderTests
     {
         var finder = new CertificateFinder(MockFileSystem).AddCommonStores();
 
-        await Assert.That(finder.Sources.Count).IsEqualTo(7);
+        await Assert
+            .That(StoresOf(finder))
+            .IsEquivalentTo(new[] {
+                ("My", StoreLocation.CurrentUser),
+                ("CA", StoreLocation.CurrentUser),
+                ("Root", StoreLocation.CurrentUser),
+                ("My", StoreLocation.LocalMachine),
+                ("CA", StoreLocation.LocalMachine),
+                ("Root", StoreLocation.LocalMachine),
+                ("WebHosting", StoreLocation.LocalMachine)
+            }, CollectionOrdering.Matching);
     }
 
 
@@ -171,6 +186,20 @@ public class CertificateFinderTests
         await Assert.That(results).Contains(certResult1);
         await Assert.That(results).Contains(certResult2);
     }
+
+
+    private static List<(string Name, StoreLocation Location)> StoresOf(CertificateFinder finder)
+        => finder.Sources
+            .Cast<CertificateStoreEnumerable>()
+            .Select(x => (x.Store.Name, x.Store.Location))
+            .ToList();
+
+
+    private static List<string> DirectoryPathsOf(CertificateFinder finder)
+        => finder.Sources
+            .Cast<CertificateDirectoryEnumerable>()
+            .Select(x => x.Directory.Path)
+            .ToList();
 
 
     private static readonly MockFileSystem MockFileSystem = TestTools.CreateMockFileSystemWithCerts();

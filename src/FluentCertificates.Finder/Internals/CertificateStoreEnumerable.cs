@@ -37,6 +37,12 @@ internal sealed class CertificateStoreEnumerable(CertificateStore certStore) : I
 
     
     /// <summary>
+    /// Gets the <see cref="CertificateStore"/> this instance enumerates.
+    /// </summary>
+    public CertificateStore Store => certStore;
+
+
+    /// <summary>
     /// Returns an enumerator that iterates through the certificates in the store.
     /// </summary>
     /// <returns>An enumerator of <see cref="CertificateFinderResult"/>.</returns>

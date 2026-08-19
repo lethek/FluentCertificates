@@ -26,6 +26,12 @@ internal sealed class CertificateDirectoryEnumerable(IFileSystem fileSystem, Cer
 
     
     /// <summary>
+    /// Gets the <see cref="CertificateDirectory"/> this instance enumerates.
+    /// </summary>
+    public CertificateDirectory Directory => directory;
+
+
+    /// <summary>
     /// Returns an enumerator that iterates through the certificates in the directory.
     /// </summary>
     /// <returns>An enumerator of <see cref="CertificateFinderResult"/>.</returns>
