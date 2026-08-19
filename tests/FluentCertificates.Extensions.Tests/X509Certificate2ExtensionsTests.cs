@@ -6,14 +6,16 @@ using FluentCertificates.Internals;
 using Org.BouncyCastle.OpenSsl;
 using Org.BouncyCastle.X509;
 
+using TUnit.Assertions.Enums;
+
 
 namespace FluentCertificates;
 
 public class X509Certificate2ExtensionsTests
 {
-    [Theory]
-    [MemberData(nameof(KeyAlgorithmsTestData))]
-    public void Certificate_IssuedBy_VerifiesIssuerSignature(KeyAlgorithm alg)
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsTestData))]
+    public async Task Certificate_IssuedBy_VerifiesIssuerSignature(KeyAlgorithm alg)
     {
         var builder = new CertificateBuilder().SetSubject("CN=Test Issuer");
         using var faker = builder.SetKeyAlgorithm(alg).Create();
@@ -22,19 +24,19 @@ public class X509Certificate2ExtensionsTests
         using var cert = new CertificateBuilder().SetIssuer(issuer).Create();
 
         //The fake issuer has the same subject-name as the real issuer
-        Assert.True(cert.IsIssuedBy(faker, verifySignature: false));
+        await Assert.That(cert.IsIssuedBy(faker, verifySignature: false)).IsTrue();
 
         //Signature verification against the fake issuer fails
-        Assert.False(cert.IsIssuedBy(faker, verifySignature: true));
+        await Assert.That(cert.IsIssuedBy(faker, verifySignature: true)).IsFalse();
 
         //Signature verification against the real issuer succeeds
-        Assert.True(cert.IsIssuedBy(issuer, true));
+        await Assert.That(cert.IsIssuedBy(issuer, true)).IsTrue();
     }
 
 
-    [Theory]
-    [MemberData(nameof(KeyAlgorithmsAndExportKeysTestData))]
-    public void ExportAsPem_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsAndExportKeysTestData))]
+    public async Task ExportAsPem_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
     {
         using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
@@ -54,22 +56,25 @@ public class X509Certificate2ExtensionsTests
 
         //Check structure of the PEM file
         if (include != ExportKeys.None) {
-            Assert.Equal(password != null ? "ENCRYPTED PRIVATE KEY" : "PRIVATE KEY", pemReader.ReadPemObject().Type);
+            await Assert.That(pemReader.ReadPemObject().Type)
+                .IsEqualTo(password != null ? "ENCRYPTED PRIVATE KEY" : "PRIVATE KEY");
         }
 
-        Assert.Equal("CERTIFICATE", pemReader.ReadPemObject().Type);
-        Assert.Null(pemReader.ReadPemObject());
+        await Assert.That(pemReader.ReadPemObject().Type).IsEqualTo("CERTIFICATE");
+        await Assert.That(pemReader.ReadPemObject()).IsNull();
 
         //Check the read certificate
-        Assert.Equal(expected.RawData, bcCert.GetEncoded());
-        Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
-        Assert.False(actual.HasPrivateKey, "Loaded X509Certificate2 should not have a private key attached");
+        await Assert.That(bcCert.GetEncoded()).IsEquivalentTo(expected.RawData, CollectionOrdering.Matching);
+        await Assert.That(expected.HasPrivateKey).IsTrue()
+            .Because("the original X509Certificate2 should have a private key attached");
+        await Assert.That(actual.HasPrivateKey).IsFalse()
+            .Because("the loaded X509Certificate2 should not have a private key attached");
     }
 
 
-    [Theory]
-    [MemberData(nameof(KeyAlgorithmsAndExportKeysTestData))]
-    public void ExportAsPem_ToFile_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsAndExportKeysTestData))]
+    public async Task ExportAsPem_ToFile_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "pem");
         try {
@@ -86,25 +91,28 @@ public class X509Certificate2ExtensionsTests
 
             //Check structure of the PEM file
             if (include != ExportKeys.None) {
-                Assert.Equal(password != null ? "ENCRYPTED PRIVATE KEY" : "PRIVATE KEY", pemReader.ReadPemObject().Type);
+                await Assert.That(pemReader.ReadPemObject().Type)
+                    .IsEqualTo(password != null ? "ENCRYPTED PRIVATE KEY" : "PRIVATE KEY");
             }
 
-            Assert.Equal("CERTIFICATE", pemReader.ReadPemObject().Type);
-            Assert.Null(pemReader.ReadPemObject());
+            await Assert.That(pemReader.ReadPemObject().Type).IsEqualTo("CERTIFICATE");
+            await Assert.That(pemReader.ReadPemObject()).IsNull();
 
             //Check the read certificate
-            Assert.Equal(expected.RawData, actual.RawData);
-            Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
-            Assert.False(actual.HasPrivateKey, "Loaded X509Certificate2 should not have a private key attached");
+            await Assert.That(actual.RawData).IsEquivalentTo(expected.RawData, CollectionOrdering.Matching);
+            await Assert.That(expected.HasPrivateKey).IsTrue()
+                .Because("the original X509Certificate2 should have a private key attached");
+            await Assert.That(actual.HasPrivateKey).IsFalse()
+                .Because("the loaded X509Certificate2 should not have a private key attached");
         } finally {
             File.Delete(tmpFile);
         }
     }
 
 
-    [Theory]
-    [MemberData(nameof(KeyAlgorithmsTestData))]
-    public void ExportAsCert_ToWriter_RawDataIsEqual(KeyAlgorithm alg)
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsTestData))]
+    public async Task ExportAsCert_ToWriter_RawDataIsEqual(KeyAlgorithm alg)
     {
         using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
@@ -115,15 +123,17 @@ public class X509Certificate2ExtensionsTests
 
         using var actual = CertTools.LoadCertificate(stream.ToArray());
 
-        Assert.Equal(expected.RawData, actual.RawData);
-        Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
-        Assert.False(actual.HasPrivateKey, "Loaded X509Certificate2 should not have a private key attached");
+        await Assert.That(actual.RawData).IsEquivalentTo(expected.RawData, CollectionOrdering.Matching);
+        await Assert.That(expected.HasPrivateKey).IsTrue()
+            .Because("the original X509Certificate2 should have a private key attached");
+        await Assert.That(actual.HasPrivateKey).IsFalse()
+            .Because("the loaded X509Certificate2 should not have a private key attached");
     }
 
 
-    [Theory]
-    [MemberData(nameof(KeyAlgorithmsTestData))]
-    public void ExportAsCert_ToFile_RawDataIsEqual(KeyAlgorithm alg)
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsTestData))]
+    public async Task ExportAsCert_ToFile_RawDataIsEqual(KeyAlgorithm alg)
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "crt");
         try {
@@ -132,18 +142,20 @@ public class X509Certificate2ExtensionsTests
             expected.Export().AsCert().ToFile(tmpFile);
             using var actual = CertTools.LoadCertificateFromFile(tmpFile);
 
-            Assert.Equal(expected.RawData, actual.RawData);
-            Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
-            Assert.False(actual.HasPrivateKey, "Loaded X509Certificate2 should not have a private key attached");
+            await Assert.That(actual.RawData).IsEquivalentTo(expected.RawData, CollectionOrdering.Matching);
+            await Assert.That(expected.HasPrivateKey).IsTrue()
+                .Because("the original X509Certificate2 should have a private key attached");
+            await Assert.That(actual.HasPrivateKey).IsFalse()
+                .Because("the loaded X509Certificate2 should not have a private key attached");
         } finally {
             File.Delete(tmpFile);
         }
     }
 
 
-    [Theory]
-    [MemberData(nameof(KeyAlgorithmsTestData))]
-    public void ExportAsPkcs7_ToWriter_RawDataIsEqual(KeyAlgorithm alg)
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsTestData))]
+    public async Task ExportAsPkcs7_ToWriter_RawDataIsEqual(KeyAlgorithm alg)
     {
         using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
@@ -156,15 +168,17 @@ public class X509Certificate2ExtensionsTests
         cms.Decode(stream.ToArray());
         using var actual = cms.Certificates[0];
 
-        Assert.Equal(expected.RawData, actual.RawData);
-        Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
-        Assert.False(actual.HasPrivateKey, "Loaded X509Certificate2 should not have a private key attached");
+        await Assert.That(actual.RawData).IsEquivalentTo(expected.RawData, CollectionOrdering.Matching);
+        await Assert.That(expected.HasPrivateKey).IsTrue()
+            .Because("the original X509Certificate2 should have a private key attached");
+        await Assert.That(actual.HasPrivateKey).IsFalse()
+            .Because("the loaded X509Certificate2 should not have a private key attached");
     }
 
 
-    [Theory]
-    [MemberData(nameof(KeyAlgorithmsTestData))]
-    public void ExportAsPkcs7_ToFile_RawDataIsEqual(KeyAlgorithm alg)
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsTestData))]
+    public async Task ExportAsPkcs7_ToFile_RawDataIsEqual(KeyAlgorithm alg)
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "p7b");
         try {
@@ -175,18 +189,20 @@ public class X509Certificate2ExtensionsTests
             cms.Decode(File.ReadAllBytes(tmpFile));
             using var actual = cms.Certificates[0];
 
-            Assert.Equal(expected.RawData, actual.RawData);
-            Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
-            Assert.False(actual.HasPrivateKey, "Loaded X509Certificate2 should not have a private key attached");
+            await Assert.That(actual.RawData).IsEquivalentTo(expected.RawData, CollectionOrdering.Matching);
+            await Assert.That(expected.HasPrivateKey).IsTrue()
+                .Because("the original X509Certificate2 should have a private key attached");
+            await Assert.That(actual.HasPrivateKey).IsFalse()
+                .Because("the loaded X509Certificate2 should not have a private key attached");
         } finally {
             File.Delete(tmpFile);
         }
     }
 
 
-    [Theory]
-    [MemberData(nameof(KeyAlgorithmsAndExportKeysTestData))]
-    public void ExportAsPkcs12_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string password)
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsAndExportKeysTestData))]
+    public async Task ExportAsPkcs12_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
     {
         using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
@@ -197,19 +213,22 @@ public class X509Certificate2ExtensionsTests
 
         using var actual = CertTools.LoadPkcs12(stream.ToArray(), password);
 
-        Assert.Equal(expected.RawData, actual.RawData);
-        Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
+        await Assert.That(actual.RawData).IsEquivalentTo(expected.RawData, CollectionOrdering.Matching);
+        await Assert.That(expected.HasPrivateKey).IsTrue()
+            .Because("the original X509Certificate2 should have a private key attached");
         if (include == ExportKeys.None) {
-            Assert.False(actual.HasPrivateKey, "Loaded X509Certificate2 should not have a private key attached");
+            await Assert.That(actual.HasPrivateKey).IsFalse()
+                .Because("the loaded X509Certificate2 should not have a private key attached");
         } else {
-            Assert.True(actual.HasPrivateKey, "Loaded X509Certificate2 should have a private key attached");
+            await Assert.That(actual.HasPrivateKey).IsTrue()
+                .Because("the loaded X509Certificate2 should have a private key attached");
         }
     }
 
 
-    [Theory]
-    [MemberData(nameof(KeyAlgorithmsAndExportKeysTestData))]
-    public void ExportAsPkcs12_ToFile_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string password)
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsAndExportKeysTestData))]
+    public async Task ExportAsPkcs12_ToFile_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "pfx");
         try {
@@ -218,12 +237,15 @@ public class X509Certificate2ExtensionsTests
             expected.Export().WithKeys(include).WithPassword(password).AsPkcs12().ToFile(tmpFile);
             using var actual = CertTools.LoadPkcs12FromFile(tmpFile, password);
 
-            Assert.Equal(expected.RawData, actual.RawData);
-            Assert.True(expected.HasPrivateKey, "Original X509Certificate2 should have a private key attached");
+            await Assert.That(actual.RawData).IsEquivalentTo(expected.RawData, CollectionOrdering.Matching);
+            await Assert.That(expected.HasPrivateKey).IsTrue()
+                .Because("the original X509Certificate2 should have a private key attached");
             if (include == ExportKeys.None) {
-                Assert.False(actual.HasPrivateKey, "Loaded X509Certificate2 should not have a private key attached");
+                await Assert.That(actual.HasPrivateKey).IsFalse()
+                    .Because("the loaded X509Certificate2 should not have a private key attached");
             } else {
-                Assert.True(actual.HasPrivateKey, "Loaded X509Certificate2 should have a private key attached");
+                await Assert.That(actual.HasPrivateKey).IsTrue()
+                    .Because("the loaded X509Certificate2 should have a private key attached");
             }
         } finally {
             File.Delete(tmpFile);
@@ -231,26 +253,28 @@ public class X509Certificate2ExtensionsTests
     }
 
 
-    public static IEnumerable<object[]> KeyAlgorithmsTestData => [
-        [KeyAlgorithm.ECDsa],
-        [KeyAlgorithm.RSA]
-    ];
+    public static IEnumerable<KeyAlgorithm> KeyAlgorithmsTestData()
+    {
+        yield return KeyAlgorithm.ECDsa;
+        yield return KeyAlgorithm.RSA;
+    }
 
 
-    public static IEnumerable<object[]> KeyAlgorithmsAndExportKeysTestData => [
-        [KeyAlgorithm.ECDsa, ExportKeys.None, TestPassword],
-        [KeyAlgorithm.ECDsa, ExportKeys.Leaf, TestPassword],
-        [KeyAlgorithm.ECDsa, ExportKeys.All, TestPassword],
-        [KeyAlgorithm.ECDsa, ExportKeys.None, null!],
-        [KeyAlgorithm.ECDsa, ExportKeys.Leaf, null!],
-        [KeyAlgorithm.ECDsa, ExportKeys.All, null!],
-        [KeyAlgorithm.RSA, ExportKeys.None, TestPassword],
-        [KeyAlgorithm.RSA, ExportKeys.Leaf, TestPassword],
-        [KeyAlgorithm.RSA, ExportKeys.All, TestPassword],
-        [KeyAlgorithm.RSA, ExportKeys.None, null!],
-        [KeyAlgorithm.RSA, ExportKeys.Leaf, null!],
-        [KeyAlgorithm.RSA, ExportKeys.All, null!]
-    ];
+    public static IEnumerable<(KeyAlgorithm, ExportKeys, string?)> KeyAlgorithmsAndExportKeysTestData()
+    {
+        yield return (KeyAlgorithm.ECDsa, ExportKeys.None, TestPassword);
+        yield return (KeyAlgorithm.ECDsa, ExportKeys.Leaf, TestPassword);
+        yield return (KeyAlgorithm.ECDsa, ExportKeys.All, TestPassword);
+        yield return (KeyAlgorithm.ECDsa, ExportKeys.None, null);
+        yield return (KeyAlgorithm.ECDsa, ExportKeys.Leaf, null);
+        yield return (KeyAlgorithm.ECDsa, ExportKeys.All, null);
+        yield return (KeyAlgorithm.RSA, ExportKeys.None, TestPassword);
+        yield return (KeyAlgorithm.RSA, ExportKeys.Leaf, TestPassword);
+        yield return (KeyAlgorithm.RSA, ExportKeys.All, TestPassword);
+        yield return (KeyAlgorithm.RSA, ExportKeys.None, null);
+        yield return (KeyAlgorithm.RSA, ExportKeys.Leaf, null);
+        yield return (KeyAlgorithm.RSA, ExportKeys.All, null);
+    }
 
 
     private const string TestPassword = "nHLYyNcicPsEaV7T";

@@ -2,57 +2,119 @@ name: Build & Publish
 
 on:
   push:
-    branches:
-      - main
-      - master
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+    branches: [ main, master ]
+    tags: [ v* ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   buildConfiguration: Release
+  publishEnabled: 'true'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    env:
+      NUGET_USER: ${{ secrets.NUGET_USER }}
+
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
+    - name: Setup GitVersion
+      uses: gittools/actions/gitversion/setup@v4
+      with:
+        versionSpec: 6.x
+
+    - name: Execute GitVersion
+      uses: gittools/actions/gitversion/execute@v4
+      id: gitversion
+
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v6
       with:
         dotnet-version: |
           8.x
           9.x
           10.x
 
-    - name: 'Cache: .nuke/temp, ~/.nuget/packages'
-      uses: actions/cache@v4
-      with:
-        path: |
-          .nuke/temp
-          ~/.nuget/packages
-        key: ${{ runner.os }}-${{ hashFiles('**/global.json', '**/*.csproj', '**/Directory.Packages.props') }}
+    - name: Restore
+      run: dotnet restore
 
-    - name: 'Run: NUKE'
-      run: ./build.cmd GitHubBuild --configuration ${{ env.buildConfiguration }}
+    - name: Build
+      run: dotnet build -c ${{ env.buildConfiguration }} --no-restore -p:Version=${{ steps.gitversion.outputs.semVer }} -p:FileVersion=${{ steps.gitversion.outputs.assemblySemFileVer }} -p:AssemblyVersion=${{ steps.gitversion.outputs.assemblySemVer }}
+
+    # TUnit runs on Microsoft.Testing.Platform (see global.json), which does not accept VSTest's
+    # --filter or --collect. Coverage comes from Microsoft.Testing.Extensions.CodeCoverage instead,
+    # which TUnit references transitively. --results-directory pins where coverage lands; the default
+    # location differs between Windows and Linux. Not --coverage-output, which is a single file path
+    # and would make the three target frameworks overwrite each other. Each framework writes a
+    # GUID-named report here instead.
+    - name: Test
+      run: dotnet test -c ${{ env.buildConfiguration }} --no-build --coverage --coverage-output-format cobertura --results-directory ${{ github.workspace }}/coverage
+
+    - name: Generate coverage summary
+      if: ${{ !cancelled() }}
+      uses: danielpalme/ReportGenerator-GitHub-Action@5.5.11
+      with:
+        reports: ${{ github.workspace }}/coverage/*.cobertura.xml
+        targetdir: ${{ github.workspace }}/coveragereport
+        reporttypes: MarkdownSummaryGithub
+
+    - name: Publish coverage in job summary
+      if: ${{ !cancelled() }}
+      run: cat ${{ github.workspace }}/coveragereport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+
+    - name: Comment coverage on pull request
+      # Fork PRs only get a read-only token, so this cannot post there
+      if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        PR_NUMBER: ${{ github.event.number }}
+      run: gh pr comment $PR_NUMBER --edit-last --create-if-none --body-file ${{ github.workspace }}/coveragereport/SummaryGithub.md
+
+    - name: Upload coverage
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage
+        path: ${{ github.workspace }}/coverage/*.cobertura.xml
+
+    - name: Pack
+      run: dotnet pack -c ${{ env.buildConfiguration }} --no-build -p:PackageOutputPath="${{ github.workspace }}/artifacts/" -p:PackageVersion=${{ steps.gitversion.outputs.semVer }}
 
     - name: Upload
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: nuget
-        compression-level: 0
         path: |
           ${{ github.workspace }}/artifacts/*.nupkg
           ${{ github.workspace }}/artifacts/*.snupkg
 
-    - name: Push
-      env:
-        NUGET_SOURCE: ${{ secrets.NUGET_SOURCE }}
-      if: ${{ env.NUGET_SOURCE != '' }}
-      uses: lethek/os-specific-run@v1.0.6
+    # Trusted Publishing: exchanges a GitHub OIDC token for an API key that is valid for 1 hour,
+    # so this must run immediately before the push rather than earlier in the job.
+    - name: NuGet login (OIDC)
+      id: nuget-login
+      if: ${{ env.publishEnabled == 'true' && github.event_name == 'push' && env.NUGET_USER != '' }}
+      uses: NuGet/login@v1
       with:
-        linux: dotnet nuget push "${{ github.workspace }}/artifacts/*.nupkg" -s ${{ secrets.NUGET_SOURCE }} -k ${{ secrets.NUGET_API_KEY }} --skip-duplicate
-        windows: dotnet nuget push "${{ github.workspace }}\artifacts\*.nupkg" -s ${{ secrets.NUGET_SOURCE }} -k ${{ secrets.NUGET_API_KEY }} --skip-duplicate
+        user: ${{ env.NUGET_USER }}
+
+    - name: Push (Release)
+      if: ${{ env.publishEnabled == 'true' && github.event_name == 'push' && env.NUGET_USER != '' }}
+      env:
+        NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+      run: dotnet nuget push "${{ github.workspace }}/artifacts/"*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate

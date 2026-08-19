@@ -29,7 +29,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="SideData" Version="0.1.0" />
+    <PackageReference Include="SideData" Version="1.1.0" />
+    <PackageReference Update="Microsoft.SourceLink.AzureRepos.Git" Version="10.0.300">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.300">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <Choose>
@@ -40,7 +48,7 @@
     </When>
     <Otherwise>
       <ItemGroup>
-        <PackageReference Include="System.Collections.Immutable" Version="9.0.5" />
+        <PackageReference Include="System.Collections.Immutable" Version="10.0.8" />
       </ItemGroup>
     </Otherwise>
   </Choose>

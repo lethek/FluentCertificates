@@ -1,7 +1,15 @@
 assembly-versioning-scheme: MajorMinorPatch
-mode: ContinuousDeployment
+# GitVersion 6 renamed the deployment modes. This "ContinuousDelivery" is what v5 called
+# "ContinuousDeployment" (a prerelease that increments per commit), which is the behaviour
+# the NUKE build produced when it pinned GitVersion.Tool to 5.12.0. Without it, v6 reads
+# "ContinuousDeployment" as "no prerelease label" and stamps untagged main commits as stable.
+mode: ContinuousDelivery
 branches:
-  master:
+  # The key must be `main`: v6 renamed v5's `master` branch config, and an unrecognised key is
+  # silently ignored along with its `label`. Untagged commits on main are prereleases
+  # (0.13.1-ci.N); pushing a v* tag produces the stable release.
+  main:
     regex: ^main$|^master$
+    label: ci
 ignore:
   sha: []

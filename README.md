@@ -1,6 +1,6 @@
 # 📖 FluentCertificates Overview
 
-⚠️ **Note:** *while version numbers are v0.x.y, this software is under initial development and there there may be breaking-changes in its API between minor versions.* ⚠️
+⚠️ **Note:** *while version numbers are v0.x.y, this software is under initial development and there may be breaking-changes in its API between minor versions.* ⚠️
 
 [![NuGet](https://img.shields.io/nuget/v/FluentCertificates.svg)](https://www.nuget.org/packages/FluentCertificates)
 [![Build & Publish](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml/badge.svg)](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml)
@@ -14,7 +14,7 @@ This project is published in several NuGet packages:
 
 * [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Top-level package that imports the Builder, Extensions, and Finder packages.
 * [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension methods. [Examples below](#certificatebuilder-examples)
-* [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides additional extension methods. [Examples below](#x509certificate2-extension-methods)
+* [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides certificate exporting via `Export()`, plus additional extension methods. [Examples below](#exporting-certificates)
 * [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across X509Stores and directories. [Examples below](#certificatefinder-examples)
 
 Documentation is incomplete. More examples can be found in the project's [unit tests](https://github.com/lethek/FluentCertificates/tree/main/tests).
@@ -153,6 +153,42 @@ using var webCert = new CertificateBuilder()
 
 ---
 
+## Exporting Certificates
+
+Exporting requires the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package (included in the top-level `FluentCertificates` package) and is found under the `FluentCertificates` namespace.
+
+Everything goes through the `Export()` extension method, available on `X509Certificate2`, `X509Certificate2Collection`, `X509Chain` and `IEnumerable<X509Certificate2>`. It returns a `CertificateExportBuilder`: configure it with `With*`, choose a format with `As*`, then finish with `To*`.
+
+```csharp
+//PEM, certificate only
+cert.Export().WithoutPrivateKeys().AsPem().ToPemString();
+
+//PEM including the private key
+cert.Export().WithPrivateKey().AsPem().ToFile("cert.pem");
+
+//Password-protected PKCS#12 (PFX)
+cert.Export().WithPassword("hunter2").AsPkcs12().ToFile("cert.pfx");
+
+//Raw DER/CER bytes
+cert.Export().AsCert().ToByteArray();
+
+//A whole chain as PKCS#7
+chain.Export().AsPkcs7().ToByteArray();
+
+//A leaf plus its issuers, with all private keys stripped
+leafCert.Export().WithChain([leafCert, intermediateCert, rootCert]).WithoutPrivateKeys().AsPkcs12().ToByteArray();
+```
+
+|Stage|Methods|
+|-|-|
+|Configure|`WithPrivateKey()`, `WithPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithChain(...)`|
+|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsCert()`|
+|Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
+
+The older `ExportAsCert` / `ExportAsPem` / `ExportAsPkcs7` / `ExportAsPkcs12` / `ToPemString` extension methods still work but are marked `[Obsolete]`; each compiler warning names its `Export()` replacement.
+
+---
+
 ## CertificateFinder Examples
 
 `CertificateFinder` requires the [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder) package and is found under the `FluentCertificates` namespace.
@@ -199,19 +235,20 @@ var cert = new CertificateFinder()
 
 ## X509Certificate2 Extension Methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
+These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these; see unit tests for more examples*
 
 |Extension-Method|Description|
 |-|-|
 |`BuildChain`||
-|`ExportAsCert`||
-|`ExportAsPkcs12`||
-|`ExportAsPkcs7`||
-|`ExportAsPem`||
-|`ToPemString`||
-|`ToBase64String`||
+|`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
+|`ExportAsCert`|**Deprecated** - use `Export().AsCert()`|
+|`ExportAsPkcs12`|**Deprecated** - use `Export().WithPassword(password).AsPkcs12()`|
+|`ExportAsPkcs7`|**Deprecated** - use `Export().AsPkcs7()`|
+|`ExportAsPem`|**Deprecated** - use `Export().AsPem()`|
+|`ToPemString`|**Deprecated** - use `Export().AsPem().ToPemString()`|
+|`ToBase64String`|**Deprecated** - use `Convert.ToBase64String(cert.RawData)`|
 |`GetPrivateKey`||
 |`GetSignatureData`||
 |`GetToBeSignedData`||
@@ -225,7 +262,7 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ## X509Chain Extension Methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
+These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these*
 
@@ -233,32 +270,34 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 |-|-|
 |`ToCollection`||
 |`ToEnumerable`||
-|`ExportAsPkcs7`||
-|`ExportAsPkcs12`||
-|`ExportAsPem`||
-|`ToPemString`||
+|`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
+|`ExportAsPkcs7`|**Deprecated** - use `Export().AsPkcs7()`|
+|`ExportAsPkcs12`|**Deprecated** - use `Export().WithPassword(password).AsPkcs12()`|
+|`ExportAsPem`|**Deprecated** - use `Export().AsPem()`|
+|`ToPemString`|**Deprecated** - use `Export().AsPem().ToPemString()`|
 
 ---
 
 ## X509Certificate2Collection Extension Methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
+These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these*
 
 |Extension-Method|Description|
 |-|-|
 |`ToEnumerable`||
-|`ExportAsPkcs7`||
-|`ExportAsPkcs12`||
-|`ExportAsPem`||
-|`ToPemString`||
+|`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
+|`ExportAsPkcs7`|**Deprecated** - use `Export().AsPkcs7()`|
+|`ExportAsPkcs12`|**Deprecated** - use `Export().WithPassword(password).AsPkcs12()`|
+|`ExportAsPem`|**Deprecated** - use `Export().AsPem()`|
+|`ToPemString`|**Deprecated** - use `Export().AsPem().ToPemString()`|
 
 ---
 
 ## IEnumerable<X509Certificate2> Extension Methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
+These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these*
 
@@ -266,16 +305,17 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 |-|-|
 |`ToCollection`||
 |`FilterPrivateKeys`||
-|`ExportAsPkcs7`||
-|`ExportAsPkcs12`||
-|`ExportAsPem`||
-|`ToPemString`||
+|`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
+|`ExportAsPkcs7`|**Deprecated** - use `Export().AsPkcs7()`|
+|`ExportAsPkcs12`|**Deprecated** - use `Export().WithPassword(password).AsPkcs12()`|
+|`ExportAsPem`|**Deprecated** - use `Export().AsPem()`|
+|`ToPemString`|**Deprecated** - use `Export().AsPem().ToPemString()`|
 
 ---
 
 ## AsymmetricAlgorithm Extension Methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
+These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
 *TODO: document these*
 
@@ -290,23 +330,11 @@ These extension methods require the [FluentCertificates.Builder](https://www.nug
 
 ## CertificateRequest Extension Methods
 
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
+These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
 |Extension-Method|Description|
 |-|-|
 |`ToPemString()`|Exports the `CertificateRequest` to a PEM string.|
 |`ExportAsPem(string path)`|Exports the `CertificateRequest` to the specified PEM file.|
 |`ExportAsPem(TextWriter writer)`|Exports the `CertificateRequest` in PEM format to the given `TextWriter`.|
-|`ConvertToBouncyCastle()`|Converts the `CertificateRequest` to a BouncyCastle `Pkcs10CertificationRequest`|
 
----
-
-## X509Extension Extension Methods
-
-These extension methods require the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and are found under the `FluentCertificates` namespace.
-
-|Extension-Method|Description|
-|-|-|
-|`dnExtension.ConvertToBouncyCastle()`|Converts a DotNet `X509Extension` to a BouncyCastle `X509Extension`.|
-|`bcExtension.ConvertToDotNet(string oid)`|Converts a BouncyCastle `X509Extension` to a DotNet `X509Extension`. A DotNet `X509Extension` includes an OID, but a BouncyCastle one doesn't, therefore one must be supplied in the parameters here.|
-|`bcExtension.ConvertToDotNet(DerObjectIdentifier oid)`|Converts a BouncyCastle `X509Extension` to a DotNet `X509Extension`. A DotNet `X509Extension` includes an OID, but a BouncyCastle one doesn't, therefore one must be supplied in the parameters here.|

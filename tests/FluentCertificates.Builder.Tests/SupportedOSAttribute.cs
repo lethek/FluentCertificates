@@ -1,35 +1,30 @@
-﻿using System.Reflection;
-using System.Runtime.InteropServices;
-using Xunit.v3;
+﻿using System.Runtime.InteropServices;
 
 namespace FluentCertificates;
 
-public sealed class SupportedOSAttribute(params SupportedOS[] supportedOSes) : BeforeAfterTestAttribute
+public sealed class SupportedOSAttribute : SkipAttribute
 {
-    public override void Before(MethodInfo methodUnderTest, IXunitTest test)
+    public SupportedOSAttribute(params SupportedOS[] supportedOSes)
+        : base($"This test is only supported on: {String.Join(", ", supportedOSes)}")
     {
-        var match = false;
-
         foreach (var supportedOS in supportedOSes) {
-            if (!OsMappings.TryGetValue(supportedOS, out var osPlatform)) {
+            if (!OsMappings.ContainsKey(supportedOS)) {
                 throw new ArgumentException($"Supported OS value '{supportedOS}' is not a known OS",
                     nameof(supportedOSes));
             }
-
-            if (RuntimeInformation.IsOSPlatform(osPlatform)) {
-                match = true;
-                break;
-            }
         }
 
-        // We use the dynamic skip exception message pattern to turn this into a skipped test
-        // when it's not running on one of the targeted OSes
-        if (!match) {
-            throw new Exception($"$XunitDynamicSkip$This test is not supported on {RuntimeInformation.OSDescription}");
-        }
+        _supportedOSes = supportedOSes;
     }
 
-    
+
+    public override Task<bool> ShouldSkip(TestRegisteredContext context)
+        => Task.FromResult(!_supportedOSes.Any(x => RuntimeInformation.IsOSPlatform(OsMappings[x])));
+
+
+    private readonly SupportedOS[] _supportedOSes;
+
+
     private static readonly Dictionary<SupportedOS, OSPlatform> OsMappings = new()
     {
         { SupportedOS.FreeBSD, OSPlatform.FreeBSD },

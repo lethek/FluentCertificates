@@ -400,20 +400,14 @@ FodyWeavers.xsd
 # DotNet generated files
 CompatibilitySuppressions.xml
 
-# NUKE
-.nuke/temp/
-build.schema.json
+# Local build outputs (dotnet pack / dotnet test --results-directory)
+artifacts/
+coverage/
 
 # Claude Code
 .claude/settings.local.json
 CLAUDE.local.md
 
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
-
-.beads/
-
 .serena/
-
+.citadel/
+.fuse/

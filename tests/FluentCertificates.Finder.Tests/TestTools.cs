@@ -3,6 +3,9 @@ using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
+// TUnit's implicit `using static TUnit.Core.HookType` makes the bare name `Assembly` ambiguous
+using Assembly = System.Reflection.Assembly;
+
 namespace FluentCertificates;
 
 public static class TestTools
