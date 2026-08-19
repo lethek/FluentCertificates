@@ -1,4 +1,5 @@
 ﻿using System.Collections.Immutable;
+using System.Formats.Asn1;
 using System.Net;
 using FluentCertificates.Internals.GeneralNames;
 
@@ -195,6 +196,113 @@ public class GeneralNameListBuilderTests
 
         await Assert.That(list).IsEquivalentTo(builder.Create(), CollectionOrdering.Matching);
     }
+
+
+    [Test]
+    public async Task AddIPAddress_IPv6_EncodedWithCorrectLength()
+    {
+        var ip = IPAddress.Parse("2001:db8::1");
+        var encoded = EncodeSingleIPAddress(new GeneralNameListBuilder().AddIPAddress(ip));
+
+        //IPv6 addresses encode as 16 bytes, not 4
+        await Assert.That(encoded.Length).IsEqualTo(16);
+        await Assert.That(encoded).IsEquivalentTo(ip.GetAddressBytes(), CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AddIPAddress_IPv4_EncodedAsFourBytes()
+    {
+        var ip = IPAddress.Parse("192.0.2.1");
+        var encoded = EncodeSingleIPAddress(new GeneralNameListBuilder().AddIPAddress(ip));
+
+        await Assert.That(encoded.Length).IsEqualTo(4);
+        await Assert.That(encoded).IsEquivalentTo(ip.GetAddressBytes(), CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AddIPAddress_IPv6WithSubnetMask_EncodesAddressThenMask()
+    {
+        var ip = IPAddress.Parse("2001:db8::");
+        var mask = IPAddress.Parse("ffff:ffff:ffff:ffff::");
+        var encoded = EncodeSingleIPAddress(new GeneralNameListBuilder().AddIPAddress(ip, mask));
+
+        await Assert.That(encoded.Length).IsEqualTo(32);
+        await Assert.That(encoded.Take(16)).IsEquivalentTo(ip.GetAddressBytes(), CollectionOrdering.Matching);
+        await Assert.That(encoded.Skip(16)).IsEquivalentTo(mask.GetAddressBytes(), CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AddIPAddress_MismatchedAddressFamily_ThrowsOnEncode()
+    {
+        var names = new GeneralNameListBuilder()
+            .AddIPAddress(IPAddress.Parse("192.0.2.1"), IPAddress.Parse("ffff:ffff::"))
+            .Create();
+
+        //Validation happens when encoding, not when adding
+        await Assert.That(names).HasSingleItem();
+        await Assert.That(() => names.Encode()).ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task AddIPAddress_InvalidAddressString_Throws()
+    {
+        await Assert.That(() => new GeneralNameListBuilder().AddIPAddress("not-an-ip")).ThrowsExactly<FormatException>();
+        await Assert.That(() => new GeneralNameListBuilder().AddIPAddress("192.0.2.1", "not-a-mask")).ThrowsExactly<FormatException>();
+    }
+
+
+    [Test]
+    public async Task AddDnsName_Wildcard_IsPreserved()
+    {
+        var builder = new GeneralNameListBuilder().AddDnsName("*.example.com");
+        var result = builder.Create();
+
+        var name = (await Assert.That(result[0]).IsTypeOf<DnsNameAsn>())!;
+        await Assert.That(name.DnsName).IsEqualTo("*.example.com");
+
+        //The wildcard must survive encoding too
+        await Assert.That(DecodeSingleIA5String(builder, 2)).IsEqualTo("*.example.com");
+    }
+
+
+    [Test]
+    public async Task AddDnsName_EmptyString_IsStoredAndEncoded()
+    {
+        //Documents current behaviour: no validation, the empty name round-trips
+        var builder = new GeneralNameListBuilder().AddDnsName("");
+        var name = (await Assert.That(builder.Create()[0]).IsTypeOf<DnsNameAsn>())!;
+
+        await Assert.That(name.DnsName).IsEqualTo(String.Empty);
+        await Assert.That(DecodeSingleIA5String(builder, 2)).IsEqualTo(String.Empty);
+    }
+
+
+    [Test]
+    public async Task AddEmailAddress_EmptyString_IsStoredAndEncoded()
+    {
+        //Documents current behaviour: no validation, the empty address round-trips
+        var builder = new GeneralNameListBuilder().AddEmailAddress("");
+        var name = (await Assert.That(builder.Create()[0]).IsTypeOf<Rfc822NameAsn>())!;
+
+        await Assert.That(name.EmailAddress).IsEqualTo(String.Empty);
+        await Assert.That(DecodeSingleIA5String(builder, 1)).IsEqualTo(String.Empty);
+    }
+
+
+    private static byte[] EncodeSingleIPAddress(GeneralNameListBuilder builder)
+        => new AsnReader(builder.Create().Encode(), AsnEncodingRules.DER)
+            .ReadSequence()
+            .ReadOctetString(new Asn1Tag(TagClass.ContextSpecific, 7));
+
+
+    private static string DecodeSingleIA5String(GeneralNameListBuilder builder, int contextTag)
+        => new AsnReader(builder.Create().Encode(), AsnEncodingRules.DER)
+            .ReadSequence()
+            .ReadCharacterString(UniversalTagNumber.IA5String, new Asn1Tag(TagClass.ContextSpecific, contextTag));
 
 
     [Test]
