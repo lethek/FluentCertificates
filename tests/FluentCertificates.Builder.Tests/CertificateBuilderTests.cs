@@ -6,6 +6,8 @@ using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1.X9;
 
+using TUnit.Assertions.Enums;
+
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
 
@@ -460,6 +462,55 @@ public class CertificateBuilderTests
         await Assert.That(actual.CertificateAuthority).IsTrue();
         await Assert.That(actual.HasPathLengthConstraint).IsTrue();
         await Assert.That(actual.PathLengthConstraint).IsEqualTo(7);
+    }
+
+
+    [Test]
+    public async Task CertificateSigningRequest_ToPemString_RoundTripsRawData()
+    {
+        using var keys = ECDsa.Create();
+        var csr = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("CSR Pem Test"))
+            .SetKeyPair(keys)
+            .CreateCertificateSigningRequest();
+
+        var pem = csr.ToPemString();
+
+        await Assert.That(pem).Contains("-----BEGIN CERTIFICATE REQUEST-----");
+        await Assert.That(pem).Contains("-----END CERTIFICATE REQUEST-----");
+
+        var fields = PemEncoding.Find(pem);
+        await Assert.That(pem[fields.Label].ToString()).IsEqualTo("CERTIFICATE REQUEST");
+
+        var decoded = Convert.FromBase64String(pem[fields.Base64Data].ToString());
+        await Assert.That(decoded).IsEquivalentTo(csr.GetRawData().ToArray(), CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task CertificateSigningRequest_ExportAsPem_WriterAndFileAgreeWithToPemString()
+    {
+        using var keys = ECDsa.Create();
+        var csr = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("CSR Export Test"))
+            .SetKeyPair(keys)
+            .CreateCertificateSigningRequest();
+
+        var expected = csr.ToPemString();
+
+        var sw = new StringWriter();
+        var returnedFromWriter = csr.ExportAsPem(sw);
+        await Assert.That(sw.ToString()).IsEqualTo(expected);
+        await Assert.That(returnedFromWriter).IsSameReferenceAs(csr);
+
+        var path = Path.Combine(Path.GetTempPath(), $"csr-{Guid.NewGuid():N}.pem");
+        try {
+            var returnedFromFile = csr.ExportAsPem(path);
+            await Assert.That(File.ReadAllText(path)).IsEqualTo(expected);
+            await Assert.That(returnedFromFile).IsSameReferenceAs(csr);
+        } finally {
+            if (File.Exists(path)) File.Delete(path);
+        }
     }
 
 
