@@ -121,7 +121,8 @@ public class CertificateExporter
         using var sw = new StringWriter();
         if (_keys != ExportKeys.None) {
             foreach (var cert in list.Where(x => x.HasPrivateKey)) {
-                cert.GetPrivateKey().ExportAsPrivateKeyPem(sw, GetPasswordString());
+                using var key = cert.GetPrivateKey();
+                key.ExportAsPrivateKeyPem(sw, GetPasswordString());
                 sw.Write('\n');
             }
         }

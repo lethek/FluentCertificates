@@ -134,6 +134,39 @@ public class X509ChainExtensionsTests
     }
 
 
+    [Test]
+    public async Task IsIssuedBy_VerifiesRepeatedly_AndLeavesBothCertificatesUsable()
+    {
+        using var rootCa = BuildRootCa();
+        using var cert = BuildLeaf(rootCa);
+
+        //Signature verification extracts and releases the issuer's public key on every call
+        await Assert.That(cert.IsIssuedBy(rootCa, true)).IsTrue();
+        await Assert.That(cert.IsIssuedBy(rootCa, true)).IsTrue();
+        await Assert.That(cert.IsIssuedBy(rootCa, true)).IsTrue();
+
+        using var rootKey = rootCa.GetPrivateKey();
+        await Assert.That(rootKey.ExportSubjectPublicKeyInfo()).IsEquivalentTo(rootCa.PublicKey.ExportSubjectPublicKeyInfo());
+    }
+
+
+    [Test]
+    public async Task ExportPem_WithPrivateKey_IsRepeatableAndLeavesTheCertificateUsable()
+    {
+        using var cert = BuildRootCa();
+
+        //The PEM exporter extracts and releases a private key per certificate it writes
+        var first = cert.Export().WithPrivateKey().AsPem().ToPemString();
+        var second = cert.Export().WithPrivateKey().AsPem().ToPemString();
+
+        await Assert.That(first).IsEqualTo(second);
+        await Assert.That(first).Contains("PRIVATE KEY");
+
+        using var key = cert.GetPrivateKey();
+        await Assert.That(key.ExportSubjectPublicKeyInfo()).IsEquivalentTo(cert.PublicKey.ExportSubjectPublicKeyInfo());
+    }
+
+
     private static X509Certificate2 BuildRootCa()
         => new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)

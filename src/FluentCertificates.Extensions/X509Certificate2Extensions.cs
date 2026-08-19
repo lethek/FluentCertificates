@@ -68,8 +68,13 @@ public static class X509Certificate2Extensions
     /// <summary>
     /// Gets the private key as an <see cref="AsymmetricAlgorithm"/> instance.
     /// </summary>
+    /// <remarks>
+    /// Every call returns a new instance, which the caller owns and should dispose. Disposing it does not
+    /// affect <paramref name="cert"/> or any instance returned by another call, so the certificate remains
+    /// usable and can be asked for its key again.
+    /// </remarks>
     /// <param name="cert">The certificate.</param>
-    /// <returns>The private key.</returns>
+    /// <returns>The private key. Dispose it when finished with it.</returns>
     /// <exception cref="NotSupportedException">Thrown if the key algorithm is not supported.</exception>
     /// <exception cref="Exception">Thrown if the private key is not found.</exception>
     public static AsymmetricAlgorithm GetPrivateKey(this X509Certificate2 cert)
@@ -199,14 +204,25 @@ public static class X509Certificate2Extensions
         var tbs = cert.GetToBeSignedData().Span;
         var sig = cert.GetSignatureData().Span;
 
-        return algorithm.KeyAlgorithm switch {
+        //Each Get*PublicKey call returns a fresh instance that this method owns and must release
+        switch (algorithm.KeyAlgorithm) {
             #pragma warning disable CS0618 // Type or member is obsolete
-            KeyAlgorithm.DSA => issuer.GetDSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm),
+            case KeyAlgorithm.DSA: {
+                using var key = issuer.GetDSAPublicKey()!;
+                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm);
+            }
             #pragma warning restore CS0618 // Type or member is obsolete
-            KeyAlgorithm.RSA => issuer.GetRSAPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, algorithm.RSASignaturePadding!),
-            KeyAlgorithm.ECDsa => issuer.GetECDsaPublicKey()!.VerifyData(tbs, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence),
-            _ => false
-        };
+            case KeyAlgorithm.RSA: {
+                using var key = issuer.GetRSAPublicKey()!;
+                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm, algorithm.RSASignaturePadding!);
+            }
+            case KeyAlgorithm.ECDsa: {
+                using var key = issuer.GetECDsaPublicKey()!;
+                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence);
+            }
+            default:
+                return false;
+        }
     }
 
 

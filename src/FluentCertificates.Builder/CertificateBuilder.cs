@@ -493,10 +493,16 @@ public record CertificateBuilder
 
             var request = builder.CreateCertificateRequest();
 
+            //GetPrivateKey hands back a fresh instance which is ours to release, unlike KeyPair, whose
+            //lifetime belongs either to the caller or to the disposal in this method's finally block
+            using var issuerKey = builder.SignatureGenerator == null && builder.Issuer != null
+                ? builder.Issuer.GetPrivateKey()
+                : null;
+
             //A supplied generator is used as-is, which also means an Issuer certificate with no attached
             //private key is enough: the key it stands for lives wherever the generator can reach it
             var generator = builder.SignatureGenerator
-                ?? builder.CreateSignatureGenerator(builder.Issuer != null ? builder.Issuer.GetPrivateKey() : builder.KeyPair);
+                ?? builder.CreateSignatureGenerator(issuerKey ?? builder.KeyPair);
 
             var cert = request.Create(
                 builder.Issuer?.SubjectName ?? builder.Subject.Create(),
@@ -506,12 +512,18 @@ public record CertificateBuilder
                 builder.GenerateSerialNumber()
             );
 
-            cert = builder.KeyPair switch {
+            //CopyWithPrivateKey returns a separate certificate, leaving the keyless original ours to release
+            var certWithKey = builder.KeyPair switch {
                 DSA dsa => cert.CopyWithPrivateKey(dsa),
                 RSA rsa => cert.CopyWithPrivateKey(rsa),
                 ECDsa ecdsa => cert.CopyWithPrivateKey(ecdsa),
-                _ => cert
+                _ => null
             };
+
+            if (certWithKey != null) {
+                cert.Dispose();
+                cert = certWithKey;
+            }
 
             if (!String.IsNullOrEmpty(builder.FriendlyName) && OperatingSystem.IsWindows()) {
                 //CopyWithPrivateKey doesn't copy FriendlyName so it needs to be set here after the copy is made

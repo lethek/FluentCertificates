@@ -817,6 +817,47 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Create_ReleasesOnlyTheKeysItOwns()
+    {
+        using var issuer = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Reused Issuer")
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
+            .Create();
+
+        //Create() extracts and releases the issuer's private key each time, so signing must stay repeatable
+        using var first = new CertificateBuilder().SetSubject("CN=First").SetIssuer(issuer).Create();
+        using var second = new CertificateBuilder().SetSubject("CN=Second").SetIssuer(issuer).Create();
+
+        await Assert.That(first.IsIssuedBy(issuer, true)).IsTrue();
+        await Assert.That(second.IsIssuedBy(issuer, true)).IsTrue();
+
+        using var issuerKey = issuer.GetPrivateKey();
+        await Assert.That(issuerKey.ExportSubjectPublicKeyInfo()).IsEquivalentTo(issuer.PublicKey.ExportSubjectPublicKeyInfo());
+
+        //Create() also disposes the keyless certificate that CopyWithPrivateKey superseded, which must
+        //leave the returned certificate's own key intact
+        using var firstKey = first.GetPrivateKey();
+        await Assert.That(first.HasPrivateKey).IsTrue();
+        await Assert.That(firstKey.ExportSubjectPublicKeyInfo()).IsEquivalentTo(first.PublicKey.ExportSubjectPublicKeyInfo());
+    }
+
+
+    [Test]
+    public async Task Create_WithSuppliedKeyPair_LeavesThatKeyUsable()
+    {
+        //Documented ownership: a key handed to the builder belongs to the caller and is never disposed by it
+        using var keys = RSA.Create(2048);
+
+        using var first = new CertificateBuilder().SetSubject("CN=First").SetKeyPair(keys).Create();
+        using var second = new CertificateBuilder().SetSubject("CN=Second").SetKeyPair(keys).Create();
+
+        await Assert.That(() => keys.ExportParameters(false)).ThrowsNothing();
+        await Assert.That(first.PublicKey.ExportSubjectPublicKeyInfo()).IsEquivalentTo(second.PublicKey.ExportSubjectPublicKeyInfo());
+    }
+
+
+    [Test]
     public async Task CreateCertificateRequest_WithoutKeyPair_Throws()
         => await Assert
             .That(() => new CertificateBuilder().CreateCertificateRequest())

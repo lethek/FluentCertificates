@@ -82,6 +82,12 @@ they summarise each release rather than record it as it happened.
 
 ### Fixed
 
+- Several disposable objects were extracted and then dropped without being released:
+  `CertificateBuilder.Create` leaked the issuer's private key on every call, and leaked the keyless
+  certificate that `CopyWithPrivateKey` superseded; PEM export leaked a private key per certificate
+  written, so exporting a chain leaked one per keyed certificate in it; and certificate signature
+  verification leaked the issuer's public key on every check. None of this changed any result, only
+  the handles left held.
 - `CertificateFinder` silently skipped PKCS#12 files (`.pfx`, `.p12`) on .NET 9 and later. They were
   listed as supported but failed to load and the error was swallowed, so a directory of PKCS#12
   files returned nothing. .NET 8 was unaffected.
