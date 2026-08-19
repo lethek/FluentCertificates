@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using Org.BouncyCastle.Asn1;
@@ -312,6 +312,121 @@ public class CertificateBuilderTests
         await Assert.That(algorithm).IsEqualTo(SignatureAlgorithm.SHA256ECDSA);
         await Assert.That(cr.PublicKey.GetECDsaPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence)).IsTrue();
     }
+
+
+    [Test]
+    public async Task Build_ClientCertificate_HasClientAuthEKU()
+    {
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetSubject(x => x.SetCommonName("Client Test"))
+            .Create();
+
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.2" });
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.DigitalSignature);
+        await Assert.That(cert.Extensions.OfType<X509BasicConstraintsExtension>().Single().CertificateAuthority).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Build_CodeSignCertificate_HasCodeSigningEKU()
+    {
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CodeSign)
+            .SetSubject(x => x.SetCommonName("CodeSign Test"))
+            .Create();
+
+        //CodeSigning, TimeStamping and Microsoft Authenticode LifetimeSigning
+        await Assert.That(GetEkuOids(cert))
+            .IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.3", "1.3.6.1.5.5.7.3.8", "1.3.6.1.4.1.311.10.3.13" });
+        await Assert.That(GetKeyUsages(cert))
+            .IsEqualTo(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment);
+    }
+
+
+    [Test]
+    public async Task Build_SMimeCertificate_HasEmailProtectionEKU()
+    {
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.SMime)
+            .SetSubject(x => x.SetCommonName("SMime Test"))
+            .Create();
+
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.4" });
+        await Assert.That(GetKeyUsages(cert))
+            .IsEqualTo(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.NonRepudiation);
+    }
+
+
+    [Test]
+    public async Task Build_ServerCertificate_HasServerAuthEKU()
+    {
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject(x => x.SetCommonName("Server Test"))
+            .Create();
+
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.1" });
+        await Assert.That(GetKeyUsages(cert))
+            .IsEqualTo(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment);
+    }
+
+
+    [Test]
+    public async Task Build_RootCA_HasKeyUsageCertSignAndCrlSign()
+    {
+        using var rootCa = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName("Root CA Test"))
+            .Create();
+
+        await Assert.That(GetKeyUsages(rootCa))
+            .IsEqualTo(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign);
+
+        var ski = rootCa.Extensions.OfType<X509SubjectKeyIdentifierExtension>().Single();
+        await Assert.That(ski.SubjectKeyIdentifier).IsNotNull().And.IsNotEmpty();
+        await Assert.That(ski.Critical).IsFalse();
+
+        //A CA has no EKU restriction
+        await Assert.That(rootCa.Extensions.OfType<X509EnhancedKeyUsageExtension>()).IsEmpty();
+    }
+
+
+    [Test]
+    public async Task Build_Certificate_WithEmptySubjectAndSAN_SanIsCritical()
+    {
+        //RFC 5280 s4.1.2.6: the SAN extension MUST be critical when the Subject is empty
+        using var withoutSubject = new CertificateBuilder()
+            .SetSubjectAlternativeNames(x => x.AddDnsNames("fake.domain"))
+            .Create();
+
+        await Assert.That(withoutSubject.SubjectName.Name).IsEqualTo(String.Empty);
+        await Assert.That(GetSanExtension(withoutSubject).Critical).IsTrue();
+
+        using var withSubject = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("fake.domain"))
+            .SetSubjectAlternativeNames(x => x.AddDnsNames("fake.domain"))
+            .Create();
+
+        await Assert.That(GetSanExtension(withSubject).Critical).IsFalse();
+    }
+
+
+    private static IEnumerable<string> GetEkuOids(X509Certificate2 cert)
+        => cert.Extensions
+            .OfType<X509EnhancedKeyUsageExtension>()
+            .Single()
+            .EnhancedKeyUsages
+            .Cast<Oid>()
+            .Select(x => x.Value!);
+
+
+    private static X509KeyUsageFlags GetKeyUsages(X509Certificate2 cert)
+        => cert.Extensions.OfType<X509KeyUsageExtension>().Single().KeyUsages;
+
+
+    private static X509Extension GetSanExtension(X509Certificate2 cert)
+        => cert.Extensions.Single(x => x.Oid?.Value == "2.5.29.17");
 
 
     private static IEnumerable<Org.BouncyCastle.Asn1.X509.GeneralName> EnumerateNamesFromSan(X509Extension extension)
