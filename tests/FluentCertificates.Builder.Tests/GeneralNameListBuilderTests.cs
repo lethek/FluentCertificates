@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+using System.Collections.Immutable;
 using System.Formats.Asn1;
 using System.Net;
 using FluentCertificates.Internals.GeneralNames;
@@ -235,15 +235,20 @@ public class GeneralNameListBuilderTests
 
 
     [Test]
-    public async Task AddIPAddress_MismatchedAddressFamily_ThrowsOnEncode()
+    public async Task AddIPAddress_MismatchedAddressFamily_Throws()
     {
-        var names = new GeneralNameListBuilder()
-            .AddIPAddress(IPAddress.Parse("192.0.2.1"), IPAddress.Parse("ffff:ffff::"))
-            .Create();
+        //An IPv4 address with an IPv6 mask, and the reverse, are both rejected when added
+        await Assert
+            .That(() => new GeneralNameListBuilder().AddIPAddress(IPAddress.Parse("192.0.2.1"), IPAddress.Parse("ffff:ffff::")))
+            .ThrowsExactly<ArgumentException>();
 
-        //Validation happens when encoding, not when adding
-        await Assert.That(names).HasSingleItem();
-        await Assert.That(() => names.Encode()).ThrowsExactly<ArgumentException>();
+        await Assert
+            .That(() => new GeneralNameListBuilder().AddIPAddress(IPAddress.Parse("2001:db8::1"), IPAddress.Parse("255.255.255.0")))
+            .ThrowsExactly<ArgumentException>();
+
+        await Assert
+            .That(() => new GeneralNameListBuilder().AddIPAddress("192.0.2.1", "ffff:ffff::"))
+            .ThrowsExactly<ArgumentException>();
     }
 
 
