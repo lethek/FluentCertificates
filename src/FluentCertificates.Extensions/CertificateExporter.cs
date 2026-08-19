@@ -109,9 +109,9 @@ public class CertificateExporter
 
 
     /// <summary>
-    /// Produces the PEM-encoded representation of the configured certificates and keys.
-    /// The output order matches <see cref="X509Certificate2EnumerableExtensions.ToPemString"/>:
-    /// private key blocks first, then CERTIFICATE blocks in leaf-first order.
+    /// Produces the PEM-encoded representation of the configured certificates and keys:
+    /// private key blocks first, then CERTIFICATE blocks in leaf-first order. The source
+    /// list is treated as root-first, so the last certificate in it is the leaf.
     /// </summary>
     internal string ExportPem()
     {

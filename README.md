@@ -185,7 +185,6 @@ leafCert.Export().WithChain([leafCert, intermediateCert, rootCert]).WithoutPriva
 |Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsCert()`|
 |Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
-The older `ExportAsCert` / `ExportAsPem` / `ExportAsPkcs7` / `ExportAsPkcs12` / `ToPemString` extension methods still work but are marked `[Obsolete]`; each compiler warning names its `Export()` replacement.
 
 ---
 
@@ -243,12 +242,6 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |-|-|
 |`BuildChain`||
 |`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
-|`ExportAsCert`|**Deprecated** - use `Export().AsCert()`|
-|`ExportAsPkcs12`|**Deprecated** - use `Export().WithPassword(password).AsPkcs12()`|
-|`ExportAsPkcs7`|**Deprecated** - use `Export().AsPkcs7()`|
-|`ExportAsPem`|**Deprecated** - use `Export().AsPem()`|
-|`ToPemString`|**Deprecated** - use `Export().AsPem().ToPemString()`|
-|`ToBase64String`|**Deprecated** - use `Convert.ToBase64String(cert.RawData)`|
 |`GetPrivateKey`||
 |`GetSignatureData`||
 |`GetToBeSignedData`||
@@ -271,10 +264,6 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`ToCollection`||
 |`ToEnumerable`||
 |`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
-|`ExportAsPkcs7`|**Deprecated** - use `Export().AsPkcs7()`|
-|`ExportAsPkcs12`|**Deprecated** - use `Export().WithPassword(password).AsPkcs12()`|
-|`ExportAsPem`|**Deprecated** - use `Export().AsPem()`|
-|`ToPemString`|**Deprecated** - use `Export().AsPem().ToPemString()`|
 
 ---
 
@@ -288,10 +277,6 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |-|-|
 |`ToEnumerable`||
 |`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
-|`ExportAsPkcs7`|**Deprecated** - use `Export().AsPkcs7()`|
-|`ExportAsPkcs12`|**Deprecated** - use `Export().WithPassword(password).AsPkcs12()`|
-|`ExportAsPem`|**Deprecated** - use `Export().AsPem()`|
-|`ToPemString`|**Deprecated** - use `Export().AsPem().ToPemString()`|
 
 ---
 
@@ -306,10 +291,6 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`ToCollection`||
 |`FilterPrivateKeys`||
 |`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
-|`ExportAsPkcs7`|**Deprecated** - use `Export().AsPkcs7()`|
-|`ExportAsPkcs12`|**Deprecated** - use `Export().WithPassword(password).AsPkcs12()`|
-|`ExportAsPem`|**Deprecated** - use `Export().AsPem()`|
-|`ToPemString`|**Deprecated** - use `Export().AsPem().ToPemString()`|
 
 ---
 

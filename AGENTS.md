@@ -116,8 +116,13 @@ cert.Export().WithPrivateKey().AsPem().ToPemString();
 cert.Export().WithPassword(pw).AsPkcs12().ToFile(path);
 ```
 
-The older `ExportAsPem()` / `ExportAsPkcs12()` / `ExportAsPkcs7()` / `ExportAsCert()` extension methods still
-exist but are `[Obsolete]`; each carries a message naming its `Export()` replacement. Prefer the builder.
+The older `ExportAsPem()` / `ExportAsPkcs12()` / `ExportAsPkcs7()` / `ExportAsCert()` / `ToPemString()` /
+`ToBase64String()` extension methods on `X509Certificate2`, `X509Certificate2Collection`, `X509Chain` and
+`IEnumerable<X509Certificate2>` were deprecated and have now been removed. `Export()` is the only export API.
+
+Note that `CertificateRequest.ExportAsPem()` / `ToPemString()` (in `CertificateRequestExtensions`) and the
+`AsymmetricAlgorithm.ExportAs*Pem()` methods share those names but are **not** deprecated and have no builder
+equivalent: the export builder works on certificates, not CSRs or bare keys.
 
 ### Target Frameworks
 
@@ -189,7 +194,6 @@ Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `IsValidNow()` / `IsValidAt()` - Validity checks
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks
 
-Deprecated: `ExportAsPem()`, `ExportAsPkcs12()`, `ExportAsPkcs7()`, `ExportAsCert()`.
 
 ## Additional Notes
 
