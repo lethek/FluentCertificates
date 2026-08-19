@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography.Pkcs;
+using System.Security.Cryptography.Pkcs;
 using System.Text;
 
 using FluentCertificates.Internals;
@@ -257,6 +257,83 @@ public class X509Certificate2ExtensionsTests
     {
         yield return KeyAlgorithm.ECDsa;
         yield return KeyAlgorithm.RSA;
+    }
+
+
+    [Test]
+    public async Task IsValidAt_InsideAndOutsideTheValidityWindow()
+    {
+        var from = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2030, 12, 31, 0, 0, 0, TimeSpan.Zero);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("Validity Test"))
+            .SetNotBefore(from)
+            .SetNotAfter(to)
+            .Create();
+
+        await Assert.That(cert.IsValidAt(from.UtcDateTime.AddDays(30))).IsTrue();
+        await Assert.That(cert.IsValidAt(from.UtcDateTime.AddSeconds(-1))).IsFalse();
+        await Assert.That(cert.IsValidAt(to.UtcDateTime.AddSeconds(1))).IsFalse();
+
+        //Both bounds are inclusive
+        await Assert.That(cert.IsValidAt(from.UtcDateTime)).IsTrue();
+        await Assert.That(cert.IsValidAt(to.UtcDateTime)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task IsValidNow_ReflectsTheCurrentValidityWindow()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        using var current = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("Current"))
+            .SetNotBefore(now.AddHours(-1))
+            .SetNotAfter(now.AddHours(1))
+            .Create();
+
+        using var expired = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("Expired"))
+            .SetNotBefore(now.AddHours(-2))
+            .SetNotAfter(now.AddHours(-1))
+            .Create();
+
+        using var notYetValid = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("Future"))
+            .SetNotBefore(now.AddHours(1))
+            .SetNotAfter(now.AddHours(2))
+            .Create();
+
+        await Assert.That(current.IsValidNow()).IsTrue();
+        await Assert.That(expired.IsValidNow()).IsFalse();
+        await Assert.That(notYetValid.IsValidNow()).IsFalse();
+    }
+
+
+    [Test]
+    public async Task IsValidAt_LocalDateTime_IsComparedAgainstUtcBounds()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("Kind Test"))
+            .SetNotBefore(now.AddMinutes(-5))
+            .SetNotAfter(now.AddMinutes(5))
+            .Create();
+
+        //IsValidAt converts the certificate's bounds to UTC but uses atTime as given, so the
+        //result depends on the DateTimeKind of the argument. A UTC instant is correct; the
+        //identical moment expressed as local time is compared against UTC bounds unconverted.
+        await Assert.That(cert.IsValidAt(DateTime.UtcNow)).IsTrue();
+
+        var offset = TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow);
+        if (offset != TimeSpan.Zero) {
+            await Assert
+                .That(cert.IsValidAt(DateTime.Now))
+                .IsFalse()
+                .Because("the local wall-clock value is compared against UTC bounds without conversion");
+        }
     }
 
 
