@@ -46,11 +46,16 @@ dotnet build
 # Run all tests
 dotnet test
 
-# Run tests for a specific project
-dotnet test tests/FluentCertificates.Builder.Tests/FluentCertificates.Builder.Tests.csproj
+# Run tests for a specific project (note: --project, not a bare path)
+dotnet test --project tests/FluentCertificates.Builder.Tests/FluentCertificates.Builder.Tests.csproj
 
-# Run a single test by name
-dotnet test --filter "FullyQualifiedName~TestMethodName"
+# Run a single target framework
+dotnet test -f net9.0 --project tests/FluentCertificates.Builder.Tests/FluentCertificates.Builder.Tests.csproj
+
+# Run a single test by name. `--filter` does NOT work under Microsoft.Testing.Platform;
+# pass TUnit's tree-node filter after `--` instead. Scope it to the owning project: a project
+# that matches zero tests is reported as a failure, so a solution-wide filter looks like it failed.
+dotnet test --project tests/FluentCertificates.Builder.Tests/FluentCertificates.Builder.Tests.csproj -- --treenode-filter "/*/*/*/TestMethodName*"
 ```
 
 ## Architecture
@@ -109,14 +114,25 @@ var builder = new CertificateBuilder()
 // 'builder' is unchanged, methods return new instances
 ```
 
-**Extension Methods for Export:**
-Certificate export functionality is implemented as extension methods rather than instance methods, providing a consistent API across X509Certificate2, X509Chain, and collections.
+**Fluent Export Builder:**
+Export is reached through an `Export()` extension method on `X509Certificate2`, `X509Certificate2Collection`,
+`X509Chain` and `IEnumerable<X509Certificate2>`, which returns a `CertificateExportBuilder`. Configure with
+`With*`, choose a format with `As*`, then terminate with `To*`:
+
+```csharp
+cert.Export().WithPrivateKey().AsPem().ToPemString();
+cert.Export().WithPassword(pw).AsPkcs12().ToFile(path);
+```
+
+The older `ExportAsPem()` / `ExportAsPkcs12()` / `ExportAsPkcs7()` / `ExportAsCert()` extension methods still
+exist but are `[Obsolete]`; each carries a message naming its `Export()` replacement. Prefer the builder.
 
 ### Target Frameworks
 
-All projects target:
-- .NET 8.0 (net8.0)
-- .NET 9.0 (net9.0)
+Targets vary by project:
+- Library projects (`FluentCertificates`, `.Builder`, `.Extensions`, `.Finder`, `.Common`): net8.0 and net9.0
+- `FluentCertificates.Builder.BouncyCastle`: net8.0 only
+- Test projects: net8.0, net9.0 and net10.0
 
 Some dependencies use conditional package references based on target framework (see .csproj files).
 
@@ -170,15 +186,20 @@ Provides LINQ-queryable interface for finding certificates across:
 - Supports filtering, ordering, and projection via standard LINQ operators
 
 ### Extension Methods
-Extensive extension methods provide export capabilities:
-- `ExportAsPem()` / `ToPemString()` - PEM format
-- `ExportAsPkcs12()` - PFX format (with private keys)
-- `ExportAsPkcs7()` - P7B format (certificate chains)
-- `ExportAsCert()` - DER/CER format
+
+Export, via `Export()` and the `CertificateExportBuilder` it returns:
+- Configure: `WithPrivateKey()` / `WithPrivateKeys()` / `WithoutPrivateKeys()` / `WithKeys(ExportKeys)` /
+  `WithPassword(string?)` / `WithChain(...)`
+- Format: `AsPem()` / `AsPkcs12()` / `AsPkcs7()` / `AsCert()`
+- Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
+
+Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `BuildChain()` - Build certificate chains
 - `VerifyChain()` - Verify certificate chains
 - `IsValidNow()` / `IsValidAt()` - Validity checks
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks
+
+Deprecated: `ExportAsPem()`, `ExportAsPkcs12()`, `ExportAsPkcs7()`, `ExportAsCert()`.
 
 ## Additional Notes
 
@@ -187,50 +208,4 @@ Extensive extension methods provide export capabilities:
 - Source Link is enabled for debugging into the library
 - Symbol packages (snupkg) are generated alongside NuGet packages
 - The solution includes .editorconfig for consistent code style
-
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
-## Beads Issue Tracker
-
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
-
-### Quick Reference
-
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
-```
-
-### Rules
-
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
-
-## Session Completion
-
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
-
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd dolt push
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
-
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
-<!-- END BEADS INTEGRATION -->
+- The solution file is `FluentCertificates.slnx` (XML solution format)
