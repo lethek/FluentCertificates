@@ -1,4 +1,4 @@
-﻿// ReSharper disable PossibleMultipleEnumeration
+// ReSharper disable PossibleMultipleEnumeration
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -8,8 +8,16 @@ using FluentCertificates.Internals;
 
 namespace FluentCertificates;
 
+/// <summary>
+/// Provides extension methods for sequences of <see cref="X509Certificate2"/>.
+/// </summary>
 public static class X509Certificate2EnumerableExtensions
 {
+    /// <summary>
+    /// Copies the sequence into a new <see cref="X509Certificate2Collection"/>.
+    /// </summary>
+    /// <param name="enumerable">The certificates to copy.</param>
+    /// <returns>A new collection containing the same certificates, in the same order.</returns>
     public static X509Certificate2Collection ToCollection(this IEnumerable<X509Certificate2> enumerable)
         => new(enumerable.ToArray());
 

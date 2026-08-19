@@ -1,7 +1,11 @@
-﻿using System.Formats.Asn1;
+using System.Formats.Asn1;
 
 namespace FluentCertificates;
 
+/// <summary>
+/// Provides extension methods for encoding sequences of <see cref="GeneralName"/> into their DER
+/// representation, as used by the SubjectAlternativeName and NameConstraints extensions.
+/// </summary>
 public static class GeneralNameListExtensions
 {
     /// <summary>

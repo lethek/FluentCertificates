@@ -1,9 +1,18 @@
-﻿using System.Security.Cryptography.X509Certificates;
+using System.Security.Cryptography.X509Certificates;
 
 namespace FluentCertificates;
 
+/// <summary>
+/// Provides extension methods for <see cref="X509Chain"/>.
+/// </summary>
 public static class X509ChainExtensions
 {
+    /// <summary>
+    /// Returns the chain's certificates in root-first order, which is the reverse of
+    /// <see cref="X509Chain.ChainElements"/>. The leaf certificate is therefore last.
+    /// </summary>
+    /// <param name="chain">The chain whose certificates are returned.</param>
+    /// <returns>The chain's certificates, root first and leaf last.</returns>
     public static IEnumerable<X509Certificate2> ToEnumerable(this X509Chain chain)
         => chain
             .ChainElements
@@ -11,6 +20,14 @@ public static class X509ChainExtensions
             .Select(x => x.Certificate);
 
 
+    /// <summary>
+    /// Returns the chain's certificates as a collection in root-first order, with private keys kept
+    /// or stripped according to <paramref name="include"/>.
+    /// </summary>
+    /// <param name="chain">The chain whose certificates are returned.</param>
+    /// <param name="include">Which private keys to retain. <see cref="ExportKeys.Leaf"/> keeps only
+    /// the last certificate's key, the leaf being last in this ordering.</param>
+    /// <returns>The chain's certificates, root first and leaf last.</returns>
     public static X509Certificate2Collection ToCollection(this X509Chain chain, ExportKeys include = ExportKeys.All)
         => chain.ToEnumerable().FilterPrivateKeys(include).ToCollection();
 

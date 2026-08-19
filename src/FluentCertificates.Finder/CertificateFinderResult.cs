@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography.X509Certificates;
+using System.Security.Cryptography.X509Certificates;
 
 namespace FluentCertificates;
 
@@ -18,6 +18,10 @@ public record CertificateFinderResult {
     public CertificateDirectory? Directory { get; init; }
 
 
+    /// <summary>
+    /// Gets the custom source the certificate was found in, if it came from one added via
+    /// <see cref="CertificateFinder.AddCustomSource"/> rather than a store or directory.
+    /// </summary>
     public AbstractCertificateSource? CustomSource { get; init; }
 
 
