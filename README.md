@@ -181,7 +181,7 @@ leafCert.Export().WithChain([leafCert, intermediateCert, rootCert]).WithoutPriva
 
 |Stage|Methods|
 |-|-|
-|Configure|`WithPrivateKey()`, `WithPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithChain(...)`|
+|Configure|`WithPrivateKey()`, `WithPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithChain(...)`|
 |Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsCert()`|
 |Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
@@ -243,6 +243,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`BuildChain`||
 |`Export`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
 |`GetPrivateKey`||
+|`GetSignatureAlgorithm`||
 |`GetSignatureData`||
 |`GetToBeSignedData`||
 |`IsValidNow`||
