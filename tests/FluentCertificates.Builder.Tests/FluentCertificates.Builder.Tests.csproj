@@ -20,9 +20,7 @@
 
   <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
-    <PackageReference Include="Meziantou.Xunit.v3.ParallelTestFramework" Version="1.0.6" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
-    <PackageReference Include="xunit.v3.mtp-v2" Version="3.2.2" />
+    <PackageReference Include="TUnit" Version="1.65.31" />
     <PackageReference Update="Microsoft.SourceLink.AzureRepos.Git" Version="10.0.300">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -36,14 +34,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FluentCertificates.Builder.BouncyCastle\FluentCertificates.Builder.BouncyCastle.csproj" />
     <ProjectReference Include="..\..\src\FluentCertificates.Builder\FluentCertificates.Builder.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="Xunit" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -123,10 +123,17 @@ Some dependencies use conditional package references based on target framework (
 ### Test Framework
 
 Tests use:
-- **xUnit** as the testing framework
-- **Meziantou.Xunit.ParallelTestFramework** for parallel execution
-- **Xunit.SkippableFact** for conditionally skipped tests
-- Test projects target both net8.0 and net9.0
+- **TUnit** as the testing framework, running on Microsoft.Testing.Platform (see `global.json`)
+- `[Test]` for test methods, `[Arguments]` for inline cases, `[MethodDataSource]` for generated cases
+- Assertions are async: `await Assert.That(actual).IsEqualTo(expected)`. Every test method returns `Task`
+- TUnit parallelises tests by default, including methods within the same class; add `[NotInParallel]` where that isn't safe
+- `SupportedOSAttribute` (a `TUnit.Core.SkipAttribute`) skips OS-specific tests
+- Test projects target net8.0, net9.0 and net10.0
+
+Two TUnit gotchas worth knowing:
+- TUnit's implicit global usings make the bare name `Assembly` ambiguous with `System.Reflection.Assembly`; alias it
+- `IsEquivalentTo` compares members structurally by reflection, not via `Equals`. For types like `X509Certificate2`
+  where that pulls in unstable members (e.g. `Handle`), pass an explicit `IEqualityComparer<T>`
 
 Test projects are located in `tests/` directory with naming pattern `{ProjectName}.Tests`.
 

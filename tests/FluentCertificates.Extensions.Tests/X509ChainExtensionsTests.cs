@@ -1,9 +1,14 @@
-﻿namespace FluentCertificates;
+﻿using System.Security.Cryptography.X509Certificates;
+
+using TUnit.Assertions.Enums;
+
+
+namespace FluentCertificates;
 
 public class X509ChainExtensionsTests
 {
-    [Fact]
-    public void ToEnumerable_ReversesChainOrder_PutsLeafCertLast()
+    [Test]
+    public async Task ToEnumerable_ReversesChainOrder_PutsLeafCertLast()
     {
         using var rootCa = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
@@ -24,13 +29,17 @@ public class X509ChainExtensionsTests
             .SetSubject("CN=Leaf")
             .Create();
 
-        var chainResult = cert.BuildChain([subCa, rootCa], true); 
+        var chainResult = cert.BuildChain([subCa, rootCa], true);
         using var chain = chainResult.Chain;
 
         var expected = new[] { rootCa, subCa, cert };
 
-        Assert.True(chainResult.Verified);
-        Assert.Equal(expected, chain.ToEnumerable());
-        Assert.Equal(expected, chain.ToCollection().ToEnumerable());
+        //TUnit's IsEquivalentTo compares members structurally by default, which trips over the
+        //differing native Handle of each X509Certificate2; compare by value instead.
+        var comparer = EqualityComparer<X509Certificate2>.Default;
+
+        await Assert.That(chainResult.Verified).IsTrue();
+        await Assert.That(chain.ToEnumerable()).IsEquivalentTo(expected, comparer, CollectionOrdering.Matching);
+        await Assert.That(chain.ToCollection().ToEnumerable()).IsEquivalentTo(expected, comparer, CollectionOrdering.Matching);
     }
 }

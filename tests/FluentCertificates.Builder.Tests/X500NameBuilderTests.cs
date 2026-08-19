@@ -4,46 +4,48 @@ using System.Security.Cryptography.X509Certificates;
 
 using Org.BouncyCastle.Asn1.X509;
 
+using TUnit.Assertions.Enums;
+
 
 namespace FluentCertificates;
 
 public class X500NameBuilderTests
 {
-    [Fact]
-    public void Create_Empty_Builder()
+    [Test]
+    public async Task Create_Empty_Builder()
     {
         var builder = new X500NameBuilder();
-        Assert.Empty(builder.RelativeDistinguishedNames);
-        Assert.Empty(builder.ToString());
+        await Assert.That(builder.RelativeDistinguishedNames).IsEmpty();
+        await Assert.That(builder.ToString()).IsEmpty();
     }
 
 
-    [Fact]
-    public void Create_Builder_FromString()
+    [Test]
+    public async Task Create_Builder_FromString()
     {
         const string expected = "DC=app, DC=fake";
-        Assert.Equal(expected, new X500NameBuilder(expected).ToString());
+        await Assert.That(new X500NameBuilder(expected).ToString()).IsEqualTo(expected);
     }
 
 
-    [Fact]
-    public void Create_Builder_FromX509Name()
+    [Test]
+    public async Task Create_Builder_FromX509Name()
     {
         const string expected = "DC=app, DC=fake";
-        Assert.Equal(expected, new X500NameBuilder(new X509Name(expected).ConvertToDotNet()).ToString());
+        await Assert.That(new X500NameBuilder(new X509Name(expected).ConvertToDotNet()).ToString()).IsEqualTo(expected);
     }
 
 
-    [Fact]
-    public void Create_Builder_FromX500DistinguishedName()
+    [Test]
+    public async Task Create_Builder_FromX500DistinguishedName()
     {
         const string expected = "DC=app, DC=fake";
-        Assert.Equal(expected, new X500NameBuilder(new X500DistinguishedName(expected)).ToString());
+        await Assert.That(new X500NameBuilder(new X500DistinguishedName(expected)).ToString()).IsEqualTo(expected);
     }
 
 
-    [Fact]
-    public void Add_Multiple_Matching_Attributes()
+    [Test]
+    public async Task Add_Multiple_Matching_Attributes()
     {
         var dcOid = Oid.FromFriendlyName("DC", OidGroup.Attribute);
         var expected = new[] {
@@ -53,136 +55,119 @@ public class X500NameBuilderTests
 
         //All of the assertions below demonstrate equivalent, alternative syntaxes
 
-        Assert.Equal(
-            expected, 
-            new X500NameBuilder().AddDomainComponent("app").AddDomainComponent("fake").RelativeDistinguishedNames,
-            X500RdnTupleComparer
-        );
+        await Assert
+            .That(new X500NameBuilder().AddDomainComponent("app").AddDomainComponent("fake").RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
-        Assert.Equal(
-            expected,
-            new X500NameBuilder().AddDomainComponents("app", "fake").RelativeDistinguishedNames,
-            X500RdnTupleComparer
-        );
+        await Assert
+            .That(new X500NameBuilder().AddDomainComponents("app", "fake").RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
-        Assert.Equal(
-            expected,
-            new X500NameBuilder()
+        await Assert
+            .That(new X500NameBuilder()
                 .Add(X509Name.DC, UniversalTagNumber.IA5String, "app")
                 .Add(X509Name.DC, UniversalTagNumber.IA5String, "fake")
-                .RelativeDistinguishedNames,
-            X500RdnTupleComparer
-        );
+                .RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
-        Assert.Equal(
-            expected,
-            new X500NameBuilder()
+        await Assert
+            .That(new X500NameBuilder()
                 .Add(X509Name.DC, UniversalTagNumber.IA5String, "app", "fake")
-                .RelativeDistinguishedNames,
-            X500RdnTupleComparer
-        );
+                .RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
-        Assert.Equal(
-            expected,
-            new X500NameBuilder()
+        await Assert
+            .That(new X500NameBuilder()
                 .Add(dcOid, UniversalTagNumber.IA5String, "app")
                 .Add(dcOid, UniversalTagNumber.IA5String, "fake")
-                .RelativeDistinguishedNames,
-            X500RdnTupleComparer
-        );
+                .RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
         //Specify OID by an Oid instance
-        Assert.Equal(
-            expected,
-            new X500NameBuilder()
+        await Assert
+            .That(new X500NameBuilder()
                 .Add(dcOid, UniversalTagNumber.IA5String, "app", "fake")
-                .RelativeDistinguishedNames,
-            X500RdnTupleComparer
-        );
+                .RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
         //Specify OID by its friendly-name string
-        Assert.Equal(
-            expected,
-            new X500NameBuilder()
+        await Assert
+            .That(new X500NameBuilder()
                 .Add("DC", UniversalTagNumber.IA5String, "app", "fake")
-                .RelativeDistinguishedNames,
-            X500RdnTupleComparer
-        );
-        
+                .RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
+
         //Specify OID by its value string
-        Assert.Equal(
-            expected,
-            new X500NameBuilder()
+        await Assert
+            .That(new X500NameBuilder()
                 .Add("0.9.2342.19200300.100.1.25", UniversalTagNumber.IA5String, "app", "fake")
-                .RelativeDistinguishedNames,
-            X500RdnTupleComparer
-        );
+                .RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
     }
 
 
-    [Fact]
-    public void Clear_Removes_All_Attributes()
+    [Test]
+    public async Task Clear_Removes_All_Attributes()
     {
         var builder = new X500NameBuilder()
             .SetOrganizationalUnits("services")
             .SetDomainComponents("app", "fake")
             .Clear();
 
-        Assert.Empty(builder.RelativeDistinguishedNames);
-        Assert.Empty(builder.Create().Name);
+        await Assert.That(builder.RelativeDistinguishedNames).IsEmpty();
+        await Assert.That(builder.Create().Name).IsEmpty();
     }
 
 
-    [Fact]
-    public void Converts_Implicitly_To_String()
+    [Test]
+    public async Task Converts_Implicitly_To_String()
     {
         const string expected = "DC=app, DC=fake";
 
         var actual = (string)new X500NameBuilder().SetDomainComponents("app", "fake");
 
-        Assert.Equal(expected, actual);
+        await Assert.That(actual).IsEqualTo(expected);
     }
 
 
-    [Fact]
-    public void Converts_Implicitly_To_X500DistinguishedName()
+    [Test]
+    public async Task Converts_Implicitly_To_X500DistinguishedName()
     {
         var expected = new X500DistinguishedName("DC=app, DC=fake");
 
         X500DistinguishedName actual = new X500NameBuilder().SetDomainComponents("app", "fake");
-        
-        Assert.Equal(
-            expected.Decode(X500DistinguishedNameFlags.Reversed),
-            actual.Decode(X500DistinguishedNameFlags.Reversed)
-        );
+
+        await Assert
+            .That(actual.Decode(X500DistinguishedNameFlags.Reversed))
+            .IsEqualTo(expected.Decode(X500DistinguishedNameFlags.Reversed));
     }
 
 
-    [Fact]
-    public void Set_Removes_Matching_Attributes_Then_Adds()
+    [Test]
+    public async Task Set_Removes_Matching_Attributes_Then_Adds()
     {
-        Assert.Equal("DC=app, DC=fake",
-            new X500NameBuilder()
+        await Assert
+            .That(new X500NameBuilder()
                 .SetDomainComponents("app", "fake")
                 .Create()
-                .Name
-        );
+                .Name)
+            .IsEqualTo("DC=app, DC=fake");
 
-        Assert.Equal("OU=services, DC=app, DC=fake",
-            new X500NameBuilder()
+        await Assert
+            .That(new X500NameBuilder()
                 .AddOrganizationalUnit("services")
                 .AddDomainComponents("old", "domain", "to", "remove")
                 .SetDomainComponents("app", "fake")
                 .Create()
-                .Name
-        );
+                .Name)
+            .IsEqualTo("OU=services, DC=app, DC=fake");
     }
 
 
-    [Theory]
-    [InlineData($"CN={nameof(Equality_With_X500DistinguishedName)}, O=SMMX, C=AU")]
-    [InlineData($"CN={nameof(Equality_With_X500DistinguishedName)},O=SMMX,C=AU")]
-    public void Equality_With_X500DistinguishedName(string dn)
+    [Test]
+    [Arguments($"CN={nameof(Equality_With_X500DistinguishedName)}, O=SMMX, C=AU")]
+    [Arguments($"CN={nameof(Equality_With_X500DistinguishedName)},O=SMMX,C=AU")]
+    public async Task Equality_With_X500DistinguishedName(string dn)
     {
         var rightOrder = new X500NameBuilder()
             .SetCommonName(nameof(Equality_With_X500DistinguishedName))
@@ -193,32 +178,32 @@ public class X500NameBuilderTests
             .SetOrganization("SMMX")
             .SetCommonName(nameof(Equality_With_X500DistinguishedName))
             .SetCountry("AU");
-        
+
         var name = new X500DistinguishedName(dn);
-        Assert.True(rightOrder.EquivalentTo(name, true));
-        Assert.True(wrongOrder.EquivalentTo(name, false));
+        await Assert.That(rightOrder.EquivalentTo(name, true)).IsTrue();
+        await Assert.That(wrongOrder.EquivalentTo(name, false)).IsTrue();
     }
 
 
-    [Theory]
-    [InlineData($"CN={nameof(Inequality_With_X500DistinguishedName)}, O=SMMX, C=AU")]
-    [InlineData($"CN={nameof(Inequality_With_X500DistinguishedName)},O=SMMX,C=AU")]
-    public void Inequality_With_X500DistinguishedName(string dn)
+    [Test]
+    [Arguments($"CN={nameof(Inequality_With_X500DistinguishedName)}, O=SMMX, C=AU")]
+    [Arguments($"CN={nameof(Inequality_With_X500DistinguishedName)},O=SMMX,C=AU")]
+    public async Task Inequality_With_X500DistinguishedName(string dn)
     {
         var wrongOrder = new X500NameBuilder()
             .SetOrganization("SMMX")
             .SetCommonName(nameof(Inequality_With_X500DistinguishedName))
             .SetCountry("AU");
-        
+
         var name = new X500DistinguishedName(dn);
-        Assert.False(wrongOrder.EquivalentTo(name, true));
+        await Assert.That(wrongOrder.EquivalentTo(name, true)).IsFalse();
     }
 
 
-    [Theory]
-    [InlineData($"CN={nameof(Equality_With_String)}, O=SMMX, C=AU")]
-    [InlineData($"CN={nameof(Equality_With_String)},O=SMMX,C=AU")]
-    public void Equality_With_String(string dn)
+    [Test]
+    [Arguments($"CN={nameof(Equality_With_String)}, O=SMMX, C=AU")]
+    [Arguments($"CN={nameof(Equality_With_String)},O=SMMX,C=AU")]
+    public async Task Equality_With_String(string dn)
     {
         var rightOrder = new X500NameBuilder()
             .SetCommonName(nameof(Equality_With_String))
@@ -230,22 +215,22 @@ public class X500NameBuilderTests
             .SetCommonName(nameof(Equality_With_String))
             .SetCountry("AU");
 
-        Assert.True(rightOrder.EquivalentTo(dn, true));
-        Assert.True(wrongOrder.EquivalentTo(dn, false));
+        await Assert.That(rightOrder.EquivalentTo(dn, true)).IsTrue();
+        await Assert.That(wrongOrder.EquivalentTo(dn, false)).IsTrue();
     }
 
 
-    [Theory]
-    [InlineData($"CN={nameof(Inequality_With_String)}, O=SMMX, C=AU")]
-    [InlineData($"CN={nameof(Inequality_With_String)},O=SMMX,C=AU")]
-    public void Inequality_With_String(string dn)
+    [Test]
+    [Arguments($"CN={nameof(Inequality_With_String)}, O=SMMX, C=AU")]
+    [Arguments($"CN={nameof(Inequality_With_String)},O=SMMX,C=AU")]
+    public async Task Inequality_With_String(string dn)
     {
         var wrongOrder = new X500NameBuilder()
             .SetOrganization("SMMX")
             .SetCommonName(nameof(Inequality_With_String))
             .SetCountry("AU");
 
-        Assert.False(wrongOrder.EquivalentTo(dn, true));
+        await Assert.That(wrongOrder.EquivalentTo(dn, true)).IsFalse();
     }
 
 

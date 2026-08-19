@@ -2,109 +2,111 @@
 using System.Net;
 using FluentCertificates.Internals.GeneralNames;
 
+using TUnit.Assertions.Enums;
+
 
 namespace FluentCertificates;
 
 public class GeneralNameListBuilderTests
 {
-    [Fact]
-    public void Create_ReturnsEmptyList_WhenNoNamesAdded()
+    [Test]
+    public async Task Create_ReturnsEmptyList_WhenNoNamesAdded()
     {
         var builder = new GeneralNameListBuilder();
         var result = builder.Create();
-        Assert.Empty(result);
+        await Assert.That(result).IsEmpty();
     }
 
 
-    [Fact]
-    public void AddEmailAddress_AddsSingleEmail()
+    [Test]
+    public async Task AddEmailAddress_AddsSingleEmail()
     {
         var builder = new GeneralNameListBuilder()
             .AddEmailAddress("user@example.com");
         var result = builder.Create();
 
-        Assert.Single(result);
-        Assert.IsType<Rfc822NameAsn>(result[0]);
+        await Assert.That(result).HasSingleItem();
+        await Assert.That(result[0]).IsTypeOf<Rfc822NameAsn>();
     }
 
 
-    [Fact]
-    public void AddEmailAddresses_AddsMultipleEmails()
+    [Test]
+    public async Task AddEmailAddresses_AddsMultipleEmails()
     {
         var builder = new GeneralNameListBuilder()
             .AddEmailAddresses("a@b.com", "c@d.com");
         var result = builder.Create();
 
-        Assert.Equal(2, result.Count);
-        Assert.All(result, x => Assert.IsType<Rfc822NameAsn>(x));
+        await Assert.That(result.Count).IsEqualTo(2);
+        await Assert.That(result).All(x => x is Rfc822NameAsn);
     }
 
 
-    [Fact]
-    public void AddDnsName_AddsSingleDns()
+    [Test]
+    public async Task AddDnsName_AddsSingleDns()
     {
         var builder = new GeneralNameListBuilder()
             .AddDnsName("example.com");
         var result = builder.Create();
 
-        Assert.Single(result);
-        Assert.IsType<DnsNameAsn>(result[0]);
+        await Assert.That(result).HasSingleItem();
+        await Assert.That(result[0]).IsTypeOf<DnsNameAsn>();
     }
 
 
-    [Fact]
-    public void AddDnsNames_AddsMultipleDns()
+    [Test]
+    public async Task AddDnsNames_AddsMultipleDns()
     {
         var builder = new GeneralNameListBuilder()
             .AddDnsNames("a.com", "b.com");
         var result = builder.Create();
 
-        Assert.Equal(2, result.Count);
-        Assert.All(result, x => Assert.IsType<DnsNameAsn>(x));
+        await Assert.That(result.Count).IsEqualTo(2);
+        await Assert.That(result).All(x => x is DnsNameAsn);
     }
 
-    
-    [Fact]
-    public void AddUri_AddsSingleUri()
+
+    [Test]
+    public async Task AddUri_AddsSingleUri()
     {
         var uri = new Uri("https://example.com");
         var builder = new GeneralNameListBuilder()
             .AddUri(uri);
         var result = builder.Create();
 
-        Assert.Single(result);
-        Assert.IsType<UriNameAsn>(result[0]);
+        await Assert.That(result).HasSingleItem();
+        await Assert.That(result[0]).IsTypeOf<UriNameAsn>();
     }
 
-    
-    [Fact]
-    public void AddUris_AddsMultipleUris()
+
+    [Test]
+    public async Task AddUris_AddsMultipleUris()
     {
         var uris = new[] { new Uri("https://a.com"), new Uri("https://b.com") };
         var builder = new GeneralNameListBuilder()
             .AddUris(uris);
         var result = builder.Create();
 
-        Assert.Equal(2, result.Count);
-        Assert.All(result, x => Assert.IsType<UriNameAsn>(x));
+        await Assert.That(result.Count).IsEqualTo(2);
+        await Assert.That(result).All(x => x is UriNameAsn);
     }
 
-    
-    [Fact]
-    public void AddIPAddress_AddsSingleIp()
+
+    [Test]
+    public async Task AddIPAddress_AddsSingleIp()
     {
         var ip = IPAddress.Parse("127.0.0.1");
         var builder = new GeneralNameListBuilder()
             .AddIPAddress(ip);
         var result = builder.Create();
 
-        Assert.Single(result);
-        Assert.IsType<IPAddressNameAsn>(result[0]);
+        await Assert.That(result).HasSingleItem();
+        await Assert.That(result[0]).IsTypeOf<IPAddressNameAsn>();
     }
 
-    
-    [Fact]
-    public void AddIPAddress_WithSubnetMask_AddsIpWithMask()
+
+    [Test]
+    public async Task AddIPAddress_WithSubnetMask_AddsIpWithMask()
     {
         var ip = IPAddress.Parse("192.168.1.0");
         var mask = IPAddress.Parse("255.255.255.0");
@@ -112,89 +114,89 @@ public class GeneralNameListBuilderTests
             .AddIPAddress(ip, mask);
         var result = builder.Create();
 
-        Assert.Single(result);
-        var ipName = Assert.IsType<IPAddressNameAsn>(result[0]);
-        Assert.Equal(ip, ipName.IPAddress);
-        Assert.Equal(mask, ipName.SubnetMask);
+        await Assert.That(result).HasSingleItem();
+        var ipName = (await Assert.That(result[0]).IsTypeOf<IPAddressNameAsn>())!;
+        await Assert.That(ipName.IPAddress).IsEqualTo(ip);
+        await Assert.That(ipName.SubnetMask).IsEqualTo(mask);
     }
 
-    
-    [Fact]
-    public void AddIPAddresses_AddsMultipleIps()
+
+    [Test]
+    public async Task AddIPAddresses_AddsMultipleIps()
     {
         var ips = new[] { IPAddress.Parse("1.1.1.1"), IPAddress.Parse("2.2.2.2") };
         var builder = new GeneralNameListBuilder()
             .AddIPAddresses(ips);
         var result = builder.Create();
 
-        Assert.Equal(2, result.Count);
-        Assert.All(result, x => Assert.IsType<IPAddressNameAsn>(x));
+        await Assert.That(result.Count).IsEqualTo(2);
+        await Assert.That(result).All(x => x is IPAddressNameAsn);
     }
 
-    
-    [Fact]
-    public void AddIPAddress_String_AddsSingleIp()
+
+    [Test]
+    public async Task AddIPAddress_String_AddsSingleIp()
     {
         var builder = new GeneralNameListBuilder()
             .AddIPAddress("10.0.0.1");
         var result = builder.Create();
 
-        Assert.Single(result);
-        var ipName = Assert.IsType<IPAddressNameAsn>(result[0]);
-        Assert.Equal(IPAddress.Parse("10.0.0.1"), ipName.IPAddress);
-        Assert.Null(ipName.SubnetMask);
+        await Assert.That(result).HasSingleItem();
+        var ipName = (await Assert.That(result[0]).IsTypeOf<IPAddressNameAsn>())!;
+        await Assert.That(ipName.IPAddress).IsEqualTo(IPAddress.Parse("10.0.0.1"));
+        await Assert.That(ipName.SubnetMask).IsNull();
     }
 
-    
-    [Fact]
-    public void AddIPAddress_StringWithSubnet_AddsIpWithMask()
+
+    [Test]
+    public async Task AddIPAddress_StringWithSubnet_AddsIpWithMask()
     {
         var builder = new GeneralNameListBuilder()
             .AddIPAddress("192.168.0.0", "255.255.255.0");
         var result = builder.Create();
 
-        Assert.Single(result);
-        var ipName = Assert.IsType<IPAddressNameAsn>(result[0]);
-        Assert.Equal(IPAddress.Parse("192.168.0.0"), ipName.IPAddress);
-        Assert.Equal(IPAddress.Parse("255.255.255.0"), ipName.SubnetMask);
+        await Assert.That(result).HasSingleItem();
+        var ipName = (await Assert.That(result[0]).IsTypeOf<IPAddressNameAsn>())!;
+        await Assert.That(ipName.IPAddress).IsEqualTo(IPAddress.Parse("192.168.0.0"));
+        await Assert.That(ipName.SubnetMask).IsEqualTo(IPAddress.Parse("255.255.255.0"));
     }
 
-    
-    [Fact]
-    public void AddIPAddresses_String_AddsMultipleIps()
+
+    [Test]
+    public async Task AddIPAddresses_String_AddsMultipleIps()
     {
         var builder = new GeneralNameListBuilder()
             .AddIPAddresses("8.8.8.8", "8.8.4.4");
         var result = builder.Create();
 
-        Assert.Equal(2, result.Count);
-        Assert.All(result, x => Assert.IsType<IPAddressNameAsn>(x));
-        Assert.Equal(IPAddress.Parse("8.8.8.8"), ((IPAddressNameAsn)result[0]).IPAddress);
-        Assert.Equal(IPAddress.Parse("8.8.4.4"), ((IPAddressNameAsn)result[1]).IPAddress);
-        Assert.All(result, x => Assert.Null(((IPAddressNameAsn)x).SubnetMask));
+        await Assert.That(result.Count).IsEqualTo(2);
+        await Assert.That(result).All(x => x is IPAddressNameAsn);
+        await Assert.That(((IPAddressNameAsn)result[0]).IPAddress).IsEqualTo(IPAddress.Parse("8.8.8.8"));
+        await Assert.That(((IPAddressNameAsn)result[1]).IPAddress).IsEqualTo(IPAddress.Parse("8.8.4.4"));
+        await Assert.That(result).All(x => ((IPAddressNameAsn)x).SubnetMask == null);
     }
-    
-    
-    [Fact]
-    public void ImplicitConversion_ReturnsSameAsCreate()
+
+
+    [Test]
+    public async Task ImplicitConversion_ReturnsSameAsCreate()
     {
         var builder = new GeneralNameListBuilder()
             .AddDnsName("example.com");
 
         ImmutableList<GeneralName> list = builder;
 
-        Assert.Equal(builder.Create(), list);
+        await Assert.That(list).IsEquivalentTo(builder.Create(), CollectionOrdering.Matching);
     }
 
-    
-    [Fact]
-    public void AddMethods_AreImmutable()
+
+    [Test]
+    public async Task AddMethods_AreImmutable()
     {
         var builder = new GeneralNameListBuilder();
         var builder2 = builder.AddDnsName("a.com");
 
-        Assert.NotSame(builder, builder2);
-        Assert.Empty(builder.Create());
-        Assert.Single(builder2.Create());
+        await Assert.That(builder2).IsNotSameReferenceAs(builder);
+        await Assert.That(builder.Create()).IsEmpty();
+        await Assert.That(builder2.Create()).HasSingleItem();
     }
 }
