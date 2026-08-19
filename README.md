@@ -108,6 +108,57 @@ using var clientAuthCert = new CertificateBuilder()
     .Create();
 ```
 
+### **Set a Validity Period from a Duration**
+
+`SetValidity` sets `NotBefore` and `NotAfter` together. The single-argument overload starts at the
+current time; note that it does not backdate the start, so use the two-argument overload if you need
+to tolerate clock skew on the verifying machine.
+
+```csharp
+using var cert = new CertificateBuilder()
+    .SetUsage(CertificateUsage.Server)
+    .SetSubject(b => b.SetCommonName("*.fake.domain"))
+    .SetValidity(TimeSpan.FromDays(90))
+    .Create();
+
+//Backdated by 5 minutes to allow for clock skew
+using var skewTolerant = new CertificateBuilder()
+    .SetUsage(CertificateUsage.Server)
+    .SetSubject(b => b.SetCommonName("*.fake.domain"))
+    .SetValidity(DateTimeOffset.UtcNow.AddMinutes(-5), TimeSpan.FromDays(90))
+    .Create();
+```
+
+### **Choose an Elliptic Curve**
+
+When the builder generates an ECDsa key it uses nistP256 unless told otherwise. A key supplied
+through `SetKeyPair` already carries its own curve, so `SetECCurve` has no effect on it.
+
+```csharp
+using var cert = new CertificateBuilder()
+    .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
+    .SetECCurve(ECCurve.NamedCurves.nistP384)
+    .SetSubject(b => b.SetCommonName("Example P-384 certificate"))
+    .Create();
+```
+
+### **Build an OCSP Responder or Time-Stamping Certificate**
+
+```csharp
+using var ocspResponder = new CertificateBuilder()
+    .SetUsage(CertificateUsage.OcspSigning)
+    .SetSubject(b => b.SetCommonName("Example OCSP responder"))
+    .SetIssuer(issuer)
+    .Create();
+
+//RFC 3161 requires a TSA certificate's extended key usage to be critical, which the builder does
+using var timeStampingAuthority = new CertificateBuilder()
+    .SetUsage(CertificateUsage.TimeStamping)
+    .SetSubject(b => b.SetCommonName("Example TSA"))
+    .SetIssuer(issuer)
+    .Create();
+```
+
 ### **Advanced: Certificate with Customized Extensions**
 
 ```csharp

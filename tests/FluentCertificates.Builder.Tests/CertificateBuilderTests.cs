@@ -344,6 +344,38 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Build_OcspSigningCertificate_HasOcspSigningEKU()
+    {
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.OcspSigning)
+            .SetSubject(x => x.SetCommonName("OCSP Responder Test"))
+            .Create();
+
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.9" });
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.DigitalSignature);
+        await Assert.That(cert.Extensions.OfType<X509EnhancedKeyUsageExtension>().Single().Critical).IsFalse();
+        await Assert.That(cert.Extensions.OfType<X509BasicConstraintsExtension>().Single().CertificateAuthority).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Build_TimeStampingCertificate_HasCriticalTimeStampingEKU()
+    {
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.TimeStamping)
+            .SetSubject(x => x.SetCommonName("TSA Test"))
+            .Create();
+
+        await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.8" });
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.DigitalSignature);
+
+        //RFC 3161 s2.3 requires the extended key usage extension on a TSA certificate to be critical
+        await Assert.That(cert.Extensions.OfType<X509EnhancedKeyUsageExtension>().Single().Critical).IsTrue();
+        await Assert.That(cert.Extensions.OfType<X509BasicConstraintsExtension>().Single().CertificateAuthority).IsFalse();
+    }
+
+
+    [Test]
     [Arguments(KeyAlgorithm.RSA, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation | X509KeyUsageFlags.KeyEncipherment)]
     [Arguments(KeyAlgorithm.ECDsa, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation)]
     public async Task Build_SMimeCertificate_HasEmailProtectionEKU(KeyAlgorithm algorithm, X509KeyUsageFlags expectedUsages)
@@ -457,6 +489,101 @@ public class CertificateBuilderTests
         await Assert
             .That(() => new CertificateBuilder().SetNotBefore(now).SetNotAfter(now.AddSeconds(1)).Validate())
             .ThrowsNothing();
+    }
+
+
+    [Test]
+    public async Task SetValidity_FromAndDuration_SetsBothBounds()
+    {
+        var from = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+
+        var builder = new CertificateBuilder().SetValidity(from, TimeSpan.FromDays(30));
+
+        await Assert.That(builder.NotBefore).IsEqualTo(from);
+        await Assert.That(builder.NotAfter).IsEqualTo(from.AddDays(30));
+    }
+
+
+    [Test]
+    public async Task SetValidity_DurationOnly_StartsNowWithoutBackdating()
+    {
+        var before = DateTimeOffset.UtcNow;
+        var builder = new CertificateBuilder().SetValidity(TimeSpan.FromDays(30));
+        var after = DateTimeOffset.UtcNow;
+
+        //Unlike the default NotBefore, this overload does not backdate the start time
+        await Assert.That(builder.NotBefore).IsGreaterThanOrEqualTo(before).And.IsLessThanOrEqualTo(after);
+        await Assert.That(builder.NotAfter - builder.NotBefore).IsEqualTo(TimeSpan.FromDays(30));
+    }
+
+
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    public async Task SetValidity_NonPositiveDuration_Throws(int ticks)
+    {
+        var duration = TimeSpan.FromTicks(ticks);
+
+        await Assert
+            .That(() => new CertificateBuilder().SetValidity(duration))
+            .ThrowsExactly<ArgumentOutOfRangeException>();
+
+        await Assert
+            .That(() => new CertificateBuilder().SetValidity(DateTimeOffset.UtcNow, duration))
+            .ThrowsExactly<ArgumentOutOfRangeException>();
+    }
+
+
+    [Test]
+    public async Task SetECCurve_GeneratesKeyOnTheRequestedCurve()
+    {
+        using var p384 = new CertificateBuilder()
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
+            .SetECCurve(ECCurve.NamedCurves.nistP384)
+            .SetSubject(x => x.SetCommonName("P-384 Test"))
+            .Create();
+
+        using var p521 = new CertificateBuilder()
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
+            .SetECCurve(ECCurve.NamedCurves.nistP521)
+            .SetSubject(x => x.SetCommonName("P-521 Test"))
+            .Create();
+
+        using var key384 = p384.GetECDsaPublicKey()!;
+        using var key521 = p521.GetECDsaPublicKey()!;
+
+        await Assert.That(key384.KeySize).IsEqualTo(384);
+        await Assert.That(key521.KeySize).IsEqualTo(521);
+    }
+
+
+    [Test]
+    public async Task GenerateKeyPair_ECDsaWithoutExplicitCurve_DefaultsToNistP256()
+    {
+        using var cert = new CertificateBuilder()
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
+            .SetSubject(x => x.SetCommonName("Default Curve Test"))
+            .Create();
+
+        //The default is pinned rather than left to the platform's ECDsa.Create() choice
+        using var key = cert.GetECDsaPublicKey()!;
+        await Assert.That(key.KeySize).IsEqualTo(256);
+    }
+
+
+    [Test]
+    public async Task SetECCurve_IsIgnoredWhenAKeyPairIsSupplied()
+    {
+        //A supplied key already carries its own curve; the builder must not try to regenerate it
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+        using var cert = new CertificateBuilder()
+            .SetECCurve(ECCurve.NamedCurves.nistP521)
+            .SetKeyPair(keys)
+            .SetSubject(x => x.SetCommonName("Supplied Curve Test"))
+            .Create();
+
+        using var key = cert.GetECDsaPublicKey()!;
+        await Assert.That(key.KeySize).IsEqualTo(384);
     }
 
 

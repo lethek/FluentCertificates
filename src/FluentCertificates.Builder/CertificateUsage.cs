@@ -28,5 +28,15 @@ public enum CertificateUsage
     /// <summary>
     /// S/MIME (email protection) usage.
     /// </summary>
-    SMime
+    SMime,
+
+    /// <summary>
+    /// OCSP response signing usage, as described by RFC 6960 §4.2.2.2.
+    /// </summary>
+    OcspSigning,
+
+    /// <summary>
+    /// Time-Stamping Authority (TSA) usage, as described by RFC 3161 §2.3.
+    /// </summary>
+    TimeStamping
 }
