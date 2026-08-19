@@ -344,29 +344,58 @@ public class CertificateBuilderTests
 
 
     [Test]
-    public async Task Build_SMimeCertificate_HasEmailProtectionEKU()
+    [Arguments(KeyAlgorithm.RSA, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation | X509KeyUsageFlags.KeyEncipherment)]
+    [Arguments(KeyAlgorithm.ECDsa, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation)]
+    public async Task Build_SMimeCertificate_HasEmailProtectionEKU(KeyAlgorithm algorithm, X509KeyUsageFlags expectedUsages)
     {
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.SMime)
+            .SetKeyAlgorithm(algorithm)
             .SetSubject(x => x.SetCommonName("SMime Test"))
             .Create();
 
         await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.4" });
-        await Assert.That(GetKeyUsages(cert))
-            .IsEqualTo(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.NonRepudiation);
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(expectedUsages);
     }
 
 
     [Test]
-    public async Task Build_ServerCertificate_HasServerAuthEKU()
+    [Arguments(KeyAlgorithm.RSA, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment)]
+    [Arguments(KeyAlgorithm.ECDsa, X509KeyUsageFlags.DigitalSignature)]
+    public async Task Build_ServerCertificate_HasServerAuthEKU(KeyAlgorithm algorithm, X509KeyUsageFlags expectedUsages)
     {
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
+            .SetKeyAlgorithm(algorithm)
             .SetSubject(x => x.SetCommonName("Server Test"))
             .Create();
 
+        //keyEncipherment is only meaningful for RSA: an EC key cannot do key transport
         await Assert.That(GetEkuOids(cert)).IsEquivalentTo(new[] { "1.3.6.1.5.5.7.3.1" });
-        await Assert.That(GetKeyUsages(cert))
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(expectedUsages);
+    }
+
+
+    [Test]
+    public async Task Build_ServerCertificate_KeyUsageFollowsTheSuppliedKeyPair()
+    {
+        //The decision must follow the actual key, not only an explicit SetKeyAlgorithm call
+        using var ecKeys = ECDsa.Create();
+        using var ecCert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject(x => x.SetCommonName("Supplied EC Key"))
+            .SetKeyPair(ecKeys)
+            .Create();
+
+        using var rsaKeys = RSA.Create(2048);
+        using var rsaCert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject(x => x.SetCommonName("Supplied RSA Key"))
+            .SetKeyPair(rsaKeys)
+            .Create();
+
+        await Assert.That(GetKeyUsages(ecCert)).IsEqualTo(X509KeyUsageFlags.DigitalSignature);
+        await Assert.That(GetKeyUsages(rsaCert))
             .IsEqualTo(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment);
     }
 

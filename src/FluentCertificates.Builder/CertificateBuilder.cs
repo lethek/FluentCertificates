@@ -481,7 +481,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetServerExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true),
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | KeyEnciphermentIfSupported(builder), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ServerAuthPurpose) }, false)
         ];
 
@@ -505,9 +505,21 @@ public record CertificateBuilder
     private static List<X509Extension> GetSMimeExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment | X509KeyUsageFlags.NonRepudiation, true),
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation | KeyEnciphermentIfSupported(builder), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.EmailProtectionPurpose) }, false)
         ];
+
+
+    /// <summary>
+    /// Returns <see cref="X509KeyUsageFlags.KeyEncipherment"/> only when the certificate's public key can
+    /// actually perform key transport, which in practice means RSA. An EC key cannot encrypt key material
+    /// (it uses key agreement instead, which is <see cref="X509KeyUsageFlags.KeyAgreement"/>), and DSA is
+    /// signature-only, so asserting keyEncipherment for either claims a capability the key does not have.
+    /// </summary>
+    private static X509KeyUsageFlags KeyEnciphermentIfSupported(CertificateBuilder builder)
+        => builder.PublicKey?.Oid.Value == Oids.Rsa
+            ? X509KeyUsageFlags.KeyEncipherment
+            : X509KeyUsageFlags.None;
 
 
     private static KeyAlgorithm? GetKeyAlgorithm(AsymmetricAlgorithm? keys)
