@@ -325,9 +325,9 @@ public class CertificateExportBuilderTests
 
 
     [Test]
-    public async Task ExportBuilder_Pem_SecureStringPasswordTakesPrecedenceOverPlainText()
+    public async Task ExportBuilder_Pem_SecureStringPasswordReplacesAnEarlierPlainText()
     {
-        using var cert = new CertificateBuilder().SetSubject("CN=Secure PEM Precedence").Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Secure Over Plain").Create();
         using var password = SecurePassword("secure-one");
 
         var pem = cert.Export().WithPrivateKey().WithPassword("plain-one").WithPassword(password).AsPem().ToPemString();
