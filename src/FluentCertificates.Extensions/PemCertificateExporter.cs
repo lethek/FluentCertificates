@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Security;
 using System.Security.Cryptography.X509Certificates;
 
 
@@ -16,10 +17,11 @@ public sealed class PemCertificateExporter : CertificateExporter
     /// Initializes a new <see cref="PemCertificateExporter"/>.
     /// </summary>
     /// <param name="certs">Certificates to export. Must be non-empty.</param>
-    /// <param name="password">Optional password for encrypted private-key blocks.</param>
+    /// <param name="password">Optional password for encrypted private-key blocks (ignored when <paramref name="securePassword"/> is non-null).</param>
+    /// <param name="securePassword">SecureString password; takes precedence over <paramref name="password"/>.</param>
     /// <param name="keys">Which private keys to include.</param>
-    internal PemCertificateExporter(ImmutableList<X509Certificate2> certs, string? password, ExportKeys keys)
-        : base(certs, ExportFormat.Pem, password, null, keys)
+    internal PemCertificateExporter(ImmutableList<X509Certificate2> certs, string? password, SecureString? securePassword, ExportKeys keys)
+        : base(certs, ExportFormat.Pem, password, securePassword, keys)
     {
     }
 

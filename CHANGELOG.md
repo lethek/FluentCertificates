@@ -44,6 +44,9 @@ they summarise each release rather than record it as it happened.
 
 ### Fixed
 
+- PEM export ignored a `SecureString` password and wrote the private key unencrypted.
+- An ECDH certificate could be self-signed, and an ECDH CSR created, via `SetSignatureGenerator`.
+  Neither can verify; both are now rejected.
 - Keys and certificates extracted internally were never disposed.
 - PEM and PKCS#12 export leaked a certificate per stripped private key.
 - `CertificateFinder` skipped PKCS#12 files (`.pfx`, `.p12`) on .NET 9 and later.

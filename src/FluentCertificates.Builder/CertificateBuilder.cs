@@ -427,7 +427,10 @@ public record CertificateBuilder
         if (KeyAlgorithm == KeyAlgorithm.ECDiffieHellman) {
             //An ECDH key agrees on a shared secret and has no signing operation at all, so it can sign
             //neither its own certificate nor anything beneath it.
-            if (Issuer == null && SignatureGenerator == null) {
+            //A SignatureGenerator is no substitute here: with no Issuer the certificate is self-issued, so
+            //the generator would sign it with a key unrelated to the subject key and the signature could
+            //never verify against it.
+            if (Issuer == null) {
                 throw new ArgumentException($"{nameof(KeyAlgorithm.ECDiffieHellman)} cannot sign, so the certificate must be signed by someone else. Set an {nameof(Issuer)}", nameof(Issuer));
             }
 
@@ -490,8 +493,18 @@ public record CertificateBuilder
     /// Creates a <see cref="CertificateSigningRequest"/> based on the builder's parameters.
     /// </summary>
     /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
+    /// <exception cref="NotSupportedException">Thrown when the key to certify is an <see cref="System.Security.Cryptography.ECDiffieHellman"/>
+    /// key, which cannot produce the proof-of-possession signature a PKCS#10 request is built around.</exception>
     public CertificateSigningRequest CreateCertificateSigningRequest()
-        => new(CreateCertificateRequest(), SignatureGenerator ?? CreateSignatureGenerator(KeyPair));
+    {
+        //PKCS#10 proves possession by signing the request with the very key being certified. A supplied
+        //SignatureGenerator signs with some other key, which proves nothing about this one.
+        if (KeyAlgorithm == KeyAlgorithm.ECDiffieHellman || KeyPair is ECDiffieHellman) {
+            throw new NotSupportedException($"An {nameof(ECDiffieHellman)} key agrees on a shared secret and cannot sign, so it cannot sign the request that asks for it to be certified");
+        }
+
+        return new(CreateCertificateRequest(), SignatureGenerator ?? CreateSignatureGenerator(KeyPair));
+    }
 
 
     /// <summary>

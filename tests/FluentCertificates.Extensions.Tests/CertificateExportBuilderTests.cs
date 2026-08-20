@@ -1,3 +1,4 @@
+using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -302,5 +303,48 @@ public class CertificateExportBuilderTests
         await Assert.That(ReferenceEquals(result[0], created[0])).IsTrue();
         await Assert.That(ReferenceEquals(result[1], withoutKey)).IsTrue();
         await Assert.That(result[0].HasPrivateKey).IsFalse();
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pem_SecureStringPassword_EncryptsThePrivateKey()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Secure PEM").Create();
+        using var password = SecurePassword("hunter2");
+
+        var pem = cert.Export().WithPrivateKey().WithPassword(password).AsPem().ToPemString();
+
+        await Assert.That(pem).Contains("BEGIN ENCRYPTED PRIVATE KEY");
+        await Assert.That(pem).DoesNotContain("BEGIN PRIVATE KEY");
+
+        //The encrypted block must actually open with that password
+        using var reloaded = RSA.Create();
+        reloaded.ImportFromEncryptedPem(pem, "hunter2");
+        await Assert.That(reloaded.ExportSubjectPublicKeyInfo()).IsEquivalentTo(cert.PublicKey.ExportSubjectPublicKeyInfo());
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pem_SecureStringPasswordTakesPrecedenceOverPlainText()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Secure PEM Precedence").Create();
+        using var password = SecurePassword("secure-one");
+
+        var pem = cert.Export().WithPrivateKey().WithPassword("plain-one").WithPassword(password).AsPem().ToPemString();
+
+        using var reloaded = RSA.Create();
+        reloaded.ImportFromEncryptedPem(pem, "secure-one");
+        await Assert.That(reloaded.ExportSubjectPublicKeyInfo()).IsEquivalentTo(cert.PublicKey.ExportSubjectPublicKeyInfo());
+    }
+
+
+    private static SecureString SecurePassword(string value)
+    {
+        var result = new SecureString();
+        foreach (var c in value) {
+            result.AppendChar(c);
+        }
+        result.MakeReadOnly();
+        return result;
     }
 }

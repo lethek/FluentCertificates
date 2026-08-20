@@ -993,6 +993,85 @@ public class CertificateBuilderTests
     }
 
 
+    [Test]
+    public async Task CreateCertificateSigningRequest_WithECDiffieHellmanAndASignatureGenerator_Throws()
+    {
+        //A generator signs with some other key, so the proof-of-possession would be over a key the
+        //request isn't asking to have certified
+        using var keys = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        using var signingKey = RSA.Create(2048);
+        var generator = X509SignatureGenerator.CreateForRSA(signingKey, RSASignaturePadding.Pkcs1);
+
+        await Assert
+            .That(() => new CertificateBuilder()
+                .SetSubject("CN=ECDH CSR")
+                .SetKeyPair(keys)
+                .SetSignatureGenerator(generator)
+                .CreateCertificateSigningRequest())
+            .ThrowsExactly<NotSupportedException>();
+    }
+
+
+    [Test]
+    public async Task CreateCertificateSigningRequest_WithAnECDiffieHellmanPublicKeyOnly_Throws()
+    {
+        //The key algorithm is the only thing that distinguishes ECDH here: the public key itself is
+        //byte-identical to an ECDsa one
+        using var keys = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        using var signingKey = RSA.Create(2048);
+        var generator = X509SignatureGenerator.CreateForRSA(signingKey, RSASignaturePadding.Pkcs1);
+
+        await Assert
+            .That(() => new CertificateBuilder()
+                .SetSubject("CN=ECDH CSR")
+                .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+                .SetPublicKey(new PublicKey(keys))
+                .SetSignatureGenerator(generator)
+                .CreateCertificateSigningRequest())
+            .ThrowsExactly<NotSupportedException>();
+    }
+
+
+    [Test]
+    public async Task Build_ECDiffieHellmanSelfSignedWithASignatureGenerator_Throws()
+    {
+        //Signing a self-issued certificate with an unrelated key produces one whose signature can never
+        //verify against its own subject key, so a generator is no substitute for an Issuer here
+        using var keys = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        using var signingKey = RSA.Create(2048);
+        var generator = X509SignatureGenerator.CreateForRSA(signingKey, RSASignaturePadding.Pkcs1);
+
+        await Assert
+            .That(() => new CertificateBuilder()
+                .SetSubject("CN=ECDH Self-Signed")
+                .SetKeyPair(keys)
+                .SetSignatureGenerator(generator)
+                .Validate())
+            .ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task Build_ECDiffieHellmanWithAnIssuerAndASignatureGenerator_IsAccepted()
+    {
+        //The HSM-held CA case stays open: the Issuer names who signed, the generator does the signing
+        using var issuer = BuildEcdhIssuer();
+        using var issuerKey = issuer.GetRSAPrivateKey()!;
+        var generator = X509SignatureGenerator.CreateForRSA(issuerKey, RSASignaturePadding.Pkcs1);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetSubject("CN=ECDH via HSM CA")
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetIssuer(issuer)
+            .SetSignatureGenerator(generator)
+            .Create();
+
+        await Assert.That(cert.IsIssuedBy(issuer)).IsTrue();
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.KeyAgreement);
+    }
+
+
     private static X509Certificate2 BuildEcdhIssuer()
         => new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)

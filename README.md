@@ -164,8 +164,9 @@ using var timeStampingAuthority = new CertificateBuilder()
 ### **Build a Key Agreement (ECDH) Certificate**
 
 An ECDH key derives a shared secret and cannot sign anything, so these certificates assert
-`keyAgreement` rather than `digitalSignature` and must be issued by a CA. Self-signing, and the
-`CA`, `CodeSign`, `OcspSigning` and `TimeStamping` usages, are all rejected.
+`keyAgreement` rather than `digitalSignature` and must be issued by a CA. Self-signing, CSRs, and the
+`CA`, `CodeSign`, `OcspSigning` and `TimeStamping` usages, are all rejected. Supplying a
+`SignatureGenerator` does not lift those restrictions, since it signs with an unrelated key.
 
 ```csharp
 using var ecdhCert = new CertificateBuilder()

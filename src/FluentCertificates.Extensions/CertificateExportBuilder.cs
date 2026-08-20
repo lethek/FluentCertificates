@@ -126,7 +126,7 @@ public record CertificateExportBuilder
     /// method produces a PEM-encoded string, and whose output methods write the UTF-8 bytes of that string.
     /// </summary>
     public PemCertificateExporter AsPem()
-        => new(Certificates, Password, Keys);
+        => new(Certificates, Password, SecurePassword, Keys);
 
     /// <summary>
     /// Selects PKCS#7 (P7B) as the export format. Private keys are never included in PKCS#7 output.
