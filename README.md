@@ -323,6 +323,11 @@ leafCert.Export().WithChain([leafCert, intermediateCert, rootCert]).WithoutPriva
 |Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsCert()`|
 |Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
+Each `WithPassword` overload clears the other kind of password, so the last call wins, and
+`WithoutPassword()` clears both. A `SecureString` password is honoured by every format, but only
+`AsPem()` keeps it out of the managed heap: the platform's PKCS#12 export takes a `string`, so
+`AsPkcs12()` has to materialise one.
+
 
 ---
 

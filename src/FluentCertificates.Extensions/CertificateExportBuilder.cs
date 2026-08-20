@@ -9,7 +9,7 @@ namespace FluentCertificates;
 /// An immutable fluent builder for configuring certificate export operations.
 /// Obtain an instance by calling <c>cert.Export()</c>, <c>chain.Export()</c>, or <c>collection.Export()</c>.
 /// Chain configuration methods (e.g. <see cref="WithPrivateKey"/>, <see cref="WithChain(IEnumerable{X509Certificate2})"/>,
-/// <see cref="WithPassword(string)"/>) then select a format with <see cref="AsPkcs12"/>, <see cref="AsPem"/>,
+/// <see cref="WithPassword(string)"/>, <see cref="WithoutPassword"/>) then select a format with <see cref="AsPkcs12"/>, <see cref="AsPem"/>,
 /// <see cref="AsPkcs7"/>, or <see cref="AsCert"/>.
 /// </summary>
 public record CertificateExportBuilder
