@@ -267,11 +267,12 @@ public class CertificateExportBuilderTests
             .SetIssuer(rootCa)
             .Create();
 
-        var certs = new[] { rootCa, leaf };
+        //Anchored, so ExportKeys.Primary has a certificate to designate. A bare collection would not.
+        CertificateExportBuilder Export() => leaf.Export().WithChain([rootCa]).WithKeys(keys);
 
         //Stripping keys creates certificates the exporter disposes; these two are not among them
-        var pem = certs.Export().WithKeys(keys).AsPem().ToPemString();
-        var pkcs12 = certs.Export().WithKeys(keys).AsPkcs12().ToByteArray();
+        var pem = Export().AsPem().ToPemString();
+        var pkcs12 = Export().AsPkcs12().ToByteArray();
 
         await Assert.That(pem).IsNotEmpty();
         await Assert.That(pkcs12).IsNotEmpty();
@@ -284,7 +285,7 @@ public class CertificateExportBuilderTests
         await Assert.That(rootKey.ExportSubjectPublicKeyInfo()).IsEquivalentTo(rootCa.PublicKey.ExportSubjectPublicKeyInfo());
 
         //Repeating the export must give the same bytes, not fail on a disposed certificate
-        await Assert.That(certs.Export().WithKeys(keys).AsPem().ToPemString()).IsEqualTo(pem);
+        await Assert.That(Export().AsPem().ToPemString()).IsEqualTo(pem);
     }
 
 
@@ -469,14 +470,19 @@ public class CertificateExportBuilderTests
 
 
     [Test]
-    public async Task ExportBuilder_Cert_ChainInAnyOrder_ExportsTheLeaf()
+    public async Task ExportBuilder_Cert_UnanchoredCollection_ThrowsEvenWhenItFormsAChain()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert Order Root").Create();
         using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert Order Intermediate").SetIssuer(root).Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Cert Order Leaf").SetIssuer(intermediate).Create();
 
-        var bytes = new[] { intermediate, root, leaf }.Export().AsCert().ToByteArray();
+        //These three do form a chain, but they arrived as a collection and a collection is a bundle.
+        //Nothing declared a chain, so nothing designates a leaf, and AsCert() refuses to pick one.
+        await Assert.That(() => new[] { intermediate, root, leaf }.Export().AsCert().ToByteArray())
+            .ThrowsExactly<InvalidOperationException>();
 
+        //Declaring the same certificates a chain is what makes the leaf knowable.
+        var bytes = leaf.Export().WithChain([intermediate, root]).AsCert().ToByteArray();
         await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
     }
 
@@ -664,6 +670,63 @@ public class CertificateExportBuilderTests
 
         await Assert.That(() => orphaned.AsCert().ToByteArray()).ThrowsExactly<ArgumentException>();
         await Assert.That(() => orphaned.WithPrivateKeys().AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pem_WithChain_SortsTheDeclaredChainWhateverOrderItArrivesIn()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Group Root").Create();
+        using var mid = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Group Mid").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Group Leaf").SetIssuer(mid).Create();
+
+        //Declared a chain, so the group is sorted leaf-first even though it arrived root-first.
+        var pem = leaf.Export().WithChain([root, mid]).WithoutPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(ParseCertificateSubjects(pem))
+            .IsEquivalentTo(new[] { leaf.Subject, mid.Subject, root.Subject }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pem_SeveralChains_KeepsEachOrderedInCallOrder()
+    {
+        using var root1 = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Multi Root1").Create();
+        using var mid1 = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Multi Mid1").SetIssuer(root1).Create();
+        using var leaf1 = new CertificateBuilder().SetSubject("CN=Multi Leaf1").SetIssuer(mid1).Create();
+
+        using var root2 = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Multi Root2").Create();
+        using var mid2 = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Multi Mid2").SetIssuer(root2).Create();
+        using var leaf2 = new CertificateBuilder().SetSubject("CN=Multi Leaf2").SetIssuer(mid2).Create();
+
+        //Two independent chains in one bundle. Each WithChain call is sorted as a unit and appended as a
+        //block, so the second chain comes out leaf-first despite being handed over root-first.
+        var pem = leaf1.Export()
+            .WithChain([mid1, root1])
+            .WithChain([root2, mid2, leaf2])
+            .WithoutPrivateKeys()
+            .AsPem()
+            .ToPemString();
+
+        await Assert.That(ParseCertificateSubjects(pem))
+            .IsEquivalentTo(
+                new[] { leaf1.Subject, mid1.Subject, root1.Subject, leaf2.Subject, mid2.Subject, root2.Subject },
+                CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pem_Collection_IsNeverReorderedEvenWhenItFormsAChain()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Bundle Root").Create();
+        using var mid = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Bundle Mid").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Bundle Leaf").SetIssuer(mid).Create();
+
+        //A collection is a bundle. It is written exactly as supplied, chain or not.
+        var pem = new[] { root, mid, leaf }.Export().WithoutPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(ParseCertificateSubjects(pem))
+            .IsEquivalentTo(new[] { root.Subject, mid.Subject, leaf.Subject }, CollectionOrdering.Matching);
     }
 
 

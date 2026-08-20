@@ -227,17 +227,26 @@ heap: the platform's PKCS#12 export takes a `string`, so `AsPkcs12()` has to mat
 `WithPassword` overload clears the other kind of password, so the last call wins; `WithoutPassword()`
 clears both. Only a `with` expression can set both at once, and there `SecurePassword` takes precedence.
 
-Certificates forming a single issuer chain are reordered leaf-first at export, so the order they were
-added in does not matter, and PEM, PKCS#12 and PKCS#7 all write them in that order. A set that is not
-one unambiguous chain is left in the order it was given.
+Ordering is decided by which API added the certificates, never by inspecting them at export time:
+
+- A **chain** is sorted. `WithChain(...)` declares its argument a chain, so that group is ordered
+  leaf-first and appended as a block. Each call is sorted separately, so several calls give several
+  ordered chains in call order. A group that does not form one chain is appended as given.
+- A **collection** is preserved. `collection.Export()` and the `IEnumerable` overload are bundles and
+  are never reordered, chain or not.
+- `chain.Export()` needs no sorting: `X509Chain.ChainElements` is already leaf-first.
+
+All four formats write the list in that order. PEM is the one where order carries meaning (TLS servers
+require the sender's certificate first), but PKCS#12 and PKCS#7 preserve it too, and it leaks back into
+PEM the moment someone runs `openssl pkcs12 -nokeys`, so the same rule applies throughout.
 
 `ExportKeys.Primary` and `AsCert()` are the only parts that need a designated certificate, and they read
 it from the builder's `Anchor` rather than from list position. `cert.Export()` anchors on the certificate
-itself and `chain.Export()` on the chain's end certificate, so `WithChain(...)` can never retarget them,
-including when the resulting set does sort into one chain: an anchored intermediate stays the target
-rather than losing to the chain's leaf. `collection.Export()` and the `IEnumerable` overload set no
-anchor: they fall back to the sorted chain's leaf, and throw `InvalidOperationException` when the set is
-not one chain. Every other export works fine without an anchor, because nothing else asks.
+itself and `chain.Export()` on the chain's end certificate, so `WithChain(...)` can never retarget them.
+`collection.Export()` and the `IEnumerable` overload set no anchor, so those two throw
+`InvalidOperationException` there: a bundle designates no leaf, and position is not evidence of one, even
+when the certificates happen to form a chain. Every other export works fine without an anchor, because
+nothing else asks.
 
 `Anchor` is `private init`, so only those entry points set it, and an export whose anchor is not among
 its certificates throws `ArgumentException`. That matters because `Certificates` is publicly settable and

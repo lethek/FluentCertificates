@@ -13,8 +13,8 @@ public enum ExportKeys
     /// </summary>
     /// <remarks>
     /// Which certificate is primary depends on where this is used. An export reads it from
-    /// <see cref="CertificateExportBuilder.Anchor"/>, falling back to the leaf of the sorted chain and
-    /// throwing when there is neither. <c>FilterPrivateKeys</c> has no anchor to consult and always
+    /// <see cref="CertificateExportBuilder.Anchor"/> and throws when there is none, since a bundle of
+    /// certificates designates no leaf. <c>FilterPrivateKeys</c> has no anchor to consult and always
     /// takes the first certificate in the sequence.
     /// </remarks>
     Primary,

@@ -328,8 +328,29 @@ Each `WithPassword` overload clears the other kind of password, so the last call
 `AsPem()` keeps it out of the managed heap: the platform's PKCS#12 export takes a `string`, so
 `AsPkcs12()` has to materialise one.
 
-Certificates forming a single issuer chain are reordered **leaf-first** at export, so the order you add
-them in does not matter. A set that is not one unambiguous chain is left exactly as given.
+**Ordering follows the API you used, not what the certificates look like.** A chain is sorted; a
+collection is preserved:
+
+```csharp
+//A chain: WithChain declares it one, so it is sorted leaf-first however it arrives
+leafCert.Export().WithChain([rootCert, midCert]).AsPem().ToPemString();
+//  -> leaf, mid, root
+
+//Several chains: each call sorted as a unit, blocks appended in call order
+leaf1.Export().WithChain([mid1, root1]).WithChain([root2, mid2, leaf2]).AsPem().ToPemString();
+//  -> leaf1, mid1, root1, leaf2, mid2, root2
+
+//A collection: a bundle, written exactly as supplied even if it happens to form a chain
+new[] { rootCert, midCert, leafCert }.Export().AsPem().ToPemString();
+//  -> root, mid, leaf
+```
+
+`chain.Export()` needs no sorting, since `X509Chain.ChainElements` is already leaf-first. A `WithChain`
+group that does not form a single chain is appended in the order given.
+
+This matters most for PEM, where TLS servers require the sender's certificate first, but the order is
+preserved in PKCS#12 and PKCS#7 too and reappears in PEM as soon as anyone runs
+`openssl pkcs12 -in cert.pfx -nokeys`.
 
 `ExportKeys.Primary` and `AsCert()` are the only parts that need a designated certificate, and they read
 it from the builder's `Anchor` rather than from position. `cert.Export()` anchors on that certificate and
@@ -341,12 +362,16 @@ retarget the export, even when the result does form a valid chain:
 intermediateCert.Export().WithChain([rootCert, leafCert]).AsCert().ToByteArray();
 ```
 
-`collection.Export()` and the `IEnumerable<X509Certificate2>` overload designate no leaf. They fall back
-to the sorted chain's leaf, and throw `InvalidOperationException` if the certificates are not one chain:
+`collection.Export()` and the `IEnumerable<X509Certificate2>` overload designate no leaf, so both throw
+`InvalidOperationException` there. This holds even when the certificates do form a chain: a bundle names
+no primary certificate, and arriving first is not evidence of being one.
 
 ```csharp
-//Throws: two sibling leaves, and nothing says which one to export
-new[] { rootCert, leafA, leafB }.Export().AsCert().ToByteArray();
+//Throws: a bundle, so nothing says which certificate to export
+new[] { rootCert, midCert, leafCert }.Export().AsCert().ToByteArray();
+
+//Fine: declaring a chain is what makes the leaf knowable
+leafCert.Export().WithChain([rootCert, midCert]).AsCert().ToByteArray();
 ```
 
 

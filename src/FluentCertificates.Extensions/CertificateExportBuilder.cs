@@ -30,8 +30,8 @@ public record CertificateExportBuilder
     /// rather than inferring it from list position, so <see cref="WithChain(IEnumerable{X509Certificate2})"/>
     /// cannot retarget the export onto a certificate the caller did not anchor on. This holds even when
     /// the set does sort into one chain: an anchored intermediate stays the target rather than being
-    /// displaced by the chain's leaf. Without an anchor those two fall back to the leaf of the sorted
-    /// chain, and throw when the certificates do not form one.
+    /// displaced by the chain's leaf. Without an anchor those two throw, because a bundle of
+    /// certificates designates no leaf and position is not evidence of one.
     /// <para>
     /// Only the entry points set this. It cannot be assigned through a <c>with</c> expression, and an
     /// export whose anchor is not among its certificates is rejected.
@@ -112,14 +112,79 @@ public record CertificateExportBuilder
     /// <summary>
     /// Returns a new builder that appends <paramref name="certs"/> to the builder's certificate list,
     /// deduplicating by thumbprint (certificates already present are skipped). The order they are added
-    /// in does not matter: certificates forming a single issuer chain are reordered leaf-first at export.
+    /// in does not matter: this call declares them a chain, so when they form one they are sorted
+    /// leaf-first and appended as a block. Each call is sorted separately, so several calls produce
+    /// several ordered chains in call order.
     /// </summary>
     /// <param name="certs">Additional certificates to include.</param>
     public CertificateExportBuilder WithChain(IEnumerable<X509Certificate2> certs)
     {
         var existing = Certificates.Select(c => c.Thumbprint).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var toAdd = certs.Where(c => existing.Add(c.Thumbprint));
-        return this with { Certificates = Certificates.AddRange(toAdd) };
+        var toAdd = certs.Where(c => existing.Add(c.Thumbprint)).ToList();
+        return this with { Certificates = Certificates.AddRange(OrderLeafFirst(toAdd)) };
+    }
+
+
+    /// <summary>
+    /// Returns <paramref name="certs"/> ordered leaf-first, root last, when they form a single unambiguous
+    /// issuer chain. Every other input, including an unrelated bag of certificates or one holding two
+    /// candidates for the same position, is returned untouched: the caller called this a chain, but nothing
+    /// here can tell which order they meant.
+    /// </summary>
+    /// <remarks>
+    /// This runs per <see cref="WithChain(IEnumerable{X509Certificate2})"/> call, so each declared chain is
+    /// sorted as a unit and appended as a block. Several calls therefore produce several ordered chains in
+    /// call order, and a bundle assembled through <c>collection.Export()</c> is never reordered at all.
+    /// </remarks>
+    private static IReadOnlyList<X509Certificate2> OrderLeafFirst(IReadOnlyList<X509Certificate2> certs)
+    {
+        if (certs.Count < 2) {
+            return certs;
+        }
+
+        //The leaf is the one certificate that issued nothing else in the list. Self-issued doesn't count:
+        //a self-signed root is its own issuer and would otherwise disqualify itself.
+        var leafIndex = -1;
+        for (var i = 0; i < certs.Count; i++) {
+            var cert = certs[i];
+            if (certs.Any(subject => !ReferenceEquals(subject, cert) && subject.IsIssuedBy(cert))) {
+                continue;
+            }
+            if (leafIndex >= 0) {
+                //More than one certificate that issued nothing here, so this isn't a single chain.
+                return certs;
+            }
+            leafIndex = i;
+        }
+        if (leafIndex < 0) {
+            return certs;
+        }
+
+        var placed = new bool[certs.Count];
+        placed[leafIndex] = true;
+
+        var ordered = new List<X509Certificate2>(certs.Count) { certs[leafIndex] };
+        while (ordered.Count < certs.Count) {
+            var subject = ordered[^1];
+            var next = -1;
+            for (var i = 0; i < certs.Count; i++) {
+                if (placed[i] || !subject.IsIssuedBy(certs[i])) {
+                    continue;
+                }
+                if (next >= 0) {
+                    //Two candidates for the same rung: the ordering isn't ours to decide.
+                    return certs;
+                }
+                next = i;
+            }
+            if (next < 0) {
+                //A gap or a disjoint certificate, so this isn't a single chain.
+                return certs;
+            }
+            ordered.Add(certs[next]);
+            placed[next] = true;
+        }
+        return ordered;
     }
 
     /// <summary>
@@ -176,9 +241,8 @@ public record CertificateExportBuilder
 
     /// <summary>
     /// Selects DER-encoded certificate (CER/CRT) as the export format.
-    /// Only the primary certificate is exported: the <see cref="Anchor"/> when there is one, otherwise the
-    /// leaf of the sorted chain. Throws when there is no anchor and the certificates are not a single
-    /// issuer chain, since nothing then designates one.
+    /// Only the primary certificate is exported, which is the <see cref="Anchor"/>.
+    /// Throws when there is no anchor, since a bundle of certificates designates none.
     /// Returns a <see cref="CertificateExporter"/> whose output methods write the raw DER bytes.
     /// </summary>
     public CertificateExporter AsCert()
