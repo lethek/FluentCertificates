@@ -17,11 +17,13 @@ public sealed class PemCertificateExporter : CertificateExporter
     /// Initializes a new <see cref="PemCertificateExporter"/>.
     /// </summary>
     /// <param name="certs">Certificates to export. Must be non-empty.</param>
+    /// <param name="anchor">The certificate the caller anchored on, or null. See
+    /// <see cref="CertificateExportBuilder.Anchor"/>.</param>
     /// <param name="password">Optional password for encrypted private-key blocks (ignored when <paramref name="securePassword"/> is non-null).</param>
     /// <param name="securePassword">SecureString password; takes precedence over <paramref name="password"/>.</param>
     /// <param name="keys">Which private keys to include.</param>
-    internal PemCertificateExporter(ImmutableList<X509Certificate2> certs, string? password, SecureString? securePassword, ExportKeys keys)
-        : base(certs, ExportFormat.Pem, password, securePassword, keys)
+    internal PemCertificateExporter(ImmutableList<X509Certificate2> certs, X509Certificate2? anchor, string? password, SecureString? securePassword, ExportKeys keys)
+        : base(certs, anchor, ExportFormat.Pem, password, securePassword, keys)
     {
     }
 

@@ -16,6 +16,15 @@ they summarise each release rather than record it as it happened.
 ### Added
 
 - `CertificateExportBuilder.WithoutPassword()`, clearing both password kinds.
+- `CertificateExportBuilder.Anchor`, naming the certificate `ExportKeys.Leaf` and `AsCert()` target. Set by `cert.Export()` and `chain.Export()`.
+
+### Changed
+
+- **Breaking:** Export orders a chain's certificates leaf-first instead of root-first, changing the certificate order within PKCS#12 and PKCS#7 output. PEM block order is unchanged.
+- **Breaking:** `X509Chain.ToEnumerable()` and `ToCollection()` now return the chain leaf first, matching `X509Chain.ChainElements`.
+- **Breaking:** `ExportKeys.Leaf` and `AsCert()` now throw `InvalidOperationException` when the certificates are not a single issuer chain and no `Anchor` names the leaf, instead of exporting whichever certificate came first.
+- `ExportKeys.Leaf` and `AsCert()` follow the builder's `Anchor` rather than list position, so `WithChain(...)` cannot retarget them.
+- `FilterPrivateKeys(ExportKeys.Leaf)` keeps the first certificate's private key instead of the last.
 
 ### Fixed
 

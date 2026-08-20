@@ -20,6 +20,21 @@ public record CertificateExportBuilder
     public ImmutableList<X509Certificate2> Certificates { get; init; } = ImmutableList<X509Certificate2>.Empty;
 
     /// <summary>
+    /// The certificate this builder was seeded with, when that certificate is known to be the leaf:
+    /// <c>cert.Export()</c> supplies the certificate itself and <c>chain.Export()</c> supplies the
+    /// chain's end certificate. Null when the builder was seeded from a set with no designated leaf,
+    /// such as <c>collection.Export()</c>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ExportKeys.Leaf"/> and <see cref="AsCert"/> read the leaf from here rather than
+    /// inferring it from list position, so <see cref="WithChain(IEnumerable{X509Certificate2})"/>
+    /// cannot retarget the export onto a certificate the caller did not anchor on. Without an anchor
+    /// those two fall back to the leaf of the sorted chain, and throw when the certificates do not
+    /// form one.
+    /// </remarks>
+    public X509Certificate2? Anchor { get; init; }
+
+    /// <summary>
     /// Controls which private keys are included in the export.
     /// Defaults to <see cref="ExportKeys.All"/>.
     /// </summary>
@@ -44,8 +59,13 @@ public record CertificateExportBuilder
     /// Initializes a new <see cref="CertificateExportBuilder"/> with the given certificates.
     /// </summary>
     /// <param name="certs">The initial set of certificates to export.</param>
-    internal CertificateExportBuilder(IEnumerable<X509Certificate2> certs)
-        => Certificates = [.. certs];
+    /// <param name="anchor">The certificate known to be the leaf, or null when the set designates none.
+    /// See <see cref="Anchor"/>.</param>
+    internal CertificateExportBuilder(IEnumerable<X509Certificate2> certs, X509Certificate2? anchor = null)
+    {
+        Certificates = [.. certs];
+        Anchor = anchor;
+    }
 
 
     /// <summary>
@@ -87,7 +107,7 @@ public record CertificateExportBuilder
     /// <summary>
     /// Returns a new builder that appends <paramref name="certs"/> to the builder's certificate list,
     /// deduplicating by thumbprint (certificates already present are skipped). The order they are added
-    /// in does not matter: certificates forming a single issuer chain are reordered root-first at export.
+    /// in does not matter: certificates forming a single issuer chain are reordered leaf-first at export.
     /// </summary>
     /// <param name="certs">Additional certificates to include.</param>
     public CertificateExportBuilder WithChain(IEnumerable<X509Certificate2> certs)
@@ -132,7 +152,7 @@ public record CertificateExportBuilder
     /// Returns a <see cref="CertificateExporter"/> whose output methods write the binary PKCS#12 data.
     /// </summary>
     public CertificateExporter AsPkcs12()
-        => new(Certificates, ExportFormat.Pkcs12, Password, SecurePassword, Keys);
+        => new(Certificates, Anchor, ExportFormat.Pkcs12, Password, SecurePassword, Keys);
 
     /// <summary>
     /// Selects PEM as the export format.
@@ -140,20 +160,22 @@ public record CertificateExportBuilder
     /// method produces a PEM-encoded string, and whose output methods write the UTF-8 bytes of that string.
     /// </summary>
     public PemCertificateExporter AsPem()
-        => new(Certificates, Password, SecurePassword, Keys);
+        => new(Certificates, Anchor, Password, SecurePassword, Keys);
 
     /// <summary>
     /// Selects PKCS#7 (P7B) as the export format. Private keys are never included in PKCS#7 output.
     /// Returns a <see cref="CertificateExporter"/> whose output methods write the binary PKCS#7 data.
     /// </summary>
     public CertificateExporter AsPkcs7()
-        => new(Certificates, ExportFormat.Pkcs7, null, null, ExportKeys.None);
+        => new(Certificates, Anchor, ExportFormat.Pkcs7, null, null, ExportKeys.None);
 
     /// <summary>
     /// Selects DER-encoded certificate (CER/CRT) as the export format.
-    /// Only the last certificate in the builder's list is exported: the leaf, for chains.
+    /// Only the leaf certificate is exported: the <see cref="Anchor"/> when there is one, otherwise the
+    /// leaf of the sorted chain. Throws when there is no anchor and the certificates are not a single
+    /// issuer chain, since the leaf is then unknown.
     /// Returns a <see cref="CertificateExporter"/> whose output methods write the raw DER bytes.
     /// </summary>
     public CertificateExporter AsCert()
-        => new(Certificates, ExportFormat.Cert, null, null, ExportKeys.None);
+        => new(Certificates, Anchor, ExportFormat.Cert, null, null, ExportKeys.None);
 }

@@ -328,6 +328,27 @@ Each `WithPassword` overload clears the other kind of password, so the last call
 `AsPem()` keeps it out of the managed heap: the platform's PKCS#12 export takes a `string`, so
 `AsPkcs12()` has to materialise one.
 
+Certificates forming a single issuer chain are reordered **leaf-first** at export, so the order you add
+them in does not matter. A set that is not one unambiguous chain is left exactly as given.
+
+`ExportKeys.Leaf` and `AsCert()` are the only parts that need to identify the leaf, and they read it from
+the builder's `Anchor` rather than from position. `cert.Export()` anchors on that certificate and
+`chain.Export()` on the chain's end certificate, so adding issuers with `WithChain(...)` can never
+retarget the export:
+
+```csharp
+//Exports the intermediate, because that is what the builder was anchored on
+intermediateCert.Export().WithChain([rootCert, leafCert]).AsCert().ToByteArray();
+```
+
+`collection.Export()` and the `IEnumerable<X509Certificate2>` overload designate no leaf. They fall back
+to the sorted chain's leaf, and throw `InvalidOperationException` if the certificates are not one chain:
+
+```csharp
+//Throws: two sibling leaves, and nothing says which one to export
+new[] { rootCert, leafA, leafB }.Export().AsCert().ToByteArray();
+```
+
 
 ---
 
@@ -511,7 +532,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 |Extension-Method|Description|
 |-|-|
-|`ToEnumerable()`|Returns the chain's certificates in **root-first** order, which is the reverse of `X509Chain.ChainElements`. The leaf is therefore last.|
+|`ToEnumerable()`|Returns the chain's certificates in **leaf-first** order, matching `X509Chain.ChainElements`. The root is therefore last.|
 |`ToCollection(ExportKeys include = ExportKeys.All)`|As `ToEnumerable()`, but returns an `X509Certificate2Collection` and applies `FilterPrivateKeys(include)`.|
 |`Export()`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
 
@@ -535,7 +556,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |Extension-Method|Description|
 |-|-|
 |`ToCollection()`|Copies the sequence into a new `X509Certificate2Collection`.|
-|`FilterPrivateKeys(ExportKeys include)`|Returns the sequence with private keys kept or stripped according to `include`. `ExportKeys.Leaf` keeps only the last certificate's private key, as the leaf is assumed to come last.|
+|`FilterPrivateKeys(ExportKeys include)`|Returns the sequence with private keys kept or stripped according to `include`. `ExportKeys.Leaf` keeps only the first certificate's private key, as the leaf is assumed to come first.|
 |`Export()`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
 
 ---

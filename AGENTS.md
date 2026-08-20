@@ -227,10 +227,16 @@ heap: the platform's PKCS#12 export takes a `string`, so `AsPkcs12()` has to mat
 `WithPassword` overload clears the other kind of password, so the last call wins; `WithoutPassword()`
 clears both. Only a `with` expression can set both at once, and there `SecurePassword` takes precedence.
 
-Certificates forming a single issuer chain are reordered root-first at export, so the order they were
-added in does not matter. PEM blocks are written leaf-first from that, `ExportKeys.Leaf` keeps the last
-certificate's key, and `AsCert()` exports the last (the leaf). A set that is not one unambiguous chain is
-left in the order it was given.
+Certificates forming a single issuer chain are reordered leaf-first at export, so the order they were
+added in does not matter, and PEM, PKCS#12 and PKCS#7 all write them in that order. A set that is not
+one unambiguous chain is left in the order it was given.
+
+`ExportKeys.Leaf` and `AsCert()` are the only parts that need to know which certificate is the leaf, and
+they read it from the builder's `Anchor` rather than from list position. `cert.Export()` anchors on the
+certificate itself and `chain.Export()` on the chain's end certificate, so `WithChain(...)` can never
+retarget them. `collection.Export()` and the `IEnumerable` overload set no anchor: they fall back to the
+sorted chain's leaf, and throw `InvalidOperationException` when the set is not one chain. Every other
+export works fine without an anchor, because nothing else asks which certificate is the leaf.
 
 Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `BuildChain()` - Build certificate chains. Two overloads: `(IEnumerable<X509Certificate2>?, bool)` and

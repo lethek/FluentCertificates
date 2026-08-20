@@ -9,8 +9,9 @@ public enum ExportKeys
     All,
 
     /// <summary>
-    /// Export only the last certificate's private key, stripping the others. Certificates forming a
-    /// single issuer chain are ordered root-first at export, so the last one is the chain's leaf.
+    /// Export only the first certificate's private key, stripping the others. Certificates forming a
+    /// single issuer chain are ordered leaf-first at export, so the first one is the chain's leaf.
+    /// Exporting throws when they are not a single chain, since the leaf is then unknown.
     /// </summary>
     Leaf,
 

@@ -29,6 +29,7 @@ internal enum ExportFormat
 public class CertificateExporter
 {
     private readonly IReadOnlyList<X509Certificate2> _certs;
+    private readonly X509Certificate2? _leaf;
     private readonly ExportFormat _format;
     private readonly string? _password;
     private readonly SecureString? _securePassword;
@@ -39,18 +40,24 @@ public class CertificateExporter
     /// Initializes a new <see cref="CertificateExporter"/>.
     /// </summary>
     /// <param name="certs">Certificates to export. Must be non-empty. When they form a single issuer
-    /// chain they are reordered root-first, whatever order they arrived in.</param>
+    /// chain they are reordered leaf-first, whatever order they arrived in.</param>
+    /// <param name="anchor">The certificate the caller anchored on, or null. See
+    /// <see cref="CertificateExportBuilder.Anchor"/>.</param>
     /// <param name="format">The binary format to produce.</param>
     /// <param name="password">Plain-text password (ignored when <paramref name="securePassword"/> is non-null).</param>
     /// <param name="securePassword">SecureString password; takes precedence over <paramref name="password"/>.</param>
     /// <param name="keys">Which private keys to include.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="certs"/> is empty.</exception>
-    internal CertificateExporter(ImmutableList<X509Certificate2> certs, ExportFormat format, string? password, SecureString? securePassword, ExportKeys keys)
+    internal CertificateExporter(ImmutableList<X509Certificate2> certs, X509Certificate2? anchor, ExportFormat format, string? password, SecureString? securePassword, ExportKeys keys)
     {
         if (certs.Count == 0) {
             throw new ArgumentException("No certificates to export.", nameof(certs));
         }
-        _certs = OrderRootFirst(certs);
+        _certs = OrderLeafFirst(certs, out var sorted);
+
+        //An anchor is the caller's own statement of which certificate is the leaf, so it outranks
+        //anything inferred from the list. Only without one does the sorted chain's leaf stand in.
+        _leaf = anchor ?? (sorted ? _certs[0] : null);
         _format = format;
         _password = password;
         _securePassword = securePassword;
@@ -99,10 +106,17 @@ public class CertificateExporter
                 ?? throw new InvalidOperationException("PKCS#7 export returned null."),
 
             ExportFormat.Cert =>
-                _certs[^1].RawData,
+                ExportCert(),
 
             _ => throw new InvalidOperationException($"Unsupported export format: {_format}.")
         };
+
+
+    /// <summary>
+    /// Produces the DER bytes of the leaf certificate, which is the first in the list.
+    /// </summary>
+    private byte[] ExportCert()
+        => RequireLeaf("AsCert()").RawData;
 
 
     /// <summary>
@@ -114,7 +128,7 @@ public class CertificateExporter
         //method can release it. The ones passed through belong to the caller and are left alone.
         var stripped = new List<X509Certificate2>();
         try {
-            return _certs.FilterPrivateKeys(_keys, stripped).ToCollection()
+            return FilterKeys(stripped).ToCollection()
                 .Export(X509ContentType.Pkcs12, GetPasswordString())
                 ?? throw new InvalidOperationException("PKCS#12 export returned null.");
         } finally {
@@ -127,14 +141,13 @@ public class CertificateExporter
 
     /// <summary>
     /// Produces the PEM-encoded representation of the configured certificates and keys:
-    /// private key blocks first, then CERTIFICATE blocks in leaf-first order. The source
-    /// list is treated as root-first, so the last certificate in it is the leaf.
+    /// private key blocks first, then CERTIFICATE blocks in list order, which is leaf-first.
     /// </summary>
     internal string ExportPem()
     {
         var stripped = new List<X509Certificate2>();
         try {
-            var list = _certs.FilterPrivateKeys(_keys, stripped).Reverse().ToList();
+            var list = FilterKeys(stripped).ToList();
             if (list.Count == 0) {
                 return string.Empty;
             }
@@ -171,50 +184,57 @@ public class CertificateExporter
 
 
     /// <summary>
-    /// Returns <paramref name="certs"/> ordered root-first, leaf last, when they form a single unambiguous
+    /// Returns <paramref name="certs"/> ordered leaf-first, root last, when they form a single unambiguous
     /// issuer chain. Every other input, including an unrelated bag of certificates or one holding two
     /// candidates for the same position, is returned untouched.
     /// </summary>
+    /// <param name="certs">The certificates to order.</param>
+    /// <param name="leafIsKnown">Receives false when the input could not be resolved to a single chain, so
+    /// the certificate at index 0 is whatever the caller happened to supply first rather than a leaf this
+    /// method identified. A single certificate is always its own leaf, so it sets this true.</param>
     /// <remarks>
-    /// The leaf-first PEM block order, <see cref="ExportKeys.Leaf"/> and
-    /// <see cref="CertificateExportBuilder.AsCert"/> all read the leaf off the end of this list, so a
+    /// The PEM block order, <see cref="ExportKeys.Leaf"/> and
+    /// <see cref="CertificateExportBuilder.AsCert"/> all read the leaf off the front of this list, so a
     /// caller who reaches the same chain by a different route (say a leaf seeded by
     /// <c>cert.Export()</c> then topped up with <see cref="CertificateExportBuilder.WithChain(X509Chain)"/>)
     /// must not get a different export.
     /// </remarks>
-    private static IReadOnlyList<X509Certificate2> OrderRootFirst(IReadOnlyList<X509Certificate2> certs)
+    private static IReadOnlyList<X509Certificate2> OrderLeafFirst(IReadOnlyList<X509Certificate2> certs, out bool leafIsKnown)
     {
         if (certs.Count < 2) {
+            leafIsKnown = true;
             return certs;
         }
 
-        //The root is the one certificate nothing else in the list issued. Self-issued doesn't count:
+        leafIsKnown = false;
+
+        //The leaf is the one certificate that issued nothing else in the list. Self-issued doesn't count:
         //a self-signed root is its own issuer and would otherwise disqualify itself.
-        var rootIndex = -1;
+        var leafIndex = -1;
         for (var i = 0; i < certs.Count; i++) {
             var cert = certs[i];
-            if (certs.Any(issuer => !ReferenceEquals(issuer, cert) && cert.IsIssuedBy(issuer))) {
+            if (certs.Any(subject => !ReferenceEquals(subject, cert) && subject.IsIssuedBy(cert))) {
                 continue;
             }
-            if (rootIndex >= 0) {
-                //More than one certificate without an issuer here, so this isn't a single chain.
+            if (leafIndex >= 0) {
+                //More than one certificate that issued nothing here, so this isn't a single chain.
                 return certs;
             }
-            rootIndex = i;
+            leafIndex = i;
         }
-        if (rootIndex < 0) {
+        if (leafIndex < 0) {
             return certs;
         }
 
         var placed = new bool[certs.Count];
-        placed[rootIndex] = true;
+        placed[leafIndex] = true;
 
-        var ordered = new List<X509Certificate2>(certs.Count) { certs[rootIndex] };
+        var ordered = new List<X509Certificate2>(certs.Count) { certs[leafIndex] };
         while (ordered.Count < certs.Count) {
-            var issuer = ordered[^1];
+            var subject = ordered[^1];
             var next = -1;
             for (var i = 0; i < certs.Count; i++) {
-                if (placed[i] || !certs[i].IsIssuedBy(issuer)) {
+                if (placed[i] || !subject.IsIssuedBy(certs[i])) {
                     continue;
                 }
                 if (next >= 0) {
@@ -230,8 +250,35 @@ public class CertificateExporter
             ordered.Add(certs[next]);
             placed[next] = true;
         }
+
+        leafIsKnown = true;
         return ordered;
     }
+
+
+    /// <summary>
+    /// Applies <see cref="_keys"/> to the certificate list. <see cref="ExportKeys.Leaf"/> resolves the leaf
+    /// first, so it throws rather than guessing when the list designates none.
+    /// </summary>
+    /// <param name="stripped">Receives the keyless certificates this call creates, for the caller to dispose.</param>
+    private IEnumerable<X509Certificate2> FilterKeys(ICollection<X509Certificate2> stripped)
+        => _keys == ExportKeys.Leaf
+            ? _certs.FilterPrivateKeys(_keys, RequireLeaf("ExportKeys.Leaf"), stripped)
+            : _certs.FilterPrivateKeys(_keys, stripped);
+
+
+    /// <summary>
+    /// Returns the leaf certificate, throwing when there is no anchor and <see cref="OrderLeafFirst"/>
+    /// could not work one out.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the certificates are not a single issuer chain
+    /// and no anchor names the leaf.</exception>
+    private X509Certificate2 RequireLeaf(string operation)
+        => _leaf ?? throw new InvalidOperationException(
+            $"{operation} needs to identify the leaf certificate, but the {_certs.Count} certificates supplied "
+            + "are not a single unambiguous issuer chain and no certificate was anchored as the leaf. Export "
+            + "them with ExportKeys.All or ExportKeys.None, seed the export from the leaf with cert.Export(), "
+            + "or narrow the set to one chain.");
 
 
     /// <summary>
