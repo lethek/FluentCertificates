@@ -21,6 +21,7 @@ they summarise each release rather than record it as it happened.
 
 - Each `CertificateExportBuilder.WithPassword` overload now clears the other kind of password, so the last call wins.
 - `AsCert()` now exports a chain's leaf certificate instead of its root.
+- The `ExportKeys` enum's XML summary described ECDsa instead of the enum.
 
 ## [0.15.0] - 2026-08-20
 
