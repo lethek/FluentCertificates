@@ -63,9 +63,9 @@ public class CertificateExporter
         //keeps the caller's order. Nothing here re-reads the certificates to second-guess either.
         _certs = certs;
 
-        //Only an anchor designates a certificate. Position never does: index 0 of a bundle is just
-        //whatever the caller happened to put first.
-        _primary = anchor;
+        //An anchor designates a certificate; so does being the only one there, since that involves no
+        //guessing. Position never does: index 0 of a larger bundle is just whatever came first.
+        _primary = anchor ?? (certs.Count == 1 ? certs[0] : null);
         _format = format;
         _password = password;
         _securePassword = securePassword;
@@ -210,8 +210,9 @@ public class CertificateExporter
         => _primary ?? throw new InvalidOperationException(
             $"{operation} needs to identify the primary certificate, but this export is a bundle of "
             + $"{_certs.Count} certificates with none anchored as the primary one. A bundle has no leaf to "
-            + "infer. Export it with ExportKeys.All or ExportKeys.None, or seed the export from the "
-            + "certificate you mean with cert.Export() or chain.Export().");
+            + "infer, and arriving first is not evidence of being one. Export it with ExportKeys.All or "
+            + "ExportKeys.None, or seed the export from the certificate you mean with cert.Export() or "
+            + "chain.Export().");
 
 
     /// <summary>

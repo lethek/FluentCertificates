@@ -327,9 +327,8 @@ leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).WithoutPrivat
 `With*` configures the export and replaces whatever was set before; `Add*` appends certificates to it.
 Every `Add*` method deduplicates by thumbprint, so a certificate already present is skipped.
 
-`AddChain` and `AddCertificates` each take either an `IEnumerable<X509Certificate2>` or loose
-`params` arguments, so an array, a LINQ query, an `X509Certificate2Collection`, or a handful of
-individual certificates all work:
+`AddChain` and `AddCertificates` take `params IEnumerable<X509Certificate2>`, so an array, a LINQ query,
+an `X509Certificate2Collection`, or a handful of individual certificates all bind to the same method:
 
 ```csharp
 leafCert.Export().AddChain(midCert, rootCert);              //loose arguments

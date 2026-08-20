@@ -219,8 +219,9 @@ Provides LINQ-queryable interface for finding certificates across:
 Export, via `Export()` and the `CertificateExportBuilder` it returns:
 - Configure, replacing state: `WithPrivateKey()` / `WithPrivateKeys()` / `WithoutPrivateKeys()` /
   `WithKeys(ExportKeys)` / `WithPassword(string?)` / `WithPassword(SecureString)` / `WithoutPassword()`
-- Add, appending certificates: `AddChain(X509Chain)` / `AddChain(...)` / `AddCertificates(...)`, the
-  latter two each taking `IEnumerable<X509Certificate2>` or `params X509Certificate2[]`
+- Add, appending certificates: `AddChain(X509Chain)` / `AddChain(params IEnumerable<X509Certificate2>)` /
+  `AddCertificates(params IEnumerable<X509Certificate2>)`. The C# 13 params-collections form means loose
+  certificates, an array, a collection and a lazy sequence all bind to the one overload
 - Format: `AsPem()` / `AsPkcs12()` / `AsPkcs7()` / `AsCert()`
 - Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
 

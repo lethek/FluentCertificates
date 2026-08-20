@@ -830,6 +830,28 @@ public class CertificateExportBuilderTests
     }
 
 
+    [Test]
+    public async Task ExportBuilder_SingleCertificateCollection_NeedsNoAnchor()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Lone Certificate").Create();
+
+        //A set of one leaves nothing to guess at, so it designates itself even without an anchor.
+        await Assert.That(new[] { cert }.Export().AsCert().ToByteArray())
+            .IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
+
+        await Assert.That(new X509Certificate2Collection(new[] { cert }).Export().AsCert().ToByteArray())
+            .IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
+
+        var pem = new[] { cert }.Export().WithPrivateKey().AsPem().ToPemString();
+        await Assert.That(pem).Contains("PRIVATE KEY");
+
+        //Two unrelated certificates do leave something to guess at, so that still throws.
+        using var other = new CertificateBuilder().SetSubject("CN=Lone Certificate Other").Create();
+        await Assert.That(() => new[] { cert, other }.Export().AsCert().ToByteArray())
+            .ThrowsExactly<InvalidOperationException>();
+    }
+
+
     private static List<string> LoadedSubjects(byte[] bytes)
     {
         var loaded = new X509Certificate2Collection();

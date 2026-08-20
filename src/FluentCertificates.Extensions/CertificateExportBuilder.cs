@@ -8,7 +8,7 @@ namespace FluentCertificates;
 /// <summary>
 /// An immutable fluent builder for configuring certificate export operations.
 /// Obtain an instance by calling <c>cert.Export()</c>, <c>chain.Export()</c>, or <c>collection.Export()</c>.
-/// Chain configuration methods (e.g. <see cref="WithPrivateKey"/>, <see cref="WithChain(IEnumerable{X509Certificate2})"/>,
+/// Chain configuration methods (e.g. <see cref="WithPrivateKey"/>, <see cref="AddChain(IEnumerable{X509Certificate2})"/>,
 /// <see cref="WithPassword(string)"/>, <see cref="WithoutPassword"/>) then select a format with <see cref="AsPkcs12"/>, <see cref="AsPem"/>,
 /// <see cref="AsPkcs7"/>, or <see cref="AsCert"/>.
 /// </summary>
@@ -27,7 +27,7 @@ public record CertificateExportBuilder
     /// </summary>
     /// <remarks>
     /// <see cref="ExportKeys.Primary"/> and <see cref="AsCert"/> read the primary certificate from here
-    /// rather than inferring it from list position, so <see cref="WithChain(IEnumerable{X509Certificate2})"/>
+    /// rather than inferring it from list position, so <see cref="AddChain(IEnumerable{X509Certificate2})"/>
     /// cannot retarget the export onto a certificate the caller did not anchor on. This holds even when
     /// the set does sort into one chain: an anchored intermediate stays the target rather than being
     /// displaced by the chain's leaf. Without an anchor those two throw, because a bundle of
@@ -116,14 +116,11 @@ public record CertificateExportBuilder
     /// leaf-first and appended as a block. Each call is sorted separately, so several calls produce
     /// several ordered chains in call order.
     /// </summary>
-    /// <param name="certs">Additional certificates to include, forming a chain.</param>
-    /// <seealso cref="AddCertificates(IEnumerable{X509Certificate2})"/>
-    public CertificateExportBuilder AddChain(IEnumerable<X509Certificate2> certs)
+    /// <param name="certs">Additional certificates to include, forming a chain. Pass them loose, as an
+    /// array or collection, or as any <see cref="IEnumerable{T}"/>.</param>
+    /// <seealso cref="AddCertificates"/>
+    public CertificateExportBuilder AddChain(params IEnumerable<X509Certificate2> certs)
         => Append(certs, OrderLeafFirst);
-
-    /// <inheritdoc cref="AddChain(IEnumerable{X509Certificate2})"/>
-    public CertificateExportBuilder AddChain(params X509Certificate2[] certs)
-        => AddChain((IEnumerable<X509Certificate2>)certs);
 
     /// <summary>
     /// Returns a new builder that appends <paramref name="certs"/> to the builder's certificate list in
@@ -134,14 +131,11 @@ public record CertificateExportBuilder
     /// certificates relate, so they are never reordered even when they do form a chain. Use it for a
     /// CA bundle, a trust store, or any set whose order is the caller's to decide.
     /// </remarks>
-    /// <param name="certs">Additional certificates to include, in the order they should be written.</param>
+    /// <param name="certs">Additional certificates to include, in the order they should be written. Pass
+    /// them loose, as an array or collection, or as any <see cref="IEnumerable{T}"/>.</param>
     /// <seealso cref="AddChain(IEnumerable{X509Certificate2})"/>
-    public CertificateExportBuilder AddCertificates(IEnumerable<X509Certificate2> certs)
+    public CertificateExportBuilder AddCertificates(params IEnumerable<X509Certificate2> certs)
         => Append(certs, x => x);
-
-    /// <inheritdoc cref="AddCertificates(IEnumerable{X509Certificate2})"/>
-    public CertificateExportBuilder AddCertificates(params X509Certificate2[] certs)
-        => AddCertificates((IEnumerable<X509Certificate2>)certs);
 
     /// <summary>
     /// Returns a new builder that appends whatever <paramref name="arrange"/> makes of the not-already-present
@@ -174,7 +168,7 @@ public record CertificateExportBuilder
     /// here can tell which order they meant.
     /// </summary>
     /// <remarks>
-    /// This runs per <see cref="WithChain(IEnumerable{X509Certificate2})"/> call, so each declared chain is
+    /// This runs per <see cref="AddChain(IEnumerable{X509Certificate2})"/> call, so each declared chain is
     /// sorted as a unit and appended as a block. Several calls therefore produce several ordered chains in
     /// call order, and a bundle assembled through <c>collection.Export()</c> is never reordered at all.
     /// </remarks>

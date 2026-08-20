@@ -47,6 +47,8 @@ public static class X509ChainExtensions
     /// <returns>A new <see cref="CertificateExportBuilder"/> containing the chain's certificates.</returns>
     public static CertificateExportBuilder Export(this X509Chain chain)
     {
+        //Seeded directly rather than through AddChain because ChainElements is already leaf-first, so
+        //there is nothing to sort. Anything added afterwards still goes through AddChain as usual.
         var certs = chain.ToEnumerable().ToList();
         return new CertificateExportBuilder(certs, certs.Count > 0 ? certs[0] : null);
     }

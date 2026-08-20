@@ -85,8 +85,15 @@ public static class X509Certificate2EnumerableExtensions
 
 
     /// <summary>
-    /// Creates a <see cref="CertificateExportBuilder"/> initialised with the certificates in this sequence.
+    /// Creates a <see cref="CertificateExportBuilder"/> initialised with the certificates in this sequence,
+    /// treated as a bundle: they are written in exactly this order and never reordered.
     /// </summary>
+    /// <remarks>
+    /// A bundle designates no leaf, so no <see cref="CertificateExportBuilder.Anchor"/> is set and
+    /// <see cref="CertificateExportBuilder.AsCert"/> and <see cref="ExportKeys.Primary"/> throw, unless the
+    /// sequence holds exactly one certificate. Seed from <c>cert.Export()</c> or <c>chain.Export()</c>
+    /// when the export is about a particular certificate.
+    /// </remarks>
     /// <param name="enumerable">The certificates to export.</param>
     /// <returns>A new <see cref="CertificateExportBuilder"/> containing all certificates in the sequence.</returns>
     public static CertificateExportBuilder Export(this IEnumerable<X509Certificate2> enumerable)

@@ -18,8 +18,15 @@ public static class X509Certificate2CollectionExtensions
 
 
     /// <summary>
-    /// Creates a <see cref="CertificateExportBuilder"/> initialised with the certificates in this collection.
+    /// Creates a <see cref="CertificateExportBuilder"/> initialised with the certificates in this collection,
+    /// treated as a bundle: they are written in exactly this order and never reordered.
     /// </summary>
+    /// <remarks>
+    /// A collection designates no leaf, so no <see cref="CertificateExportBuilder.Anchor"/> is set and
+    /// <see cref="CertificateExportBuilder.AsCert"/> and <see cref="ExportKeys.Primary"/> throw, unless the
+    /// collection holds exactly one certificate. Seed from <c>cert.Export()</c> or <c>chain.Export()</c>
+    /// when the export is about a particular certificate.
+    /// </remarks>
     /// <param name="collection">The certificate collection to export.</param>
     /// <returns>A new <see cref="CertificateExportBuilder"/> containing all certificates in the collection.</returns>
     public static CertificateExportBuilder Export(this X509Certificate2Collection collection)
