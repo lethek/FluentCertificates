@@ -13,5 +13,12 @@ public enum KeyAlgorithm
     DSA,
 
     /// <summary>ECDsa (Elliptic Curve Digital Signature Algorithm).</summary>
-    ECDsa
+    ECDsa,
+
+    /// <summary>
+    /// ECDH (Elliptic Curve Diffie-Hellman) key agreement. An ECDH key cannot sign, so a certificate for
+    /// one must be issued by a CA and cannot itself be a CA or a code-signing, OCSP-signing or
+    /// time-stamping certificate.
+    /// </summary>
+    ECDiffieHellman
 }

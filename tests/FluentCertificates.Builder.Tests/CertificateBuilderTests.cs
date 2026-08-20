@@ -858,6 +858,150 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Build_ECDiffieHellmanCertificate_AssertsKeyAgreementAndCarriesAUsableKey()
+    {
+        using var issuer = BuildEcdhIssuer();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.SMime)
+            .SetSubject("CN=ECDH Subject")
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetIssuer(issuer)
+            .Create();
+
+        //An ECDH key agrees on a secret rather than signing, so digitalSignature must not be asserted
+        await Assert.That(GetKeyUsages(cert))
+            .IsEqualTo(X509KeyUsageFlags.KeyAgreement | X509KeyUsageFlags.NonRepudiation);
+        await Assert.That(cert.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdECPublicKey.Id);
+        await Assert.That(cert.IsIssuedBy(issuer, true)).IsTrue();
+
+        //The attached key must survive as a working ECDH key, not merely be present
+        await Assert.That(cert.HasPrivateKey).IsTrue();
+        using var certKey = cert.GetECDiffieHellmanPrivateKey()!;
+        using var otherParty = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+        using var certPublic = cert.GetECDiffieHellmanPublicKey()!;
+
+        var fromCert = certKey.DeriveKeyMaterial(otherParty.PublicKey);
+        var fromOther = otherParty.DeriveKeyMaterial(certPublic.PublicKey);
+        await Assert.That(fromCert).IsEquivalentTo(fromOther);
+    }
+
+
+    [Test]
+    public async Task Build_ECDiffieHellmanCertificate_SelfSigned_Throws()
+    {
+        //Nothing in a self-signed build could produce the signature
+        await Assert
+            .That(() => new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman).Validate())
+            .ThrowsExactly<ArgumentException>();
+
+        using var issuer = BuildEcdhIssuer();
+        await Assert
+            .That(() => new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman).SetIssuer(issuer).Validate())
+            .ThrowsNothing();
+    }
+
+
+    [Test]
+    [Arguments(CertificateUsage.CA)]
+    [Arguments(CertificateUsage.CodeSign)]
+    [Arguments(CertificateUsage.OcspSigning)]
+    [Arguments(CertificateUsage.TimeStamping)]
+    public async Task Build_ECDiffieHellmanWithASigningUsage_Throws(CertificateUsage usage)
+    {
+        using var issuer = BuildEcdhIssuer();
+
+        await Assert
+            .That(() => new CertificateBuilder()
+                .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+                .SetUsage(usage)
+                .SetIssuer(issuer)
+                .Validate())
+            .ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    [Arguments(CertificateUsage.Server)]
+    [Arguments(CertificateUsage.Client)]
+    [Arguments(CertificateUsage.SMime)]
+    public async Task Build_ECDiffieHellmanWithAKeyAgreementUsage_IsAccepted(CertificateUsage usage)
+    {
+        using var issuer = BuildEcdhIssuer();
+
+        using var cert = new CertificateBuilder()
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetUsage(usage)
+            .SetSubject($"CN=ECDH {usage}")
+            .SetIssuer(issuer)
+            .Create();
+
+        await Assert.That(GetKeyUsages(cert).HasFlag(X509KeyUsageFlags.KeyAgreement)).IsTrue();
+        await Assert.That(GetKeyUsages(cert).HasFlag(X509KeyUsageFlags.DigitalSignature)).IsFalse();
+
+        //keyEncipherment is key transport, which an EC key cannot do either
+        await Assert.That(GetKeyUsages(cert).HasFlag(X509KeyUsageFlags.KeyEncipherment)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Build_ECDiffieHellmanCertificate_FollowsASuppliedKeyPair()
+    {
+        using var issuer = BuildEcdhIssuer();
+        using var keys = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP384);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetSubject("CN=Supplied ECDH Key")
+            .SetKeyPair(keys)
+            .SetIssuer(issuer)
+            .Create();
+
+        //The algorithm is taken from the key's runtime type, since its public half looks like ECDsa's
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.KeyAgreement);
+        using var certPublic = cert.GetECDiffieHellmanPublicKey()!;
+        await Assert.That(certPublic.KeySize).IsEqualTo(384);
+    }
+
+
+    [Test]
+    public async Task SetECCurve_AppliesToGeneratedECDiffieHellmanKeys()
+    {
+        using var issuer = BuildEcdhIssuer();
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=ECDH P-521")
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetECCurve(ECCurve.NamedCurves.nistP521)
+            .SetIssuer(issuer)
+            .Create();
+
+        using var certPublic = cert.GetECDiffieHellmanPublicKey()!;
+        await Assert.That(certPublic.KeySize).IsEqualTo(521);
+    }
+
+
+    [Test]
+    public async Task CreateCertificateSigningRequest_WithECDiffieHellman_Throws()
+    {
+        //A CSR is signed by the subject's own key, which an ECDH key cannot do
+        using var keys = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+
+        await Assert
+            .That(() => new CertificateBuilder().SetSubject("CN=ECDH CSR").SetKeyPair(keys).CreateCertificateSigningRequest())
+            .ThrowsExactly<NotSupportedException>();
+    }
+
+
+    private static X509Certificate2 BuildEcdhIssuer()
+        => new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=ECDH Test CA")
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
+            .Create();
+
+
+    [Test]
     public async Task CreateCertificateRequest_WithoutKeyPair_Throws()
         => await Assert
             .That(() => new CertificateBuilder().CreateCertificateRequest())

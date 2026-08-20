@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
@@ -237,10 +237,22 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified public key.</returns>
     public CertificateBuilder SetPublicKey(PublicKey? value)
         => this with {
-            KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
+            KeyAlgorithm = KeepEcChoice(GetKeyAlgorithm(value)) ?? KeyAlgorithm,
             PublicKey = value,
             KeyPair = null
         };
+
+
+    /// <summary>
+    /// An EC public key reads back as <see cref="KeyAlgorithm.ECDsa"/> whether it was made for signing or for
+    /// key agreement, so that guess must not overwrite a caller who already said
+    /// <see cref="KeyAlgorithm.ECDiffieHellman"/>. Call <see cref="SetKeyAlgorithm"/> before
+    /// <see cref="SetPublicKey"/> to certify an ECDH key held elsewhere.
+    /// </summary>
+    private KeyAlgorithm? KeepEcChoice(KeyAlgorithm? derived)
+        => derived == KeyAlgorithm.ECDsa && KeyAlgorithm == KeyAlgorithm.ECDiffieHellman
+            ? KeyAlgorithm.ECDiffieHellman
+            : derived;
 
     /// <summary>
     /// Sets the key algorithm for automatic key generation. This is mutually exclusive with the SetKeyPair method, so if a KeyPair
@@ -404,7 +416,7 @@ public record CertificateBuilder
     /// </summary>
     public void Validate()
     {
-        if (KeyLength <= 0 && KeyPair == null && KeyAlgorithm != KeyAlgorithm.ECDsa) {
+        if (KeyLength <= 0 && KeyPair == null && !IsEllipticCurve(KeyAlgorithm)) {
             throw new ArgumentException($"{nameof(KeyLength)} must be greater than zero", nameof(KeyLength));
         }
 
@@ -412,10 +424,22 @@ public record CertificateBuilder
             throw new ArgumentException($"{nameof(NotBefore)} cannot be later than or equal to {nameof(NotAfter)}", nameof(NotAfter));
         }
 
+        if (KeyAlgorithm == KeyAlgorithm.ECDiffieHellman) {
+            //An ECDH key agrees on a shared secret and has no signing operation at all, so it can sign
+            //neither its own certificate nor anything beneath it.
+            if (Issuer == null && SignatureGenerator == null) {
+                throw new ArgumentException($"{nameof(KeyAlgorithm.ECDiffieHellman)} cannot sign, so the certificate must be signed by someone else. Set an {nameof(Issuer)}", nameof(Issuer));
+            }
+
+            if (Usage is CertificateUsage.CA or CertificateUsage.CodeSign or CertificateUsage.OcspSigning or CertificateUsage.TimeStamping) {
+                throw new ArgumentException($"{nameof(CertificateUsage)}.{Usage} needs a key that can sign, which {nameof(KeyAlgorithm.ECDiffieHellman)} cannot", nameof(Usage));
+            }
+        }
+
         //A curve only means something when this builder is going to generate an EC key itself. Rather than
         //silently ignoring it, reject the combination: there is no reading of it that the caller could have meant.
-        if (ECCurve != null && KeyPair == null && KeyAlgorithm != KeyAlgorithm.ECDsa) {
-            throw new ArgumentException($"{nameof(ECCurve)} only applies when {nameof(KeyAlgorithm)} is {nameof(KeyAlgorithm.ECDsa)}, but it is {KeyAlgorithm}", nameof(ECCurve));
+        if (ECCurve != null && KeyPair == null && !IsEllipticCurve(KeyAlgorithm)) {
+            throw new ArgumentException($"{nameof(ECCurve)} only applies when {nameof(KeyAlgorithm)} is {nameof(KeyAlgorithm.ECDsa)} or {nameof(KeyAlgorithm.ECDiffieHellman)}, but it is {KeyAlgorithm}", nameof(ECCurve));
         }
 
         //Self-signing means the subject key and the signing key are the same key, so with no KeyPair in hand
@@ -517,6 +541,7 @@ public record CertificateBuilder
                 DSA dsa => cert.CopyWithPrivateKey(dsa),
                 RSA rsa => cert.CopyWithPrivateKey(rsa),
                 ECDsa ecdsa => cert.CopyWithPrivateKey(ecdsa),
+                ECDiffieHellman ecdh => cert.CopyWithPrivateKey(ecdh),
                 _ => null
             };
 
@@ -566,6 +591,7 @@ public record CertificateBuilder
             DSA dsa => new DSAX509SignatureGenerator(dsa),
             RSA rsa => X509SignatureGenerator.CreateForRSA(rsa, RSASignaturePadding),
             ECDsa ecdsa => X509SignatureGenerator.CreateForECDsa(ecdsa),
+            ECDiffieHellman => throw new NotSupportedException($"An {nameof(ECDiffieHellman)} key agrees on a shared secret and cannot sign. Set an {nameof(Issuer)} so the certificate is signed by a CA, or supply a {nameof(SignatureGenerator)}"),
             null => throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair"),
             _ => throw new NotSupportedException($"Unsupported algorithm: {keys.SignatureAlgorithm}")
         };
@@ -575,6 +601,7 @@ public record CertificateBuilder
         => SetKeyPair(
             KeyAlgorithm switch {
                 KeyAlgorithm.ECDsa => ECDsa.Create(ECCurve ?? System.Security.Cryptography.ECCurve.NamedCurves.nistP256),
+                KeyAlgorithm.ECDiffieHellman => ECDiffieHellman.Create(ECCurve ?? System.Security.Cryptography.ECCurve.NamedCurves.nistP256),
                 KeyAlgorithm.RSA => RSA.Create(KeyLength ?? 4096),
 #pragma warning disable CS0618 // Type or member is obsolete
                 KeyAlgorithm.DSA => DSA.Create(KeyLength ?? 1024),
@@ -628,7 +655,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetServerExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | KeyEnciphermentIfSupported(builder), true),
+            new X509KeyUsageExtension(SigningOrKeyAgreement(builder) | KeyEnciphermentIfSupported(builder), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ServerAuthPurpose) }, false)
         ];
 
@@ -636,7 +663,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetClientExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true),
+            new X509KeyUsageExtension(SigningOrKeyAgreement(builder), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ClientAuthPurpose) }, false)
         ];
 
@@ -652,7 +679,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetSMimeExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation | KeyEnciphermentIfSupported(builder), true),
+            new X509KeyUsageExtension(SigningOrKeyAgreement(builder) | X509KeyUsageFlags.NonRepudiation | KeyEnciphermentIfSupported(builder), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.EmailProtectionPurpose) }, false)
         ];
 
@@ -676,6 +703,23 @@ public record CertificateBuilder
 
 
     /// <summary>
+    /// Returns the key usage bit for the certificate's own key: <see cref="X509KeyUsageFlags.KeyAgreement"/>
+    /// for an ECDH key, which derives a shared secret and cannot sign, and
+    /// <see cref="X509KeyUsageFlags.DigitalSignature"/> otherwise. RFC 5280 s4.2.1.3 separates key transport
+    /// from key agreement, and RFC 5480 s3 lists keyAgreement among the usages permitted for id-ecPublicKey.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="KeyEnciphermentIfSupported"/> this reads <see cref="KeyAlgorithm"/> rather than the
+    /// public key, because it has to: an ECDH and an ECDsa public key are byte-identical in
+    /// SubjectPublicKeyInfo, carrying the same algorithm OID and the same curve parameters.
+    /// </remarks>
+    private static X509KeyUsageFlags SigningOrKeyAgreement(CertificateBuilder builder)
+        => builder.KeyAlgorithm == KeyAlgorithm.ECDiffieHellman
+            ? X509KeyUsageFlags.KeyAgreement
+            : X509KeyUsageFlags.DigitalSignature;
+
+
+    /// <summary>
     /// Returns <see cref="X509KeyUsageFlags.KeyEncipherment"/> only when the certificate's public key can
     /// actually perform key transport, which in practice means RSA. An EC key cannot encrypt key material
     /// (it uses key agreement instead, which is <see cref="X509KeyUsageFlags.KeyAgreement"/>), and DSA is
@@ -695,6 +739,12 @@ public record CertificateBuilder
     /// not one the builder knows how to generate. Unlike the key-pair overload an unrecognised algorithm is not
     /// an error here: the builder only has to put the key in the certificate, not produce one like it.
     /// </summary>
+    /// <remarks>
+    /// <see cref="Oids.EcPublicKey"/> maps to <see cref="KeyAlgorithm.ECDsa"/> because an ECDH public key is
+    /// indistinguishable from an ECDsa one: both carry that OID and the same curve parameters, so the intended
+    /// use cannot be read back off the key. <see cref="SetPublicKey"/> keeps an explicit
+    /// <see cref="KeyAlgorithm.ECDiffieHellman"/> choice rather than overwriting it with this guess.
+    /// </remarks>
     private static KeyAlgorithm? GetKeyAlgorithm(PublicKey? key)
         => key?.Oid.Value switch {
             Oids.Rsa => KeyAlgorithm.RSA,
@@ -706,9 +756,18 @@ public record CertificateBuilder
         };
 
 
+    /// <summary>
+    /// Whether the algorithm generates an elliptic curve key, which takes its size from the curve rather than
+    /// from <see cref="KeyLength"/> and accepts an <see cref="ECCurve"/>.
+    /// </summary>
+    private static bool IsEllipticCurve(KeyAlgorithm algorithm)
+        => algorithm is KeyAlgorithm.ECDsa or KeyAlgorithm.ECDiffieHellman;
+
+
     private static KeyAlgorithm? GetKeyAlgorithm(AsymmetricAlgorithm? keys)
         => keys switch {
             ECDsa => KeyAlgorithm.ECDsa,
+            ECDiffieHellman => KeyAlgorithm.ECDiffieHellman,
             RSA => KeyAlgorithm.RSA,
             #pragma warning disable CS0618 // Type or member is obsolete
             DSA => KeyAlgorithm.DSA,

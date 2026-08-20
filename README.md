@@ -161,6 +161,29 @@ using var timeStampingAuthority = new CertificateBuilder()
     .Create();
 ```
 
+### **Build a Key Agreement (ECDH) Certificate**
+
+An ECDH key derives a shared secret and cannot sign anything, so these certificates assert
+`keyAgreement` rather than `digitalSignature` and must be issued by a CA. Self-signing, and the
+`CA`, `CodeSign`, `OcspSigning` and `TimeStamping` usages, are all rejected.
+
+```csharp
+using var ecdhCert = new CertificateBuilder()
+    .SetUsage(CertificateUsage.SMime)
+    .SetSubject(b => b.SetCommonName("user@fake.domain"))
+    .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+    .SetECCurve(ECCurve.NamedCurves.nistP384)
+    .SetIssuer(issuer)
+    .Create();
+
+using var privateKey = ecdhCert.GetECDiffieHellmanPrivateKey();
+```
+
+An ECDH public key is indistinguishable from an ECDsa one inside a certificate: same algorithm OID,
+same curve parameters. The builder therefore takes the distinction from `SetKeyAlgorithm`, or from the
+runtime type of a key passed to `SetKeyPair`. If you use `SetPublicKey` for an ECDH key held elsewhere,
+call `SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)` first, or the key will be treated as ECDsa.
+
 ### **Advanced: Signing with a Key Held in an HSM, TPM or Cloud KMS**
 
 When the private key can't leave the device, supply the public key to certify with `SetPublicKey` and

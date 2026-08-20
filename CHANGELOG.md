@@ -21,6 +21,8 @@ they summarise each release rather than record it as it happened.
 - `CertificateBuilder.SetSignatureGenerator` and `SetPublicKey`, for keys held in an HSM, TPM or KMS.
 - `BuildChain(Action<X509ChainPolicy>)` overload on `X509Certificate2`.
 - `CertificateBuilder.SetECCurve(ECCurve)`.
+- `KeyAlgorithm.ECDiffieHellman`, for key agreement certificates. These assert `keyAgreement`
+  instead of `digitalSignature`, and must be issued by a CA since an ECDH key cannot sign.
 
 ### Changed
 

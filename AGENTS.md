@@ -188,6 +188,11 @@ The main API for creating certificates. Supports:
 - Custom extensions
 - Subject Alternative Names (SAN)
 - Custom serial number generation
+- Key agreement certificates, via `KeyAlgorithm.ECDiffieHellman`. An ECDH key cannot sign, so `Validate()`
+  requires an `Issuer` and rejects the `CA`, `CodeSign`, `OcspSigning` and `TimeStamping` usages. The key
+  usage bit becomes `keyAgreement` instead of `digitalSignature`. An ECDH public key is byte-identical to
+  an ECDsa one in SubjectPublicKeyInfo, so the distinction comes from `KeyAlgorithm` or the supplied key's
+  runtime type, never from the certificate.
 - External signing keys, via `SetPublicKey` (certify a key whose private half is unreachable) and
   `SetSignatureGenerator` (sign with a supplied `X509SignatureGenerator`). Used together they cover
   HSM/TPM/KMS keys. `Validate()` requires both when self-signing, since either alone yields a
