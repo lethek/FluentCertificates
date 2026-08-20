@@ -456,6 +456,57 @@ public class CertificateExportBuilderTests
 
 
     [Test]
+    public async Task ExportBuilder_Cert_WithChain_ExportsTheLeaf()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert Chain Root").Create();
+        using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert Chain Intermediate").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Cert Chain Leaf").SetIssuer(intermediate).Create();
+
+        var bytes = leaf.Export().WithChain([root, intermediate]).AsCert().ToByteArray();
+
+        await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Cert_ChainInAnyOrder_ExportsTheLeaf()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert Order Root").Create();
+        using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert Order Intermediate").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Cert Order Leaf").SetIssuer(intermediate).Create();
+
+        var bytes = new[] { intermediate, root, leaf }.Export().AsCert().ToByteArray();
+
+        await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Cert_FromX509Chain_ExportsTheLeaf()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert X509Chain Root").Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Cert X509Chain Leaf").SetIssuer(root).Create();
+
+        var (_, chain) = leaf.BuildChain([root], true);
+        using (chain) {
+            var bytes = chain.Export().AsCert().ToByteArray();
+            await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
+        }
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Cert_SingleCertificate_ExportsThatCertificate()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Cert Solo").Create();
+
+        var bytes = cert.Export().AsCert().ToByteArray();
+
+        await Assert.That(bytes).IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
     public async Task ExportBuilder_ECDiffieHellmanCertificate_ExportsItsPrivateKey()
     {
         using var issuer = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=ECDH Export CA").Create();

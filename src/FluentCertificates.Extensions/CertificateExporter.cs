@@ -99,7 +99,7 @@ public class CertificateExporter
                 ?? throw new InvalidOperationException("PKCS#7 export returned null."),
 
             ExportFormat.Cert =>
-                _certs[0].RawData,
+                _certs[^1].RawData,
 
             _ => throw new InvalidOperationException($"Unsupported export format: {_format}.")
         };
@@ -176,8 +176,9 @@ public class CertificateExporter
     /// candidates for the same position, is returned untouched.
     /// </summary>
     /// <remarks>
-    /// Both the leaf-first PEM block order and <see cref="ExportKeys.Leaf"/> read the leaf off the end of
-    /// this list, so a caller who reaches the same chain by a different route (say a leaf seeded by
+    /// The leaf-first PEM block order, <see cref="ExportKeys.Leaf"/> and
+    /// <see cref="CertificateExportBuilder.AsCert"/> all read the leaf off the end of this list, so a
+    /// caller who reaches the same chain by a different route (say a leaf seeded by
     /// <c>cert.Export()</c> then topped up with <see cref="CertificateExportBuilder.WithChain(X509Chain)"/>)
     /// must not get a different export.
     /// </remarks>

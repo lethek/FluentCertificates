@@ -20,6 +20,7 @@ they summarise each release rather than record it as it happened.
 ### Fixed
 
 - Each `CertificateExportBuilder.WithPassword` overload now clears the other kind of password, so the last call wins.
+- `AsCert()` now exports a chain's leaf certificate instead of its root.
 
 ## [0.15.0] - 2026-08-20
 

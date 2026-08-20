@@ -40,7 +40,7 @@ public static class X509ChainExtensions
     /// <summary>
     /// Creates a <see cref="CertificateExportBuilder"/> initialised with the certificates in this chain.
     /// Certificates are added in root-first order (same as <see cref="ToEnumerable"/>).
-    /// Use <see cref="CertificateExportBuilder.AsCert"/> to export the first certificate (the root);
+    /// Use <see cref="CertificateExportBuilder.AsCert"/> to export the last certificate (the leaf);
     /// use <see cref="CertificateExportBuilder.AsPkcs12"/> etc. to export all chain certificates.
     /// </summary>
     /// <param name="chain">The certificate chain to export.</param>
