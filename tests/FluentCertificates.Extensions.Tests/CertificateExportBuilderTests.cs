@@ -353,6 +353,23 @@ public class CertificateExportBuilderTests
 
 
     [Test]
+    public async Task ExportBuilder_Pem_SecureStringPasswordClearsTheEarlierPlainText()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Secure Clears Plain").Create();
+        using var password = SecurePassword("secure-one");
+
+        var builder = cert.Export().WithPrivateKey().WithPassword("plain-one").WithPassword(password);
+
+        //Dropping the SecureString must not resurrect the plain-text password it replaced
+        var pem = (builder with { SecurePassword = null }).AsPem().ToPemString();
+
+        await Assert.That(pem).Contains("BEGIN PRIVATE KEY");
+        await Assert.That(pem).DoesNotContain("BEGIN ENCRYPTED PRIVATE KEY");
+        await Assert.That(builder.Password).IsNull();
+    }
+
+
+    [Test]
     public async Task ExportBuilder_Pem_WithoutPassword_ClearsASecureStringPassword()
     {
         using var cert = new CertificateBuilder().SetSubject("CN=Clear Secure Password").Create();
