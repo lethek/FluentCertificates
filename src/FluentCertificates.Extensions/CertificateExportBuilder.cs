@@ -27,13 +27,14 @@ public record CertificateExportBuilder
 
     /// <summary>
     /// Plain-text password used to protect private keys (e.g. in PKCS#12 output).
-    /// If <see cref="SecurePassword"/> is also set, <see cref="SecurePassword"/> takes precedence.
+    /// Only a <c>with</c> expression can set this alongside <see cref="SecurePassword"/>; when both are
+    /// set, <see cref="SecurePassword"/> wins.
     /// </summary>
     public string? Password { get; init; }
 
     /// <summary>
     /// SecureString password used to protect private keys (e.g. in PKCS#12 output).
-    /// Takes precedence over <see cref="Password"/> when non-null.
+    /// Wins over <see cref="Password"/> in the only case where both can be set, a <c>with</c> expression.
     /// Disposal of the <see cref="SecureString"/> after export is the caller's responsibility.
     /// </summary>
     public SecureString? SecurePassword { get; init; }
@@ -97,16 +98,16 @@ public record CertificateExportBuilder
     }
 
     /// <summary>
-    /// Returns a new builder with a plain-text export password.
-    /// If <see cref="SecurePassword"/> is also set on the resulting builder, it takes precedence.
+    /// Returns a new builder with a plain-text export password, clearing any <see cref="SecurePassword"/>
+    /// set earlier.
     /// </summary>
     /// <param name="password">The plain-text password, or <c>null</c> to clear it.</param>
     public CertificateExportBuilder WithPassword(string? password)
-        => this with { Password = password };
+        => this with { Password = password, SecurePassword = null };
 
     /// <summary>
-    /// Returns a new builder with a <see cref="SecureString"/> export password.
-    /// This value takes precedence over <see cref="Password"/> when non-null.
+    /// Returns a new builder with a <see cref="SecureString"/> export password, clearing any plain-text
+    /// <see cref="Password"/> set earlier.
     /// Disposal of the <see cref="SecureString"/> after export is the caller's responsibility.
     /// </summary>
     /// <remarks>
@@ -116,7 +117,14 @@ public record CertificateExportBuilder
     /// </remarks>
     /// <param name="password">The secure password.</param>
     public CertificateExportBuilder WithPassword(SecureString password)
-        => this with { SecurePassword = password };
+        => this with { Password = null, SecurePassword = password };
+
+    /// <summary>
+    /// Returns a new builder with no export password, clearing both <see cref="Password"/> and
+    /// <see cref="SecurePassword"/>.
+    /// </summary>
+    public CertificateExportBuilder WithoutPassword()
+        => this with { Password = null, SecurePassword = null };
 
 
     /// <summary>

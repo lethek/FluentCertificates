@@ -339,6 +339,45 @@ public class CertificateExportBuilderTests
 
 
     [Test]
+    public async Task ExportBuilder_Pem_PlainTextPasswordReplacesAnEarlierSecureString()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Plain Over Secure").Create();
+        using var password = SecurePassword("secure-one");
+
+        var pem = cert.Export().WithPrivateKey().WithPassword(password).WithPassword("plain-one").AsPem().ToPemString();
+
+        using var reloaded = RSA.Create();
+        reloaded.ImportFromEncryptedPem(pem, "plain-one");
+        await Assert.That(reloaded.ExportSubjectPublicKeyInfo()).IsEquivalentTo(cert.PublicKey.ExportSubjectPublicKeyInfo());
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pem_WithoutPassword_ClearsASecureStringPassword()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Clear Secure Password").Create();
+        using var password = SecurePassword("secure-one");
+
+        var pem = cert.Export().WithPrivateKey().WithPassword(password).WithoutPassword().AsPem().ToPemString();
+
+        await Assert.That(pem).Contains("BEGIN PRIVATE KEY");
+        await Assert.That(pem).DoesNotContain("BEGIN ENCRYPTED PRIVATE KEY");
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pem_WithoutPassword_ClearsAPlainTextPassword()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Clear Plain Password").Create();
+
+        var pem = cert.Export().WithPrivateKey().WithPassword("plain-one").WithoutPassword().AsPem().ToPemString();
+
+        await Assert.That(pem).Contains("BEGIN PRIVATE KEY");
+        await Assert.That(pem).DoesNotContain("BEGIN ENCRYPTED PRIVATE KEY");
+    }
+
+
+    [Test]
     public async Task ExportBuilder_Pem_WithChain_WritesCertificatesLeafFirst()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Order Root").Create();
