@@ -30,6 +30,7 @@ they summarise each release rather than record it as it happened.
 - `CertificateUsage.CodeSign` no longer adds the `timeStamping` and `lifetimeSigning` EKUs.
 - `keyEncipherment` is now set only on RSA certificates. Affects `CertificateUsage.Server` and `SMime`.
 - `GeneralNameListBuilder` validates DNS names, email addresses and IP addresses as they are added.
+- Setting `SetECCurve` with a non-ECDsa `KeyAlgorithm` is now rejected by `Validate` instead of ignored.
 
 ### Deprecated
 

@@ -16,6 +16,14 @@ Versioning is supplied by GitVersion, which runs as a GitHub Action step in CI (
 via `-p:` properties. A local `dotnet build` with no properties produces a default version; that is
 expected and only CI-produced packages carry real version numbers.
 
+Releases are cut with the `/release` skill (`.claude/skills/release/SKILL.md`): it sizes the SemVer bump
+from the diff, promotes the changelog and tags, stopping before the push that publishes to nuget.org.
+
+`CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Add an entry under
+`## [Unreleased]` for anything that reaches consumers, grouped under `### Added` / `### Changed` /
+`### Deprecated` / `### Removed` / `### Fixed` / `### Security`. One terse line per change. Repo-only
+changes (tests, CI, docs for agents) get no entry.
+
 ### Common Build Commands
 
 ```bash
