@@ -22,8 +22,9 @@ public static class X509Certificate2EnumerableExtensions
 
 
     /// <summary>
-    /// Remove/keep private keys from certificates based on the <paramref name="include"/> parameter. When <paramref name="include"/> is set to <see cref="ExportKeys.Leaf"/>,
-    /// the leaf certificate is assumed to be the first one.
+    /// Remove/keep private keys from certificates based on the <paramref name="include"/> parameter. When <paramref name="include"/> is set to <see cref="ExportKeys.Primary"/>,
+    /// the primary certificate is taken to be the first one in the sequence, since a bare sequence
+    /// designates none.
     /// </summary>
     /// <remarks>
     /// Stripping a private key produces a new certificate, while a certificate that keeps its key is passed
@@ -48,7 +49,7 @@ public static class X509Certificate2EnumerableExtensions
     internal static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include, ICollection<X509Certificate2> created)
         => include switch {
             ExportKeys.All => enumerable,
-            ExportKeys.Leaf => enumerable.Select((x, i) => x.HasPrivateKey && i > 0 ? StripPrivateKey(x, created) : x),
+            ExportKeys.Primary => enumerable.Select((x, i) => x.HasPrivateKey && i > 0 ? StripPrivateKey(x, created) : x),
             ExportKeys.None => enumerable.Select(x => x.HasPrivateKey ? StripPrivateKey(x, created) : x),
             _ => throw new ArgumentOutOfRangeException(nameof(include))
         };
@@ -56,13 +57,13 @@ public static class X509Certificate2EnumerableExtensions
 
     /// <summary>
     /// As <see cref="FilterPrivateKeys(IEnumerable{X509Certificate2},ExportKeys,ICollection{X509Certificate2})"/>,
-    /// but <see cref="ExportKeys.Leaf"/> keeps <paramref name="leaf"/>'s key rather than the first
+    /// but <see cref="ExportKeys.Primary"/> keeps <paramref name="primary"/>'s key rather than the first
     /// certificate's, so a caller's anchor survives whatever order the list ends up in.
     /// </summary>
-    internal static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include, X509Certificate2 leaf, ICollection<X509Certificate2> created)
+    internal static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include, X509Certificate2 primary, ICollection<X509Certificate2> created)
         => include switch {
             ExportKeys.All => enumerable,
-            ExportKeys.Leaf => enumerable.Select(x => x.HasPrivateKey && !String.Equals(x.Thumbprint, leaf.Thumbprint, StringComparison.OrdinalIgnoreCase) ? StripPrivateKey(x, created) : x),
+            ExportKeys.Primary => enumerable.Select(x => x.HasPrivateKey && !String.Equals(x.Thumbprint, primary.Thumbprint, StringComparison.OrdinalIgnoreCase) ? StripPrivateKey(x, created) : x),
             ExportKeys.None => enumerable.Select(x => x.HasPrivateKey ? StripPrivateKey(x, created) : x),
             _ => throw new ArgumentOutOfRangeException(nameof(include))
         };

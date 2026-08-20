@@ -362,16 +362,16 @@ public class X509Certificate2ExtensionsTests
     public static IEnumerable<(KeyAlgorithm, ExportKeys, string?)> KeyAlgorithmsAndExportKeysTestData()
     {
         yield return (KeyAlgorithm.ECDsa, ExportKeys.None, TestPassword);
-        yield return (KeyAlgorithm.ECDsa, ExportKeys.Leaf, TestPassword);
+        yield return (KeyAlgorithm.ECDsa, ExportKeys.Primary, TestPassword);
         yield return (KeyAlgorithm.ECDsa, ExportKeys.All, TestPassword);
         yield return (KeyAlgorithm.ECDsa, ExportKeys.None, null);
-        yield return (KeyAlgorithm.ECDsa, ExportKeys.Leaf, null);
+        yield return (KeyAlgorithm.ECDsa, ExportKeys.Primary, null);
         yield return (KeyAlgorithm.ECDsa, ExportKeys.All, null);
         yield return (KeyAlgorithm.RSA, ExportKeys.None, TestPassword);
-        yield return (KeyAlgorithm.RSA, ExportKeys.Leaf, TestPassword);
+        yield return (KeyAlgorithm.RSA, ExportKeys.Primary, TestPassword);
         yield return (KeyAlgorithm.RSA, ExportKeys.All, TestPassword);
         yield return (KeyAlgorithm.RSA, ExportKeys.None, null);
-        yield return (KeyAlgorithm.RSA, ExportKeys.Leaf, null);
+        yield return (KeyAlgorithm.RSA, ExportKeys.Primary, null);
         yield return (KeyAlgorithm.RSA, ExportKeys.All, null);
     }
 

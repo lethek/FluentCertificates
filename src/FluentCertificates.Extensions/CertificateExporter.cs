@@ -29,7 +29,7 @@ internal enum ExportFormat
 public class CertificateExporter
 {
     private readonly IReadOnlyList<X509Certificate2> _certs;
-    private readonly X509Certificate2? _leaf;
+    private readonly X509Certificate2? _primary;
     private readonly ExportFormat _format;
     private readonly string? _password;
     private readonly SecureString? _securePassword;
@@ -53,11 +53,17 @@ public class CertificateExporter
         if (certs.Count == 0) {
             throw new ArgumentException("No certificates to export.", nameof(certs));
         }
+        if (anchor != null && !certs.Any(x => String.Equals(x.Thumbprint, anchor.Thumbprint, StringComparison.OrdinalIgnoreCase))) {
+            throw new ArgumentException(
+                "The anchor certificate is not among the certificates being exported. An export cannot "
+                + "target a certificate it does not contain.", nameof(anchor));
+        }
+
         _certs = OrderLeafFirst(certs, out var sorted);
 
-        //An anchor is the caller's own statement of which certificate is the leaf, so it outranks
-        //anything inferred from the list. Only without one does the sorted chain's leaf stand in.
-        _leaf = anchor ?? (sorted ? _certs[0] : null);
+        //An anchor is the caller's own statement of which certificate the export is about, so it
+        //outranks anything inferred from the list. Only without one does the sorted chain's leaf stand in.
+        _primary = anchor ?? (sorted ? _certs[0] : null);
         _format = format;
         _password = password;
         _securePassword = securePassword;
@@ -113,10 +119,10 @@ public class CertificateExporter
 
 
     /// <summary>
-    /// Produces the DER bytes of the leaf certificate, which is the first in the list.
+    /// Produces the DER bytes of the primary certificate: the anchor, or the sorted chain's leaf.
     /// </summary>
     private byte[] ExportCert()
-        => RequireLeaf("AsCert()").RawData;
+        => RequirePrimary("AsCert()").RawData;
 
 
     /// <summary>
@@ -193,8 +199,8 @@ public class CertificateExporter
     /// the certificate at index 0 is whatever the caller happened to supply first rather than a leaf this
     /// method identified. A single certificate is always its own leaf, so it sets this true.</param>
     /// <remarks>
-    /// The PEM block order, <see cref="ExportKeys.Leaf"/> and
-    /// <see cref="CertificateExportBuilder.AsCert"/> all read the leaf off the front of this list, so a
+    /// The PEM block order, and the fallback <see cref="ExportKeys.Primary"/> and
+    /// <see cref="CertificateExportBuilder.AsCert"/> use when there is no anchor, all read off the front of this list, so a
     /// caller who reaches the same chain by a different route (say a leaf seeded by
     /// <c>cert.Export()</c> then topped up with <see cref="CertificateExportBuilder.WithChain(X509Chain)"/>)
     /// must not get a different export.
@@ -257,28 +263,28 @@ public class CertificateExporter
 
 
     /// <summary>
-    /// Applies <see cref="_keys"/> to the certificate list. <see cref="ExportKeys.Leaf"/> resolves the leaf
-    /// first, so it throws rather than guessing when the list designates none.
+    /// Applies <see cref="_keys"/> to the certificate list. <see cref="ExportKeys.Primary"/> resolves the
+    /// primary certificate first, so it throws rather than guessing when nothing designates one.
     /// </summary>
     /// <param name="stripped">Receives the keyless certificates this call creates, for the caller to dispose.</param>
     private IEnumerable<X509Certificate2> FilterKeys(ICollection<X509Certificate2> stripped)
-        => _keys == ExportKeys.Leaf
-            ? _certs.FilterPrivateKeys(_keys, RequireLeaf("ExportKeys.Leaf"), stripped)
+        => _keys == ExportKeys.Primary
+            ? _certs.FilterPrivateKeys(_keys, RequirePrimary("ExportKeys.Primary"), stripped)
             : _certs.FilterPrivateKeys(_keys, stripped);
 
 
     /// <summary>
-    /// Returns the leaf certificate, throwing when there is no anchor and <see cref="OrderLeafFirst"/>
-    /// could not work one out.
+    /// Returns the primary certificate, throwing when there is no anchor and <see cref="OrderLeafFirst"/>
+    /// could not work out a leaf to stand in for one.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when the certificates are not a single issuer chain
-    /// and no anchor names the leaf.</exception>
-    private X509Certificate2 RequireLeaf(string operation)
-        => _leaf ?? throw new InvalidOperationException(
-            $"{operation} needs to identify the leaf certificate, but the {_certs.Count} certificates supplied "
-            + "are not a single unambiguous issuer chain and no certificate was anchored as the leaf. Export "
-            + "them with ExportKeys.All or ExportKeys.None, seed the export from the leaf with cert.Export(), "
-            + "or narrow the set to one chain.");
+    /// and no anchor names the primary certificate.</exception>
+    private X509Certificate2 RequirePrimary(string operation)
+        => _primary ?? throw new InvalidOperationException(
+            $"{operation} needs to identify the primary certificate, but the {_certs.Count} certificates "
+            + "supplied are not a single unambiguous issuer chain and none was anchored as the primary one. "
+            + "Export them with ExportKeys.All or ExportKeys.None, seed the export from the certificate you "
+            + "mean with cert.Export(), or narrow the set to one chain.");
 
 
     /// <summary>

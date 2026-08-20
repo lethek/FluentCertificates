@@ -231,12 +231,21 @@ Certificates forming a single issuer chain are reordered leaf-first at export, s
 added in does not matter, and PEM, PKCS#12 and PKCS#7 all write them in that order. A set that is not
 one unambiguous chain is left in the order it was given.
 
-`ExportKeys.Leaf` and `AsCert()` are the only parts that need to know which certificate is the leaf, and
-they read it from the builder's `Anchor` rather than from list position. `cert.Export()` anchors on the
-certificate itself and `chain.Export()` on the chain's end certificate, so `WithChain(...)` can never
-retarget them. `collection.Export()` and the `IEnumerable` overload set no anchor: they fall back to the
-sorted chain's leaf, and throw `InvalidOperationException` when the set is not one chain. Every other
-export works fine without an anchor, because nothing else asks which certificate is the leaf.
+`ExportKeys.Primary` and `AsCert()` are the only parts that need a designated certificate, and they read
+it from the builder's `Anchor` rather than from list position. `cert.Export()` anchors on the certificate
+itself and `chain.Export()` on the chain's end certificate, so `WithChain(...)` can never retarget them,
+including when the resulting set does sort into one chain: an anchored intermediate stays the target
+rather than losing to the chain's leaf. `collection.Export()` and the `IEnumerable` overload set no
+anchor: they fall back to the sorted chain's leaf, and throw `InvalidOperationException` when the set is
+not one chain. Every other export works fine without an anchor, because nothing else asks.
+
+`Anchor` is `private init`, so only those entry points set it, and an export whose anchor is not among
+its certificates throws `ArgumentException`. That matters because `Certificates` is publicly settable and
+a `with` expression can otherwise leave the anchor dangling.
+
+Note `ExportKeys.Primary` means different things in different places: an export resolves it through the
+anchor, while the public `FilterPrivateKeys` extension has no anchor to consult and always takes the
+first certificate in the sequence.
 
 Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `BuildChain()` - Build certificate chains. Two overloads: `(IEnumerable<X509Certificate2>?, bool)` and

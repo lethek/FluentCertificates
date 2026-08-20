@@ -244,7 +244,7 @@ public static class X509Certificate2Extensions
     /// <returns>A new <see cref="CertificateExportBuilder"/> containing this certificate, anchored on it.</returns>
     /// <remarks>
     /// The certificate becomes the builder's <see cref="CertificateExportBuilder.Anchor"/>, so
-    /// <see cref="ExportKeys.Leaf"/> and <see cref="CertificateExportBuilder.AsCert"/> keep targeting it
+    /// <see cref="ExportKeys.Primary"/> and <see cref="CertificateExportBuilder.AsCert"/> keep targeting it
     /// however many issuers are added afterwards.
     /// </remarks>
     public static CertificateExportBuilder Export(this X509Certificate2 cert)

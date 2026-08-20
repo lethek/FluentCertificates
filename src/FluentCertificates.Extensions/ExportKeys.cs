@@ -9,11 +9,15 @@ public enum ExportKeys
     All,
 
     /// <summary>
-    /// Export only the first certificate's private key, stripping the others. Certificates forming a
-    /// single issuer chain are ordered leaf-first at export, so the first one is the chain's leaf.
-    /// Exporting throws when they are not a single chain, since the leaf is then unknown.
+    /// Export only the primary certificate's private key, stripping the others.
     /// </summary>
-    Leaf,
+    /// <remarks>
+    /// Which certificate is primary depends on where this is used. An export reads it from
+    /// <see cref="CertificateExportBuilder.Anchor"/>, falling back to the leaf of the sorted chain and
+    /// throwing when there is neither. <c>FilterPrivateKeys</c> has no anchor to consult and always
+    /// takes the first certificate in the sequence.
+    /// </remarks>
+    Primary,
 
     /// <summary>Export no private keys.</summary>
     None

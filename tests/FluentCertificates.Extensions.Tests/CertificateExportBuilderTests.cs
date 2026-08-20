@@ -252,7 +252,7 @@ public class CertificateExportBuilderTests
 
     [Test]
     [Arguments(ExportKeys.All)]
-    [Arguments(ExportKeys.Leaf)]
+    [Arguments(ExportKeys.Primary)]
     [Arguments(ExportKeys.None)]
     public async Task Export_LeavesTheCallersCertificatesUsable(ExportKeys keys)
     {
@@ -643,11 +643,27 @@ public class CertificateExportBuilderTests
         using var leafA = new CertificateBuilder().SetSubject("CN=Ambiguous All Leaf A").SetIssuer(root).Create();
         using var leafB = new CertificateBuilder().SetSubject("CN=Ambiguous All Leaf B").SetIssuer(root).Create();
 
-        //Only ExportKeys.Leaf and AsCert() need to know which one is the leaf; the rest never ask.
+        //Only ExportKeys.Primary and AsCert() need a designated certificate; the rest never ask.
         var certs = new[] { root, leafA, leafB };
         await Assert.That(certs.Export().WithPrivateKeys().AsPem().ToPemString()).IsNotEmpty();
         await Assert.That(certs.Export().WithoutPrivateKeys().AsPkcs12().ToByteArray()).IsNotEmpty();
         await Assert.That(certs.Export().AsPkcs7().ToByteArray()).IsNotEmpty();
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_AnchorDroppedFromTheCertificates_Throws()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Orphan Anchor Root").Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Orphan Anchor Leaf").SetIssuer(root).Create();
+        using var stranger = new CertificateBuilder().SetSubject("CN=Orphan Anchor Stranger").Create();
+
+        //Certificates is public and settable, so the anchor can be left dangling. An export that
+        //targets a certificate it does not contain is rejected rather than silently emitting it.
+        var orphaned = leaf.Export() with { Certificates = [root, stranger] };
+
+        await Assert.That(() => orphaned.AsCert().ToByteArray()).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => orphaned.WithPrivateKeys().AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
     }
 
 

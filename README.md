@@ -331,10 +331,10 @@ Each `WithPassword` overload clears the other kind of password, so the last call
 Certificates forming a single issuer chain are reordered **leaf-first** at export, so the order you add
 them in does not matter. A set that is not one unambiguous chain is left exactly as given.
 
-`ExportKeys.Leaf` and `AsCert()` are the only parts that need to identify the leaf, and they read it from
-the builder's `Anchor` rather than from position. `cert.Export()` anchors on that certificate and
+`ExportKeys.Primary` and `AsCert()` are the only parts that need a designated certificate, and they read
+it from the builder's `Anchor` rather than from position. `cert.Export()` anchors on that certificate and
 `chain.Export()` on the chain's end certificate, so adding issuers with `WithChain(...)` can never
-retarget the export:
+retarget the export, even when the result does form a valid chain:
 
 ```csharp
 //Exports the intermediate, because that is what the builder was anchored on
@@ -556,7 +556,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |Extension-Method|Description|
 |-|-|
 |`ToCollection()`|Copies the sequence into a new `X509Certificate2Collection`.|
-|`FilterPrivateKeys(ExportKeys include)`|Returns the sequence with private keys kept or stripped according to `include`. `ExportKeys.Leaf` keeps only the first certificate's private key, as the leaf is assumed to come first.|
+|`FilterPrivateKeys(ExportKeys include)`|Returns the sequence with private keys kept or stripped according to `include`. `ExportKeys.Primary` keeps only the first certificate's private key: a bare sequence has no anchor, so the primary one is taken to be the first.|
 |`Export()`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
 
 ---

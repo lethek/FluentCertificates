@@ -16,15 +16,17 @@ they summarise each release rather than record it as it happened.
 ### Added
 
 - `CertificateExportBuilder.WithoutPassword()`, clearing both password kinds.
-- `CertificateExportBuilder.Anchor`, naming the certificate `ExportKeys.Leaf` and `AsCert()` target. Set by `cert.Export()` and `chain.Export()`.
+- `CertificateExportBuilder.Anchor`, naming the certificate `ExportKeys.Primary` and `AsCert()` target. Set by `cert.Export()` and `chain.Export()`.
 
 ### Changed
 
+- **Breaking:** `ExportKeys.Leaf` is renamed to `ExportKeys.Primary`, since it now follows the export's anchor rather than a certificate's position in a chain.
 - **Breaking:** Export orders a chain's certificates leaf-first instead of root-first, changing the certificate order within PKCS#12 and PKCS#7 output. PEM block order is unchanged.
 - **Breaking:** `X509Chain.ToEnumerable()` and `ToCollection()` now return the chain leaf first, matching `X509Chain.ChainElements`.
-- **Breaking:** `ExportKeys.Leaf` and `AsCert()` now throw `InvalidOperationException` when the certificates are not a single issuer chain and no `Anchor` names the leaf, instead of exporting whichever certificate came first.
-- `ExportKeys.Leaf` and `AsCert()` follow the builder's `Anchor` rather than list position, so `WithChain(...)` cannot retarget them.
-- `FilterPrivateKeys(ExportKeys.Leaf)` keeps the first certificate's private key instead of the last.
+- **Breaking:** `ExportKeys.Primary` and `AsCert()` now throw `InvalidOperationException` when the certificates are not a single issuer chain and no `Anchor` names one, instead of exporting whichever certificate came first.
+- `ExportKeys.Primary` and `AsCert()` follow the builder's `Anchor` rather than list position, so `WithChain(...)` cannot retarget them even when the certificates do form a chain.
+- Exporting throws `ArgumentException` when the `Anchor` is not among the certificates being exported.
+- `FilterPrivateKeys(ExportKeys.Primary)` keeps the first certificate's private key instead of the last.
 
 ### Fixed
 

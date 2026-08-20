@@ -24,7 +24,7 @@ public static class X509ChainExtensions
     /// or stripped according to <paramref name="include"/>.
     /// </summary>
     /// <param name="chain">The chain whose certificates are returned.</param>
-    /// <param name="include">Which private keys to retain. <see cref="ExportKeys.Leaf"/> keeps only
+    /// <param name="include">Which private keys to retain. <see cref="ExportKeys.Primary"/> keeps only
     /// the first certificate's key, the leaf being first in this ordering.</param>
     /// <returns>The chain's certificates, leaf first and root last.</returns>
     /// <remarks>

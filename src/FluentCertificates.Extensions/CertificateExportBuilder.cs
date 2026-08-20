@@ -20,19 +20,24 @@ public record CertificateExportBuilder
     public ImmutableList<X509Certificate2> Certificates { get; init; } = ImmutableList<X509Certificate2>.Empty;
 
     /// <summary>
-    /// The certificate this builder was seeded with, when that certificate is known to be the leaf:
+    /// The certificate this builder was seeded with, and therefore the one the export is about:
     /// <c>cert.Export()</c> supplies the certificate itself and <c>chain.Export()</c> supplies the
-    /// chain's end certificate. Null when the builder was seeded from a set with no designated leaf,
+    /// chain's end certificate. Null when the builder was seeded from a set that designates none,
     /// such as <c>collection.Export()</c>.
     /// </summary>
     /// <remarks>
-    /// <see cref="ExportKeys.Leaf"/> and <see cref="AsCert"/> read the leaf from here rather than
-    /// inferring it from list position, so <see cref="WithChain(IEnumerable{X509Certificate2})"/>
-    /// cannot retarget the export onto a certificate the caller did not anchor on. Without an anchor
-    /// those two fall back to the leaf of the sorted chain, and throw when the certificates do not
-    /// form one.
+    /// <see cref="ExportKeys.Primary"/> and <see cref="AsCert"/> read the primary certificate from here
+    /// rather than inferring it from list position, so <see cref="WithChain(IEnumerable{X509Certificate2})"/>
+    /// cannot retarget the export onto a certificate the caller did not anchor on. This holds even when
+    /// the set does sort into one chain: an anchored intermediate stays the target rather than being
+    /// displaced by the chain's leaf. Without an anchor those two fall back to the leaf of the sorted
+    /// chain, and throw when the certificates do not form one.
+    /// <para>
+    /// Only the entry points set this. It cannot be assigned through a <c>with</c> expression, and an
+    /// export whose anchor is not among its certificates is rejected.
+    /// </para>
     /// </remarks>
-    public X509Certificate2? Anchor { get; init; }
+    public X509Certificate2? Anchor { get; private init; }
 
     /// <summary>
     /// Controls which private keys are included in the export.
@@ -76,11 +81,11 @@ public record CertificateExportBuilder
         => this with { Keys = keys };
 
     /// <summary>
-    /// Returns a new builder that will include only the leaf certificate's private key in the export
-    /// (i.e. <see cref="ExportKeys.Leaf"/>).
+    /// Returns a new builder that will include only the primary certificate's private key in the export
+    /// (i.e. <see cref="ExportKeys.Primary"/>). See <see cref="Anchor"/> for which one that is.
     /// </summary>
     public CertificateExportBuilder WithPrivateKey()
-        => this with { Keys = ExportKeys.Leaf };
+        => this with { Keys = ExportKeys.Primary };
 
     /// <summary>
     /// Returns a new builder that will include all private keys in the export
@@ -171,9 +176,9 @@ public record CertificateExportBuilder
 
     /// <summary>
     /// Selects DER-encoded certificate (CER/CRT) as the export format.
-    /// Only the leaf certificate is exported: the <see cref="Anchor"/> when there is one, otherwise the
+    /// Only the primary certificate is exported: the <see cref="Anchor"/> when there is one, otherwise the
     /// leaf of the sorted chain. Throws when there is no anchor and the certificates are not a single
-    /// issuer chain, since the leaf is then unknown.
+    /// issuer chain, since nothing then designates one.
     /// Returns a <see cref="CertificateExporter"/> whose output methods write the raw DER bytes.
     /// </summary>
     public CertificateExporter AsCert()
