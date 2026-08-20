@@ -218,12 +218,14 @@ Provides LINQ-queryable interface for finding certificates across:
 
 Export, via `Export()` and the `CertificateExportBuilder` it returns:
 - Configure: `WithPrivateKey()` / `WithPrivateKeys()` / `WithoutPrivateKeys()` / `WithKeys(ExportKeys)` /
-  `WithPassword(string?)` / `WithChain(...)`
+  `WithPassword(string?)` / `WithPassword(SecureString)` / `WithoutPassword()` / `WithChain(...)`
 - Format: `AsPem()` / `AsPkcs12()` / `AsPkcs7()` / `AsCert()`
 - Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
 
 `WithPassword(SecureString)` is honoured by every format, but only `AsPem()` keeps it out of the managed
-heap: the platform's PKCS#12 export takes a `string`, so `AsPkcs12()` has to materialise one.
+heap: the platform's PKCS#12 export takes a `string`, so `AsPkcs12()` has to materialise one. Each
+`WithPassword` overload clears the other kind of password, so the last call wins; `WithoutPassword()`
+clears both. Only a `with` expression can set both at once, and there `SecurePassword` takes precedence.
 
 Certificates forming a single issuer chain are reordered root-first at export, so the order they were
 added in does not matter. PEM blocks are written leaf-first from that, `ExportKeys.Leaf` keeps the last
