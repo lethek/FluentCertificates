@@ -217,10 +217,16 @@ Provides LINQ-queryable interface for finding certificates across:
 ### Extension Methods
 
 Export, via `Export()` and the `CertificateExportBuilder` it returns:
-- Configure: `WithPrivateKey()` / `WithPrivateKeys()` / `WithoutPrivateKeys()` / `WithKeys(ExportKeys)` /
-  `WithPassword(string?)` / `WithPassword(SecureString)` / `WithoutPassword()` / `WithChain(...)`
+- Configure, replacing state: `WithPrivateKey()` / `WithPrivateKeys()` / `WithoutPrivateKeys()` /
+  `WithKeys(ExportKeys)` / `WithPassword(string?)` / `WithPassword(SecureString)` / `WithoutPassword()`
+- Add, appending certificates: `AddChain(X509Chain)` / `AddChain(IEnumerable<X509Certificate2>)` /
+  `AddCertificates(IEnumerable<X509Certificate2>)` / `AddCertificate(X509Certificate2)`
 - Format: `AsPem()` / `AsPkcs12()` / `AsPkcs7()` / `AsCert()`
 - Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
+
+`With*` configures and `Add*` accumulates; keep that split when adding methods. All the `Add*` methods
+deduplicate by thumbprint, so a certificate already present is skipped. `WithChain(...)` is `[Obsolete]`
+and forwards to `AddChain(...)`.
 
 `WithPassword(SecureString)` is honoured by every format, but only `AsPem()` keeps it out of the managed
 heap: the platform's PKCS#12 export takes a `string`, so `AsPkcs12()` has to materialise one. Each
@@ -229,11 +235,11 @@ clears both. Only a `with` expression can set both at once, and there `SecurePas
 
 Ordering is decided by which API added the certificates, never by inspecting them at export time:
 
-- A **chain** is sorted. `WithChain(...)` declares its argument a chain, so that group is ordered
+- A **chain** is sorted. `AddChain(...)` declares its argument a chain, so that group is ordered
   leaf-first and appended as a block. Each call is sorted separately, so several calls give several
   ordered chains in call order. A group that does not form one chain is appended as given.
-- A **collection** is preserved. `collection.Export()` and the `IEnumerable` overload are bundles and
-  are never reordered, chain or not.
+- A **collection** is preserved. `AddCertificates(...)`, `AddCertificate(...)`, `collection.Export()`
+  and the `IEnumerable` overload are bundles and are never reordered, chain or not.
 - `chain.Export()` needs no sorting: `X509Chain.ChainElements` is already leaf-first.
 
 All four formats write the list in that order. PEM is the one where order carries meaning (TLS servers
@@ -242,7 +248,7 @@ PEM the moment someone runs `openssl pkcs12 -nokeys`, so the same rule applies t
 
 `ExportKeys.Primary` and `AsCert()` are the only parts that need a designated certificate, and they read
 it from the builder's `Anchor` rather than from list position. `cert.Export()` anchors on the certificate
-itself and `chain.Export()` on the chain's end certificate, so `WithChain(...)` can never retarget them.
+itself and `chain.Export()` on the chain's end certificate, so `AddChain(...)` can never retarget them.
 `collection.Export()` and the `IEnumerable` overload set no anchor, so those two throw
 `InvalidOperationException` there: a bundle designates no leaf, and position is not evidence of one, even
 when the certificates happen to form a chain. Every other export works fine without an anchor, because

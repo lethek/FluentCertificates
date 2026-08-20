@@ -314,14 +314,18 @@ cert.Export().AsCert().ToByteArray();
 chain.Export().AsPkcs7().ToByteArray();
 
 //A leaf plus its issuers, with all private keys stripped
-leafCert.Export().WithChain([leafCert, intermediateCert, rootCert]).WithoutPrivateKeys().AsPkcs12().ToByteArray();
+leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).WithoutPrivateKeys().AsPkcs12().ToByteArray();
 ```
 
 |Stage|Methods|
 |-|-|
-|Configure|`WithPrivateKey()`, `WithPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`, `WithChain(...)`|
+|Configure|`WithPrivateKey()`, `WithPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`|
+|Add|`AddChain(X509Chain)`, `AddChain(IEnumerable<X509Certificate2>)`, `AddCertificates(IEnumerable<X509Certificate2>)`, `AddCertificate(X509Certificate2)`|
 |Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsCert()`|
 |Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
+
+`With*` configures the export and replaces whatever was set before; `Add*` appends certificates to it.
+Every `Add*` method deduplicates by thumbprint, so a certificate already present is skipped.
 
 Each `WithPassword` overload clears the other kind of password, so the last call wins, and
 `WithoutPassword()` clears both. A `SecureString` password is honoured by every format, but only
@@ -332,20 +336,24 @@ Each `WithPassword` overload clears the other kind of password, so the last call
 collection is preserved:
 
 ```csharp
-//A chain: WithChain declares it one, so it is sorted leaf-first however it arrives
-leafCert.Export().WithChain([rootCert, midCert]).AsPem().ToPemString();
+//A chain: AddChain declares it one, so it is sorted leaf-first however it arrives
+leafCert.Export().AddChain([rootCert, midCert]).AsPem().ToPemString();
 //  -> leaf, mid, root
 
 //Several chains: each call sorted as a unit, blocks appended in call order
-leaf1.Export().WithChain([mid1, root1]).WithChain([root2, mid2, leaf2]).AsPem().ToPemString();
+leaf1.Export().AddChain([mid1, root1]).AddChain([root2, mid2, leaf2]).AsPem().ToPemString();
 //  -> leaf1, mid1, root1, leaf2, mid2, root2
 
 //A collection: a bundle, written exactly as supplied even if it happens to form a chain
 new[] { rootCert, midCert, leafCert }.Export().AsPem().ToPemString();
 //  -> root, mid, leaf
+
+//AddCertificates appends without claiming a relationship, so it never reorders either
+leafCert.Export().AddChain([rootCert, midCert]).AddCertificates([otherRoot, unrelated]).AsPem().ToPemString();
+//  -> leaf, mid, root, otherRoot, unrelated
 ```
 
-`chain.Export()` needs no sorting, since `X509Chain.ChainElements` is already leaf-first. A `WithChain`
+`chain.Export()` needs no sorting, since `X509Chain.ChainElements` is already leaf-first. An `AddChain`
 group that does not form a single chain is appended in the order given.
 
 This matters most for PEM, where TLS servers require the sender's certificate first, but the order is
@@ -354,12 +362,12 @@ preserved in PKCS#12 and PKCS#7 too and reappears in PEM as soon as anyone runs
 
 `ExportKeys.Primary` and `AsCert()` are the only parts that need a designated certificate, and they read
 it from the builder's `Anchor` rather than from position. `cert.Export()` anchors on that certificate and
-`chain.Export()` on the chain's end certificate, so adding issuers with `WithChain(...)` can never
+`chain.Export()` on the chain's end certificate, so adding issuers with `AddChain(...)` can never
 retarget the export, even when the result does form a valid chain:
 
 ```csharp
 //Exports the intermediate, because that is what the builder was anchored on
-intermediateCert.Export().WithChain([rootCert, leafCert]).AsCert().ToByteArray();
+intermediateCert.Export().AddChain([rootCert, leafCert]).AsCert().ToByteArray();
 ```
 
 `collection.Export()` and the `IEnumerable<X509Certificate2>` overload designate no leaf, so both throw
@@ -371,7 +379,7 @@ no primary certificate, and arriving first is not evidence of being one.
 new[] { rootCert, midCert, leafCert }.Export().AsCert().ToByteArray();
 
 //Fine: declaring a chain is what makes the leaf knowable
-leafCert.Export().WithChain([rootCert, midCert]).AsCert().ToByteArray();
+leafCert.Export().AddChain([rootCert, midCert]).AsCert().ToByteArray();
 ```
 
 

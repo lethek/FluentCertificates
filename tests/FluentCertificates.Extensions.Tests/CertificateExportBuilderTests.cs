@@ -135,7 +135,7 @@ public class CertificateExportBuilderTests
 
     [Test]
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
-    public async Task ExportBuilder_WithChain_DeduplicatesByThumbprint(KeyAlgorithm algorithm)
+    public async Task ExportBuilder_AddChain_DeduplicatesByThumbprint(KeyAlgorithm algorithm)
     {
         using var rootCert = new CertificateBuilder()
             .SetKeyAlgorithm(algorithm)
@@ -146,9 +146,9 @@ public class CertificateExportBuilderTests
             .SetIssuer(rootCert)
             .Create();
 
-        // leafCert already in the initial list; WithChain adds leafCert again + rootCert
+        // leafCert already in the initial list; AddChain adds leafCert again + rootCert
         var bytes = leafCert.Export()
-            .WithChain([leafCert, rootCert])
+            .AddChain([leafCert, rootCert])
             .AsPkcs12()
             .ToByteArray();
 
@@ -268,7 +268,7 @@ public class CertificateExportBuilderTests
             .Create();
 
         //Anchored, so ExportKeys.Primary has a certificate to designate. A bare collection would not.
-        CertificateExportBuilder Export() => leaf.Export().WithChain([rootCa]).WithKeys(keys);
+        CertificateExportBuilder Export() => leaf.Export().AddChain([rootCa]).WithKeys(keys);
 
         //Stripping keys creates certificates the exporter disposes; these two are not among them
         var pem = Export().AsPem().ToPemString();
@@ -396,13 +396,13 @@ public class CertificateExportBuilderTests
 
 
     [Test]
-    public async Task ExportBuilder_Pem_WithChain_WritesCertificatesLeafFirst()
+    public async Task ExportBuilder_Pem_AddChain_WritesCertificatesLeafFirst()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Order Root").Create();
         using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Order Intermediate").SetIssuer(root).Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Order Leaf").SetIssuer(intermediate).Create();
 
-        var pem = leaf.Export().WithChain([root, intermediate]).WithoutPrivateKeys().AsPem().ToPemString();
+        var pem = leaf.Export().AddChain([root, intermediate]).WithoutPrivateKeys().AsPem().ToPemString();
 
         await Assert.That(ParseCertificateSubjects(pem))
             .IsEquivalentTo(new[] { leaf.Subject, intermediate.Subject, root.Subject }, CollectionOrdering.Matching);
@@ -417,7 +417,7 @@ public class CertificateExportBuilderTests
 
         var (_, chain) = leaf.BuildChain([root], true);
         using (chain) {
-            var viaLeaf = leaf.Export().WithChain(chain).WithoutPrivateKeys().AsPem().ToPemString();
+            var viaLeaf = leaf.Export().AddChain(chain).WithoutPrivateKeys().AsPem().ToPemString();
             var viaChain = chain.Export().WithoutPrivateKeys().AsPem().ToPemString();
             await Assert.That(viaLeaf).IsEqualTo(viaChain);
         }
@@ -425,12 +425,12 @@ public class CertificateExportBuilderTests
 
 
     [Test]
-    public async Task ExportBuilder_WithChain_WithPrivateKey_KeepsTheLeafsKeyNotTheIssuers()
+    public async Task ExportBuilder_AddChain_WithPrivateKey_KeepsTheLeafsKeyNotTheIssuers()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Key Owner Root").Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Key Owner Leaf").SetIssuer(root).Create();
 
-        var bytes = leaf.Export().WithChain([root]).WithPrivateKey().AsPkcs12().ToByteArray();
+        var bytes = leaf.Export().AddChain([root]).WithPrivateKey().AsPkcs12().ToByteArray();
 
         var loaded = new X509Certificate2Collection();
 #pragma warning disable SYSLIB0057
@@ -457,13 +457,13 @@ public class CertificateExportBuilderTests
 
 
     [Test]
-    public async Task ExportBuilder_Cert_WithChain_ExportsTheLeaf()
+    public async Task ExportBuilder_Cert_AddChain_ExportsTheLeaf()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert Chain Root").Create();
         using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert Chain Intermediate").SetIssuer(root).Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Cert Chain Leaf").SetIssuer(intermediate).Create();
 
-        var bytes = leaf.Export().WithChain([root, intermediate]).AsCert().ToByteArray();
+        var bytes = leaf.Export().AddChain([root, intermediate]).AsCert().ToByteArray();
 
         await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
     }
@@ -482,7 +482,7 @@ public class CertificateExportBuilderTests
             .ThrowsExactly<InvalidOperationException>();
 
         //Declaring the same certificates a chain is what makes the leaf knowable.
-        var bytes = leaf.Export().WithChain([intermediate, root]).AsCert().ToByteArray();
+        var bytes = leaf.Export().AddChain([intermediate, root]).AsCert().ToByteArray();
         await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
     }
 
@@ -535,13 +535,13 @@ public class CertificateExportBuilderTests
 
 
     [Test]
-    public async Task ExportBuilder_Pkcs7_WithChain_WritesCertificatesLeafFirst()
+    public async Task ExportBuilder_Pkcs7_AddChain_WritesCertificatesLeafFirst()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=P7 Order Root").Create();
         using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=P7 Order Intermediate").SetIssuer(root).Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=P7 Order Leaf").SetIssuer(intermediate).Create();
 
-        var bytes = leaf.Export().WithChain([root, intermediate]).AsPkcs7().ToByteArray();
+        var bytes = leaf.Export().AddChain([root, intermediate]).AsPkcs7().ToByteArray();
 
         await Assert.That(LoadedSubjects(bytes))
             .IsEquivalentTo(new[] { leaf.Subject, intermediate.Subject, root.Subject }, CollectionOrdering.Matching);
@@ -549,13 +549,13 @@ public class CertificateExportBuilderTests
 
 
     [Test]
-    public async Task ExportBuilder_Pkcs12_WithChain_WritesCertificatesLeafFirst()
+    public async Task ExportBuilder_Pkcs12_AddChain_WritesCertificatesLeafFirst()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=P12 Order Root").Create();
         using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=P12 Order Intermediate").SetIssuer(root).Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=P12 Order Leaf").SetIssuer(intermediate).Create();
 
-        var bytes = leaf.Export().WithChain([root, intermediate]).WithoutPrivateKeys().AsPkcs12().ToByteArray();
+        var bytes = leaf.Export().AddChain([root, intermediate]).WithoutPrivateKeys().AsPkcs12().ToByteArray();
 
         await Assert.That(LoadedSubjects(bytes))
             .IsEquivalentTo(new[] { leaf.Subject, intermediate.Subject, root.Subject }, CollectionOrdering.Matching);
@@ -571,14 +571,14 @@ public class CertificateExportBuilderTests
 
         //Root plus two sibling leaves is not one chain, so the canonicaliser bails out and leaves the
         //list as supplied. The certificate the caller seeded the builder with is still at index 0.
-        var bytes = leafA.Export().WithChain([root, leafB]).AsCert().ToByteArray();
+        var bytes = leafA.Export().AddChain([root, leafB]).AsCert().ToByteArray();
 
         await Assert.That(bytes).IsEquivalentTo(leafA.RawData, CollectionOrdering.Matching);
     }
 
 
     [Test]
-    public async Task ExportBuilder_Cert_WithChain_CannotRetargetTheAnchor()
+    public async Task ExportBuilder_Cert_AddChain_CannotRetargetTheAnchor()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Retarget Root").Create();
         using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Retarget Intermediate").SetIssuer(root).Create();
@@ -586,20 +586,20 @@ public class CertificateExportBuilderTests
 
         //These three do sort into one chain whose leaf is `leaf`, but the caller anchored on the
         //intermediate, so that is what gets exported. Position does not get a vote.
-        var bytes = intermediate.Export().WithChain([root, leaf]).AsCert().ToByteArray();
+        var bytes = intermediate.Export().AddChain([root, leaf]).AsCert().ToByteArray();
 
         await Assert.That(bytes).IsEquivalentTo(intermediate.RawData, CollectionOrdering.Matching);
     }
 
 
     [Test]
-    public async Task ExportBuilder_WithPrivateKey_WithChain_KeepsTheAnchorsKey()
+    public async Task ExportBuilder_WithPrivateKey_AddChain_KeepsTheAnchorsKey()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Anchor Key Root").Create();
         using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Anchor Key Intermediate").SetIssuer(root).Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Anchor Key Leaf").SetIssuer(intermediate).Create();
 
-        var bytes = intermediate.Export().WithChain([root, leaf]).WithPrivateKey().AsPkcs12().ToByteArray();
+        var bytes = intermediate.Export().AddChain([root, leaf]).WithPrivateKey().AsPkcs12().ToByteArray();
 
         var loaded = new X509Certificate2Collection();
 #pragma warning disable SYSLIB0057
@@ -674,14 +674,14 @@ public class CertificateExportBuilderTests
 
 
     [Test]
-    public async Task ExportBuilder_Pem_WithChain_SortsTheDeclaredChainWhateverOrderItArrivesIn()
+    public async Task ExportBuilder_Pem_AddChain_SortsTheDeclaredChainWhateverOrderItArrivesIn()
     {
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Group Root").Create();
         using var mid = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Group Mid").SetIssuer(root).Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Group Leaf").SetIssuer(mid).Create();
 
         //Declared a chain, so the group is sorted leaf-first even though it arrived root-first.
-        var pem = leaf.Export().WithChain([root, mid]).WithoutPrivateKeys().AsPem().ToPemString();
+        var pem = leaf.Export().AddChain([root, mid]).WithoutPrivateKeys().AsPem().ToPemString();
 
         await Assert.That(ParseCertificateSubjects(pem))
             .IsEquivalentTo(new[] { leaf.Subject, mid.Subject, root.Subject }, CollectionOrdering.Matching);
@@ -699,11 +699,11 @@ public class CertificateExportBuilderTests
         using var mid2 = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Multi Mid2").SetIssuer(root2).Create();
         using var leaf2 = new CertificateBuilder().SetSubject("CN=Multi Leaf2").SetIssuer(mid2).Create();
 
-        //Two independent chains in one bundle. Each WithChain call is sorted as a unit and appended as a
+        //Two independent chains in one bundle. Each AddChain call is sorted as a unit and appended as a
         //block, so the second chain comes out leaf-first despite being handed over root-first.
         var pem = leaf1.Export()
-            .WithChain([mid1, root1])
-            .WithChain([root2, mid2, leaf2])
+            .AddChain([mid1, root1])
+            .AddChain([root2, mid2, leaf2])
             .WithoutPrivateKeys()
             .AsPem()
             .ToPemString();
@@ -727,6 +727,79 @@ public class CertificateExportBuilderTests
 
         await Assert.That(ParseCertificateSubjects(pem))
             .IsEquivalentTo(new[] { root.Subject, mid.Subject, leaf.Subject }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_AddCertificates_AppendsWithoutReordering()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Append Root").Create();
+        using var mid = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Append Mid").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Append Leaf").SetIssuer(mid).Create();
+
+        using var otherRoot = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Append Other Root").Create();
+        using var otherMid = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Append Other Mid").SetIssuer(otherRoot).Create();
+
+        //The second group is a chain too, root-first. AddChain would sort it to otherMid, otherRoot;
+        //AddCertificates claims nothing about it, so it stays exactly as handed over.
+        var pem = leaf.Export()
+            .AddChain([root, mid])
+            .AddCertificates([otherRoot, otherMid])
+            .WithoutPrivateKeys()
+            .AsPem()
+            .ToPemString();
+
+        await Assert.That(ParseCertificateSubjects(pem))
+            .IsEquivalentTo(
+                new[] { leaf.Subject, mid.Subject, root.Subject, otherRoot.Subject, otherMid.Subject },
+                CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_AddCertificate_AppendsOneAtTheEnd()
+    {
+        using var first = new CertificateBuilder().SetSubject("CN=Single One").Create();
+        using var second = new CertificateBuilder().SetSubject("CN=Single Two").Create();
+
+        var pem = first.Export().AddCertificate(second).WithoutPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(ParseCertificateSubjects(pem))
+            .IsEquivalentTo(new[] { first.Subject, second.Subject }, CollectionOrdering.Matching);
+
+        //Adding one already present is a no-op rather than a duplicate block
+        var same = first.Export().AddCertificate(first).WithoutPrivateKeys().AsPem().ToPemString();
+        await Assert.That(ParseCertificateSubjects(same)).IsEquivalentTo(new[] { first.Subject }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_AddCertificates_TakesAnX509Certificate2Collection()
+    {
+        using var leaf = new CertificateBuilder().SetSubject("CN=Coll Leaf").Create();
+        using var other = new CertificateBuilder().SetSubject("CN=Coll Other").Create();
+
+        var collection = new X509Certificate2Collection(new[] { other });
+        var pem = leaf.Export().AddCertificates(collection).WithoutPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(ParseCertificateSubjects(pem))
+            .IsEquivalentTo(new[] { leaf.Subject, other.Subject }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_WithChain_StillForwardsToAddChain()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Bridge Root").Create();
+        using var mid = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Bridge Mid").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Bridge Leaf").SetIssuer(mid).Create();
+
+#pragma warning disable CS0618 // deliberately exercising the obsolete forwarding overload
+        var viaOld = leaf.Export().WithChain([root, mid]).WithoutPrivateKeys().AsPem().ToPemString();
+#pragma warning restore CS0618
+        var viaNew = leaf.Export().AddChain([root, mid]).WithoutPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(viaOld).IsEqualTo(viaNew);
     }
 
 

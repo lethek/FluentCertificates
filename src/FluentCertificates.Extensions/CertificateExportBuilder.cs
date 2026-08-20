@@ -106,8 +106,8 @@ public record CertificateExportBuilder
     /// builder's certificate list, deduplicating by thumbprint (certificates already present are skipped).
     /// </summary>
     /// <param name="chain">An X.509 chain whose elements are appended.</param>
-    public CertificateExportBuilder WithChain(X509Chain chain)
-        => WithChain(chain.ToEnumerable());
+    public CertificateExportBuilder AddChain(X509Chain chain)
+        => AddChain(chain.ToEnumerable());
 
     /// <summary>
     /// Returns a new builder that appends <paramref name="certs"/> to the builder's certificate list,
@@ -116,13 +116,55 @@ public record CertificateExportBuilder
     /// leaf-first and appended as a block. Each call is sorted separately, so several calls produce
     /// several ordered chains in call order.
     /// </summary>
-    /// <param name="certs">Additional certificates to include.</param>
-    public CertificateExportBuilder WithChain(IEnumerable<X509Certificate2> certs)
+    /// <param name="certs">Additional certificates to include, forming a chain.</param>
+    /// <seealso cref="AddCertificates"/>
+    public CertificateExportBuilder AddChain(IEnumerable<X509Certificate2> certs)
+        => Append(certs, OrderLeafFirst);
+
+    /// <summary>
+    /// Returns a new builder that appends <paramref name="certs"/> to the builder's certificate list in
+    /// exactly the order given, deduplicating by thumbprint (certificates already present are skipped).
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="AddChain(IEnumerable{X509Certificate2})"/> this claims nothing about how the
+    /// certificates relate, so they are never reordered even when they do form a chain. Use it for a
+    /// CA bundle, a trust store, or any set whose order is the caller's to decide.
+    /// </remarks>
+    /// <param name="certs">Additional certificates to include, in the order they should be written.</param>
+    /// <seealso cref="AddChain(IEnumerable{X509Certificate2})"/>
+    public CertificateExportBuilder AddCertificates(IEnumerable<X509Certificate2> certs)
+        => Append(certs, x => x);
+
+    /// <summary>
+    /// Returns a new builder that appends <paramref name="cert"/> to the end of the builder's certificate
+    /// list, or the same builder when it is already present.
+    /// </summary>
+    /// <param name="cert">The certificate to append.</param>
+    public CertificateExportBuilder AddCertificate(X509Certificate2 cert)
+        => AddCertificates([cert]);
+
+    /// <summary>
+    /// Returns a new builder that appends whatever <paramref name="arrange"/> makes of the not-already-present
+    /// members of <paramref name="certs"/>.
+    /// </summary>
+    private CertificateExportBuilder Append(IEnumerable<X509Certificate2> certs, Func<IReadOnlyList<X509Certificate2>, IReadOnlyList<X509Certificate2>> arrange)
     {
         var existing = Certificates.Select(c => c.Thumbprint).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var toAdd = certs.Where(c => existing.Add(c.Thumbprint)).ToList();
-        return this with { Certificates = Certificates.AddRange(OrderLeafFirst(toAdd)) };
+        return toAdd.Count == 0
+            ? this
+            : this with { Certificates = Certificates.AddRange(arrange(toAdd)) };
     }
+
+    /// <inheritdoc cref="AddChain(X509Chain)"/>
+    [Obsolete("Renamed to AddChain, which says that it appends rather than configures. This forwarding overload will be removed in a future version.")]
+    public CertificateExportBuilder WithChain(X509Chain chain)
+        => AddChain(chain);
+
+    /// <inheritdoc cref="AddChain(IEnumerable{X509Certificate2})"/>
+    [Obsolete("Renamed to AddChain, which says that it appends rather than configures. Use AddCertificates to append certificates without declaring them a chain. This forwarding overload will be removed in a future version.")]
+    public CertificateExportBuilder WithChain(IEnumerable<X509Certificate2> certs)
+        => AddChain(certs);
 
 
     /// <summary>

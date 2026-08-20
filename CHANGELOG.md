@@ -17,17 +17,22 @@ they summarise each release rather than record it as it happened.
 
 - `CertificateExportBuilder.WithoutPassword()`, clearing both password kinds.
 - `CertificateExportBuilder.Anchor`, naming the certificate `ExportKeys.Primary` and `AsCert()` target. Set by `cert.Export()` and `chain.Export()`.
+- `CertificateExportBuilder.AddCertificates(IEnumerable<X509Certificate2>)` and `AddCertificate(X509Certificate2)`, appending certificates without declaring them a chain, so they are never reordered.
 
 ### Changed
 
 - **Breaking:** `ExportKeys.Leaf` is renamed to `ExportKeys.Primary`, since it now follows the export's anchor rather than a certificate's position in a chain.
 - **Breaking:** Export orders a chain's certificates leaf-first instead of root-first, changing the certificate order within PKCS#12 and PKCS#7 output. PEM block order is unchanged.
-- **Breaking:** Ordering is decided by which API added the certificates. `WithChain(...)` declares its argument a chain and sorts that group leaf-first, appending it as a block; `collection.Export()` and the `IEnumerable` overload are bundles and are never reordered, even when they form a chain.
+- **Breaking:** Ordering is decided by which API added the certificates. `AddChain(...)` declares its argument a chain and sorts that group leaf-first, appending it as a block; `AddCertificates(...)`, `collection.Export()` and the `IEnumerable` overload are bundles and are never reordered, even when they form a chain.
 - **Breaking:** `X509Chain.ToEnumerable()` and `ToCollection()` now return the chain leaf first, matching `X509Chain.ChainElements`.
 - **Breaking:** `ExportKeys.Primary` and `AsCert()` now throw `InvalidOperationException` when no `Anchor` names a certificate, instead of exporting whichever came first. Only `cert.Export()` and `chain.Export()` set an anchor.
-- `ExportKeys.Primary` and `AsCert()` follow the builder's `Anchor` rather than list position, so `WithChain(...)` cannot retarget them even when the certificates do form a chain.
+- `ExportKeys.Primary` and `AsCert()` follow the builder's `Anchor` rather than list position, so `AddChain(...)` cannot retarget them even when the certificates do form a chain.
 - Exporting throws `ArgumentException` when the `Anchor` is not among the certificates being exported.
 - `FilterPrivateKeys(ExportKeys.Primary)` keeps the first certificate's private key instead of the last.
+
+### Deprecated
+
+- `CertificateExportBuilder.WithChain(...)`, renamed to `AddChain(...)` because it appends rather than configures. The old name forwards to the new one.
 
 ### Fixed
 
