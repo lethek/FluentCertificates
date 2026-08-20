@@ -2,8 +2,6 @@ using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates.Internals;
-
 
 namespace FluentCertificates;
 
@@ -234,22 +232,6 @@ public static class X509Certificate2Extensions
     /// <returns>True if equal; otherwise, false.</returns>
     private static bool AreByteSpansEqual(Span<byte> first, Span<byte> second)
         => first.SequenceEqual(second);
-
-
-    
-    /// <summary>
-    /// Filters the private key from the certificate based on the <see cref="ExportKeys"/> option.
-    /// </summary>
-    /// <param name="cert">The certificate.</param>
-    /// <param name="include">The export key option.</param>
-    /// <returns>The filtered certificate.</returns>
-    private static X509Certificate2 FilterPrivateKey(X509Certificate2 cert, ExportKeys include)
-        => include switch {
-            ExportKeys.All => cert,
-            ExportKeys.Leaf => cert,
-            ExportKeys.None => cert.HasPrivateKey ? CertTools.LoadCertificate(cert.RawDataMemory.Span) : cert,
-            _ => throw new ArgumentOutOfRangeException(nameof(include))
-        };
 
 
     /// <summary>
