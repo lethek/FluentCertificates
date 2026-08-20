@@ -176,8 +176,9 @@ public class CertificateExporter
     /// candidates for the same position, is returned untouched.
     /// </summary>
     /// <remarks>
-    /// Both the leaf-first PEM block order and <see cref="ExportKeys.Leaf"/> read the leaf off the end of
-    /// this list, so a caller who reaches the same chain by a different route (say a leaf seeded by
+    /// The leaf-first PEM block order, <see cref="ExportKeys.Leaf"/> and
+    /// <see cref="CertificateExportBuilder.AsCert"/> all read the leaf off the end of this list, so a
+    /// caller who reaches the same chain by a different route (say a leaf seeded by
     /// <c>cert.Export()</c> then topped up with <see cref="CertificateExportBuilder.WithChain(X509Chain)"/>)
     /// must not get a different export.
     /// </remarks>
