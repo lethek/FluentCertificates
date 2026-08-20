@@ -99,7 +99,7 @@ public class CertificateExporter
                 ?? throw new InvalidOperationException("PKCS#7 export returned null."),
 
             ExportFormat.Cert =>
-                _certs[0].RawData,
+                _certs[^1].RawData,
 
             _ => throw new InvalidOperationException($"Unsupported export format: {_format}.")
         };

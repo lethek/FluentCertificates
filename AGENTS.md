@@ -227,8 +227,8 @@ heap: the platform's PKCS#12 export takes a `string`, so `AsPkcs12()` has to mat
 
 Certificates forming a single issuer chain are reordered root-first at export, so the order they were
 added in does not matter. PEM blocks are written leaf-first from that, `ExportKeys.Leaf` keeps the last
-certificate's key, and `AsCert()` exports the first. A set that is not one unambiguous chain is left in
-the order it was given.
+certificate's key, and `AsCert()` exports the last (the leaf). A set that is not one unambiguous chain is
+left in the order it was given.
 
 Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `BuildChain()` - Build certificate chains. Two overloads: `(IEnumerable<X509Certificate2>?, bool)` and

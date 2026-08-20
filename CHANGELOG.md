@@ -13,6 +13,10 @@ they summarise each release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Fixed
+
+- `AsCert()` now exports a chain's leaf certificate instead of its root.
+
 ## [0.15.0] - 2026-08-20
 
 ### Added

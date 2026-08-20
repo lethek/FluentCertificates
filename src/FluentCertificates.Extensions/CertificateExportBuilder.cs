@@ -143,8 +143,7 @@ public record CertificateExportBuilder
 
     /// <summary>
     /// Selects DER-encoded certificate (CER/CRT) as the export format.
-    /// Only the first certificate in the builder's list is exported — for chains,
-    /// this is typically the root certificate; for single-certificate builders it is the leaf.
+    /// Only the last certificate in the builder's list is exported: the leaf, for chains.
     /// Returns a <see cref="CertificateExporter"/> whose output methods write the raw DER bytes.
     /// </summary>
     public CertificateExporter AsCert()
