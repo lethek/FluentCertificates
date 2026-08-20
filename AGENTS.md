@@ -162,6 +162,21 @@ All public APIs require XML documentation comments (`///`). Documentation is gen
 ### Internals Visibility
 Several projects expose internals to test projects and LINQPad via `InternalsVisibleTo`. Check .csproj files before making members internal.
 
+### Key and Certificate Ownership
+`X509Certificate2` and `AsymmetricAlgorithm` are both disposable, and three rules decide who releases them:
+
+1. **Keys the builder generates** are disposed by `CertificateBuilder.Create` (see the `generateKeys` flag).
+2. **Keys supplied by the caller**, via `SetKeyPair` or `SetPublicKey`, are never disposed by the library.
+3. **Keys and certificates the library extracts** it must dispose itself. `GetPrivateKey()`,
+   `GetRSAPublicKey()` and friends return a *new* instance per call, and `CopyWithPrivateKey` returns a
+   new certificate that supersedes the original. Scope all of them with `using`.
+
+Check rule 3 when adding any call to `Get*PrivateKey`, `Get*PublicKey` or `CopyWithPrivateKey`. Disposing
+an extracted key does not affect the certificate it came from, or any sibling instance.
+
+`FilterPrivateKeys` is the exception: it emits a mix of caller-owned originals and library-created keyless
+copies, indistinguishable to the caller, so its output must not be disposed. See #46.
+
 ## Working with Certificates
 
 ### CertificateBuilder

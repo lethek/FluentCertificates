@@ -237,6 +237,36 @@ using var webCert = new CertificateBuilder()
 
 ---
 
+## Key Ownership and Disposal
+
+`X509Certificate2` and every `AsymmetricAlgorithm` are disposable. Three rules cover who releases what:
+
+* **Keys the builder generates** are disposed by the builder, as soon as `Create()` no longer needs
+  them. You never see them.
+* **Keys you supply**, through `SetKeyPair` or `SetPublicKey`, are yours. The builder never disposes
+  them, so the same key can be reused across as many certificates as you like.
+* **Keys you extract from a certificate**, through `GetPrivateKey()` or .NET's own
+  `GetRSAPrivateKey()` and friends, are yours to dispose. Each call hands back a *new* instance, so
+  calling it in a loop without a `using` leaks one handle per iteration.
+
+Disposing an extracted key doesn't affect the certificate it came from, or any other instance
+obtained from it, so the certificate stays usable and can be asked for its key again.
+
+```csharp
+//The certificate and the extracted key are separate disposables
+using var cert = new CertificateBuilder().SetSubject(b => b.SetCommonName("Example")).Create();
+using var key = cert.GetPrivateKey();
+```
+
+Certificates the library returns to you are always yours. Nothing in `CertificateFinder` or the export
+path disposes a certificate you can still reach.
+
+One exception, on `FilterPrivateKeys`: when it strips a private key it returns a keyless copy, and
+otherwise passes your original through. The resulting sequence mixes objects you own with objects the
+call created, and there's no way to tell them apart, so don't dispose its elements.
+
+---
+
 ## Exporting Certificates
 
 Exporting requires the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package (included in the top-level `FluentCertificates` package) and is found under the `FluentCertificates` namespace.
@@ -438,7 +468,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. The `DateTime` overload is **deprecated**, because a `DateTime` carries no offset and its `DateTimeKind` changes the result.|
 |`IsSelfSigned(bool verifySignature = false)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key.|
 |`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name.|
-|`GetPrivateKey()`|Returns the private key as an `AsymmetricAlgorithm`, whatever its algorithm.|
+|`GetPrivateKey()`|Returns the private key as an `AsymmetricAlgorithm`, whatever its algorithm. Every call returns a **new instance which you own and should dispose**; see [Key ownership](#key-ownership-and-disposal).|
 |`GetSignatureAlgorithm()`|Returns the `SignatureAlgorithm` the certificate was signed with, combining key algorithm, hash and padding.|
 |`GetToBeSignedData()`|The raw "to be signed" (TBS) bytes, i.e. what the issuer's signature covers.|
 |`GetSignatureData()`|The raw signature bytes. Together with `GetToBeSignedData()` this allows verifying a signature yourself.|
