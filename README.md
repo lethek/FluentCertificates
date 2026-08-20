@@ -320,12 +320,23 @@ leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).WithoutPrivat
 |Stage|Methods|
 |-|-|
 |Configure|`WithPrivateKey()`, `WithPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`|
-|Add|`AddChain(X509Chain)`, `AddChain(IEnumerable<X509Certificate2>)`, `AddCertificates(IEnumerable<X509Certificate2>)`, `AddCertificate(X509Certificate2)`|
+|Add|`AddChain(X509Chain)`, `AddChain(...)`, `AddCertificates(...)`|
 |Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsCert()`|
 |Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
 `With*` configures the export and replaces whatever was set before; `Add*` appends certificates to it.
 Every `Add*` method deduplicates by thumbprint, so a certificate already present is skipped.
+
+`AddChain` and `AddCertificates` each take either an `IEnumerable<X509Certificate2>` or loose
+`params` arguments, so an array, a LINQ query, an `X509Certificate2Collection`, or a handful of
+individual certificates all work:
+
+```csharp
+leafCert.Export().AddChain(midCert, rootCert);              //loose arguments
+leafCert.Export().AddChain(chainArray);                     //an array
+leafCert.Export().AddCertificates(store.Certificates);      //an X509Certificate2Collection
+leafCert.Export().AddCertificates(certs.Where(IsCurrent));  //a lazy sequence
+```
 
 Each `WithPassword` overload clears the other kind of password, so the last call wins, and
 `WithoutPassword()` clears both. A `SecureString` password is honoured by every format, but only

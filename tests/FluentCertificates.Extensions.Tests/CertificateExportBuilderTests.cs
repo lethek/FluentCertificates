@@ -757,19 +757,46 @@ public class CertificateExportBuilderTests
 
 
     [Test]
-    public async Task ExportBuilder_AddCertificate_AppendsOneAtTheEnd()
+    public async Task ExportBuilder_AddCertificates_AcceptsLooseArguments()
     {
         using var first = new CertificateBuilder().SetSubject("CN=Single One").Create();
         using var second = new CertificateBuilder().SetSubject("CN=Single Two").Create();
+        using var third = new CertificateBuilder().SetSubject("CN=Single Three").Create();
 
-        var pem = first.Export().AddCertificate(second).WithoutPrivateKeys().AsPem().ToPemString();
-
-        await Assert.That(ParseCertificateSubjects(pem))
+        //One certificate, no collection in sight
+        var one = first.Export().AddCertificates(second).WithoutPrivateKeys().AsPem().ToPemString();
+        await Assert.That(ParseCertificateSubjects(one))
             .IsEquivalentTo(new[] { first.Subject, second.Subject }, CollectionOrdering.Matching);
 
+        //Several, still loose
+        var several = first.Export().AddCertificates(second, third).WithoutPrivateKeys().AsPem().ToPemString();
+        await Assert.That(ParseCertificateSubjects(several))
+            .IsEquivalentTo(new[] { first.Subject, second.Subject, third.Subject }, CollectionOrdering.Matching);
+
+        //An array and a lazy sequence reach the same overload set
+        var array = first.Export().AddCertificates(new[] { second, third }).WithoutPrivateKeys().AsPem().ToPemString();
+        var lazy = first.Export().AddCertificates(new[] { second, third }.Where(x => true)).WithoutPrivateKeys().AsPem().ToPemString();
+        await Assert.That(array).IsEqualTo(several);
+        await Assert.That(lazy).IsEqualTo(several);
+
         //Adding one already present is a no-op rather than a duplicate block
-        var same = first.Export().AddCertificate(first).WithoutPrivateKeys().AsPem().ToPemString();
+        var same = first.Export().AddCertificates(first).WithoutPrivateKeys().AsPem().ToPemString();
         await Assert.That(ParseCertificateSubjects(same)).IsEquivalentTo(new[] { first.Subject }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_AddChain_AcceptsLooseArguments()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Loose Root").Create();
+        using var mid = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Loose Mid").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Loose Leaf").SetIssuer(mid).Create();
+
+        //Loose arguments still count as one declared chain, so the group is sorted
+        var pem = leaf.Export().AddChain(root, mid).WithoutPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(ParseCertificateSubjects(pem))
+            .IsEquivalentTo(new[] { leaf.Subject, mid.Subject, root.Subject }, CollectionOrdering.Matching);
     }
 
 

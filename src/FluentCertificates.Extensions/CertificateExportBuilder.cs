@@ -117,9 +117,13 @@ public record CertificateExportBuilder
     /// several ordered chains in call order.
     /// </summary>
     /// <param name="certs">Additional certificates to include, forming a chain.</param>
-    /// <seealso cref="AddCertificates"/>
+    /// <seealso cref="AddCertificates(IEnumerable{X509Certificate2})"/>
     public CertificateExportBuilder AddChain(IEnumerable<X509Certificate2> certs)
         => Append(certs, OrderLeafFirst);
+
+    /// <inheritdoc cref="AddChain(IEnumerable{X509Certificate2})"/>
+    public CertificateExportBuilder AddChain(params X509Certificate2[] certs)
+        => AddChain((IEnumerable<X509Certificate2>)certs);
 
     /// <summary>
     /// Returns a new builder that appends <paramref name="certs"/> to the builder's certificate list in
@@ -135,13 +139,9 @@ public record CertificateExportBuilder
     public CertificateExportBuilder AddCertificates(IEnumerable<X509Certificate2> certs)
         => Append(certs, x => x);
 
-    /// <summary>
-    /// Returns a new builder that appends <paramref name="cert"/> to the end of the builder's certificate
-    /// list, or the same builder when it is already present.
-    /// </summary>
-    /// <param name="cert">The certificate to append.</param>
-    public CertificateExportBuilder AddCertificate(X509Certificate2 cert)
-        => AddCertificates([cert]);
+    /// <inheritdoc cref="AddCertificates(IEnumerable{X509Certificate2})"/>
+    public CertificateExportBuilder AddCertificates(params X509Certificate2[] certs)
+        => AddCertificates((IEnumerable<X509Certificate2>)certs);
 
     /// <summary>
     /// Returns a new builder that appends whatever <paramref name="arrange"/> makes of the not-already-present

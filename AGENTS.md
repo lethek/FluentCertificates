@@ -219,8 +219,8 @@ Provides LINQ-queryable interface for finding certificates across:
 Export, via `Export()` and the `CertificateExportBuilder` it returns:
 - Configure, replacing state: `WithPrivateKey()` / `WithPrivateKeys()` / `WithoutPrivateKeys()` /
   `WithKeys(ExportKeys)` / `WithPassword(string?)` / `WithPassword(SecureString)` / `WithoutPassword()`
-- Add, appending certificates: `AddChain(X509Chain)` / `AddChain(IEnumerable<X509Certificate2>)` /
-  `AddCertificates(IEnumerable<X509Certificate2>)` / `AddCertificate(X509Certificate2)`
+- Add, appending certificates: `AddChain(X509Chain)` / `AddChain(...)` / `AddCertificates(...)`, the
+  latter two each taking `IEnumerable<X509Certificate2>` or `params X509Certificate2[]`
 - Format: `AsPem()` / `AsPkcs12()` / `AsPkcs7()` / `AsCert()`
 - Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
 
@@ -238,8 +238,8 @@ Ordering is decided by which API added the certificates, never by inspecting the
 - A **chain** is sorted. `AddChain(...)` declares its argument a chain, so that group is ordered
   leaf-first and appended as a block. Each call is sorted separately, so several calls give several
   ordered chains in call order. A group that does not form one chain is appended as given.
-- A **collection** is preserved. `AddCertificates(...)`, `AddCertificate(...)`, `collection.Export()`
-  and the `IEnumerable` overload are bundles and are never reordered, chain or not.
+- A **collection** is preserved. `AddCertificates(...)`, `collection.Export()` and the `IEnumerable`
+  overload are bundles and are never reordered, chain or not.
 - `chain.Export()` needs no sorting: `X509Chain.ChainElements` is already leaf-first.
 
 All four formats write the list in that order. PEM is the one where order carries meaning (TLS servers

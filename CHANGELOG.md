@@ -17,7 +17,8 @@ they summarise each release rather than record it as it happened.
 
 - `CertificateExportBuilder.WithoutPassword()`, clearing both password kinds.
 - `CertificateExportBuilder.Anchor`, naming the certificate `ExportKeys.Primary` and `AsCert()` target. Set by `cert.Export()` and `chain.Export()`.
-- `CertificateExportBuilder.AddCertificates(IEnumerable<X509Certificate2>)` and `AddCertificate(X509Certificate2)`, appending certificates without declaring them a chain, so they are never reordered.
+- `CertificateExportBuilder.AddCertificates(...)`, appending certificates without declaring them a chain, so they are never reordered.
+- `params X509Certificate2[]` overloads of `AddChain` and `AddCertificates`, so loose certificates, an array, or any `IEnumerable<X509Certificate2>` all work.
 
 ### Changed
 
