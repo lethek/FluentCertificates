@@ -79,7 +79,8 @@ public static class X509Certificate2Extensions
         => (AsymmetricAlgorithm?)(cert.GetKeyAlgorithm() switch {
             Oids.Rsa => cert.GetRSAPrivateKey(),
             Oids.Dsa => cert.GetDSAPrivateKey(),
-            Oids.EcPublicKey => cert.GetECDsaPrivateKey(),
+            //An ECDH and an ECDsa key share this OID, so ask for both before giving up.
+            Oids.EcPublicKey => (AsymmetricAlgorithm?)cert.GetECDsaPrivateKey() ?? cert.GetECDiffieHellmanPrivateKey(),
             _ => throw new NotSupportedException($"Unsupported key algorithm OID {cert.GetKeyAlgorithm()}")
         }) ?? throw new Exception($"Private key not found for OID {cert.GetKeyAlgorithm()}");
 

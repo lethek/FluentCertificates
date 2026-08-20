@@ -338,6 +338,110 @@ public class CertificateExportBuilderTests
     }
 
 
+    [Test]
+    public async Task ExportBuilder_Pem_WithChain_WritesCertificatesLeafFirst()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Order Root").Create();
+        using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Order Intermediate").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Order Leaf").SetIssuer(intermediate).Create();
+
+        var pem = leaf.Export().WithChain([root, intermediate]).WithoutPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(ParseCertificateSubjects(pem))
+            .IsEquivalentTo(new[] { leaf.Subject, intermediate.Subject, root.Subject }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pem_ChainSeededBuilder_WritesTheSameOrderAsALeafSeededOne()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Route Root").Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Route Leaf").SetIssuer(root).Create();
+
+        var (_, chain) = leaf.BuildChain([root], true);
+        using (chain) {
+            var viaLeaf = leaf.Export().WithChain(chain).WithoutPrivateKeys().AsPem().ToPemString();
+            var viaChain = chain.Export().WithoutPrivateKeys().AsPem().ToPemString();
+            await Assert.That(viaLeaf).IsEqualTo(viaChain);
+        }
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_WithChain_WithPrivateKey_KeepsTheLeafsKeyNotTheIssuers()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Key Owner Root").Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Key Owner Leaf").SetIssuer(root).Create();
+
+        var bytes = leaf.Export().WithChain([root]).WithPrivateKey().AsPkcs12().ToByteArray();
+
+        var loaded = new X509Certificate2Collection();
+#pragma warning disable SYSLIB0057
+        loaded.Import(bytes);
+#pragma warning restore SYSLIB0057
+
+        var withKeys = loaded.Cast<X509Certificate2>().Where(c => c.HasPrivateKey).Select(c => c.Subject).ToList();
+        await Assert.That(withKeys).IsEquivalentTo(new[] { leaf.Subject }, CollectionOrdering.Any);
+    }
+
+
+    [Test]
+    public async Task Export_UnrelatedCertificates_KeepsTheSuppliedOrder()
+    {
+        using var first = new CertificateBuilder().SetSubject("CN=Unrelated One").Create();
+        using var second = new CertificateBuilder().SetSubject("CN=Unrelated Two").Create();
+
+        var pem = new[] { first, second }.Export().WithoutPrivateKeys().AsPem().ToPemString();
+
+        //Nothing to sort, so the list is left alone: ExportPem still writes it in reverse.
+        await Assert.That(ParseCertificateSubjects(pem))
+            .IsEquivalentTo(new[] { second.Subject, first.Subject }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_ECDiffieHellmanCertificate_ExportsItsPrivateKey()
+    {
+        using var issuer = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=ECDH Export CA").Create();
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.SMime)
+            .SetSubject("CN=ecdh-export@fake.domain")
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetIssuer(issuer)
+            .Create();
+
+        //An ECDH and an ECDsa public key are indistinguishable in the certificate, so the export path has
+        //only the OID to go on when it reaches for the private key.
+        var pem = cert.Export().WithPrivateKey().AsPem().ToPemString();
+        await Assert.That(pem).Contains("-----BEGIN PRIVATE KEY-----");
+
+        var bytes = cert.Export().WithPrivateKey().AsPkcs12().ToByteArray();
+        using var loaded = CertTools.LoadPkcs12(bytes, null);
+        await Assert.That(loaded.HasPrivateKey).IsTrue();
+    }
+
+
+    private static List<string> ParseCertificateSubjects(string pem)
+    {
+        const string begin = "-----BEGIN CERTIFICATE-----";
+        const string end = "-----END CERTIFICATE-----";
+
+        var result = new List<string>();
+        var index = 0;
+        while (true) {
+            var start = pem.IndexOf(begin, index, StringComparison.Ordinal);
+            if (start < 0) {
+                break;
+            }
+            var stop = pem.IndexOf(end, start, StringComparison.Ordinal) + end.Length;
+            using var cert = X509Certificate2.CreateFromPem(pem.AsSpan(start, stop - start));
+            result.Add(cert.Subject);
+            index = stop;
+        }
+        return result;
+    }
+
+
     private static SecureString SecurePassword(string value)
     {
         var result = new SecureString();

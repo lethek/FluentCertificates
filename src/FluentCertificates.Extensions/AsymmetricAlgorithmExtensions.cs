@@ -99,6 +99,25 @@ public static class AsymmetricAlgorithmExtensions
 
 
     /// <summary>
+    /// Writes the private key to <paramref name="writer"/> as PEM, encrypted with
+    /// <paramref name="password"/> when it is non-empty.
+    /// </summary>
+    /// <remarks>
+    /// Takes the password as characters rather than a <see cref="string"/> so a caller holding it in a
+    /// <see cref="System.Security.SecureString"/> can hand over a buffer it is able to zero afterwards.
+    /// </remarks>
+    /// <param name="keys">The <see cref="AsymmetricAlgorithm"/> instance.</param>
+    /// <param name="writer">The <see cref="TextWriter"/> to write the PEM to.</param>
+    /// <param name="password">The password to encrypt the private key, or empty for no encryption.</param>
+    internal static void WritePrivateKeyPem(this AsymmetricAlgorithm keys, TextWriter writer, ReadOnlySpan<char> password)
+        => writer.Write(
+            password.IsEmpty
+                ? PemEncoding.Write("PRIVATE KEY", keys.ExportPkcs8PrivateKey())
+                : PemEncoding.Write("ENCRYPTED PRIVATE KEY", keys.ExportEncryptedPkcs8PrivateKey(password, DefaultPbeParameters))
+        );
+
+
+    /// <summary>
     /// The default parameters for password-based encryption (PBE) when exporting encrypted private keys.
     /// </summary>
     private static readonly PbeParameters DefaultPbeParameters = new(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 600_000);

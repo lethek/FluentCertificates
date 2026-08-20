@@ -85,7 +85,8 @@ public record CertificateExportBuilder
 
     /// <summary>
     /// Returns a new builder that appends <paramref name="certs"/> to the builder's certificate list,
-    /// deduplicating by thumbprint (certificates already present are skipped).
+    /// deduplicating by thumbprint (certificates already present are skipped). The order they are added
+    /// in does not matter: certificates forming a single issuer chain are reordered root-first at export.
     /// </summary>
     /// <param name="certs">Additional certificates to include.</param>
     public CertificateExportBuilder WithChain(IEnumerable<X509Certificate2> certs)
@@ -108,6 +109,11 @@ public record CertificateExportBuilder
     /// This value takes precedence over <see cref="Password"/> when non-null.
     /// Disposal of the <see cref="SecureString"/> after export is the caller's responsibility.
     /// </summary>
+    /// <remarks>
+    /// <see cref="AsPem"/> decrypts the password into a buffer it zeroes afterwards. <see cref="AsPkcs12"/>
+    /// cannot: the platform's PKCS#12 export accepts only a <see cref="string"/>, so the password is copied
+    /// into one that lives in the managed heap until collected and cannot be erased.
+    /// </remarks>
     /// <param name="password">The secure password.</param>
     public CertificateExportBuilder WithPassword(SecureString password)
         => this with { SecurePassword = password };

@@ -44,6 +44,9 @@ they summarise each release rather than record it as it happened.
 
 ### Fixed
 
+- Export now orders a certificate chain root-first however it was assembled. `cert.Export().WithChain(...)`
+  previously wrote PEM blocks in a jumbled order and kept the issuer's private key instead of the leaf's.
+- PEM export no longer copies a `SecureString` password into a managed string it cannot erase.
 - PEM export ignored a `SecureString` password and wrote the private key unencrypted.
 - An ECDH certificate could be self-signed, and an ECDH CSR created, via `SetSignatureGenerator`.
   Neither can verify; both are now rejected.

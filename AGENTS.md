@@ -214,6 +214,14 @@ Export, via `Export()` and the `CertificateExportBuilder` it returns:
 - Format: `AsPem()` / `AsPkcs12()` / `AsPkcs7()` / `AsCert()`
 - Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
 
+`WithPassword(SecureString)` is honoured by every format, but only `AsPem()` keeps it out of the managed
+heap: the platform's PKCS#12 export takes a `string`, so `AsPkcs12()` has to materialise one.
+
+Certificates forming a single issuer chain are reordered root-first at export, so the order they were
+added in does not matter. PEM blocks are written leaf-first from that, `ExportKeys.Leaf` keeps the last
+certificate's key, and `AsCert()` exports the first. A set that is not one unambiguous chain is left in
+the order it was given.
+
 Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `BuildChain()` - Build certificate chains. Two overloads: `(IEnumerable<X509Certificate2>?, bool)` and
   `(Action<X509ChainPolicy>)`. Both leave revocation set to `NoCheck`. Read `Verified` from the returned

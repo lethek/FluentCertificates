@@ -28,7 +28,7 @@ internal enum ExportFormat
 /// </summary>
 public class CertificateExporter
 {
-    private readonly ImmutableList<X509Certificate2> _certs;
+    private readonly IReadOnlyList<X509Certificate2> _certs;
     private readonly ExportFormat _format;
     private readonly string? _password;
     private readonly SecureString? _securePassword;
@@ -38,7 +38,8 @@ public class CertificateExporter
     /// <summary>
     /// Initializes a new <see cref="CertificateExporter"/>.
     /// </summary>
-    /// <param name="certs">Certificates to export. Must be non-empty.</param>
+    /// <param name="certs">Certificates to export. Must be non-empty. When they form a single issuer
+    /// chain they are reordered root-first, whatever order they arrived in.</param>
     /// <param name="format">The binary format to produce.</param>
     /// <param name="password">Plain-text password (ignored when <paramref name="securePassword"/> is non-null).</param>
     /// <param name="securePassword">SecureString password; takes precedence over <paramref name="password"/>.</param>
@@ -49,7 +50,7 @@ public class CertificateExporter
         if (certs.Count == 0) {
             throw new ArgumentException("No certificates to export.", nameof(certs));
         }
-        _certs = certs;
+        _certs = OrderRootFirst(certs);
         _format = format;
         _password = password;
         _securePassword = securePassword;
@@ -140,10 +141,18 @@ public class CertificateExporter
 
             using var sw = new StringWriter();
             if (_keys != ExportKeys.None) {
-                foreach (var cert in list.Where(x => x.HasPrivateKey)) {
-                    using var key = cert.GetPrivateKey();
-                    key.ExportAsPrivateKeyPem(sw, GetPasswordString());
-                    sw.Write('\n');
+                char[]? buffer = null;
+                try {
+                    var password = GetPasswordChars(out buffer);
+                    foreach (var cert in list.Where(x => x.HasPrivateKey)) {
+                        using var key = cert.GetPrivateKey();
+                        key.WritePrivateKeyPem(sw, password.Span);
+                        sw.Write('\n');
+                    }
+                } finally {
+                    if (buffer != null) {
+                        Array.Clear(buffer);
+                    }
                 }
             }
             sw.Write(PemEncoding.Write("CERTIFICATE", list[0].RawData));
@@ -162,9 +171,102 @@ public class CertificateExporter
 
 
     /// <summary>
+    /// Returns <paramref name="certs"/> ordered root-first, leaf last, when they form a single unambiguous
+    /// issuer chain. Every other input, including an unrelated bag of certificates or one holding two
+    /// candidates for the same position, is returned untouched.
+    /// </summary>
+    /// <remarks>
+    /// Both the leaf-first PEM block order and <see cref="ExportKeys.Leaf"/> read the leaf off the end of
+    /// this list, so a caller who reaches the same chain by a different route (say a leaf seeded by
+    /// <c>cert.Export()</c> then topped up with <see cref="CertificateExportBuilder.WithChain(X509Chain)"/>)
+    /// must not get a different export.
+    /// </remarks>
+    private static IReadOnlyList<X509Certificate2> OrderRootFirst(IReadOnlyList<X509Certificate2> certs)
+    {
+        if (certs.Count < 2) {
+            return certs;
+        }
+
+        //The root is the one certificate nothing else in the list issued. Self-issued doesn't count:
+        //a self-signed root is its own issuer and would otherwise disqualify itself.
+        var rootIndex = -1;
+        for (var i = 0; i < certs.Count; i++) {
+            var cert = certs[i];
+            if (certs.Any(issuer => !ReferenceEquals(issuer, cert) && cert.IsIssuedBy(issuer))) {
+                continue;
+            }
+            if (rootIndex >= 0) {
+                //More than one certificate without an issuer here, so this isn't a single chain.
+                return certs;
+            }
+            rootIndex = i;
+        }
+        if (rootIndex < 0) {
+            return certs;
+        }
+
+        var placed = new bool[certs.Count];
+        placed[rootIndex] = true;
+
+        var ordered = new List<X509Certificate2>(certs.Count) { certs[rootIndex] };
+        while (ordered.Count < certs.Count) {
+            var issuer = ordered[^1];
+            var next = -1;
+            for (var i = 0; i < certs.Count; i++) {
+                if (placed[i] || !certs[i].IsIssuedBy(issuer)) {
+                    continue;
+                }
+                if (next >= 0) {
+                    //Two candidates for the same rung: the ordering isn't ours to decide.
+                    return certs;
+                }
+                next = i;
+            }
+            if (next < 0) {
+                //A gap or a disjoint certificate, so this isn't a single chain.
+                return certs;
+            }
+            ordered.Add(certs[next]);
+            placed[next] = true;
+        }
+        return ordered;
+    }
+
+
+    /// <summary>
+    /// Returns the effective export password as characters: <see cref="_securePassword"/> decrypted into
+    /// <paramref name="buffer"/> when non-null, otherwise <see cref="_password"/>.
+    /// </summary>
+    /// <param name="buffer">Receives the buffer holding a decrypted <see cref="SecureString"/>, which the
+    /// caller must zero once finished with the returned characters. Null when there was nothing to decrypt,
+    /// since a plain-text password is already an unerasable managed string.</param>
+    private ReadOnlyMemory<char> GetPasswordChars(out char[]? buffer)
+    {
+        if (_securePassword is null) {
+            buffer = null;
+            return (_password ?? String.Empty).AsMemory();
+        }
+
+        buffer = new char[_securePassword.Length];
+        var ptr = Marshal.SecureStringToGlobalAllocUnicode(_securePassword);
+        try {
+            Marshal.Copy(ptr, buffer, 0, buffer.Length);
+        } finally {
+            Marshal.ZeroFreeGlobalAllocUnicode(ptr);
+        }
+        return buffer.AsMemory();
+    }
+
+
+    /// <summary>
     /// Returns the effective export password: <see cref="_securePassword"/> converted to string when non-null,
     /// otherwise <see cref="_password"/>.
     /// </summary>
+    /// <remarks>
+    /// Only for the formats whose platform API takes a <see cref="string"/>. It defeats the point of a
+    /// <see cref="SecureString"/>, since the result cannot be zeroed, so prefer
+    /// <see cref="GetPasswordChars"/> wherever a span-taking overload exists.
+    /// </remarks>
     private string? GetPasswordString()
     {
         if (_securePassword is null) {
