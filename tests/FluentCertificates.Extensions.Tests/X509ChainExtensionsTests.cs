@@ -8,7 +8,7 @@ namespace FluentCertificates;
 public class X509ChainExtensionsTests
 {
     [Test]
-    public async Task ToEnumerable_ReversesChainOrder_PutsLeafCertLast()
+    public async Task ToEnumerable_KeepsChainOrder_PutsLeafCertFirst()
     {
         using var rootCa = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
@@ -32,7 +32,7 @@ public class X509ChainExtensionsTests
         var chainResult = cert.BuildChain([subCa, rootCa], true);
         using var chain = chainResult.Chain;
 
-        var expected = new[] { rootCa, subCa, cert };
+        var expected = new[] { cert, subCa, rootCa };
 
         //TUnit's IsEquivalentTo compares members structurally by default, which trips over the
         //differing native Handle of each X509Certificate2; compare by value instead.

@@ -241,7 +241,12 @@ public static class X509Certificate2Extensions
     /// build a fully configured export operation.
     /// </summary>
     /// <param name="cert">The certificate to export.</param>
-    /// <returns>A new <see cref="CertificateExportBuilder"/> containing this certificate.</returns>
+    /// <returns>A new <see cref="CertificateExportBuilder"/> containing this certificate, anchored on it.</returns>
+    /// <remarks>
+    /// The certificate becomes the builder's <see cref="CertificateExportBuilder.Anchor"/>, so
+    /// <see cref="ExportKeys.Primary"/> and <see cref="CertificateExportBuilder.AsCert"/> keep targeting it
+    /// however many issuers are added afterwards.
+    /// </remarks>
     public static CertificateExportBuilder Export(this X509Certificate2 cert)
-        => new([cert]);
+        => new([cert], cert);
 }
