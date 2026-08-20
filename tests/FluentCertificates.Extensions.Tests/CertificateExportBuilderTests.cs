@@ -247,4 +247,60 @@ public class CertificateExportBuilderTests
         yield return KeyAlgorithm.ECDsa;
         yield return KeyAlgorithm.RSA;
     }
+
+
+    [Test]
+    [Arguments(ExportKeys.All)]
+    [Arguments(ExportKeys.Leaf)]
+    [Arguments(ExportKeys.None)]
+    public async Task Export_LeavesTheCallersCertificatesUsable(ExportKeys keys)
+    {
+        using var rootCa = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Export Owner Root")
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
+            .Create();
+
+        using var leaf = new CertificateBuilder()
+            .SetSubject("CN=Export Owner Leaf")
+            .SetIssuer(rootCa)
+            .Create();
+
+        var certs = new[] { rootCa, leaf };
+
+        //Stripping keys creates certificates the exporter disposes; these two are not among them
+        var pem = certs.Export().WithKeys(keys).AsPem().ToPemString();
+        var pkcs12 = certs.Export().WithKeys(keys).AsPkcs12().ToByteArray();
+
+        await Assert.That(pem).IsNotEmpty();
+        await Assert.That(pkcs12).IsNotEmpty();
+
+        await Assert.That(rootCa.HasPrivateKey).IsTrue();
+        await Assert.That(leaf.HasPrivateKey).IsTrue();
+        await Assert.That(leaf.IsIssuedBy(rootCa, true)).IsTrue();
+
+        using var rootKey = rootCa.GetPrivateKey();
+        await Assert.That(rootKey.ExportSubjectPublicKeyInfo()).IsEquivalentTo(rootCa.PublicKey.ExportSubjectPublicKeyInfo());
+
+        //Repeating the export must give the same bytes, not fail on a disposed certificate
+        await Assert.That(certs.Export().WithKeys(keys).AsPem().ToPemString()).IsEqualTo(pem);
+    }
+
+
+    [Test]
+    public async Task FilterPrivateKeys_RecordsOnlyTheCertificatesItCreates()
+    {
+        using var withKey = new CertificateBuilder().SetSubject("CN=Has Key").Create();
+        using var withoutKey = CertTools.LoadCertificate(withKey.RawData);
+
+        var created = new List<X509Certificate2>();
+        var result = new[] { withKey, withoutKey }.FilterPrivateKeys(ExportKeys.None, created).ToList();
+
+        //The keyed certificate is replaced and recorded; the keyless one is passed straight through
+        await Assert.That(created.Count).IsEqualTo(1);
+        await Assert.That(ReferenceEquals(result[0], withKey)).IsFalse();
+        await Assert.That(ReferenceEquals(result[0], created[0])).IsTrue();
+        await Assert.That(ReferenceEquals(result[1], withoutKey)).IsTrue();
+        await Assert.That(result[0].HasPrivateKey).IsFalse();
+    }
 }

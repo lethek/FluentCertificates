@@ -25,17 +25,41 @@ public static class X509Certificate2EnumerableExtensions
     /// Remove/keep private keys from certificates based on the <paramref name="include"/> parameter. When <paramref name="include"/> is set to <see cref="ExportKeys.Leaf"/>,
     /// the leaf certificate is assumed to be the final one.
     /// </summary>
-    /// <param name="enumerable"></param>
-    /// <param name="include"></param>
-    /// <returns></returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <remarks>
+    /// Stripping a private key produces a new certificate, while a certificate that keeps its key is passed
+    /// through unchanged. The result therefore mixes certificates created by this call with the ones you
+    /// supplied, and they cannot be told apart, so do not dispose the elements of the returned sequence.
+    /// </remarks>
+    /// <param name="enumerable">The certificates to filter.</param>
+    /// <param name="include">Which private keys to keep.</param>
+    /// <returns>The certificates, with private keys removed as requested.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="include"/> is not a defined <see cref="ExportKeys"/> value.</exception>
     public static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include)
+        => enumerable.FilterPrivateKeys(include, new List<X509Certificate2>());
+
+
+    /// <summary>
+    /// As <see cref="FilterPrivateKeys(IEnumerable{X509Certificate2},ExportKeys)"/>, but records every
+    /// certificate this call creates into <paramref name="created"/> so the caller can dispose them once the
+    /// sequence has been consumed. Certificates passed through unchanged are not recorded: those belong to
+    /// whoever supplied them. Note the sequence is lazy, so <paramref name="created"/> is only complete after
+    /// it has been enumerated.
+    /// </summary>
+    internal static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include, ICollection<X509Certificate2> created)
         => include switch {
             ExportKeys.All => enumerable,
-            ExportKeys.Leaf => enumerable.Reverse().Select((x, i) => x.HasPrivateKey && i > 0 ? CertTools.LoadCertificate(x.RawDataMemory.Span) : x).Reverse(),
-            ExportKeys.None => enumerable.Select(x => x.HasPrivateKey ? CertTools.LoadCertificate(x.RawDataMemory.Span) : x),
+            ExportKeys.Leaf => enumerable.Reverse().Select((x, i) => x.HasPrivateKey && i > 0 ? StripPrivateKey(x, created) : x).Reverse(),
+            ExportKeys.None => enumerable.Select(x => x.HasPrivateKey ? StripPrivateKey(x, created) : x),
             _ => throw new ArgumentOutOfRangeException(nameof(include))
         };
+
+
+    private static X509Certificate2 StripPrivateKey(X509Certificate2 cert, ICollection<X509Certificate2> created)
+    {
+        var keyless = CertTools.LoadCertificate(cert.RawDataMemory.Span);
+        created.Add(keyless);
+        return keyless;
+    }
 
 
     #region Export to a Writer

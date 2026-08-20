@@ -28,6 +28,11 @@ public static class X509ChainExtensions
     /// <param name="include">Which private keys to retain. <see cref="ExportKeys.Leaf"/> keeps only
     /// the last certificate's key, the leaf being last in this ordering.</param>
     /// <returns>The chain's certificates, root first and leaf last.</returns>
+    /// <remarks>
+    /// Any <paramref name="include"/> value other than <see cref="ExportKeys.All"/> replaces the keyed
+    /// certificates with new keyless ones and passes the rest through, so the collection mixes certificates
+    /// created here with the chain's own. Do not dispose its elements; dispose the <paramref name="chain"/>.
+    /// </remarks>
     public static X509Certificate2Collection ToCollection(this X509Chain chain, ExportKeys include = ExportKeys.All)
         => chain.ToEnumerable().FilterPrivateKeys(include).ToCollection();
 

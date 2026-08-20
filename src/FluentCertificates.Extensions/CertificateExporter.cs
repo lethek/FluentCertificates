@@ -88,9 +88,7 @@ public class CertificateExporter
     public virtual byte[] ToByteArray()
         => _format switch {
             ExportFormat.Pkcs12 =>
-                _certs.FilterPrivateKeys(_keys).ToCollection()
-                    .Export(X509ContentType.Pkcs12, GetPasswordString())
-                ?? throw new InvalidOperationException("PKCS#12 export returned null."),
+                ExportPkcs12(),
 
             ExportFormat.Pem =>
                 Encoding.UTF8.GetBytes(ExportPem()),
@@ -107,31 +105,59 @@ public class CertificateExporter
 
 
     /// <summary>
+    /// Produces the PKCS#12 representation of the configured certificates and keys.
+    /// </summary>
+    private byte[] ExportPkcs12()
+    {
+        //Stripping a private key creates a certificate that only this method can see, so only this
+        //method can release it. The ones passed through belong to the caller and are left alone.
+        var stripped = new List<X509Certificate2>();
+        try {
+            return _certs.FilterPrivateKeys(_keys, stripped).ToCollection()
+                .Export(X509ContentType.Pkcs12, GetPasswordString())
+                ?? throw new InvalidOperationException("PKCS#12 export returned null.");
+        } finally {
+            foreach (var cert in stripped) {
+                cert.Dispose();
+            }
+        }
+    }
+
+
+    /// <summary>
     /// Produces the PEM-encoded representation of the configured certificates and keys:
     /// private key blocks first, then CERTIFICATE blocks in leaf-first order. The source
     /// list is treated as root-first, so the last certificate in it is the leaf.
     /// </summary>
     internal string ExportPem()
     {
-        var list = _certs.FilterPrivateKeys(_keys).Reverse().ToList();
-        if (list.Count == 0) {
-            return string.Empty;
-        }
+        var stripped = new List<X509Certificate2>();
+        try {
+            var list = _certs.FilterPrivateKeys(_keys, stripped).Reverse().ToList();
+            if (list.Count == 0) {
+                return string.Empty;
+            }
 
-        using var sw = new StringWriter();
-        if (_keys != ExportKeys.None) {
-            foreach (var cert in list.Where(x => x.HasPrivateKey)) {
-                using var key = cert.GetPrivateKey();
-                key.ExportAsPrivateKeyPem(sw, GetPasswordString());
+            using var sw = new StringWriter();
+            if (_keys != ExportKeys.None) {
+                foreach (var cert in list.Where(x => x.HasPrivateKey)) {
+                    using var key = cert.GetPrivateKey();
+                    key.ExportAsPrivateKeyPem(sw, GetPasswordString());
+                    sw.Write('\n');
+                }
+            }
+            sw.Write(PemEncoding.Write("CERTIFICATE", list[0].RawData));
+            foreach (var cert in list.Skip(1)) {
                 sw.Write('\n');
+                sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
+            }
+            return sw.ToString();
+
+        } finally {
+            foreach (var cert in stripped) {
+                cert.Dispose();
             }
         }
-        sw.Write(PemEncoding.Write("CERTIFICATE", list[0].RawData));
-        foreach (var cert in list.Skip(1)) {
-            sw.Write('\n');
-            sw.Write(PemEncoding.Write("CERTIFICATE", cert.RawData));
-        }
-        return sw.ToString();
     }
 
 

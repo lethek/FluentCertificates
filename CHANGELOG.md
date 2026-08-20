@@ -43,6 +43,7 @@ they summarise each release rather than record it as it happened.
 ### Fixed
 
 - Keys and certificates extracted internally were never disposed.
+- PEM and PKCS#12 export leaked a certificate per stripped private key.
 - `CertificateFinder` skipped PKCS#12 files (`.pfx`, `.p12`) on .NET 9 and later.
 - `CertificateFinder` ignored certificate file extensions that were not lowercase.
 
