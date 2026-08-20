@@ -13,6 +13,8 @@ they summarise each release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-20
+
 ### Added
 
 - `IsValidAt(DateTimeOffset)` on `X509Certificate2`.
@@ -362,7 +364,8 @@ they summarise each release rather than record it as it happened.
 - Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
   including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
 
-[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/lethek/FluentCertificates/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/lethek/FluentCertificates/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/lethek/FluentCertificates/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/lethek/FluentCertificates/compare/v0.11.0...v0.12.0
