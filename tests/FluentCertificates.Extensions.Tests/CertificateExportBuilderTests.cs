@@ -528,6 +528,50 @@ public class CertificateExportBuilderTests
     }
 
 
+    [Test]
+    public async Task ExportBuilder_Pkcs7_WithChain_WritesCertificatesRootFirst()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=P7 Order Root").Create();
+        using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=P7 Order Intermediate").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=P7 Order Leaf").SetIssuer(intermediate).Create();
+
+        var bytes = leaf.Export().WithChain([root, intermediate]).AsPkcs7().ToByteArray();
+
+        await Assert.That(LoadedSubjects(bytes))
+            .IsEquivalentTo(new[] { root.Subject, intermediate.Subject, leaf.Subject }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pkcs12_WithChain_WritesCertificatesRootFirst()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=P12 Order Root").Create();
+        using var intermediate = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=P12 Order Intermediate").SetIssuer(root).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=P12 Order Leaf").SetIssuer(intermediate).Create();
+
+        var bytes = leaf.Export().WithChain([root, intermediate]).WithoutPrivateKeys().AsPkcs12().ToByteArray();
+
+        await Assert.That(LoadedSubjects(bytes))
+            .IsEquivalentTo(new[] { root.Subject, intermediate.Subject, leaf.Subject }, CollectionOrdering.Matching);
+    }
+
+
+    private static List<string> LoadedSubjects(byte[] bytes)
+    {
+        var loaded = new X509Certificate2Collection();
+#pragma warning disable SYSLIB0057
+        loaded.Import(bytes);
+#pragma warning restore SYSLIB0057
+        try {
+            return loaded.Cast<X509Certificate2>().Select(x => x.Subject).ToList();
+        } finally {
+            foreach (var cert in loaded) {
+                cert.Dispose();
+            }
+        }
+    }
+
+
     private static List<string> ParseCertificateSubjects(string pem)
     {
         const string begin = "-----BEGIN CERTIFICATE-----";
