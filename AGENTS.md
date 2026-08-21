@@ -358,10 +358,17 @@ silently matches nothing is a defect: a skipped test must report as skipped, nev
 |ML-KEM|no|yes|no|
 |Composite ML-DSA|no|no|no|
 
-Ubuntu 24.04 ships OpenSSL 3.0, so `ubuntu-latest` supports none of it. The `pqc` job in
-`.github/workflows/dotnet.yml` runs the net10.0 leg on `mcr.microsoft.com/dotnet/sdk:10.0-alpine3.24`,
-which is where PQC is actually verified in CI. Locally, use that same image; there is no
-`10.0-trixie` tag, and the default `10.0` image is Ubuntu 24.04.
+What decides it is the OpenSSL version, not the distribution: 3.5+ supports PQC, 3.0 supports none of
+it. Check `openssl version` before concluding a platform is broken.
+
+The `pqc` job in `.github/workflows/dotnet.yml` runs the net10.0 leg on **`ubuntu-26.04`** (OpenSSL
+3.5.5), which is where PQC is actually verified in CI. It is pinned to that label rather than
+`ubuntu-latest`, which resolves to `ubuntu-24.04` (OpenSSL 3.0.13) and would silently stop testing
+anything; the main `build` job stays on `ubuntu-latest` and skips every PQC test as a result.
+
+Locally on Windows, run PQC tests in Docker: `mcr.microsoft.com/dotnet/sdk:10.0-alpine3.24` works
+(Alpine 3.22+ carries OpenSSL 3.5). The default `10.0` tag is Ubuntu 24.04 and will not do, and
+there is no `10.0-trixie` tag.
 
 ### OIDs
 
