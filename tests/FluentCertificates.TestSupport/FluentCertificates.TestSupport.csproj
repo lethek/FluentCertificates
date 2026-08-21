@@ -19,4 +19,13 @@
     <PackageReference Include="TUnit.Core" Version="1.65.31" />
   </ItemGroup>
 
+  <!--
+    Compiles against the net8.0 build, but every consumer is a test project that deploys its own
+    target framework's copy, so at runtime the capability checks run against the loaded assembly and
+    report what that framework can actually do.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FluentCertificates.Extensions\FluentCertificates.Extensions.csproj" />
+  </ItemGroup>
+
 </Project>

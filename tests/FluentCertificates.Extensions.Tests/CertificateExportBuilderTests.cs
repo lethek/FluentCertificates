@@ -225,13 +225,13 @@ public class CertificateExportBuilderTests
     private static bool SignedByPrivateKeyVerifiesAgainst(X509Certificate2 signer, X509Certificate2 verifier, KeyAlgorithm algorithm)
     {
         var data = "FluentCertificates"u8.ToArray();
-        switch (algorithm) {
-            case KeyAlgorithm.ECDsa: {
+        switch (algorithm.Family) {
+            case KeyAlgorithmFamily.ECDsa: {
                 using var priv = signer.GetECDsaPrivateKey()!;
                 using var pub = verifier.GetECDsaPublicKey()!;
                 return pub.VerifyData(data, priv.SignData(data, HashAlgorithmName.SHA256), HashAlgorithmName.SHA256);
             }
-            case KeyAlgorithm.RSA: {
+            case KeyAlgorithmFamily.Rsa: {
                 using var priv = signer.GetRSAPrivateKey()!;
                 using var pub = verifier.GetRSAPublicKey()!;
                 var sig = priv.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -245,8 +245,8 @@ public class CertificateExportBuilderTests
 
     public static IEnumerable<KeyAlgorithm> KeyAlgorithmsTestData()
     {
-        yield return KeyAlgorithm.ECDsa;
-        yield return KeyAlgorithm.RSA;
+        yield return KeyAlgorithm.ECDsa();
+        yield return KeyAlgorithm.RSA();
     }
 
 
@@ -518,7 +518,7 @@ public class CertificateExportBuilderTests
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.SMime)
             .SetSubject("CN=ecdh-export@fake.domain")
-            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman())
             .SetIssuer(issuer)
             .Create();
 

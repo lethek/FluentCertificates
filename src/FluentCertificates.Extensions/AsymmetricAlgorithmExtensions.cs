@@ -118,6 +118,19 @@ public static class AsymmetricAlgorithmExtensions
 
 
     /// <summary>
+    /// Writes a key as PEM, whether it is classical or post-quantum. The post-quantum key types have no
+    /// common base with <see cref="AsymmetricAlgorithm"/>, so they export through
+    /// <see cref="CertificateKey"/> rather than through the overload above.
+    /// </summary>
+    internal static void WritePrivateKeyPem(this CertificateKey key, TextWriter writer, ReadOnlySpan<char> password)
+        => writer.Write(
+            password.IsEmpty
+                ? key.ExportPkcs8PrivateKeyPem()
+                : key.ExportEncryptedPkcs8PrivateKeyPem(password, DefaultPbeParameters)
+        );
+
+
+    /// <summary>
     /// The default parameters for password-based encryption (PBE) when exporting encrypted private keys.
     /// </summary>
     private static readonly PbeParameters DefaultPbeParameters = new(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 600_000);

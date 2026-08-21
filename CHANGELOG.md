@@ -16,6 +16,22 @@ they summarise each release rather than record it as it happened.
 ### Added
 
 - `net10.0` target framework for all packages.
+- ML-DSA (FIPS 204) support: `KeyAlgorithm.MLDsa44` / `MLDsa65` / `MLDsa87`, marked `[Experimental("FLUENTCERT001")]`. Requires net10.0 at runtime.
+- `CertificateKey`, a key abstraction spanning classical and post-quantum keys, returned by `X509Certificate2.GetPrivateKey()`.
+- `KeyAlgorithmFamily` enum, and `KeyAlgorithm.Default(KeyAlgorithmFamily)` for callers that hold a family rather than a full algorithm.
+- `KeyAlgorithm.IsSupported`, reporting whether the algorithm can be used on the current runtime and platform.
+- `SignatureAlgorithm.MLDsa44` / `MLDsa65` / `MLDsa87`, so `SignatureAlgorithm.FromOid` resolves an ML-DSA certificate instead of throwing.
+
+### Changed
+
+- **Breaking:** `KeyAlgorithm` is now a record carrying its own key length, curve or parameter set, replacing the enum. Use `KeyAlgorithm.RSA(4096)`, `KeyAlgorithm.ECDsa(curve)` or `KeyAlgorithm.MLDsa65`. Defaults are unchanged: RSA 4096, DSA 1024, EC nistP256.
+- **Breaking:** `X509Certificate2.GetPrivateKey()` returns `CertificateKey` instead of `AsymmetricAlgorithm`, which cannot represent a post-quantum key. Reach a classical key through `CertificateKey.AsAsymmetricAlgorithm`.
+- **Breaking:** `SignatureAlgorithm.KeyAlgorithm` is replaced by `SignatureAlgorithm.Family`, and `SignatureAlgorithm.HashAlgorithm` is now nullable, since the post-quantum algorithms take no separate hash.
+- `X509Certificate2.CanSign()` now returns `true` for an ML-DSA certificate holding a usable key. It previously returned `false`, because `GetPrivateKey()` threw `NotSupportedException` and `CanSign` swallowed it.
+
+### Removed
+
+- **Breaking:** `CertificateBuilder.KeyLength` and `CertificateBuilder.ECCurve`, along with `SetKeyLength(...)` and `SetECCurve(...)`. Both are now part of `KeyAlgorithm`, which makes an invalid combination unrepresentable rather than rejected at build time.
 
 ## [0.17.0] - 2026-08-21
 

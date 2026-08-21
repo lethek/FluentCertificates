@@ -31,25 +31,56 @@ public static class X509Certificate2Extensions
 
 
     /// <summary>
-    /// Gets the private key as an <see cref="AsymmetricAlgorithm"/> instance.
+    /// Gets the private key, whether it is a classical or a post-quantum one.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Every call returns a new instance, which the caller owns and should dispose. Disposing it does not
     /// affect <paramref name="cert"/> or any instance returned by another call, so the certificate remains
     /// usable and can be asked for its key again.
+    /// </para>
+    /// <para>
+    /// The return type is <see cref="CertificateKey"/> rather than <see cref="AsymmetricAlgorithm"/> because
+    /// .NET's post-quantum key types do not derive from the latter. Reach a classical key through
+    /// <see cref="CertificateKey.AsAsymmetricAlgorithm"/>.
+    /// </para>
     /// </remarks>
     /// <param name="cert">The certificate.</param>
     /// <returns>The private key. Dispose it when finished with it.</returns>
     /// <exception cref="NotSupportedException">Thrown if the key algorithm is not supported.</exception>
     /// <exception cref="CryptographicException">Thrown if the private key is not found.</exception>
-    public static AsymmetricAlgorithm GetPrivateKey(this X509Certificate2 cert)
-        => (AsymmetricAlgorithm?)(cert.GetKeyAlgorithm() switch {
+    public static CertificateKey GetPrivateKey(this X509Certificate2 cert)
+    {
+        ArgumentNullException.ThrowIfNull(cert);
+
+        var oid = cert.GetKeyAlgorithm();
+
+#if NET10_0_OR_GREATER
+#pragma warning disable SYSLIB5006
+#pragma warning disable FLUENTCERT001
+        switch (oid) {
+            case Oids.MLDsa44:
+            case Oids.MLDsa65:
+            case Oids.MLDsa87:
+                return new CertificateKey(
+                    cert.GetMLDsaPrivateKey()
+                        ?? throw new CryptographicException($"Private key not found for OID {oid}")
+                );
+        }
+#pragma warning restore FLUENTCERT001
+#pragma warning restore SYSLIB5006
+#endif
+
+        var key = (AsymmetricAlgorithm?)(oid switch {
             Oids.Rsa => cert.GetRSAPrivateKey(),
             Oids.Dsa => cert.GetDSAPrivateKey(),
             //An ECDH and an ECDsa key share this OID, so ask for both before giving up.
             Oids.EcPublicKey => (AsymmetricAlgorithm?)cert.GetECDsaPrivateKey() ?? cert.GetECDiffieHellmanPrivateKey(),
-            _ => throw new NotSupportedException($"Unsupported key algorithm OID {cert.GetKeyAlgorithm()}")
-        }) ?? throw new CryptographicException($"Private key not found for OID {cert.GetKeyAlgorithm()}");
+            _ => throw new NotSupportedException($"Unsupported key algorithm OID {oid}")
+        }) ?? throw new CryptographicException($"Private key not found for OID {oid}");
+
+        return new CertificateKey(key);
+    }
 
 
     /// <summary>
@@ -88,7 +119,7 @@ public static class X509Certificate2Extensions
 
         try {
             using var key = cert.GetPrivateKey();
-            return key is not ECDiffieHellman;
+            return key.CanSign;
 
         } catch (CryptographicException) {
             //The container is gone, its ACL excludes this user, or its token is absent
@@ -220,21 +251,30 @@ public static class X509Certificate2Extensions
         var sig = cert.GetSignatureData().Span;
 
         //Each Get*PublicKey call returns a fresh instance that this method owns and must release
-        switch (algorithm.KeyAlgorithm) {
+        switch (algorithm.Family) {
             #pragma warning disable CS0618 // Type or member is obsolete
-            case KeyAlgorithm.DSA: {
+            case KeyAlgorithmFamily.Dsa: {
                 using var key = issuer.GetDSAPublicKey()!;
-                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm);
+                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value);
             }
             #pragma warning restore CS0618 // Type or member is obsolete
-            case KeyAlgorithm.RSA: {
+            case KeyAlgorithmFamily.Rsa: {
                 using var key = issuer.GetRSAPublicKey()!;
-                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm, algorithm.RSASignaturePadding!);
+                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, algorithm.RSASignaturePadding!);
             }
-            case KeyAlgorithm.ECDsa: {
+            case KeyAlgorithmFamily.ECDsa: {
                 using var key = issuer.GetECDsaPublicKey()!;
-                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence);
+                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
             }
+#if NET10_0_OR_GREATER
+            //ML-DSA absorbs the message directly, so there is no hash to pass and no signature format to pick
+            case KeyAlgorithmFamily.MLDsa: {
+                #pragma warning disable SYSLIB5006
+                using var key = issuer.GetMLDsaPublicKey()!;
+                return key.VerifyData(tbs, sig);
+                #pragma warning restore SYSLIB5006
+            }
+#endif
             default:
                 return false;
         }
