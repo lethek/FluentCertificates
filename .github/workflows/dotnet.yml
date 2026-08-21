@@ -5,7 +5,9 @@ on:
     branches: [ main, master ]
     tags: [ v* ]
   pull_request:
-    branches: [ main, master ]
+    # epic/** integration branches get CI too. Deliberately not added to the push trigger
+    # above: a push event with NUGET_USER set runs the publish step.
+    branches: [ main, master, 'epic/**' ]
 
 permissions:
   contents: read
