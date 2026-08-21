@@ -12,54 +12,21 @@ namespace FluentCertificates;
 public static class X509Certificate2Extensions
 {
     /// <summary>
-    /// Builds an <see cref="X509Chain"/> for the given certificate, optionally including extra certificates and custom root trust.
+    /// Starts a fluent <see cref="X509ChainBuilder"/> for building and verifying a certificate chain
+    /// for this certificate. Configure with <see cref="X509ChainBuilder.TrustRoot"/>,
+    /// <see cref="X509ChainBuilder.AddCertificates"/>, <see cref="X509ChainBuilder.AllowInvalidTime"/>
+    /// and <see cref="X509ChainBuilder.WithPolicy"/>; terminate with
+    /// <see cref="X509ChainBuilder.Create"/> to inspect the result or
+    /// <see cref="X509ChainBuilder.Export"/> to export the verified chain in one step.
     /// </summary>
     /// <param name="cert">The certificate to build the chain for.</param>
-    /// <param name="extraCerts">Optional additional certificates to include in the chain. If <paramref name="customRootTrust"/> is <c>true</c>, these extra certificates are automatically trusted within the returned <see cref="X509Chain"/>.</param>
-    /// <param name="customRootTrust">If true, uses a custom root trust store in the returned chain; otherwise, uses the system trust store.</param>
-    /// <returns>A tuple containing a boolean indicating if the chain is valid (<c>Verified</c>), and the built <see cref="X509Chain"/>.</returns>
-    /// <remarks>No revocation checks are performed on the certificates.</remarks>
-    public static (bool Verified, X509Chain Chain) BuildChain(this X509Certificate2 cert, IEnumerable<X509Certificate2>? extraCerts = null, bool customRootTrust = false)
-        => cert.BuildChain(policy => {
-            policy.TrustMode = customRootTrust ? X509ChainTrustMode.CustomRootTrust : X509ChainTrustMode.System;
-
-            if (extraCerts != null) {
-                (customRootTrust ? policy.CustomTrustStore : policy.ExtraStore).AddRange(extraCerts.ToArray());
-            }
-        });
-
-
-    /// <summary>
-    /// Builds an <see cref="X509Chain"/> for the given certificate, configuring the chain policy through
-    /// <paramref name="configurePolicy"/> before the chain is built.
-    /// </summary>
-    /// <param name="cert">The certificate to build the chain for.</param>
-    /// <param name="configurePolicy">
-    /// An action which receives the <see cref="X509ChainPolicy"/> of the chain about to be built. Use it to set
-    /// <see cref="X509ChainPolicy.TrustMode"/>, populate <see cref="X509ChainPolicy.CustomTrustStore"/> or
-    /// <see cref="X509ChainPolicy.ExtraStore"/>, enable revocation checking, adjust
-    /// <see cref="X509ChainPolicy.VerificationFlags"/>, and so on.
-    /// </param>
-    /// <returns>A tuple containing a boolean indicating if the chain is valid (<c>Verified</c>), and the built <see cref="X509Chain"/>.</returns>
-    /// <remarks>
-    /// The policy is pre-set to <see cref="X509RevocationMode.NoCheck"/> when <paramref name="configurePolicy"/> is
-    /// invoked, matching the other <see cref="BuildChain(X509Certificate2,IEnumerable{X509Certificate2},bool)"/>
-    /// overload rather than the framework's online default. Set
-    /// <see cref="X509ChainPolicy.RevocationMode"/> within the action to perform revocation checks.
-    /// </remarks>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="configurePolicy"/> is <see langword="null"/>.</exception>
-    public static (bool Verified, X509Chain Chain) BuildChain(this X509Certificate2 cert, Action<X509ChainPolicy> configurePolicy)
+    /// <returns>A new <see cref="X509ChainBuilder"/> for <paramref name="cert"/>.</returns>
+    /// <remarks>No revocation checks are performed unless enabled via <see cref="X509ChainBuilder.WithPolicy"/>.</remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="cert"/> is <see langword="null"/>.</exception>
+    public static X509ChainBuilder BuildChain(this X509Certificate2 cert)
     {
-        ArgumentNullException.ThrowIfNull(configurePolicy);
-
-        var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-
-        configurePolicy(chain.ChainPolicy);
-
-        var result = chain.Build(cert);
-
-        return (result, chain);
+        ArgumentNullException.ThrowIfNull(cert);
+        return new X509ChainBuilder(cert);
     }
 
 

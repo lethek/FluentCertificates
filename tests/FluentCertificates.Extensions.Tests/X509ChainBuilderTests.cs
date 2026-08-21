@@ -35,7 +35,7 @@ public class X509ChainBuilderTests
         using var mid = BuildIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
-        using var result = new X509ChainBuilder(leaf).TrustRoot(root).AddCertificates(mid).Create();
+        using var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
 
         await Assert.That(result.Verified).IsTrue();
         await Assert.That(result.Chain.ChainElements.Count).IsEqualTo(3);
@@ -48,7 +48,7 @@ public class X509ChainBuilderTests
         using var root = BuildRootCa();
         using var leaf = BuildLeaf(root);
 
-        using var result = new X509ChainBuilder(leaf).TrustRoot(root).Create();
+        using var result = leaf.BuildChain().TrustRoot(root).Create();
 
         await Assert.That(result.Chain.ChainPolicy.TrustMode).IsEqualTo(X509ChainTrustMode.CustomRootTrust);
         await Assert.That(result.Chain.ChainPolicy.CustomTrustStore.Contains(root)).IsTrue();
@@ -61,7 +61,7 @@ public class X509ChainBuilderTests
         using var root = BuildRootCa();
         using var leaf = BuildLeaf(root);
 
-        using var result = new X509ChainBuilder(leaf).AddCertificates(root).Create();
+        using var result = leaf.BuildChain().AddCertificates(root).Create();
 
         await Assert.That(result.Chain.ChainPolicy.TrustMode).IsEqualTo(X509ChainTrustMode.System);
         //A private root is not in the system store, so this must not verify
@@ -76,7 +76,7 @@ public class X509ChainBuilderTests
         using var mid = BuildIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
-        using var result = new X509ChainBuilder(leaf).TrustRoot(root).AddCertificates(mid).Create();
+        using var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
 
         await Assert.That(result.Chain.ChainPolicy.ExtraStore.Contains(mid)).IsTrue();
     }
@@ -90,7 +90,7 @@ public class X509ChainBuilderTests
         using var leaf = BuildLeaf(mid);
 
         //mid is deliberately absent
-        using var result = new X509ChainBuilder(leaf).TrustRoot(root).Create();
+        using var result = leaf.BuildChain().TrustRoot(root).Create();
 
         await Assert.That(result.Verified).IsFalse();
         await Assert.That(result.ChainStatus.Select(x => x.Status)).Contains(X509ChainStatusFlags.PartialChain);
@@ -104,7 +104,7 @@ public class X509ChainBuilderTests
         using var mid = BuildIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
-        using var result = new X509ChainBuilder(leaf).TrustRoot(root).Create();
+        using var result = leaf.BuildChain().TrustRoot(root).Create();
 
         var ex = await Assert.That(() => result.EnsureVerified()).Throws<CryptographicException>();
         await Assert.That(ex!.Message).Contains("PartialChain");
@@ -117,7 +117,7 @@ public class X509ChainBuilderTests
         using var root = BuildRootCa();
         using var leaf = BuildLeaf(root);
 
-        using var result = new X509ChainBuilder(leaf).TrustRoot(root).Create();
+        using var result = leaf.BuildChain().TrustRoot(root).Create();
 
         await Assert.That(result.EnsureVerified()).IsSameReferenceAs(result);
     }
@@ -129,12 +129,12 @@ public class X509ChainBuilderTests
         using var root = BuildRootCa();
         using var leaf = BuildLeaf(root);
 
-        var builder = new X509ChainBuilder(leaf);
+        var builder = leaf.BuildChain();
         var withRoot = builder.TrustRoot(root);
 
         await Assert.That(ReferenceEquals(builder, withRoot)).IsFalse();
         await Assert.That(builder.TrustedRoots).IsEmpty();
-        await Assert.That(withRoot.TrustedRoots).HasCount().EqualTo(1);
+        await Assert.That(withRoot.TrustedRoots).Count().IsEqualTo(1);
     }
 
 
@@ -144,7 +144,7 @@ public class X509ChainBuilderTests
         using var root = BuildRootCa();
         using var leaf = BuildLeaf(root);
 
-        using var result = new X509ChainBuilder(leaf).TrustRoot(root).Create();
+        using var result = leaf.BuildChain().TrustRoot(root).Create();
 
         await Assert.That(result.Chain.ChainPolicy.RevocationMode).IsEqualTo(X509RevocationMode.NoCheck);
     }
@@ -167,7 +167,7 @@ public class X509ChainBuilderTests
         using var mid = BuildExpiredIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
-        using var result = new X509ChainBuilder(leaf).TrustRoot(root).AddCertificates(mid).Create();
+        using var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
 
         await Assert.That(result.Verified).IsFalse();
         var allStatuses = result.Chain.ChainElements
@@ -185,7 +185,7 @@ public class X509ChainBuilderTests
         using var mid = BuildExpiredIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
-        using var result = new X509ChainBuilder(leaf)
+        using var result = leaf.BuildChain()
             .TrustRoot(root)
             .AddCertificates(mid)
             .AllowInvalidTime()
@@ -203,7 +203,7 @@ public class X509ChainBuilderTests
         using var leaf = BuildLeaf(mid);
 
         //AllowInvalidTime() would let this verify; the policy action undoes it, so it must run last
-        using var result = new X509ChainBuilder(leaf)
+        using var result = leaf.BuildChain()
             .TrustRoot(root)
             .AddCertificates(mid)
             .AllowInvalidTime()
@@ -222,7 +222,7 @@ public class X509ChainBuilderTests
         using var leaf = BuildLeaf(root);
 
         var order = new List<int>();
-        using var result = new X509ChainBuilder(leaf)
+        using var result = leaf.BuildChain()
             .TrustRoot(root)
             .WithPolicy(_ => order.Add(1))
             .WithPolicy(_ => order.Add(2))
@@ -238,7 +238,7 @@ public class X509ChainBuilderTests
         using var root = BuildRootCa();
         using var leaf = BuildLeaf(root);
 
-        await Assert.That(() => new X509ChainBuilder(leaf).WithPolicy(null!)).Throws<ArgumentNullException>();
+        await Assert.That(() => leaf.BuildChain().WithPolicy(null!)).Throws<ArgumentNullException>();
     }
 
 
@@ -249,7 +249,7 @@ public class X509ChainBuilderTests
         using var mid = BuildIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
-        var pem = new X509ChainBuilder(leaf)
+        var pem = leaf.BuildChain()
             .TrustRoot(root)
             .AddCertificates(mid)
             .Export()
@@ -271,7 +271,7 @@ public class X509ChainBuilderTests
         using var leaf = BuildLeaf(mid);
 
         var ex = await Assert
-            .That(() => new X509ChainBuilder(leaf).TrustRoot(root).Export())
+            .That(() => leaf.BuildChain().TrustRoot(root).Export())
             .Throws<CryptographicException>();
         await Assert.That(ex!.Message).Contains("PartialChain");
     }
@@ -283,10 +283,12 @@ public class X509ChainBuilderTests
         using var root = BuildRootCa();
         using var leaf = BuildLeaf(root);
 
-        var pfx = new X509ChainBuilder(leaf).TrustRoot(root).Export().WithPrivateKey().AsPkcs12().ToByteArray();
+        var pfx = leaf.BuildChain().TrustRoot(root).Export().WithPrivateKey().AsPkcs12().ToByteArray();
 
         var reloaded = new X509Certificate2Collection();
+#pragma warning disable SYSLIB0057
         reloaded.Import(pfx, (string?)null, X509KeyStorageFlags.EphemeralKeySet);
+#pragma warning restore SYSLIB0057
         try {
             var reloadedLeaf = reloaded.Single(x => x.Thumbprint == leaf.Thumbprint);
             await Assert.That(reloadedLeaf.HasPrivateKey).IsTrue();
@@ -306,7 +308,7 @@ public class X509ChainBuilderTests
         using var mid = BuildIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
-        new X509ChainBuilder(leaf).TrustRoot(root).AddCertificates(mid).Export().AsPem().ToPemString();
+        leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export().AsPem().ToPemString();
 
         //Accessing RawData after disposal throws, so this proves the internal chain's disposal
         //did not reach the caller's instances
@@ -324,7 +326,7 @@ public class X509ChainBuilderTests
         using var mid = BuildIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
-        using var result = new X509ChainBuilder(leaf).TrustRoot(root).AddCertificates(mid).Create();
+        using var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
         var pem = result.EnsureVerified().Export().WithoutPrivateKeys().AsPem().ToPemString();
 
         var expected = new[] { leaf, mid, root }

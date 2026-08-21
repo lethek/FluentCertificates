@@ -415,12 +415,12 @@ public class CertificateExportBuilderTests
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Route Root").Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Route Leaf").SetIssuer(root).Create();
 
-        var (_, chain) = leaf.BuildChain([root], true);
-        using (chain) {
-            var viaLeaf = leaf.Export().AddChain(chain).WithoutPrivateKeys().AsPem().ToPemString();
-            var viaChain = chain.Export().WithoutPrivateKeys().AsPem().ToPemString();
-            await Assert.That(viaLeaf).IsEqualTo(viaChain);
-        }
+        using var result = leaf.BuildChain().TrustRoot(root).Create();
+        var chain = result.Chain;
+
+        var viaLeaf = leaf.Export().AddChain(chain).WithoutPrivateKeys().AsPem().ToPemString();
+        var viaChain = chain.Export().WithoutPrivateKeys().AsPem().ToPemString();
+        await Assert.That(viaLeaf).IsEqualTo(viaChain);
     }
 
 
@@ -493,11 +493,10 @@ public class CertificateExportBuilderTests
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert X509Chain Root").Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Cert X509Chain Leaf").SetIssuer(root).Create();
 
-        var (_, chain) = leaf.BuildChain([root], true);
-        using (chain) {
-            var bytes = chain.Export().AsCert().ToByteArray();
-            await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
-        }
+        using var result = leaf.BuildChain().TrustRoot(root).Create();
+
+        var bytes = result.Chain.Export().AsCert().ToByteArray();
+        await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
     }
 
 

@@ -29,8 +29,8 @@ public class X509ChainExtensionsTests
             .SetSubject("CN=Leaf")
             .Create();
 
-        var chainResult = cert.BuildChain([subCa, rootCa], true);
-        using var chain = chainResult.Chain;
+        using var chainResult = cert.BuildChain().TrustRoot(subCa, rootCa).Create();
+        var chain = chainResult.Chain;
 
         var expected = new[] { cert, subCa, rootCa };
 
@@ -52,8 +52,10 @@ public class X509ChainExtensionsTests
         using var rootCa = BuildRootCa();
         using var cert = BuildLeaf(rootCa);
 
-        var (_, chain) = cert.BuildChain([rootCa], customRootTrust);
-        using var _chain = chain;
+        var builder = cert.BuildChain();
+        builder = customRootTrust ? builder.TrustRoot(rootCa) : builder.AddCertificates(rootCa);
+        using var result = builder.Create();
+        var chain = result.Chain;
 
         var comparer = EqualityComparer<X509Certificate2>.Default;
         var expectedTrustMode = customRootTrust ? X509ChainTrustMode.CustomRootTrust : X509ChainTrustMode.System;
@@ -64,7 +66,7 @@ public class X509ChainExtensionsTests
         await Assert.That(populated).IsEquivalentTo([rootCa], comparer);
         await Assert.That(empty).IsEmpty();
 
-        //Revocation is off by default on both overloads, so a chain build never reaches the network
+        //Revocation is off by default, so a chain build never reaches the network
         await Assert.That(chain.ChainPolicy.RevocationMode).IsEqualTo(X509RevocationMode.NoCheck);
     }
 
@@ -76,17 +78,17 @@ public class X509ChainExtensionsTests
         using var cert = BuildLeaf(rootCa);
 
         //A self-signed root is not in the machine's trust store, so this only verifies if the policy says so
-        var (unTrusted, chain1) = cert.BuildChain(_ => { });
-        using var _chain1 = chain1;
+        using var unTrusted = cert.BuildChain().Create();
 
-        var (trusted, chain2) = cert.BuildChain(policy => {
-            policy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-            policy.CustomTrustStore.Add(rootCa);
-        });
-        using var _chain2 = chain2;
+        using var trusted = cert.BuildChain()
+            .WithPolicy(policy => {
+                policy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+                policy.CustomTrustStore.Add(rootCa);
+            })
+            .Create();
 
-        await Assert.That(unTrusted).IsFalse();
-        await Assert.That(trusted).IsTrue();
+        await Assert.That(unTrusted.Verified).IsFalse();
+        await Assert.That(trusted.Verified).IsTrue();
     }
 
 
@@ -97,40 +99,36 @@ public class X509ChainExtensionsTests
         using var cert = BuildLeaf(rootCa);
 
         X509RevocationMode observed = default;
-        var (_, chain) = cert.BuildChain(policy => {
-            observed = policy.RevocationMode;
-            policy.RevocationMode = X509RevocationMode.Offline;
-        });
-        using var _chain = chain;
+        using var result = cert.BuildChain()
+            .WithPolicy(policy => {
+                observed = policy.RevocationMode;
+                policy.RevocationMode = X509RevocationMode.Offline;
+            })
+            .Create();
 
         //The action sees NoCheck rather than the framework's Online default, and its own change sticks
         await Assert.That(observed).IsEqualTo(X509RevocationMode.NoCheck);
-        await Assert.That(chain.ChainPolicy.RevocationMode).IsEqualTo(X509RevocationMode.Offline);
+        await Assert.That(result.Chain.ChainPolicy.RevocationMode).IsEqualTo(X509RevocationMode.Offline);
     }
 
 
     [Test]
-    public async Task BuildChain_WithNullPolicyAction_Throws()
-    {
-        using var cert = BuildRootCa();
-
-        await Assert
-            .That(() => cert.BuildChain((Action<X509ChainPolicy>)null!))
+    public async Task BuildChain_WithNullCertificate_Throws()
+        => await Assert
+            .That(() => X509Certificate2Extensions.BuildChain(null!))
             .ThrowsExactly<ArgumentNullException>();
-    }
 
 
     [Test]
-    public async Task BuildChain_WithNoArguments_StillResolvesToTheExtraCertsOverload()
+    public async Task BuildChain_ReturnsBuilderForTheCertificate()
     {
-        //Guards against the policy overload making the parameterless call ambiguous
         using var cert = BuildRootCa();
 
-        var (_, chain) = cert.BuildChain();
-        using var _chain = chain;
+        var builder = cert.BuildChain();
 
-        await Assert.That(chain.ChainPolicy.TrustMode).IsEqualTo(X509ChainTrustMode.System);
-        await Assert.That(chain.ChainPolicy.ExtraStore).IsEmpty();
+        await Assert.That(builder.Certificate).IsSameReferenceAs(cert);
+        await Assert.That(builder.TrustedRoots).IsEmpty();
+        await Assert.That(builder.ExtraCertificates).IsEmpty();
     }
 
 
