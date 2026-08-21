@@ -129,20 +129,27 @@ using var skewTolerant = new CertificateBuilder()
     .Create();
 ```
 
-### **Choose an Elliptic Curve**
+### **Choose a Key Algorithm**
 
-When the builder generates an ECDsa key it uses nistP256 unless told otherwise. A key supplied
-through `SetKeyPair` already carries its own curve, so `SetECCurve` has no effect on it. Setting a
-curve while the key algorithm is RSA or DSA throws, rather than quietly generating a key you didn't
-ask for.
+A `KeyAlgorithm` carries its own parameters: a key length for RSA and DSA, a curve for the
+elliptic-curve algorithms, a parameter set for the post-quantum ones. There is no separate
+`KeyLength` or `ECCurve` to set alongside it, so a curve can never be paired with RSA and a key
+length can never be paired with ECDsa. Defaults are RSA-4096, DSA-1024 and nistP256.
 
 ```csharp
+using var rsa = new CertificateBuilder()
+    .SetKeyAlgorithm(KeyAlgorithm.RSA(2048))
+    .SetSubject(b => b.SetCommonName("Example RSA-2048 certificate"))
+    .Create();
+
 using var cert = new CertificateBuilder()
-    .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
-    .SetECCurve(ECCurve.NamedCurves.nistP384)
+    .SetKeyAlgorithm(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP384))
     .SetSubject(b => b.SetCommonName("Example P-384 certificate"))
     .Create();
 ```
+
+A key supplied through `SetKeyPair` already carries its own parameters and takes precedence over
+anything set here.
 
 ### **Build an OCSP Responder or Time-Stamping Certificate**
 
@@ -172,8 +179,7 @@ An ECDH key derives a shared secret and cannot sign anything, so these certifica
 using var ecdhCert = new CertificateBuilder()
     .SetUsage(CertificateUsage.SMime)
     .SetSubject(b => b.SetCommonName("user@fake.domain"))
-    .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
-    .SetECCurve(ECCurve.NamedCurves.nistP384)
+    .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman(ECCurve.NamedCurves.nistP384))
     .SetIssuer(issuer)
     .Create();
 
@@ -183,7 +189,59 @@ using var privateKey = ecdhCert.GetECDiffieHellmanPrivateKey();
 An ECDH public key is indistinguishable from an ECDsa one inside a certificate: same algorithm OID,
 same curve parameters. The builder therefore takes the distinction from `SetKeyAlgorithm`, or from the
 runtime type of a key passed to `SetKeyPair`. If you use `SetPublicKey` for an ECDH key held elsewhere,
-call `SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)` first, or the key will be treated as ECDsa.
+call `SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman())` first, or the key will be treated as ECDsa.
+
+### **Build a Post-Quantum Certificate**
+
+> ⚠️ **Experimental.** The post-quantum surface is marked `[Experimental("FLUENTCERT001")]` and may
+> change. Suppress it per call site with `#pragma warning disable FLUENTCERT001`, or project-wide
+> with `<NoWarn>$(NoWarn);FLUENTCERT001</NoWarn>`. The .NET types underneath are themselves
+> experimental under `SYSLIB5006`, so any code naming one already has to suppress that; this library
+> adds its own ID rather than implying only Microsoft's half is unsettled.
+
+Requires .NET 10 at runtime. ML-DSA (FIPS 204), SLH-DSA (FIPS 205), Composite ML-DSA and ML-KEM
+(FIPS 203) each expose their parameter sets as `KeyAlgorithm` members.
+
+```csharp
+#pragma warning disable FLUENTCERT001
+
+using var cert = new CertificateBuilder()
+    .SetKeyAlgorithm(KeyAlgorithm.MLDsa65)
+    .SetSubject(b => b.SetCommonName("Example ML-DSA certificate"))
+    .Create();
+```
+
+**Availability is a runtime capability, not an operating system.** It depends on the platform's
+cryptographic provider, so test it rather than inferring it:
+
+```csharp
+if (KeyAlgorithm.SlhDsaSha2_128f.IsSupported) {
+    //...
+}
+```
+
+`IsSupported` reports whether a certificate can actually be built, not merely whether a key can be
+generated. The two come apart in practice. As of .NET 10:
+
+|Algorithm|Windows|Linux (OpenSSL 3.5+)|Linux (OpenSSL 3.0)|
+|---|---|---|---|
+|ML-DSA|✅|✅|❌|
+|SLH-DSA|❌|✅|❌|
+|ML-KEM|❌ *(key cannot be attached to a certificate)*|✅|❌|
+|Composite ML-DSA|❌ *(no platform can sign a certificate with one)*|❌|❌|
+
+Ubuntu 24.04 ships OpenSSL 3.0 and so supports none of them; Alpine 3.22+ and Debian 13 ship
+OpenSSL 3.5 and support all but Composite. Selecting an unsupported algorithm throws
+`PlatformNotSupportedException` from `Create()` rather than producing a certificate that does not
+work.
+
+The members exist on every target framework so the API surface does not vary; on .NET 8 and .NET 9
+selecting one throws.
+
+ML-KEM is key encapsulation, not signing. Like `ECDiffieHellman`, an ML-KEM certificate must be
+issued by a CA, cannot self-sign, cannot be a CA or a code-signing, OCSP-signing or time-stamping
+certificate, and has no CSR. It asserts `keyEncipherment`, not `keyAgreement`: encapsulating to the
+certified key is key transport rather than Diffie-Hellman agreement.
 
 ### **Advanced: Signing with a Key Held in an HSM, TPM or Cloud KMS**
 
@@ -263,7 +321,8 @@ using var webCert = new CertificateBuilder()
 
 ## Key Ownership and Disposal
 
-`X509Certificate2` and every `AsymmetricAlgorithm` are disposable. Three rules cover who releases what:
+`X509Certificate2`, every `AsymmetricAlgorithm` and every `CertificateKey` are disposable. Three
+rules cover who releases what:
 
 * **Keys the builder generates** are disposed by the builder, as soon as `Create()` no longer needs
   them. You never see them.
@@ -594,7 +653,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`IsSelfSigned(bool verifySignature = false)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key.|
 |`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name.|
 |`CanSign()`|Whether the private key can actually be used for signing, as opposed to merely being associated with the certificate. Every "cannot sign" outcome returns `false` rather than throwing. Costs a key-store lookup. See [Find a certificate whose private key can actually sign](#find-a-certificate-whose-private-key-can-actually-sign).|
-|`GetPrivateKey()`|Returns the private key as an `AsymmetricAlgorithm`, whatever its algorithm. Every call returns a **new instance which you own and should dispose**; see [Key ownership](#key-ownership-and-disposal).|
+|`GetPrivateKey()`|Returns the private key as a `CertificateKey`, whatever its algorithm, classical or post-quantum. Reach a classical key through `.AsAsymmetricAlgorithm`. Every call returns a **new instance which you own and should dispose**; see [Key ownership](#key-ownership-and-disposal).|
 |`GetSignatureAlgorithm()`|Returns the `SignatureAlgorithm` the certificate was signed with, combining key algorithm, hash and padding.|
 |`GetToBeSignedData()`|The raw "to be signed" (TBS) bytes, i.e. what the issuer's signature covers.|
 |`GetSignatureData()`|The raw signature bytes. Together with `GetToBeSignedData()` this allows verifying a signature yourself.|

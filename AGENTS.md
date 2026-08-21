@@ -128,9 +128,11 @@ equivalent and are not deprecated: the export builder works on certificates, not
 
 ### Target Frameworks
 
-- All five library projects under `src/`: net8.0 and net9.0
+- All five library projects under `src/`: net8.0, net9.0 and net10.0
 - Test projects: net8.0, net9.0 and net10.0
-- `tests/FluentCertificates.TestSupport`: net8.0 alone, which all three consume
+- `tests/FluentCertificates.TestSupport`: net8.0 alone, which all three consume. It references
+  `FluentCertificates.Extensions`, so its capability checks compile against the net8.0 build but run
+  against whichever build the consuming test project deployed
 
 Some dependencies use conditional package references based on target framework (see .csproj files).
 
@@ -170,7 +172,14 @@ All public APIs require XML documentation comments (`///`). Documentation is gen
 Several projects expose internals to test projects and LINQPad via `InternalsVisibleTo`. Check .csproj files before making members internal.
 
 ### Key and Certificate Ownership
-`X509Certificate2` and `AsymmetricAlgorithm` are both disposable, and three rules decide who releases them:
+`X509Certificate2`, `AsymmetricAlgorithm` and `CertificateKey` are all disposable, and three rules decide
+who releases them.
+
+`CertificateKey` is the library's own abstraction over a key of any kind, and exists because .NET's
+post-quantum key types derive from `object` rather than `AsymmetricAlgorithm`, making every
+`AsymmetricAlgorithm`-typed signature a wall they cannot pass. It owns and disposes the key it wraps, so
+never dispose something reached through `AsAsymmetricAlgorithm`, `AsMLDsa` and friends - dispose the
+`CertificateKey`. `GetPrivateKey()` returns one.
 
 1. **Keys the builder generates** are disposed by `CertificateBuilder.Create` (see the `generateKeys` flag).
 2. **Keys supplied by the caller**, via `SetKeyPair` or `SetPublicKey`, are never disposed by the library.
@@ -200,13 +209,23 @@ The main API for creating certificates. Supports:
 - Custom extensions
 - Subject Alternative Names (SAN)
 - Custom serial number generation
-- Key agreement certificates, via `KeyAlgorithm.ECDiffieHellman`. An ECDH key cannot sign, so `Validate()`
-  requires an `Issuer` and rejects the `CA`, `CodeSign`, `OcspSigning` and `TimeStamping` usages, and
-  `CreateCertificateSigningRequest` throws. A `SignatureGenerator` does not lift either restriction: it
-  signs with an unrelated key, which neither self-signs nor proves possession. The key
-  usage bit becomes `keyAgreement` instead of `digitalSignature`. An ECDH public key is byte-identical to
-  an ECDsa one in SubjectPublicKeyInfo, so the distinction comes from `KeyAlgorithm` or the supplied key's
-  runtime type, never from the certificate.
+- Algorithm selection, via a single `KeyAlgorithm` descriptor that carries its own key length, curve or
+  parameter set: `KeyAlgorithm.RSA(4096)`, `KeyAlgorithm.ECDsa(curve)`, `KeyAlgorithm.MLDsa65`. There is no
+  separate `KeyLength` or `ECCurve` on the builder, so an invalid combination is unrepresentable rather than
+  rejected, and `Validate()` has no combination guards to enforce. `KeyAlgorithm.Default(KeyAlgorithmFamily)`
+  covers callers holding only a family, which is what an attribute or switch label can carry. Defaults are
+  unchanged: RSA 4096, DSA 1024, EC nistP256.
+- Non-signing certificates, via `KeyAlgorithm.CanSign`. This is `false` for `ECDiffieHellman` and the
+  `MLKem` sets, and it alone drives the guards: `Validate()` requires an `Issuer` and rejects the `CA`,
+  `CodeSign`, `OcspSigning` and `TimeStamping` usages, and `CreateCertificateSigningRequest` throws. A
+  `SignatureGenerator` does not lift either restriction: it signs with an unrelated key, which neither
+  self-signs nor proves possession. Key usage differs between the two, deliberately: ECDH asserts
+  `keyAgreement`, while ML-KEM asserts `keyEncipherment`, because encapsulation is key transport rather than
+  Diffie-Hellman agreement. An ECDH public key is byte-identical to an ECDsa one in SubjectPublicKeyInfo, so
+  that distinction comes from `KeyAlgorithm` or the supplied key's runtime type, never from the certificate;
+  a post-quantum key carries its own OID and needs no such workaround.
+- Post-quantum certificates: ML-DSA (FIPS 204), SLH-DSA (FIPS 205), Composite ML-DSA and ML-KEM (FIPS 203).
+  See "Post-quantum cryptography" below.
 - External signing keys, via `SetPublicKey` (certify a key whose private half is unreachable) and
   `SetSignatureGenerator` (sign with a supplied `X509SignatureGenerator`). Used together they cover
   HSM/TPM/KMS keys. `Validate()` requires both when self-signing, since either alone yields a
@@ -300,6 +319,65 @@ Chain and validity helpers on `X509Certificate2` / `X509Chain`:
   `HasPrivateKey` reports. Every "cannot sign" outcome returns `false` rather than throwing, and it is
   independent of exportability: never implement either in terms of the other. See its XML docs
 
+
+## Post-quantum cryptography
+
+The PQC surface carries `[Experimental(Experiments.PostQuantumCryptography)]`, which is
+`FLUENTCERT001`. The .NET types underneath are themselves `[Experimental]` under `SYSLIB5006`, so a
+consumer naming one already has to suppress that; the library's own ID is deliberate rather than
+hiding behind Microsoft's.
+
+The public API does not vary by target framework. Every parameter set exists on net8.0 and net9.0
+too, where selecting one throws `PlatformNotSupportedException`. Do not put PQC members behind
+`#if NET10_0_OR_GREATER` - only their implementations.
+
+### `IsSupported` means "usable to build a certificate"
+
+Not "the key generates". The two come apart repeatedly, and this is the single most important rule
+here: a `true` that fails later in `Create()` is worse than a `false`.
+
+- Composite ML-DSA keys generate on Windows and Linux, but `X509SignatureGenerator.CreateForCompositeMLDsa`
+  throws on both, so no platform can currently produce a composite certificate.
+- ML-KEM certificates build anywhere, but `CopyWithPrivateKey(MLKem)` throws on Windows.
+
+Both are settled by a cached one-time probe in `PostQuantumSupport` rather than by naming operating
+systems, so a runtime that gains support starts working with no change to the library. Add a probe,
+never an OS check, when the next gap appears.
+
+Availability is a runtime capability, so `[SupportedOSPlatform]` cannot express it. Tests gate on
+`SkipUnlessAlgorithmSupportedAttribute` (whole class) or `Skip.Unless(algorithm.IsSupported, ...)`
+(per parameter set, needed because Composite availability varies per set). A capability gate that
+silently matches nothing is a defect: a skipped test must report as skipped, never as passed.
+
+### Platform matrix as of .NET 10
+
+|Algorithm|Windows|Linux OpenSSL 3.5+|Linux OpenSSL 3.0|
+|---|---|---|---|
+|ML-DSA|yes|yes|no|
+|SLH-DSA|no|yes|no|
+|ML-KEM|no|yes|no|
+|Composite ML-DSA|no|no|no|
+
+Ubuntu 24.04 ships OpenSSL 3.0, so `ubuntu-latest` supports none of it. The `pqc` job in
+`.github/workflows/dotnet.yml` runs the net10.0 leg on `mcr.microsoft.com/dotnet/sdk:10.0-alpine3.24`,
+which is where PQC is actually verified in CI. Locally, use that same image; there is no
+`10.0-trixie` tag, and the default `10.0` image is Ubuntu 24.04.
+
+### OIDs
+
+`Oids.cs` holds all 33 post-quantum OIDs. They were read out of generated keys' SubjectPublicKeyInfo
+rather than transcribed from a spec. Five Composite sets are unimplemented everywhere, so theirs are
+inferred from the arc being contiguous and are marked as such; `DeclaredOid_MatchesTheGeneratedKey`
+asserts every declared OID against the real encoding for whatever the running platform supports, so a
+wrong inference fails as soon as a platform implements it. Keep that test passing rather than
+relaxing it.
+
+Note SLH-DSA's arc is not in declaration order: SHA2 takes `.20`-`.25`, SHAKE takes `.26`-`.31`.
+
+A post-quantum parameter set fixes both the key algorithm and the signature algorithm, so the two
+share an OID and `SignatureAlgorithm` carries no `HashAlgorithm` for them - which is why that
+property is nullable. `SignatureAlgorithm`'s lookup is built from
+`KeyAlgorithm.PostQuantumAlgorithms`, so adding a parameter set there cannot be forgotten here.
 
 ## Additional Notes
 
