@@ -320,6 +320,50 @@ public class X509ChainBuilderTests
 
 
     [Test]
+    public async Task Export_ReusesTheCallersCertificatesRatherThanCopyingThem()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        var certs = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export().Certificates;
+
+        //Every element came from the caller, so nothing here needs disposing beyond what they already own
+        await Assert.That(certs[0]).IsSameReferenceAs(leaf);
+        await Assert.That(certs[1]).IsSameReferenceAs(mid);
+        await Assert.That(certs[2]).IsSameReferenceAs(root);
+    }
+
+
+    [Test]
+    public async Task Export_DefaultsToTheLeafKeyOnly()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        //root and mid both hold private keys here, and a fullchain must not carry them
+        var pem = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export().AsPem().ToPemString();
+
+        await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(2);
+        using var leafKey = leaf.GetPrivateKey();
+        await Assert.That(pem).Contains(leafKey.ExportPkcs8PrivateKeyPem().Trim());
+    }
+
+
+    [Test]
+    public async Task Export_WithPrivateKeys_IncludesTheChainKeysTheCallerHolds()
+    {
+        using var root = BuildRootCa();
+        using var leaf = BuildLeaf(root);
+
+        var pem = leaf.BuildChain().TrustRoot(root).Export().WithPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(4);
+    }
+
+
+    [Test]
     public async Task ChainResult_Export_WritesLeafFirstPem()
     {
         using var root = BuildRootCa();

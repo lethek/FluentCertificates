@@ -270,8 +270,13 @@ Chain and validity helpers on `X509Certificate2` / `X509Chain`:
   defaults to `NoCheck`). `Create()` returns a disposable `ChainResult` (`Verified`, `Chain`,
   `ChainStatus`, `EnsureVerified()`, `Export()`) and never throws on verification failure.
   `Export()` on the builder verifies (throwing on failure, naming the statuses) and returns a
-  `CertificateExportBuilder` anchored on the certificate; the caller's certificate is passed through
-  with its key, the rest are library-created keyless copies that must not be disposed.
+  `CertificateExportBuilder` anchored on the certificate, seeded with `ExportKeys.Primary` so a
+  fullchain carries only the leaf's key. It disposes its internal chain, so each element is mapped back
+  by thumbprint to the instance the caller supplied via the certificate, `TrustRoot` or
+  `AddCertificates`; only an element the platform supplied itself (system-store root, AIA-fetched
+  intermediate) is copied, and that copy is keyless and must not be disposed.
+  `ChainResult.Export()` does not verify, matching every other `Export()`; use
+  `EnsureVerified().Export()` for the guarded form.
 - `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. `IsValidAt(DateTime)` is `[Obsolete]`: a
   `DateTime` carries no offset, so its `DateTimeKind` silently changes the answer.
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks

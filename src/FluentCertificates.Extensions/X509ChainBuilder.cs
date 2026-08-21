@@ -119,23 +119,46 @@ public record X509ChainBuilder
     /// <summary>
     /// Builds and verifies the chain, then creates a <see cref="CertificateExportBuilder"/> over its
     /// certificates, leaf first, anchored on <see cref="Certificate"/>. Throws when the chain does not
-    /// verify, so a gap can never silently reach the exported file. The internal chain is disposed
-    /// before returning: <see cref="Certificate"/> is passed through as-is (keeping its private key),
-    /// and the remaining chain certificates are key-less copies created here, which the caller must
-    /// not dispose (the same rule as <c>FilterPrivateKeys</c>).
+    /// verify, so a gap can never silently reach the exported file.
     /// </summary>
-    /// <returns>A new <see cref="CertificateExportBuilder"/> containing the verified chain's certificates.</returns>
+    /// <returns>A new <see cref="CertificateExportBuilder"/> containing the verified chain's certificates,
+    /// seeded with <see cref="ExportKeys.Primary"/>.</returns>
     /// <exception cref="System.Security.Cryptography.CryptographicException">The chain did not verify; the message names each failed status.</exception>
+    /// <remarks>
+    /// The internal chain is disposed before returning, so its element certificates cannot be handed out.
+    /// Each element is instead mapped back to the instance the caller supplied through
+    /// <see cref="Certificate"/>, <see cref="TrustedRoots"/> or <see cref="ExtraCertificates"/>, which
+    /// outlives this call and which the caller already owns. Only an element the platform supplied
+    /// itself, such as a root from the system store or an intermediate fetched via AIA, has no such
+    /// instance and is copied here; that copy is keyless and must not be disposed by the caller
+    /// (the same rule as <c>FilterPrivateKeys</c>).
+    /// <para>
+    /// The result is seeded with <see cref="ExportKeys.Primary"/> so a chain export carries only the
+    /// leaf's private key by default, which is what a fullchain wants. Any CA keys the caller happens
+    /// to hold are stripped by the exporter, which disposes the keyless certificates it creates.
+    /// Call <see cref="CertificateExportBuilder.WithPrivateKeys"/> to include them instead.
+    /// </para>
+    /// </remarks>
     public CertificateExportBuilder Export()
     {
         using var result = Create();
         result.EnsureVerified();
 
-        var certs = new List<X509Certificate2> { Certificate };
-        certs.AddRange(result.Chain.ChainElements
-            .Skip(1)
-            .Select(x => CertTools.LoadCertificate(x.Certificate.RawDataMemory.Span)));
+        var supplied = new Dictionary<string, X509Certificate2>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cert in TrustedRoots.Concat(ExtraCertificates)) {
+            supplied[cert.Thumbprint] = cert;
+        }
 
-        return new CertificateExportBuilder(certs, Certificate);
+        //Assigned last so the anchor's own instance always wins, keeping its private key and keeping
+        //the anchor among the exported certificates even when it also appears as a trusted root
+        supplied[Certificate.Thumbprint] = Certificate;
+
+        var certs = result.Chain.ChainElements
+            .Select(x => supplied.TryGetValue(x.Certificate.Thumbprint, out var mine)
+                ? mine
+                : CertTools.LoadCertificate(x.Certificate.RawDataMemory.Span))
+            .ToList();
+
+        return new CertificateExportBuilder(certs, Certificate) { Keys = ExportKeys.Primary };
     }
 }

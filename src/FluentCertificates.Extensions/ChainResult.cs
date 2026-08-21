@@ -46,6 +46,12 @@ public sealed class ChainResult : IDisposable
     /// result undisposed until the export terminates.
     /// </summary>
     /// <returns>A new <see cref="CertificateExportBuilder"/> containing the chain's certificates.</returns>
+    /// <remarks>
+    /// This does <b>not</b> verify, matching every other <c>Export()</c> in the library: a result whose
+    /// <see cref="Verified"/> is false exports whatever was built, which for a partial chain is an
+    /// incomplete bundle. Write <c>result.EnsureVerified().Export()</c> for the guarded form, or use
+    /// <see cref="X509ChainBuilder.Export"/>, which verifies before exporting.
+    /// </remarks>
     public CertificateExportBuilder Export() => Chain.Export();
 
 

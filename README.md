@@ -595,15 +595,27 @@ leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export().AsPem().ToFile("
 using var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
 if (!result.Verified) {
     Console.WriteLine(String.Join("; ", result.ChainStatus.Select(x => x.Status)));
+    return;
 }
 result.Export().AsPkcs12().ToFile("bundle.pfx");
 ```
 
-`builder.Export()` disposes its internal chain before returning: the certificate you started from is
-passed through as-is, keeping its private key, while the remaining chain certificates are keyless copies
-created by the library which you must **not** dispose (the same rule as `FilterPrivateKeys`; see
-[Key ownership](#key-ownership-and-disposal)). `result.Export()` copies nothing, so keep the `ChainResult`
-undisposed until that export terminates.
+`ChainResult.Export()` does **not** verify, matching every other `Export()` in the library: exporting an
+unverified result writes whatever was built, which for a partial chain is an incomplete bundle. Check
+`Verified` first as above, or write `result.EnsureVerified().Export()`. Only `builder.Export()` verifies
+on your behalf, because it is a one-liner with nowhere to intervene.
+
+`builder.Export()` seeds the export with `ExportKeys.Primary`, so a chain export carries only the leaf's
+private key by default, which is what a fullchain wants. If you hold your CA's private keys, they are
+stripped rather than written; call `WithPrivateKeys()` to include them.
+
+`builder.Export()` disposes its internal chain before returning, so it cannot hand out the chain's own
+element certificates. Each element is mapped back to the instance you supplied through the certificate
+itself, `TrustRoot(...)` or `AddCertificates(...)`, which you already own and dispose. Only an element the
+platform supplied itself, such as a root from the system store or an intermediate fetched via AIA, has no
+such instance and is copied; that copy is keyless and must **not** be disposed by you (the same rule as
+`FilterPrivateKeys`; see [Key ownership](#key-ownership-and-disposal)). `result.Export()` copies nothing,
+so keep the `ChainResult` undisposed until that export terminates.
 
 ---
 
