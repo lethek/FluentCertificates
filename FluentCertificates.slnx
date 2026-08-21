@@ -17,5 +17,6 @@
     <Project Path="tests/FluentCertificates.Builder.Tests/FluentCertificates.Builder.Tests.csproj" />
     <Project Path="tests/FluentCertificates.Extensions.Tests/FluentCertificates.Extensions.Tests.csproj" />
     <Project Path="tests/FluentCertificates.Finder.Tests/FluentCertificates.Finder.Tests.csproj" />
+    <Project Path="tests/FluentCertificates.TestSupport/FluentCertificates.TestSupport.csproj" />
   </Folder>
 </Solution>

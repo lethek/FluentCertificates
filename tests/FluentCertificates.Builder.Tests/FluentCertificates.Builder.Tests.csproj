@@ -21,18 +21,16 @@
   <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
     <PackageReference Include="TUnit" Version="1.65.31" />
-    <PackageReference Update="Microsoft.SourceLink.AzureRepos.Git" Version="10.0.300">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.300">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Skips any test whose [SupportedOSPlatform]/[UnsupportedOSPlatform] exclude the running OS -->
+    <AssemblyAttribute Include="FluentCertificates.SkipUnsupportedOSPlatformAttribute" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FluentCertificates.Builder\FluentCertificates.Builder.csproj" />
+    <ProjectReference Include="..\FluentCertificates.TestSupport\FluentCertificates.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>
