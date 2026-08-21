@@ -1,6 +1,9 @@
 using System.Collections.Immutable;
 using System.Security.Cryptography.X509Certificates;
 
+using FluentCertificates.Internals;
+
+
 namespace FluentCertificates;
 
 /// <summary>
@@ -110,5 +113,29 @@ public record X509ChainBuilder
 
         var verified = chain.Build(Certificate);
         return new ChainResult(verified, chain);
+    }
+
+
+    /// <summary>
+    /// Builds and verifies the chain, then creates a <see cref="CertificateExportBuilder"/> over its
+    /// certificates, leaf first, anchored on <see cref="Certificate"/>. Throws when the chain does not
+    /// verify, so a gap can never silently reach the exported file. The internal chain is disposed
+    /// before returning: <see cref="Certificate"/> is passed through as-is (keeping its private key),
+    /// and the remaining chain certificates are key-less copies created here, which the caller must
+    /// not dispose (the same rule as <c>FilterPrivateKeys</c>).
+    /// </summary>
+    /// <returns>A new <see cref="CertificateExportBuilder"/> containing the verified chain's certificates.</returns>
+    /// <exception cref="System.Security.Cryptography.CryptographicException">The chain did not verify; the message names each failed status.</exception>
+    public CertificateExportBuilder Export()
+    {
+        using var result = Create();
+        result.EnsureVerified();
+
+        var certs = new List<X509Certificate2> { Certificate };
+        certs.AddRange(result.Chain.ChainElements
+            .Skip(1)
+            .Select(x => CertTools.LoadCertificate(x.Certificate.RawDataMemory.Span)));
+
+        return new CertificateExportBuilder(certs, Certificate);
     }
 }

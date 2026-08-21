@@ -240,4 +240,95 @@ public class X509ChainBuilderTests
 
         await Assert.That(() => new X509ChainBuilder(leaf).WithPolicy(null!)).Throws<ArgumentNullException>();
     }
+
+
+    [Test]
+    public async Task Export_WritesLeafFirstPem()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        var pem = new X509ChainBuilder(leaf)
+            .TrustRoot(root)
+            .AddCertificates(mid)
+            .Export()
+            .WithoutPrivateKeys()
+            .AsPem()
+            .ToPemString();
+
+        var expected = new[] { leaf, mid, root }
+            .Select(x => x.Export().WithoutPrivateKeys().AsPem().ToPemString().Trim());
+        await Assert.That(pem.Trim()).IsEqualTo(String.Join("\n", expected));
+    }
+
+
+    [Test]
+    public async Task Export_MissingIntermediate_ThrowsNamingPartialChain()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        var ex = await Assert
+            .That(() => new X509ChainBuilder(leaf).TrustRoot(root).Export())
+            .Throws<CryptographicException>();
+        await Assert.That(ex!.Message).Contains("PartialChain");
+    }
+
+
+    [Test]
+    public async Task Export_WithPrivateKey_RetainsTheLeafKeyInPkcs12()
+    {
+        using var root = BuildRootCa();
+        using var leaf = BuildLeaf(root);
+
+        var pfx = new X509ChainBuilder(leaf).TrustRoot(root).Export().WithPrivateKey().AsPkcs12().ToByteArray();
+
+        var reloaded = new X509Certificate2Collection();
+        reloaded.Import(pfx, (string?)null, X509KeyStorageFlags.EphemeralKeySet);
+        try {
+            var reloadedLeaf = reloaded.Single(x => x.Thumbprint == leaf.Thumbprint);
+            await Assert.That(reloadedLeaf.HasPrivateKey).IsTrue();
+        }
+        finally {
+            foreach (var cert in reloaded) {
+                cert.Dispose();
+            }
+        }
+    }
+
+
+    [Test]
+    public async Task Export_LeavesTheCallersCertificatesUsable()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        new X509ChainBuilder(leaf).TrustRoot(root).AddCertificates(mid).Export().AsPem().ToPemString();
+
+        //Accessing RawData after disposal throws, so this proves the internal chain's disposal
+        //did not reach the caller's instances
+        await Assert.That(leaf.RawData).IsNotNull();
+        await Assert.That(mid.RawData).IsNotNull();
+        await Assert.That(root.RawData).IsNotNull();
+        await Assert.That(leaf.HasPrivateKey).IsTrue();
+    }
+
+
+    [Test]
+    public async Task ChainResult_Export_WritesLeafFirstPem()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        using var result = new X509ChainBuilder(leaf).TrustRoot(root).AddCertificates(mid).Create();
+        var pem = result.EnsureVerified().Export().WithoutPrivateKeys().AsPem().ToPemString();
+
+        var expected = new[] { leaf, mid, root }
+            .Select(x => x.Export().WithoutPrivateKeys().AsPem().ToPemString().Trim());
+        await Assert.That(pem.Trim()).IsEqualTo(String.Join("\n", expected));
+    }
 }
