@@ -23,17 +23,25 @@ env:
   publishEnabled: 'true'
 
 jobs:
-  # ubuntu-latest is Ubuntu 24.04, whose OpenSSL 3.0.13 implements none of the post-quantum
-  # algorithms: ML-DSA, SLH-DSA, Composite ML-DSA and ML-KEM all report IsSupported = false there,
-  # so the main job below skips every PQC test. This job runs the net10.0 leg on Alpine 3.24, whose
-  # OpenSSL 3.5 supports all four, so the PQC work is actually exercised somewhere in CI.
+  # .NET's post-quantum algorithms need OpenSSL 3.5+. The ubuntu-24.04 image ships OpenSSL 3.0.13,
+  # where ML-DSA, SLH-DSA, Composite ML-DSA and ML-KEM all report IsSupported = false, so every PQC
+  # test skips there. ubuntu-latest currently resolves to ubuntu-24.04, so the main job below cannot
+  # verify any of this; ubuntu-26.04 ships OpenSSL 3.5.5 and is pinned explicitly here rather than
+  # tracking ubuntu-latest, so this job keeps testing what it is meant to when that alias moves on.
   pqc:
-    runs-on: ubuntu-latest
-    container: mcr.microsoft.com/dotnet/sdk:10.0-alpine3.24
+    runs-on: ubuntu-26.04
 
     steps:
     - name: Checkout
       uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: 10.x
+
+    - name: Report OpenSSL version
+      run: openssl version
 
     - name: Test (net10.0, PQC-capable)
       run: dotnet test -f net10.0 -c ${{ env.buildConfiguration }}
