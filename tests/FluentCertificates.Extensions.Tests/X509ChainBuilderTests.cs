@@ -352,14 +352,29 @@ public class X509ChainBuilderTests
 
 
     [Test]
-    public async Task Export_DefaultsToTheLeafKeyOnly()
+    public async Task Export_DefaultsToNoPrivateKeys()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        //All three hold private keys here, and none of them was asked for
+        var pem = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export().AsPem().ToPemString();
+
+        await Assert.That(pem).DoesNotContain("PRIVATE KEY");
+    }
+
+
+    [Test]
+    public async Task Export_WithPrivateKey_TakesTheLeafKeyAndNoCAKey()
     {
         using var root = BuildRootCa();
         using var mid = BuildIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
         //root and mid both hold private keys here, and a fullchain must not carry them
-        var pem = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export().AsPem().ToPemString();
+        var pem = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export()
+            .WithPrivateKey().AsPem().ToPemString();
 
         await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(2);
         using var leafKey = leaf.GetPrivateKey();
@@ -368,12 +383,12 @@ public class X509ChainBuilderTests
 
 
     [Test]
-    public async Task Export_WithPrivateKeys_IncludesTheChainKeysTheCallerHolds()
+    public async Task Export_WithAllPrivateKeys_IncludesTheChainKeysTheCallerHolds()
     {
         using var root = BuildRootCa();
         using var leaf = BuildLeaf(root);
 
-        var pem = leaf.BuildChain().TrustRoot(root).Export().WithPrivateKeys().AsPem().ToPemString();
+        var pem = leaf.BuildChain().TrustRoot(root).Export().WithAllPrivateKeys().AsPem().ToPemString();
 
         await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(4);
     }
@@ -395,7 +410,7 @@ public class X509ChainBuilderTests
 
         await Assert.That(export.Certificates[1]).IsSameReferenceAs(mid);
 
-        var pem = export.WithPrivateKeys().AsPem().ToPemString();
+        var pem = export.WithAllPrivateKeys().AsPem().ToPemString();
         await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(6);
     }
 
@@ -433,19 +448,17 @@ public class X509ChainBuilderTests
 
 
     [Test]
-    public async Task ChainResult_Export_DefaultsToTheLeafKeyOnly()
+    public async Task ChainResult_Export_DefaultsToNoPrivateKeys()
     {
         using var root = BuildRootCa();
         using var mid = BuildIntermediate(root);
         using var leaf = BuildLeaf(mid);
 
-        //Same key default as X509ChainBuilder.Export, so choosing the unverified terminator cannot
-        //write a CA key into the bundle
+        //Same key default as every other export, so choosing this terminator over the builder's
+        //cannot change what the bundle carries
         using var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
         var pem = result.EnsureVerified().Export().AsPem().ToPemString();
 
-        await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(2);
-        using var leafKey = leaf.GetPrivateKey();
-        await Assert.That(pem).Contains(leafKey.ExportPkcs8PrivateKeyPem().Trim());
+        await Assert.That(pem).DoesNotContain("PRIVATE KEY");
     }
 }

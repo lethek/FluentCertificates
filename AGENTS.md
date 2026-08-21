@@ -222,7 +222,7 @@ Provides LINQ-queryable interface for finding certificates across:
 ### Extension Methods
 
 Export, via `Export()` and the `CertificateExportBuilder` it returns:
-- Configure, replacing state: `WithPrivateKey()` / `WithPrivateKeys()` / `WithoutPrivateKeys()` /
+- Configure, replacing state: `WithPrivateKey()` / `WithAllPrivateKeys()` / `WithoutPrivateKeys()` /
   `WithKeys(ExportKeys)` / `WithPassword(string?)` / `WithPassword(SecureString)` / `WithoutPassword()`
 - Add, appending certificates: `AddChain(X509Chain)` / `AddChain(params IEnumerable<X509Certificate2>)` /
   `AddCertificates(params IEnumerable<X509Certificate2>)`. The C# 13 params-collections form means loose
@@ -231,8 +231,15 @@ Export, via `Export()` and the `CertificateExportBuilder` it returns:
 - Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
 
 `With*` configures and `Add*` accumulates; keep that split when adding methods. All the `Add*` methods
-deduplicate by thumbprint, so a certificate already present is skipped. `WithChain(...)` is `[Obsolete]`
-and forwards to `AddChain(...)`.
+deduplicate by thumbprint, so a certificate already present is skipped. `WithChain(...)` and
+`WithPrivateKeys(...)` are `[Obsolete]` and forward to `AddChain(...)` and `WithAllPrivateKeys(...)`.
+
+**Private keys are opt-in.** `CertificateExportBuilder.Keys` defaults to `ExportKeys.None`, and so does
+`X509Chain.ToCollection(ExportKeys)`; they are the only two places the enum carries a default, and both
+say `None`. Every entry point inherits it, so an export writes a key only where the caller wrote
+`WithPrivateKey()` (the anchor's) or `WithAllPrivateKeys()` (every one held). This is why `AsPkcs12()`
+produces a keyless PFX unless asked otherwise. Keep any new default at `None`: a key the caller did not
+request must never reach a file.
 
 `WithPassword(SecureString)` is honoured by every format, but only `AsPem()` keeps it out of the managed
 heap: the platform's PKCS#12 export takes a `string`, so `AsPkcs12()` has to materialise one. Each
@@ -284,10 +291,9 @@ Chain and validity helpers on `X509Certificate2` / `X509Chain`:
   `CustomTrustStore` (later sources win, so the anchor always keeps its own instance); only an element
   the platform supplied itself (system-store root, AIA-fetched intermediate) is copied, and that copy
   is keyless and must not be disposed.
-  Both `Export()` methods seed `ExportKeys.Primary`, so a fullchain carries only the leaf's key;
-  `result.Chain.Export()` opts back out to the extension's `ExportKeys.All`. `ChainResult.Export()`
-  does not verify, matching every other `Export()`; use `EnsureVerified().Export()` for the guarded
-  form.
+  Neither `Export()` seeds any key: like every export they default to `ExportKeys.None`, so a
+  fullchain needs `WithPrivateKey()` for the leaf's key. `ChainResult.Export()` does not verify,
+  matching every other `Export()`; use `EnsureVerified().Export()` for the guarded form.
 - `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. `IsValidAt(DateTime)` is `[Obsolete]`: a
   `DateTime` carries no offset, so its `DateTimeKind` silently changes the answer.
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks

@@ -650,7 +650,7 @@ public class CertificateExportBuilderTests
 
         //Only ExportKeys.Primary and AsCert() need a designated certificate; the rest never ask.
         var certs = new[] { root, leafA, leafB };
-        await Assert.That(certs.Export().WithPrivateKeys().AsPem().ToPemString()).IsNotEmpty();
+        await Assert.That(certs.Export().WithAllPrivateKeys().AsPem().ToPemString()).IsNotEmpty();
         await Assert.That(certs.Export().WithoutPrivateKeys().AsPkcs12().ToByteArray()).IsNotEmpty();
         await Assert.That(certs.Export().AsPkcs7().ToByteArray()).IsNotEmpty();
     }
@@ -668,7 +668,7 @@ public class CertificateExportBuilderTests
         var orphaned = leaf.Export() with { Certificates = [root, stranger] };
 
         await Assert.That(() => orphaned.AsCert().ToByteArray()).ThrowsExactly<ArgumentException>();
-        await Assert.That(() => orphaned.WithPrivateKeys().AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => orphaned.WithAllPrivateKeys().AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
     }
 
 
@@ -826,6 +826,35 @@ public class CertificateExportBuilderTests
         var viaNew = leaf.Export().AddChain([root, mid]).WithoutPrivateKeys().AsPem().ToPemString();
 
         await Assert.That(viaOld).IsEqualTo(viaNew);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_WithPrivateKeys_StillForwardsToWithAllPrivateKeys()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Rename Root").Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Rename Leaf").SetIssuer(root).Create();
+
+#pragma warning disable CS0618 // deliberately exercising the obsolete forwarding overload
+        var viaOld = leaf.Export().AddChain([root]).WithPrivateKeys().AsPem().ToPemString();
+#pragma warning restore CS0618
+        var viaNew = leaf.Export().AddChain([root]).WithAllPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(viaOld).IsEqualTo(viaNew);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_DefaultsToNoPrivateKeys()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Opt In").Create();
+
+        //Keys are opt-in: an export nobody asked for a key from must not carry one
+        var pem = cert.Export().AsPem().ToPemString();
+
+        await Assert.That(cert.HasPrivateKey).IsTrue();
+        await Assert.That(pem).DoesNotContain("PRIVATE KEY");
+        await Assert.That(cert.Export().Keys).IsEqualTo(ExportKeys.None);
     }
 
 

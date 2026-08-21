@@ -134,8 +134,7 @@ public record X509ChainBuilder
     /// certificates, leaf first, anchored on <see cref="Certificate"/>. Throws when the chain does not
     /// verify, so a gap can never silently reach the exported file.
     /// </summary>
-    /// <returns>A new <see cref="CertificateExportBuilder"/> containing the verified chain's certificates,
-    /// seeded with <see cref="ExportKeys.Primary"/>.</returns>
+    /// <returns>A new <see cref="CertificateExportBuilder"/> containing the verified chain's certificates.</returns>
     /// <exception cref="System.Security.Cryptography.CryptographicException">The chain did not verify; the message names each failed status.</exception>
     /// <remarks>
     /// The internal chain is disposed before returning, so its element certificates cannot be handed out.
@@ -149,10 +148,10 @@ public record X509ChainBuilder
     /// Where the same certificate was supplied more than once as different instances, the later source
     /// in that list wins, so <see cref="Certificate"/> always keeps its own instance and its key.
     /// <para>
-    /// The result is seeded with <see cref="ExportKeys.Primary"/> so a chain export carries only the
-    /// leaf's private key by default, which is what a fullchain wants. Any CA keys the caller happens
-    /// to hold are stripped by the exporter, which disposes the keyless certificates it creates.
-    /// Call <see cref="CertificateExportBuilder.WithPrivateKeys"/> to include them instead.
+    /// Like every export, this one carries no private key until asked. Call
+    /// <see cref="CertificateExportBuilder.WithPrivateKey"/> for the leaf's, which is what a fullchain
+    /// wants, or <see cref="CertificateExportBuilder.WithAllPrivateKeys"/> to include any CA keys the
+    /// caller happens to hold. Either way the exporter disposes the keyless certificates it creates.
     /// </para>
     /// </remarks>
     public CertificateExportBuilder Export()
@@ -181,6 +180,6 @@ public record X509ChainBuilder
                 : CertTools.LoadCertificate(x.RawDataMemory.Span))
             .ToList();
 
-        return new CertificateExportBuilder(certs, Certificate) { Keys = ExportKeys.Primary };
+        return new CertificateExportBuilder(certs, Certificate);
     }
 }
