@@ -850,11 +850,15 @@ public class CertificateExportBuilderTests
         using var cert = new CertificateBuilder().SetSubject("CN=Opt In").Create();
 
         //Keys are opt-in: an export nobody asked for a key from must not carry one
-        var pem = cert.Export().AsPem().ToPemString();
-
         await Assert.That(cert.HasPrivateKey).IsTrue();
-        await Assert.That(pem).DoesNotContain("PRIVATE KEY");
         await Assert.That(cert.Export().Keys).IsEqualTo(ExportKeys.None);
+
+        await Assert.That(cert.Export().AsPem().ToPemString()).DoesNotContain("PRIVATE KEY");
+
+        //Including PKCS#12, where a keyless PFX is the surprising half of this default
+        using var loaded = CertTools.LoadPkcs12(cert.Export().AsPkcs12().ToByteArray(), null);
+        await Assert.That(loaded.Thumbprint).IsEqualTo(cert.Thumbprint);
+        await Assert.That(loaded.HasPrivateKey).IsFalse();
     }
 
 
