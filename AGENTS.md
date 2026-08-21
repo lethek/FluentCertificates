@@ -8,8 +8,8 @@ FluentCertificates is a .NET library for working with X.509 certificates using a
 
 ## Build System
 
-Plain `dotnet` CLI. There is no build-system wrapper: the NUKE build (`build.cmd` / `build.sh` /
-`build/`) was removed, and CI in `.github/workflows/dotnet.yml` calls `dotnet` directly.
+Plain `dotnet` CLI. There is no build-system wrapper; CI in `.github/workflows/dotnet.yml` calls
+`dotnet` directly.
 
 Versioning is supplied by GitVersion, which runs as a GitHub Action step in CI (`gittools/actions`,
 `versionSpec: 6.x`, configured by `GitVersion.yml`) and passes the result to `dotnet build`/`dotnet pack`
@@ -55,7 +55,7 @@ dotnet pack -c Release -p:PackageOutputPath="$PWD/artifacts/"
 
 ### Package Structure
 
-The solution is organized into five NuGet packages with clear separation of concerns. Every project under `src/` is published; there are no internal-only projects.
+The solution is organized into five NuGet packages. Every project under `src/` is published; there are no internal-only projects.
 
 1. **FluentCertificates** (meta-package)
    - Top-level package that imports Builder, Extensions, and Finder
@@ -91,15 +91,13 @@ The solution is organized into five NuGet packages with clear separation of conc
 
 ### BouncyCastle
 
-**BouncyCastle is not a dependency of any shipped package.** `CertificateBuilder` used it internally in
-the past but no longer does; nothing under `src/` references `Org.BouncyCastle`.
+**BouncyCastle is not a dependency of any shipped package.** Nothing under `src/` references
+`Org.BouncyCastle`, and nothing should.
 
-Some tests still use BouncyCastle as a tool, to construct inputs and to pick apart output for assertions.
+Some tests use BouncyCastle as a tool, to construct inputs and to pick apart output for assertions.
 Those projects take their own `BouncyCastle.Cryptography` package reference, and the two conversion
 helpers they need (`X509Name.ConvertToDotNet()`, `X509Extension.ConvertToBouncyCastle()`) live in
-`tests/FluentCertificates.Builder.Tests/BouncyCastleTestExtensions.cs`. There was previously a
-`src/FluentCertificates.Builder.BouncyCastle` project for this; it was never published and has been
-removed. Do not reintroduce a BouncyCastle dependency under `src/`.
+`tests/FluentCertificates.Builder.Tests/BouncyCastleTestExtensions.cs`.
 
 ### Key Design Patterns
 
@@ -124,37 +122,38 @@ cert.Export().WithPrivateKey().AsPem().ToPemString();
 cert.Export().WithPassword(pw).AsPkcs12().ToFile(path);
 ```
 
-The older `ExportAsPem()` / `ExportAsPkcs12()` / `ExportAsPkcs7()` / `ExportAsCert()` / `ToPemString()` /
-`ToBase64String()` extension methods on `X509Certificate2`, `X509Certificate2Collection`, `X509Chain` and
-`IEnumerable<X509Certificate2>` were deprecated and have now been removed. `Export()` is the only export API.
-
-Note that `CertificateRequest.ExportAsPem()` / `ToPemString()` (in `CertificateRequestExtensions`) and the
-`AsymmetricAlgorithm.ExportAs*Pem()` methods share those names but are **not** deprecated and have no builder
-equivalent: the export builder works on certificates, not CSRs or bare keys.
+`Export()` is the only export API for certificates. `CertificateRequest.ExportAsPem()` / `ToPemString()`
+(in `CertificateRequestExtensions`) and the `AsymmetricAlgorithm.ExportAs*Pem()` methods have no builder
+equivalent and are not deprecated: the export builder works on certificates, not CSRs or bare keys.
 
 ### Target Frameworks
 
 - All five library projects under `src/`: net8.0 and net9.0
 - Test projects: net8.0, net9.0 and net10.0
+- `tests/FluentCertificates.TestSupport`: net8.0 alone, which all three consume
 
 Some dependencies use conditional package references based on target framework (see .csproj files).
 
 ### Test Framework
 
-Tests use:
-- **TUnit** as the testing framework, running on Microsoft.Testing.Platform (see `global.json`)
+- **TUnit**, running on Microsoft.Testing.Platform (see `global.json`)
 - `[Test]` for test methods, `[Arguments]` for inline cases, `[MethodDataSource]` for generated cases
 - Assertions are async: `await Assert.That(actual).IsEqualTo(expected)`. Every test method returns `Task`
 - TUnit parallelises tests by default, including methods within the same class; add `[NotInParallel]` where that isn't safe
-- `SupportedOSAttribute` (a `TUnit.Core.SkipAttribute`) skips OS-specific tests
-- Test projects target net8.0, net9.0 and net10.0
+- An OS-specific test declares its platforms with the BCL's `[SupportedOSPlatform]` /
+  `[UnsupportedOSPlatform]` and nothing else: they satisfy CA1416, and `SkipUnsupportedOSPlatformAttribute`
+  reads them back to skip the test elsewhere. Each test project applies that attribute at assembly level
+  through an `<AssemblyAttribute>` item in its `.csproj`, so tests never mention it. Precedence rules are
+  in its XML docs, and `SkipUnsupportedOSPlatformAttributeTests` guards it
 
-Two TUnit gotchas worth knowing:
+TUnit gotchas:
 - TUnit's implicit global usings make the bare name `Assembly` ambiguous with `System.Reflection.Assembly`; alias it
 - `IsEquivalentTo` compares members structurally by reflection, not via `Equals`. For types like `X509Certificate2`
   where that pulls in unstable members (e.g. `Handle`), pass an explicit `IEqualityComparer<T>`
 
-Test projects are located in `tests/` directory with naming pattern `{ProjectName}.Tests`.
+Test projects live in `tests/` with the naming pattern `{ProjectName}.Tests`. Alongside them,
+`tests/FluentCertificates.TestSupport` holds support types shared between them and runs no tests of its
+own; it is a library rather than a test project, so it takes `TUnit.Core` alone.
 
 ## Code Conventions
 
@@ -185,7 +184,7 @@ an extracted key does not affect the certificate it came from, or any sibling in
 Two APIs are the exception, both emitting a mix of caller-owned originals and library-created copies that
 are indistinguishable to the caller, so neither's output may be disposed:
 
-- `FilterPrivateKeys`, whose stripped certificates are keyless copies. See #46.
+- `FilterPrivateKeys`, whose stripped certificates are keyless copies.
 - `X509ChainBuilder.Export()`, whose `Certificates` are the caller's own instances wherever the caller
   supplied them and keyless copies only for elements the platform supplied (a system-store root, an
   AIA-fetched intermediate).
@@ -297,13 +296,13 @@ Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. `IsValidAt(DateTime)` is `[Obsolete]`: a
   `DateTime` carries no offset, so its `DateTimeKind` silently changes the answer.
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks
+- `CanSign()` - Whether the private key is usable for signing, rather than merely associated as
+  `HasPrivateKey` reports. Every "cannot sign" outcome returns `false` rather than throwing, and it is
+  independent of exportability: never implement either in terms of the other. See its XML docs
 
 
 ## Additional Notes
 
-- The project uses GitVersion for semantic versioning
-- GitHub Actions CI is configured for automated builds and publishing
 - Source Link is enabled for debugging into the library
 - Symbol packages (snupkg) are generated alongside NuGet packages
-- The solution includes .editorconfig for consistent code style
 - The solution file is `FluentCertificates.slnx` (XML solution format)

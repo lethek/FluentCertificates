@@ -41,7 +41,7 @@ public static class X509Certificate2Extensions
     /// <param name="cert">The certificate.</param>
     /// <returns>The private key. Dispose it when finished with it.</returns>
     /// <exception cref="NotSupportedException">Thrown if the key algorithm is not supported.</exception>
-    /// <exception cref="Exception">Thrown if the private key is not found.</exception>
+    /// <exception cref="CryptographicException">Thrown if the private key is not found.</exception>
     public static AsymmetricAlgorithm GetPrivateKey(this X509Certificate2 cert)
         => (AsymmetricAlgorithm?)(cert.GetKeyAlgorithm() switch {
             Oids.Rsa => cert.GetRSAPrivateKey(),
@@ -49,7 +49,56 @@ public static class X509Certificate2Extensions
             //An ECDH and an ECDsa key share this OID, so ask for both before giving up.
             Oids.EcPublicKey => (AsymmetricAlgorithm?)cert.GetECDsaPrivateKey() ?? cert.GetECDiffieHellmanPrivateKey(),
             _ => throw new NotSupportedException($"Unsupported key algorithm OID {cert.GetKeyAlgorithm()}")
-        }) ?? throw new Exception($"Private key not found for OID {cert.GetKeyAlgorithm()}");
+        }) ?? throw new CryptographicException($"Private key not found for OID {cert.GetKeyAlgorithm()}");
+
+
+    /// <summary>
+    /// Reports whether the certificate's private key can actually be used for signing, as opposed to merely
+    /// being associated with the certificate.
+    /// </summary>
+    /// <param name="cert">The certificate to test.</param>
+    /// <returns><see langword="true"/> if a signing key was resolved; otherwise <see langword="false"/>.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="cert"/> is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// <see cref="X509Certificate2.HasPrivateKey"/> reports only that the certificate carries metadata naming
+    /// a key, which outlives the key itself: a deleted container, an ACL that excludes the caller, or an
+    /// absent smartcard, TPM or HSM all leave it reporting <see langword="true"/>. This resolves the key
+    /// instead, so each of those reports <see langword="false"/> here. It reaches the key store, so narrow a
+    /// query by subject or thumbprint first and apply this last.
+    /// <para>
+    /// Two things it deliberately does not do. It never exports, because a non-exportable key signs perfectly
+    /// well through its handle. It never reads <c>KeyUsage</c>, because that records what the issuer
+    /// authorised rather than what the key can do; in particular a key-agreement certificate reports
+    /// <see langword="true"/> wherever the platform hands its EC key back as an <see cref="ECDsa"/>, which
+    /// Windows does, and that key really does produce valid signatures.
+    /// </para>
+    /// <para>
+    /// The key is opened but never used, so no hardware-backed key is prompted for a PIN. A key that opens
+    /// but fails at first use is therefore the one case left uncaught.
+    /// </para>
+    /// </remarks>
+    public static bool CanSign(this X509Certificate2 cert)
+    {
+        ArgumentNullException.ThrowIfNull(cert);
+
+        //Cheap and reliable as a negative; it is only as a positive that HasPrivateKey misleads
+        if (!cert.HasPrivateKey) {
+            return false;
+        }
+
+        try {
+            using var key = cert.GetPrivateKey();
+            return key is not ECDiffieHellman;
+
+        } catch (CryptographicException) {
+            //The container is gone, its ACL excludes this user, or its token is absent
+            return false;
+
+        } catch (NotSupportedException) {
+            //An unrecognised key algorithm, or a provider this platform cannot reach
+            return false;
+        }
+    }
 
 
     /// <summary>

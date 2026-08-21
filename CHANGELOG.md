@@ -18,10 +18,12 @@ they summarise each release rather than record it as it happened.
 - `X509ChainBuilder`, a fluent chain builder started by `cert.BuildChain()`: `TrustRoot`, `AddCertificates`, `AllowInvalidTime`, `WithPolicy`, `Create()` and `Export()`.
 - `ChainResult`, the disposable result of `X509ChainBuilder.Create()`: `Verified`, `Chain`, `ChainStatus`, `EnsureVerified()` and `Export()`.
 - `CertificateExportBuilder.WithAllPrivateKeys()`, replacing `WithPrivateKeys()`.
+- `X509Certificate2.CanSign()`, reporting whether the private key is usable for signing rather than merely associated, which is all `HasPrivateKey` reports.
 
 ### Changed
 
 - **Breaking:** Private keys are now opt-in. `CertificateExportBuilder.Keys` and `X509Chain.ToCollection(ExportKeys)` default to `ExportKeys.None` instead of `ExportKeys.All`, so `cert.Export().AsPkcs12()` writes a keyless PFX. Call `WithPrivateKey()` for the anchor's key or `WithAllPrivateKeys()` for every key held.
+- `X509Certificate2.GetPrivateKey()` throws `CryptographicException` rather than a bare `Exception` when the key cannot be resolved.
 
 ### Deprecated
 

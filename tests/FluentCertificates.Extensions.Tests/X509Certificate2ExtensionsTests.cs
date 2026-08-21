@@ -1,4 +1,7 @@
+using System.Runtime.Versioning;
+using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 using FluentCertificates.Internals;
@@ -373,6 +376,174 @@ public class X509Certificate2ExtensionsTests
         yield return (KeyAlgorithm.RSA, ExportKeys.None, null);
         yield return (KeyAlgorithm.RSA, ExportKeys.Primary, null);
         yield return (KeyAlgorithm.RSA, ExportKeys.All, null);
+    }
+
+
+    [Test]
+    [MethodDataSource(nameof(KeyAlgorithmsTestData))]
+    public async Task CanSign_WithAWorkingSigningKey_IsTrue(KeyAlgorithm alg)
+    {
+        using var cert = new CertificateBuilder()
+            .SetKeyAlgorithm(alg)
+            .SetSubject("CN=Signer")
+            .Create();
+
+        await Assert.That(cert.HasPrivateKey).IsTrue();
+        await Assert.That(cert.CanSign()).IsTrue();
+    }
+
+
+    [Test]
+    [SupportedOSPlatform("Windows")]
+    [SupportedOSPlatform("Linux")]
+    public async Task CanSign_WithADSAKey_IsTrue()
+    {
+        //DSA signs, however deprecated it is for certificate use
+        #pragma warning disable CS0618 // Type or member is obsolete
+        using var cert = new CertificateBuilder()
+            .SetKeyAlgorithm(KeyAlgorithm.DSA)
+            .SetSubject("CN=DSA Signer")
+            .Create();
+        #pragma warning restore CS0618 // Type or member is obsolete
+
+        await Assert.That(cert.HasPrivateKey).IsTrue();
+        await Assert.That(cert.CanSign()).IsTrue();
+    }
+
+
+    [Test]
+    public async Task CanSign_WithoutAPrivateKey_IsFalseAndDoesNotThrow()
+    {
+        using var signer = new CertificateBuilder().SetSubject("CN=Signer").Create();
+        using var keyless = CertTools.LoadCertificate(signer.RawData);
+
+        await Assert.That(keyless.HasPrivateKey).IsFalse();
+        await Assert.That(keyless.CanSign()).IsFalse();
+    }
+
+
+    [Test]
+    public async Task CanSign_WithAnECDiffieHellmanCertificate_FollowsTheKeyThePlatformHandsBack()
+    {
+        using var issuer = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=ECDH Issuer")
+            .Create();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.SMime)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetSubject("CN=ECDH Subject")
+            .SetIssuer(issuer)
+            .Create();
+
+        await Assert.That(cert.HasPrivateKey).IsTrue();
+
+        //Whether an EC key was meant for agreement or signing lives in KeyAlgorithm and the KeyUsage
+        //bits, never in the key, so CanSign can only report what the platform will hand back
+        using var key = cert.GetPrivateKey();
+        await Assert.That(cert.CanSign()).IsEqualTo(key is not ECDiffieHellman);
+
+        if (key is ECDsa ecdsa) {
+            //Windows takes this branch, and the true answer is not a lie: the key really does sign
+            await Assert
+                .That(() => ecdsa.SignData(new byte[] { 1, 2, 3 }, HashAlgorithmName.SHA256))
+                .ThrowsNothing();
+        }
+    }
+
+
+    [Test]
+    public async Task CanSign_WithANullCertificate_Throws()
+        => await Assert
+            .That(() => X509Certificate2Extensions.CanSign(null!))
+            .ThrowsExactly<ArgumentNullException>();
+
+
+    [Test]
+    //A key association that outlives its container is a CERT_KEY_PROV_INFO behaviour
+    [SupportedOSPlatform("Windows")]
+    public async Task CanSign_WhenTheKeyContainerIsDeleted_IsFalseWhileHasPrivateKeyStaysTrue()
+    {
+        var keyName = NewTestKeyName();
+        CreatePersistedRsaKey(keyName, CngExportPolicies.AllowPlaintextExport);
+        try {
+            using var cert = BuildCertWithPersistedKey(keyName, "CN=Dangling Key");
+
+            await Assert.That(cert.HasPrivateKey).IsTrue();
+            await Assert.That(cert.CanSign()).IsTrue()
+                .Because("the key container still exists at this point");
+
+            DeletePersistedKey(keyName);
+
+            //The certificate still names a container that no longer exists, which is the state
+            //certutil reports as "Missing stored keyset"
+            await Assert.That(cert.HasPrivateKey).IsTrue()
+                .Because("the association is metadata on the certificate and outlives the key itself");
+            await Assert.That(cert.CanSign()).IsFalse();
+
+        } finally {
+            DeletePersistedKey(keyName);
+        }
+    }
+
+
+    [Test]
+    //CNG export policies are a Windows key-storage concept
+    [SupportedOSPlatform("Windows")]
+    public async Task CanSign_WithANonExportableKey_IsTrueEvenThoughItsMaterialIsWalledOff()
+    {
+        var keyName = NewTestKeyName();
+        CreatePersistedRsaKey(keyName, CngExportPolicies.None);
+        try {
+            using var cert = BuildCertWithPersistedKey(keyName, "CN=Non Exportable");
+
+            //Signing goes through the key's handle; only the key material is unreachable. Never
+            //implement CanSign in terms of exportability.
+            await Assert.That(cert.CanSign()).IsTrue();
+
+            using var key = cert.GetPrivateKey();
+            await Assert.That(() => key.ExportPkcs8PrivateKey()).Throws<CryptographicException>();
+
+        } finally {
+            DeletePersistedKey(keyName);
+        }
+    }
+
+
+    private static string NewTestKeyName()
+        => $"FluentCertificates.Tests.{Guid.NewGuid():N}";
+
+
+    [SupportedOSPlatform("Windows")]
+    private static void CreatePersistedRsaKey(string name, CngExportPolicies exportPolicy)
+    {
+        using var key = CngKey.Create(CngAlgorithm.Rsa, name, new CngKeyCreationParameters {
+            Provider = CngProvider.MicrosoftSoftwareKeyStorageProvider,
+            ExportPolicy = exportPolicy
+        });
+    }
+
+
+    [SupportedOSPlatform("Windows")]
+    private static X509Certificate2 BuildCertWithPersistedKey(string keyName, string subject)
+    {
+        //A persisted key makes CopyWithPrivateKey record the container name on the certificate, rather
+        //than attaching an ephemeral key that would disappear along with this instance
+        using var key = CngKey.Open(keyName, CngProvider.MicrosoftSoftwareKeyStorageProvider);
+        using var rsa = new RSACng(key);
+        return new CertificateBuilder().SetSubject(subject).SetKeyPair(rsa).Create();
+    }
+
+
+    [SupportedOSPlatform("Windows")]
+    private static void DeletePersistedKey(string name)
+    {
+        if (!CngKey.Exists(name, CngProvider.MicrosoftSoftwareKeyStorageProvider)) {
+            return;
+        }
+        using var key = CngKey.Open(name, CngProvider.MicrosoftSoftwareKeyStorageProvider);
+        key.Delete();
     }
 
 

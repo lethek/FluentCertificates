@@ -443,6 +443,25 @@ var cert = new CertificateFinder()
     .FirstOrDefault(x => subject.EquivalentTo(x.SubjectName, false));
 ```
 
+### **Find a Certificate Whose Private Key Can Actually Sign**
+
+`HasPrivateKey` only reports that the certificate carries metadata naming a key. Picking an issuer on
+that basis can select one whose key container was deleted, whose key ACL excludes you, or whose token
+is absent, and the failure then surfaces much later as `CryptographicException: Keyset does not exist`
+from somewhere unrelated. `CanSign()` resolves the key instead, so the dud is rejected at selection
+time:
+
+```csharp
+var ca = new CertificateFinder()
+    .AddCommonStores()
+    .Select(x => x.Certificate)
+    .Where(x => subject.EquivalentTo(x.SubjectName, false))
+    .FirstOrDefault(x => x.CanSign());
+```
+
+It reaches the key store, so it costs far more than the property read it replaces. Narrow by subject or
+thumbprint first and apply it last, as above.
+
 ---
 
 ## X500NameBuilder Examples
@@ -574,6 +593,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. The `DateTime` overload is **deprecated**, because a `DateTime` carries no offset and its `DateTimeKind` changes the result.|
 |`IsSelfSigned(bool verifySignature = false)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key.|
 |`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name.|
+|`CanSign()`|Whether the private key can actually be used for signing, as opposed to merely being associated with the certificate. Every "cannot sign" outcome returns `false` rather than throwing. Costs a key-store lookup. See [Find a certificate whose private key can actually sign](#find-a-certificate-whose-private-key-can-actually-sign).|
 |`GetPrivateKey()`|Returns the private key as an `AsymmetricAlgorithm`, whatever its algorithm. Every call returns a **new instance which you own and should dispose**; see [Key ownership](#key-ownership-and-disposal).|
 |`GetSignatureAlgorithm()`|Returns the `SignatureAlgorithm` the certificate was signed with, combining key algorithm, hash and padding.|
 |`GetToBeSignedData()`|The raw "to be signed" (TBS) bytes, i.e. what the issuer's signature covers.|

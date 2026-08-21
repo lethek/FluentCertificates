@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -76,6 +77,8 @@ public class CertificateBuilderTests
 
 
     [Test]
+    [SupportedOSPlatform("Windows")]
+    [SupportedOSPlatform("Linux")]
     public async Task Build_Certificate_WithDSAKeys()
     {
         using var keys = DSA.Create(1024);
@@ -132,7 +135,7 @@ public class CertificateBuilderTests
 
 
     [Test]
-    [SupportedOS(SupportedOS.Windows)]
+    [SupportedOSPlatform("Windows")]
     public async Task Build_CertificateOnWindows_WithFriendlyName()
     {
         const string friendlyName = "A FriendlyName can be set on Windows";
