@@ -38,7 +38,8 @@ internal static class PostQuantumSupport
                 CompositeMLDsa.IsSupported
                 && CompositeMLDsa.IsAlgorithmSupported(CompositeAlgorithmFor(algorithm))
                 && CompositeCertificateSigning.Value,
-            KeyAlgorithmFamily.MLKem => MLKem.IsSupported,
+            //An ML-KEM certificate builds anywhere, but attaching the private key to it is Windows's gap
+            KeyAlgorithmFamily.MLKem => MLKem.IsSupported && MLKemCertificateKeys.Value,
             _ => true
         };
 #pragma warning restore SYSLIB5006
@@ -67,6 +68,53 @@ internal static class PostQuantumSupport
             using var probe = CompositeMLDsa.GenerateKey(CompositeMLDsaAlgorithm.MLDsa44WithECDsaP256);
             System.Security.Cryptography.X509Certificates.X509SignatureGenerator.CreateForCompositeMLDsa(probe);
             return true;
+
+        } catch (PlatformNotSupportedException) {
+            return false;
+
+        } catch (CryptographicException) {
+            return false;
+        }
+#pragma warning restore SYSLIB5006
+    });
+
+
+    /// <summary>
+    /// Whether this runtime can attach an ML-KEM private key to a certificate.
+    /// </summary>
+    /// <remarks>
+    /// An ML-KEM certificate builds on every platform, but <c>X509Certificate2.CopyWithPrivateKey(MLKem)</c>
+    /// throws <see cref="PlatformNotSupportedException"/> on Windows while working on Linux. A certificate
+    /// whose private key cannot be attached is not what a caller asking for ML-KEM means, so this decides
+    /// support rather than <c>MLKem.IsSupported</c> alone. Probed once rather than keyed to an OS name, so a
+    /// Windows build that gains support needs no change here.
+    /// </remarks>
+    private static readonly Lazy<bool> MLKemCertificateKeys = new(() => {
+#pragma warning disable SYSLIB5006
+        try {
+            if (!MLKem.IsSupported) {
+                return false;
+            }
+
+            using var kem = MLKem.GenerateKey(MLKemAlgorithm.MLKem512);
+            using var signer = System.Security.Cryptography.ECDsa.Create();
+
+            var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                new System.Security.Cryptography.X509Certificates.X500DistinguishedName("CN=probe"),
+                new System.Security.Cryptography.X509Certificates.PublicKey(kem),
+                HashAlgorithmName.SHA256
+            );
+
+            using var cert = request.Create(
+                new System.Security.Cryptography.X509Certificates.X500DistinguishedName("CN=probe"),
+                System.Security.Cryptography.X509Certificates.X509SignatureGenerator.CreateForECDsa(signer),
+                DateTimeOffset.UtcNow.AddHours(-1),
+                DateTimeOffset.UtcNow.AddHours(1),
+                [1]
+            );
+
+            using var withKey = cert.CopyWithPrivateKey(kem);
+            return withKey.HasPrivateKey;
 
         } catch (PlatformNotSupportedException) {
             return false;

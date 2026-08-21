@@ -71,6 +71,9 @@ public static class X509Certificate2Extensions
                 KeyAlgorithmFamily.CompositeMLDsa => new CertificateKey(
                     cert.GetCompositeMLDsaPrivateKey() ?? throw new CryptographicException($"Private key not found for OID {oid}")
                 ),
+                KeyAlgorithmFamily.MLKem => new CertificateKey(
+                    cert.GetMLKemPrivateKey() ?? throw new CryptographicException($"Private key not found for OID {oid}")
+                ),
                 _ => throw new NotSupportedException($"Unsupported key algorithm OID {oid}")
             };
         }

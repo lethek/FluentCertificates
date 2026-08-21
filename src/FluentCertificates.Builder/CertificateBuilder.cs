@@ -622,6 +622,8 @@ public record CertificateBuilder
                 return SetKeyPair(new CertificateKey(SlhDsa.GenerateKey(PostQuantumSupport.SlhDsaAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.CompositeMLDsa:
                 return SetKeyPair(new CertificateKey(CompositeMLDsa.GenerateKey(PostQuantumSupport.CompositeAlgorithmFor(KeyAlgorithm))));
+            case KeyAlgorithmFamily.MLKem:
+                return SetKeyPair(new CertificateKey(MLKem.GenerateKey(PostQuantumSupport.MLKemAlgorithmFor(KeyAlgorithm))));
         }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
@@ -746,9 +748,15 @@ public record CertificateBuilder
     /// SubjectPublicKeyInfo, carrying the same algorithm OID and the same curve parameters.
     /// </remarks>
     private static X509KeyUsageFlags SigningOrKeyAgreement(CertificateBuilder builder)
-        => builder.KeyAlgorithm.CanSign
-            ? X509KeyUsageFlags.DigitalSignature
-            : X509KeyUsageFlags.KeyAgreement;
+        => builder.KeyAlgorithm.Family switch {
+            //An ECDH key really does perform Diffie-Hellman key agreement
+            KeyAlgorithmFamily.ECDiffieHellman => X509KeyUsageFlags.KeyAgreement,
+            //ML-KEM does not. Encapsulation is key transport, so its bit is keyEncipherment, asserted by
+            //KeyEnciphermentIfSupported; claiming keyAgreement as well would name an operation the key
+            //has no equivalent of.
+            KeyAlgorithmFamily.MLKem => X509KeyUsageFlags.None,
+            _ => X509KeyUsageFlags.DigitalSignature
+        };
 
 
     /// <summary>
@@ -761,9 +769,14 @@ public record CertificateBuilder
     /// Baseline Requirements s7.1.2.3 reach the same result via "Other bit positions SHALL NOT be set".
     /// </summary>
     private static X509KeyUsageFlags KeyEnciphermentIfSupported(CertificateBuilder builder)
-        => builder.PublicKey?.Oid.Value == Oids.Rsa
-            ? X509KeyUsageFlags.KeyEncipherment
-            : X509KeyUsageFlags.None;
+        => builder.PublicKey?.Oid.Value switch {
+            Oids.Rsa => X509KeyUsageFlags.KeyEncipherment,
+            //ML-KEM is a key-encapsulation mechanism: encapsulating to the certified public key is
+            //key transport, which is what keyEncipherment asserts. RFC 9629 s3 and the draft LAMPS
+            //profile for ML-KEM certificates both put it here rather than under keyAgreement.
+            Oids.MLKem512 or Oids.MLKem768 or Oids.MLKem1024 => X509KeyUsageFlags.KeyEncipherment,
+            _ => X509KeyUsageFlags.None
+        };
 
 
     /// <summary>
@@ -826,7 +839,8 @@ public record CertificateBuilder
         //name covers all three post-quantum signature families
         var name = keys.AsMLDsa?.Algorithm.Name
             ?? keys.AsSlhDsa?.Algorithm.Name
-            ?? keys.AsCompositeMLDsa?.Algorithm.Name;
+            ?? keys.AsCompositeMLDsa?.Algorithm.Name
+            ?? keys.AsMLKem?.Algorithm.Name;
 
         if (name != null) {
             return KeyAlgorithm.PostQuantumAlgorithms.FirstOrDefault(x => x.Name == name)
@@ -863,6 +877,10 @@ public record CertificateBuilder
 
         if (keys.AsCompositeMLDsa is { } composite) {
             return new PublicKey(composite);
+        }
+
+        if (keys.AsMLKem is { } mlkem) {
+            return new PublicKey(mlkem);
         }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006

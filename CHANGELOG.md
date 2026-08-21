@@ -26,6 +26,7 @@ they summarise each release rather than record it as it happened.
 - `KeyAlgorithm.PostQuantumAlgorithms`, listing every post-quantum parameter set the library knows.
 - `SignatureAlgorithm.ForPostQuantum(KeyAlgorithm)`, and `FromOid` now resolves every post-quantum signature OID.
 - `SkipUnlessAlgorithmSupportedAttribute` in the test-support library, for gating a test on runtime capability rather than on OS.
+- ML-KEM (FIPS 203) key-encapsulation certificates: `KeyAlgorithm.MLKem512` / `MLKem768` / `MLKem1024`. Unavailable on Windows, which cannot attach an ML-KEM private key to a certificate; `IsSupported` reports `false` there.
 
 ### Changed
 
