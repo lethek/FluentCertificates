@@ -223,17 +223,17 @@ if (KeyAlgorithm.SlhDsaSha2_128f.IsSupported) {
 `IsSupported` reports whether a certificate can actually be built, not merely whether a key can be
 generated. The two come apart in practice. As of .NET 10:
 
-|Algorithm|Windows|Linux (OpenSSL 3.5+)|Linux (OpenSSL 3.0)|
+|Algorithm|Windows|Linux, OpenSSL 3.5+|Linux, OpenSSL 3.0|
 |---|---|---|---|
 |ML-DSA|✅|✅|❌|
 |SLH-DSA|❌|✅|❌|
 |ML-KEM|❌ *(key cannot be attached to a certificate)*|✅|❌|
 |Composite ML-DSA|❌ *(no platform can sign a certificate with one)*|❌|❌|
 
-Ubuntu 24.04 ships OpenSSL 3.0 and so supports none of them; Alpine 3.22+ and Debian 13 ship
-OpenSSL 3.5 and support all but Composite. Selecting an unsupported algorithm throws
-`PlatformNotSupportedException` from `Create()` rather than producing a certificate that does not
-work.
+On Linux what decides it is the OpenSSL version, not the distribution. OpenSSL 3.5+ supports these
+algorithms and 3.0 supports none of them, so Ubuntu 26.04, Debian 13 and Alpine 3.22+ work while
+Ubuntu 24.04 does not. Selecting an unsupported algorithm throws `PlatformNotSupportedException`
+from `Create()` rather than producing a certificate that does not work.
 
 The members exist on every target framework so the API surface does not vary; on .NET 8 and .NET 9
 selecting one throws.
