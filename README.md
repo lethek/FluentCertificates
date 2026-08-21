@@ -285,9 +285,14 @@ using var key = cert.GetPrivateKey();
 Certificates the library returns to you are always yours. Nothing in `CertificateFinder` or the export
 path disposes a certificate you can still reach.
 
-One exception, on `FilterPrivateKeys`: when it strips a private key it returns a keyless copy, and
-otherwise passes your original through. The resulting sequence mixes objects you own with objects the
-call created, and there's no way to tell them apart, so don't dispose its elements.
+Two exceptions, both producing a sequence that mixes objects you own with objects the call created, with
+no way to tell them apart, so don't dispose their elements:
+
+- `FilterPrivateKeys`: when it strips a private key it returns a keyless copy, and otherwise passes your
+  original through.
+- `X509ChainBuilder.Export()`: it hands back your own instances wherever you supplied them, and a keyless
+  copy only for a chain element the platform supplied itself. See
+  [Building a Certificate Chain](#building-a-certificate-chain).
 
 ---
 
@@ -575,7 +580,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 |Method|Description|
 |-|-|
-|`TrustRoot(params IEnumerable<X509Certificate2> roots)`|Trusts these certificates as the only valid roots (`X509ChainTrustMode.CustomRootTrust`). Never calling it leaves the system trust store in effect.|
+|`TrustRoot(params IEnumerable<X509Certificate2> roots)`|Trusts these certificates as the only valid roots (`X509ChainTrustMode.CustomRootTrust`). Never calling it leaves the system trust store in effect. Calling it is what replaces system trust, not the number of roots passed, so an empty set trusts no root at all rather than falling back.|
 |`AddCertificates(params IEnumerable<X509Certificate2> certs)`|Offers extra certificates, typically intermediates, to path building via `ExtraStore`. Candidates only: an untrusted root stays untrusted however it arrives here.|
 |`AllowInvalidTime()`|Ignores expired or not-yet-valid certificates anywhere in the chain. Structural and trust failures still fail.|
 |`WithPolicy(Action<X509ChainPolicy> configure)`|Escape hatch for anything else: revocation checking, `ApplicationPolicy`, a custom `VerificationTime`, and so on. Applied after the builder's own settings, so it always wins; multiple calls run in registration order.|
@@ -605,17 +610,19 @@ unverified result writes whatever was built, which for a partial chain is an inc
 `Verified` first as above, or write `result.EnsureVerified().Export()`. Only `builder.Export()` verifies
 on your behalf, because it is a one-liner with nowhere to intervene.
 
-`builder.Export()` seeds the export with `ExportKeys.Primary`, so a chain export carries only the leaf's
+Both terminators seed the export with `ExportKeys.Primary`, so a chain export carries only the leaf's
 private key by default, which is what a fullchain wants. If you hold your CA's private keys, they are
-stripped rather than written; call `WithPrivateKeys()` to include them.
+stripped rather than written; call `WithPrivateKeys()` to include them. Reaching past `result.Export()` to
+`result.Chain.Export()` opts out of that and gets the extension method's own `ExportKeys.All` default.
 
 `builder.Export()` disposes its internal chain before returning, so it cannot hand out the chain's own
 element certificates. Each element is mapped back to the instance you supplied through the certificate
-itself, `TrustRoot(...)` or `AddCertificates(...)`, which you already own and dispose. Only an element the
-platform supplied itself, such as a root from the system store or an intermediate fetched via AIA, has no
-such instance and is copied; that copy is keyless and must **not** be disposed by you (the same rule as
-`FilterPrivateKeys`; see [Key ownership](#key-ownership-and-disposal)). `result.Export()` copies nothing,
-so keep the `ChainResult` undisposed until that export terminates.
+itself, `TrustRoot(...)`, `AddCertificates(...)` or a `WithPolicy(...)` action that populated `ExtraStore`
+or `CustomTrustStore`, which you already own and dispose. Only an element the platform supplied itself,
+such as a root from the system store or an intermediate fetched via AIA, has no such instance and is
+copied; that copy is keyless and must **not** be disposed by you (the same rule as `FilterPrivateKeys`;
+see [Key ownership](#key-ownership-and-disposal)). `result.Export()` copies nothing, so keep the
+`ChainResult` undisposed until that export terminates.
 
 ---
 

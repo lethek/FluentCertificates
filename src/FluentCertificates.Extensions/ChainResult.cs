@@ -42,8 +42,8 @@ public sealed class ChainResult : IDisposable
 
     /// <summary>
     /// Creates a <see cref="CertificateExportBuilder"/> over the chain's certificates, leaf first,
-    /// anchored on the chain's end certificate. The certificates belong to the chain, so keep this
-    /// result undisposed until the export terminates.
+    /// anchored on the chain's end certificate and seeded with <see cref="ExportKeys.Primary"/>. The
+    /// certificates belong to the chain, so keep this result undisposed until the export terminates.
     /// </summary>
     /// <returns>A new <see cref="CertificateExportBuilder"/> containing the chain's certificates.</returns>
     /// <remarks>
@@ -51,8 +51,16 @@ public sealed class ChainResult : IDisposable
     /// <see cref="Verified"/> is false exports whatever was built, which for a partial chain is an
     /// incomplete bundle. Write <c>result.EnsureVerified().Export()</c> for the guarded form, or use
     /// <see cref="X509ChainBuilder.Export"/>, which verifies before exporting.
+    /// <para>
+    /// The <see cref="ExportKeys.Primary"/> seed matches <see cref="X509ChainBuilder.Export"/>, so both
+    /// terminators of a <c>BuildChain()</c> differ only in whether they verify: a chain export carries
+    /// the leaf's private key and no CA's. Call <see cref="CertificateExportBuilder.WithPrivateKeys"/>
+    /// to include any CA keys this process happens to hold. Reaching past this method to
+    /// <c>result.Chain.Export()</c> opts out and gets the extension's own
+    /// <see cref="ExportKeys.All"/> default.
+    /// </para>
     /// </remarks>
-    public CertificateExportBuilder Export() => Chain.Export();
+    public CertificateExportBuilder Export() => Chain.Export() with { Keys = ExportKeys.Primary };
 
 
     /// <summary>Disposes the owned <see cref="X509Chain"/> and with it the chain's element certificates.</summary>

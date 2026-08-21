@@ -182,8 +182,13 @@ Several projects expose internals to test projects and LINQPad via `InternalsVis
 Check rule 3 when adding any call to `Get*PrivateKey`, `Get*PublicKey` or `CopyWithPrivateKey`. Disposing
 an extracted key does not affect the certificate it came from, or any sibling instance.
 
-`FilterPrivateKeys` is the exception: it emits a mix of caller-owned originals and library-created keyless
-copies, indistinguishable to the caller, so its output must not be disposed. See #46.
+Two APIs are the exception, both emitting a mix of caller-owned originals and library-created copies that
+are indistinguishable to the caller, so neither's output may be disposed:
+
+- `FilterPrivateKeys`, whose stripped certificates are keyless copies. See #46.
+- `X509ChainBuilder.Export()`, whose `Certificates` are the caller's own instances wherever the caller
+  supplied them and keyless copies only for elements the platform supplied (a system-store root, an
+  AIA-fetched intermediate).
 
 ## Working with Certificates
 
@@ -267,16 +272,22 @@ Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `BuildChain()` - Starts a fluent `X509ChainBuilder`: `TrustRoot(...)` (custom root trust; system
   trust when never called), `AddCertificates(...)` (extra path-building candidates),
   `AllowInvalidTime()`, `WithPolicy(Action<X509ChainPolicy>)` (applied last, always wins; revocation
-  defaults to `NoCheck`). `Create()` returns a disposable `ChainResult` (`Verified`, `Chain`,
-  `ChainStatus`, `EnsureVerified()`, `Export()`) and never throws on verification failure.
+  defaults to `NoCheck`). Calling `TrustRoot` is what switches to `CustomRootTrust`, tracked by
+  `CustomTrustEnabled` rather than inferred from `TrustedRoots` being non-empty, so trusting an empty
+  set trusts nothing instead of falling back to system trust. `Create()` returns a disposable
+  `ChainResult` (`Verified`, `Chain`, `ChainStatus`, `EnsureVerified()`, `Export()`) and never throws
+  on verification failure; it disposes the chain itself if a `WithPolicy` action or `Build` throws.
   `Export()` on the builder verifies (throwing on failure, naming the statuses) and returns a
-  `CertificateExportBuilder` anchored on the certificate, seeded with `ExportKeys.Primary` so a
-  fullchain carries only the leaf's key. It disposes its internal chain, so each element is mapped back
-  by thumbprint to the instance the caller supplied via the certificate, `TrustRoot` or
-  `AddCertificates`; only an element the platform supplied itself (system-store root, AIA-fetched
-  intermediate) is copied, and that copy is keyless and must not be disposed.
-  `ChainResult.Export()` does not verify, matching every other `Export()`; use
-  `EnsureVerified().Export()` for the guarded form.
+  `CertificateExportBuilder` anchored on the certificate. It disposes its internal chain, so each
+  element is mapped back by thumbprint to the instance the caller supplied via the certificate,
+  `TrustRoot`, `AddCertificates` or a `WithPolicy` action that populated `ExtraStore` or
+  `CustomTrustStore` (later sources win, so the anchor always keeps its own instance); only an element
+  the platform supplied itself (system-store root, AIA-fetched intermediate) is copied, and that copy
+  is keyless and must not be disposed.
+  Both `Export()` methods seed `ExportKeys.Primary`, so a fullchain carries only the leaf's key;
+  `result.Chain.Export()` opts back out to the extension's `ExportKeys.All`. `ChainResult.Export()`
+  does not verify, matching every other `Export()`; use `EnsureVerified().Export()` for the guarded
+  form.
 - `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. `IsValidAt(DateTime)` is `[Obsolete]`: a
   `DateTime` carries no offset, so its `DateTimeKind` silently changes the answer.
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks

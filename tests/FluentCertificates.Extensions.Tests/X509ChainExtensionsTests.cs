@@ -129,6 +129,11 @@ public class X509ChainExtensionsTests
         await Assert.That(builder.Certificate).IsSameReferenceAs(cert);
         await Assert.That(builder.TrustedRoots).IsEmpty();
         await Assert.That(builder.ExtraCertificates).IsEmpty();
+
+        //An unconfigured builder must seed neither store
+        using var result = builder.Create();
+        await Assert.That(result.Chain.ChainPolicy.TrustMode).IsEqualTo(X509ChainTrustMode.System);
+        await Assert.That(result.Chain.ChainPolicy.ExtraStore.Count).IsEqualTo(0);
     }
 
 

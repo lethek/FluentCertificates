@@ -70,6 +70,22 @@ public class X509ChainBuilderTests
 
 
     [Test]
+    public async Task TrustRoot_WithNoRoots_TrustsNothingRatherThanFallingBackToSystemTrust()
+    {
+        using var root = BuildRootCa();
+        using var leaf = BuildLeaf(root);
+
+        //An empty roots list is what a failed config load produces; it must not quietly re-enable
+        //every public CA in the machine store
+        using var result = leaf.BuildChain().TrustRoot([]).AddCertificates(root).Create();
+
+        await Assert.That(result.Chain.ChainPolicy.TrustMode).IsEqualTo(X509ChainTrustMode.CustomRootTrust);
+        await Assert.That(result.Chain.ChainPolicy.CustomTrustStore.Count).IsEqualTo(0);
+        await Assert.That(result.Verified).IsFalse();
+    }
+
+
+    [Test]
     public async Task AddCertificates_PopulatesExtraStore()
     {
         using var root = BuildRootCa();
@@ -364,6 +380,43 @@ public class X509ChainBuilderTests
 
 
     [Test]
+    public async Task Export_ReusesCertificatesSuppliedThroughWithPolicy()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        //mid reaches the chain through the policy rather than AddCertificates, so it is only reachable
+        //via the policy's own stores
+        var export = leaf.BuildChain()
+            .TrustRoot(root)
+            .WithPolicy(policy => policy.ExtraStore.Add(mid))
+            .Export();
+
+        await Assert.That(export.Certificates[1]).IsSameReferenceAs(mid);
+
+        var pem = export.WithPrivateKeys().AsPem().ToPemString();
+        await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(6);
+    }
+
+
+    [Test]
+    public async Task Create_WhenPolicyActionThrows_PropagatesTheException()
+    {
+        using var root = BuildRootCa();
+        using var leaf = BuildLeaf(root);
+
+        //The chain allocated before the action runs is disposed on the way out, and the caller's
+        //exception must still be the one that surfaces
+        await Assert.That(() => leaf.BuildChain()
+                .WithPolicy(_ => throw new InvalidOperationException("boom"))
+                .Create())
+            .Throws<InvalidOperationException>()
+            .WithMessage("boom");
+    }
+
+
+    [Test]
     public async Task ChainResult_Export_WritesLeafFirstPem()
     {
         using var root = BuildRootCa();
@@ -376,5 +429,23 @@ public class X509ChainBuilderTests
         var expected = new[] { leaf, mid, root }
             .Select(x => x.Export().WithoutPrivateKeys().AsPem().ToPemString().Trim());
         await Assert.That(pem.Trim()).IsEqualTo(String.Join("\n", expected));
+    }
+
+
+    [Test]
+    public async Task ChainResult_Export_DefaultsToTheLeafKeyOnly()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        //Same key default as X509ChainBuilder.Export, so choosing the unverified terminator cannot
+        //write a CA key into the bundle
+        using var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
+        var pem = result.EnsureVerified().Export().AsPem().ToPemString();
+
+        await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(2);
+        using var leafKey = leaf.GetPrivateKey();
+        await Assert.That(pem).Contains(leafKey.ExportPkcs8PrivateKeyPem().Trim());
     }
 }
