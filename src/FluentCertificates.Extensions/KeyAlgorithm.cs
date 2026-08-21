@@ -98,6 +98,9 @@ public sealed record KeyAlgorithm
             KeyAlgorithmFamily.ECDsa => ECDsa(),
             KeyAlgorithmFamily.ECDiffieHellman => ECDiffieHellman(),
             KeyAlgorithmFamily.MLDsa => MLDsa65,
+            KeyAlgorithmFamily.SlhDsa => SlhDsaSha2_128f,
+            KeyAlgorithmFamily.CompositeMLDsa => MLDsa65WithECDsaP256,
+            KeyAlgorithmFamily.MLKem => MLKem768,
             _ => throw new ArgumentOutOfRangeException(nameof(family), family, $"No default algorithm for {family}")
         };
 #pragma warning restore FLUENTCERT001
@@ -241,6 +244,28 @@ public sealed record KeyAlgorithm
 
 
     /// <summary>
+    /// ML-KEM-512 (FIPS 203) key encapsulation. Cannot sign, so a certificate for one must be issued by a
+    /// CA and cannot itself be a CA or a code-signing, OCSP-signing or time-stamping certificate.
+    /// </summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLKem512 = new(KeyAlgorithmFamily.MLKem, "ML-KEM-512", Oids.MLKem512, canSign: false);
+
+    /// <summary>
+    /// ML-KEM-768 (FIPS 203) key encapsulation. Cannot sign, so a certificate for one must be issued by a
+    /// CA and cannot itself be a CA or a code-signing, OCSP-signing or time-stamping certificate.
+    /// </summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLKem768 = new(KeyAlgorithmFamily.MLKem, "ML-KEM-768", Oids.MLKem768, canSign: false);
+
+    /// <summary>
+    /// ML-KEM-1024 (FIPS 203) key encapsulation. Cannot sign, so a certificate for one must be issued by a
+    /// CA and cannot itself be a CA or a code-signing, OCSP-signing or time-stamping certificate.
+    /// </summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLKem1024 = new(KeyAlgorithmFamily.MLKem, "ML-KEM-1024", Oids.MLKem1024, canSign: false);
+
+
+    /// <summary>
     /// Every post-quantum algorithm this library knows, whether or not the current platform supports it.
     /// </summary>
     /// <remarks>
@@ -256,7 +281,8 @@ public sealed record KeyAlgorithm
         MLDsa65WithRSA3072Pss, MLDsa65WithRSA3072Pkcs15, MLDsa65WithRSA4096Pss, MLDsa65WithRSA4096Pkcs15,
         MLDsa65WithECDsaP256, MLDsa65WithECDsaP384, MLDsa65WithECDsaBrainpoolP256r1, MLDsa65WithEd25519,
         MLDsa87WithECDsaP384, MLDsa87WithECDsaBrainpoolP384r1, MLDsa87WithEd448,
-        MLDsa87WithRSA3072Pss, MLDsa87WithRSA4096Pss, MLDsa87WithECDsaP521
+        MLDsa87WithRSA3072Pss, MLDsa87WithRSA4096Pss, MLDsa87WithECDsaP521,
+        MLKem512, MLKem768, MLKem1024
     ];
 
 

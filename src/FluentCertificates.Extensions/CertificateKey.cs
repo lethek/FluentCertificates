@@ -86,6 +86,7 @@ public sealed class CertificateKey : IDisposable
             MLDsa key => key.ExportSubjectPublicKeyInfo(),
             SlhDsa key => key.ExportSubjectPublicKeyInfo(),
             CompositeMLDsa key => key.ExportSubjectPublicKeyInfo(),
+            MLKem key => key.ExportSubjectPublicKeyInfo(),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot export a public key of type {_key.GetType()}")
@@ -104,6 +105,7 @@ public sealed class CertificateKey : IDisposable
             MLDsa key => key.ExportPkcs8PrivateKey(),
             SlhDsa key => key.ExportPkcs8PrivateKey(),
             CompositeMLDsa key => key.ExportPkcs8PrivateKey(),
+            MLKem key => key.ExportPkcs8PrivateKey(),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot export a private key of type {_key.GetType()}")
@@ -122,6 +124,7 @@ public sealed class CertificateKey : IDisposable
             MLDsa key => key.ExportPkcs8PrivateKeyPem(),
             SlhDsa key => key.ExportPkcs8PrivateKeyPem(),
             CompositeMLDsa key => key.ExportPkcs8PrivateKeyPem(),
+            MLKem key => key.ExportPkcs8PrivateKeyPem(),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot export a private key of type {_key.GetType()}")
@@ -142,6 +145,7 @@ public sealed class CertificateKey : IDisposable
             MLDsa key => key.ExportEncryptedPkcs8PrivateKeyPem(password, parameters),
             SlhDsa key => key.ExportEncryptedPkcs8PrivateKeyPem(password, parameters),
             CompositeMLDsa key => key.ExportEncryptedPkcs8PrivateKeyPem(password, parameters),
+            MLKem key => key.ExportEncryptedPkcs8PrivateKeyPem(password, parameters),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot export a private key of type {_key.GetType()}")
@@ -172,6 +176,7 @@ public sealed class CertificateKey : IDisposable
             MLDsa mldsa => cert.CopyWithPrivateKey(mldsa),
             SlhDsa slhdsa => cert.CopyWithPrivateKey(slhdsa),
             CompositeMLDsa composite => cert.CopyWithPrivateKey(composite),
+            MLKem mlkem => cert.CopyWithPrivateKey(mlkem),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot attach a private key of type {_key.GetType()} to a certificate")
@@ -233,6 +238,36 @@ public sealed class CertificateKey : IDisposable
         _key = key;
         Family = KeyAlgorithmFamily.CompositeMLDsa;
     }
+
+
+    /// <summary>Wraps an ML-KEM key.</summary>
+    /// <param name="key">The key to wrap. This instance takes ownership of it.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="key"/> is <see langword="null"/>.</exception>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public CertificateKey(MLKem key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        _key = key;
+        Family = KeyAlgorithmFamily.MLKem;
+    }
+
+
+    /// <summary>
+    /// Gets the wrapped key as an <see cref="MLKem"/>, or <see langword="null"/> if it is not one.
+    /// </summary>
+    /// <remarks>
+    /// The returned instance belongs to this <see cref="CertificateKey"/>. Do not dispose it separately.
+    /// </remarks>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public MLKem? AsMLKem => _key as MLKem;
+
+
+    /// <summary>Implicitly wraps an ML-KEM key.</summary>
+    /// <param name="key">The key to wrap.</param>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    [return: NotNullIfNotNull(nameof(key))]
+    public static implicit operator CertificateKey?(MLKem? key)
+        => key == null ? null : new CertificateKey(key);
 
 
     /// <summary>
