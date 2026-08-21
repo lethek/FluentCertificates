@@ -21,6 +21,11 @@ they summarise each release rather than record it as it happened.
 - `KeyAlgorithmFamily` enum, and `KeyAlgorithm.Default(KeyAlgorithmFamily)` for callers that hold a family rather than a full algorithm.
 - `KeyAlgorithm.IsSupported`, reporting whether the algorithm can be used on the current runtime and platform.
 - `SignatureAlgorithm.MLDsa44` / `MLDsa65` / `MLDsa87`, so `SignatureAlgorithm.FromOid` resolves an ML-DSA certificate instead of throwing.
+- SLH-DSA (FIPS 205) support: all twelve `KeyAlgorithm.SlhDsa*` parameter sets. Unavailable on Windows, where `KeyAlgorithm.IsSupported` reports `false`.
+- Composite ML-DSA support: all eighteen `KeyAlgorithm.MLDsa*With*` parameter sets. No .NET 10 platform can yet sign a certificate with a composite key, so `IsSupported` reports `false` for all of them; the API is present so it lights up when the platform does.
+- `KeyAlgorithm.PostQuantumAlgorithms`, listing every post-quantum parameter set the library knows.
+- `SignatureAlgorithm.ForPostQuantum(KeyAlgorithm)`, and `FromOid` now resolves every post-quantum signature OID.
+- `SkipUnlessAlgorithmSupportedAttribute` in the test-support library, for gating a test on runtime capability rather than on OS.
 
 ### Changed
 

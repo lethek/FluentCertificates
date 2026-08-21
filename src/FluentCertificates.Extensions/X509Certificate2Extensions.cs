@@ -58,14 +58,21 @@ public static class X509Certificate2Extensions
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006
 #pragma warning disable FLUENTCERT001
-        switch (oid) {
-            case Oids.MLDsa44:
-            case Oids.MLDsa65:
-            case Oids.MLDsa87:
-                return new CertificateKey(
-                    cert.GetMLDsaPrivateKey()
-                        ?? throw new CryptographicException($"Private key not found for OID {oid}")
-                );
+        //A post-quantum OID names its parameter set exactly, so the family follows from the OID alone
+        var pqc = KeyAlgorithm.PostQuantumAlgorithms.FirstOrDefault(x => x.Oid == oid);
+        if (pqc != null) {
+            return pqc.Family switch {
+                KeyAlgorithmFamily.MLDsa => new CertificateKey(
+                    cert.GetMLDsaPrivateKey() ?? throw new CryptographicException($"Private key not found for OID {oid}")
+                ),
+                KeyAlgorithmFamily.SlhDsa => new CertificateKey(
+                    cert.GetSlhDsaPrivateKey() ?? throw new CryptographicException($"Private key not found for OID {oid}")
+                ),
+                KeyAlgorithmFamily.CompositeMLDsa => new CertificateKey(
+                    cert.GetCompositeMLDsaPrivateKey() ?? throw new CryptographicException($"Private key not found for OID {oid}")
+                ),
+                _ => throw new NotSupportedException($"Unsupported key algorithm OID {oid}")
+            };
         }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
@@ -267,10 +274,23 @@ public static class X509Certificate2Extensions
                 return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
             }
 #if NET10_0_OR_GREATER
-            //ML-DSA absorbs the message directly, so there is no hash to pass and no signature format to pick
+            //The post-quantum algorithms absorb the message directly, so there is no hash to pass and no
+            //signature format to pick
             case KeyAlgorithmFamily.MLDsa: {
                 #pragma warning disable SYSLIB5006
                 using var key = issuer.GetMLDsaPublicKey()!;
+                return key.VerifyData(tbs, sig);
+                #pragma warning restore SYSLIB5006
+            }
+            case KeyAlgorithmFamily.SlhDsa: {
+                #pragma warning disable SYSLIB5006
+                using var key = issuer.GetSlhDsaPublicKey()!;
+                return key.VerifyData(tbs, sig);
+                #pragma warning restore SYSLIB5006
+            }
+            case KeyAlgorithmFamily.CompositeMLDsa: {
+                #pragma warning disable SYSLIB5006
+                using var key = issuer.GetCompositeMLDsaPublicKey()!;
                 return key.VerifyData(tbs, sig);
                 #pragma warning restore SYSLIB5006
             }

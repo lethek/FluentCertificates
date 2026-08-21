@@ -118,6 +118,148 @@ public sealed record KeyAlgorithm
     public static readonly KeyAlgorithm MLDsa87 = new(KeyAlgorithmFamily.MLDsa, "ML-DSA-87", Oids.MLDsa87, canSign: true);
 
 
+    /// <summary>SLH-DSA-SHA2-128s (FIPS 205). The <c>s</c> sets favour signature size over signing speed.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaSha2_128s = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHA2-128s", Oids.SlhDsaSha2_128s, canSign: true);
+
+    /// <summary>SLH-DSA-SHA2-128f (FIPS 205). The <c>f</c> sets favour signing speed over signature size.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaSha2_128f = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHA2-128f", Oids.SlhDsaSha2_128f, canSign: true);
+
+    /// <summary>SLH-DSA-SHA2-192s (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaSha2_192s = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHA2-192s", Oids.SlhDsaSha2_192s, canSign: true);
+
+    /// <summary>SLH-DSA-SHA2-192f (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaSha2_192f = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHA2-192f", Oids.SlhDsaSha2_192f, canSign: true);
+
+    /// <summary>SLH-DSA-SHA2-256s (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaSha2_256s = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHA2-256s", Oids.SlhDsaSha2_256s, canSign: true);
+
+    /// <summary>SLH-DSA-SHA2-256f (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaSha2_256f = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHA2-256f", Oids.SlhDsaSha2_256f, canSign: true);
+
+    /// <summary>SLH-DSA-SHAKE-128s (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaShake128s = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHAKE-128s", Oids.SlhDsaShake128s, canSign: true);
+
+    /// <summary>SLH-DSA-SHAKE-128f (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaShake128f = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHAKE-128f", Oids.SlhDsaShake128f, canSign: true);
+
+    /// <summary>SLH-DSA-SHAKE-192s (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaShake192s = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHAKE-192s", Oids.SlhDsaShake192s, canSign: true);
+
+    /// <summary>SLH-DSA-SHAKE-192f (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaShake192f = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHAKE-192f", Oids.SlhDsaShake192f, canSign: true);
+
+    /// <summary>SLH-DSA-SHAKE-256s (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaShake256s = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHAKE-256s", Oids.SlhDsaShake256s, canSign: true);
+
+    /// <summary>SLH-DSA-SHAKE-256f (FIPS 205).</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm SlhDsaShake256f = new(KeyAlgorithmFamily.SlhDsa, "SLH-DSA-SHAKE-256f", Oids.SlhDsaShake256f, canSign: true);
+
+
+    /// <summary>MLDSA44-RSA2048-PSS-SHA256, pairing ML-DSA-44 with RSA-2048 PSS.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa44WithRSA2048Pss = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA44-RSA2048-PSS-SHA256", Oids.MLDsa44WithRSA2048Pss, canSign: true);
+
+    /// <summary>MLDSA44-RSA2048-PKCS15-SHA256, pairing ML-DSA-44 with RSA-2048 PKCS#1 v1.5.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa44WithRSA2048Pkcs15 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA44-RSA2048-PKCS15-SHA256", Oids.MLDsa44WithRSA2048Pkcs15, canSign: true);
+
+    /// <summary>MLDSA44-Ed25519-SHA512, pairing ML-DSA-44 with Ed25519.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa44WithEd25519 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA44-Ed25519-SHA512", Oids.MLDsa44WithEd25519, canSign: true);
+
+    /// <summary>MLDSA44-ECDSA-P256-SHA256, pairing ML-DSA-44 with ECDSA on P-256.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa44WithECDsaP256 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA44-ECDSA-P256-SHA256", Oids.MLDsa44WithECDsaP256, canSign: true);
+
+    /// <summary>MLDSA65-RSA3072-PSS-SHA512, pairing ML-DSA-65 with RSA-3072 PSS.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa65WithRSA3072Pss = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA65-RSA3072-PSS-SHA512", Oids.MLDsa65WithRSA3072Pss, canSign: true);
+
+    /// <summary>MLDSA65-RSA3072-PKCS15-SHA512, pairing ML-DSA-65 with RSA-3072 PKCS#1 v1.5.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa65WithRSA3072Pkcs15 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA65-RSA3072-PKCS15-SHA512", Oids.MLDsa65WithRSA3072Pkcs15, canSign: true);
+
+    /// <summary>MLDSA65-RSA4096-PSS-SHA512, pairing ML-DSA-65 with RSA-4096 PSS.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa65WithRSA4096Pss = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA65-RSA4096-PSS-SHA512", Oids.MLDsa65WithRSA4096Pss, canSign: true);
+
+    /// <summary>MLDSA65-RSA4096-PKCS15-SHA512, pairing ML-DSA-65 with RSA-4096 PKCS#1 v1.5.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa65WithRSA4096Pkcs15 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA65-RSA4096-PKCS15-SHA512", Oids.MLDsa65WithRSA4096Pkcs15, canSign: true);
+
+    /// <summary>MLDSA65-ECDSA-P256-SHA512, pairing ML-DSA-65 with ECDSA on P-256.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa65WithECDsaP256 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA65-ECDSA-P256-SHA512", Oids.MLDsa65WithECDsaP256, canSign: true);
+
+    /// <summary>MLDSA65-ECDSA-P384-SHA512, pairing ML-DSA-65 with ECDSA on P-384.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa65WithECDsaP384 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA65-ECDSA-P384-SHA512", Oids.MLDsa65WithECDsaP384, canSign: true);
+
+    /// <summary>MLDSA65-ECDSA-brainpoolP256r1-SHA512, pairing ML-DSA-65 with ECDSA on brainpoolP256r1.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa65WithECDsaBrainpoolP256r1 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA65-ECDSA-brainpoolP256r1-SHA512", Oids.MLDsa65WithECDsaBrainpoolP256r1, canSign: true);
+
+    /// <summary>MLDSA65-Ed25519-SHA512, pairing ML-DSA-65 with Ed25519.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa65WithEd25519 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA65-Ed25519-SHA512", Oids.MLDsa65WithEd25519, canSign: true);
+
+    /// <summary>MLDSA87-ECDSA-P384-SHA512, pairing ML-DSA-87 with ECDSA on P-384.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa87WithECDsaP384 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA87-ECDSA-P384-SHA512", Oids.MLDsa87WithECDsaP384, canSign: true);
+
+    /// <summary>MLDSA87-ECDSA-brainpoolP384r1-SHA512, pairing ML-DSA-87 with ECDSA on brainpoolP384r1.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa87WithECDsaBrainpoolP384r1 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA87-ECDSA-brainpoolP384r1-SHA512", Oids.MLDsa87WithECDsaBrainpoolP384r1, canSign: true);
+
+    /// <summary>MLDSA87-Ed448-SHAKE256, pairing ML-DSA-87 with Ed448.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa87WithEd448 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA87-Ed448-SHAKE256", Oids.MLDsa87WithEd448, canSign: true);
+
+    /// <summary>MLDSA87-RSA3072-PSS-SHA512, pairing ML-DSA-87 with RSA-3072 PSS.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa87WithRSA3072Pss = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA87-RSA3072-PSS-SHA512", Oids.MLDsa87WithRSA3072Pss, canSign: true);
+
+    /// <summary>MLDSA87-RSA4096-PSS-SHA512, pairing ML-DSA-87 with RSA-4096 PSS.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa87WithRSA4096Pss = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA87-RSA4096-PSS-SHA512", Oids.MLDsa87WithRSA4096Pss, canSign: true);
+
+    /// <summary>MLDSA87-ECDSA-P521-SHA512, pairing ML-DSA-87 with ECDSA on P-521.</summary>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static readonly KeyAlgorithm MLDsa87WithECDsaP521 = new(KeyAlgorithmFamily.CompositeMLDsa, "MLDSA87-ECDSA-P521-SHA512", Oids.MLDsa87WithECDsaP521, canSign: true);
+
+
+    /// <summary>
+    /// Every post-quantum algorithm this library knows, whether or not the current platform supports it.
+    /// </summary>
+    /// <remarks>
+    /// Useful for enumerating parameter sets in tests and diagnostics. Filter with
+    /// <see cref="IsSupported"/> before trying to generate a key from one.
+    /// </remarks>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static IReadOnlyList<KeyAlgorithm> PostQuantumAlgorithms { get; } = [
+        MLDsa44, MLDsa65, MLDsa87,
+        SlhDsaSha2_128s, SlhDsaSha2_128f, SlhDsaSha2_192s, SlhDsaSha2_192f, SlhDsaSha2_256s, SlhDsaSha2_256f,
+        SlhDsaShake128s, SlhDsaShake128f, SlhDsaShake192s, SlhDsaShake192f, SlhDsaShake256s, SlhDsaShake256f,
+        MLDsa44WithRSA2048Pss, MLDsa44WithRSA2048Pkcs15, MLDsa44WithEd25519, MLDsa44WithECDsaP256,
+        MLDsa65WithRSA3072Pss, MLDsa65WithRSA3072Pkcs15, MLDsa65WithRSA4096Pss, MLDsa65WithRSA4096Pkcs15,
+        MLDsa65WithECDsaP256, MLDsa65WithECDsaP384, MLDsa65WithECDsaBrainpoolP256r1, MLDsa65WithEd25519,
+        MLDsa87WithECDsaP384, MLDsa87WithECDsaBrainpoolP384r1, MLDsa87WithEd448,
+        MLDsa87WithRSA3072Pss, MLDsa87WithRSA4096Pss, MLDsa87WithECDsaP521
+    ];
+
+
     /// <summary>Gets the family this algorithm belongs to.</summary>
     public KeyAlgorithmFamily Family { get; }
 
@@ -158,13 +300,24 @@ public sealed record KeyAlgorithm
             or KeyAlgorithmFamily.CompositeMLDsa or KeyAlgorithmFamily.MLKem;
 
     /// <summary>
-    /// Gets whether keys of this algorithm can be generated on the current runtime and platform.
+    /// Gets whether this algorithm can be used to build a certificate on the current runtime and platform.
     /// </summary>
     /// <remarks>
-    /// The classical families are always supported. A post-quantum family requires .NET 10 or later, and
-    /// further requires the platform's cryptographic provider to implement it: SLH-DSA in particular is
-    /// unavailable on Windows, and Composite ML-DSA support varies by parameter set. Availability is a runtime
-    /// capability rather than a property of the operating system, so test it rather than inferring it.
+    /// <para>
+    /// The classical families are always supported. A post-quantum family requires .NET 10 or later and the
+    /// platform's cryptographic provider to implement it. Availability is a runtime capability rather than a
+    /// property of the operating system, so test it rather than inferring it from the OS.
+    /// </para>
+    /// <para>
+    /// Known gaps as of .NET 10: SLH-DSA is unavailable on Windows; Composite ML-DSA is unavailable
+    /// everywhere for certificate use, because although composite keys generate, no platform can yet build
+    /// an <c>X509SignatureGenerator</c> from one; and four Composite parameter sets do not generate at all.
+    /// </para>
+    /// <para>
+    /// This reports certificate usability, not merely key generation, since a certificate is what this
+    /// library builds. An algorithm reporting <see langword="true"/> here will not fail in
+    /// <c>CertificateBuilder.Create()</c> for want of platform support.
+    /// </para>
     /// </remarks>
     public bool IsSupported => !IsPostQuantum || PostQuantumSupport.IsSupported(this);
 

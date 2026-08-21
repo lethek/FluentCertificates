@@ -84,6 +84,8 @@ public sealed class CertificateKey : IDisposable
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006
             MLDsa key => key.ExportSubjectPublicKeyInfo(),
+            SlhDsa key => key.ExportSubjectPublicKeyInfo(),
+            CompositeMLDsa key => key.ExportSubjectPublicKeyInfo(),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot export a public key of type {_key.GetType()}")
@@ -100,6 +102,8 @@ public sealed class CertificateKey : IDisposable
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006
             MLDsa key => key.ExportPkcs8PrivateKey(),
+            SlhDsa key => key.ExportPkcs8PrivateKey(),
+            CompositeMLDsa key => key.ExportPkcs8PrivateKey(),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot export a private key of type {_key.GetType()}")
@@ -116,6 +120,8 @@ public sealed class CertificateKey : IDisposable
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006
             MLDsa key => key.ExportPkcs8PrivateKeyPem(),
+            SlhDsa key => key.ExportPkcs8PrivateKeyPem(),
+            CompositeMLDsa key => key.ExportPkcs8PrivateKeyPem(),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot export a private key of type {_key.GetType()}")
@@ -134,6 +140,8 @@ public sealed class CertificateKey : IDisposable
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006
             MLDsa key => key.ExportEncryptedPkcs8PrivateKeyPem(password, parameters),
+            SlhDsa key => key.ExportEncryptedPkcs8PrivateKeyPem(password, parameters),
+            CompositeMLDsa key => key.ExportEncryptedPkcs8PrivateKeyPem(password, parameters),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot export a private key of type {_key.GetType()}")
@@ -162,6 +170,8 @@ public sealed class CertificateKey : IDisposable
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006
             MLDsa mldsa => cert.CopyWithPrivateKey(mldsa),
+            SlhDsa slhdsa => cert.CopyWithPrivateKey(slhdsa),
+            CompositeMLDsa composite => cert.CopyWithPrivateKey(composite),
 #pragma warning restore SYSLIB5006
 #endif
             _ => throw new NotSupportedException($"Cannot attach a private key of type {_key.GetType()} to a certificate")
@@ -188,16 +198,40 @@ public sealed class CertificateKey : IDisposable
     private readonly object _key;
 
 #if NET10_0_OR_GREATER
+#pragma warning disable SYSLIB5006
     /// <summary>Wraps an ML-DSA key.</summary>
     /// <param name="key">The key to wrap. This instance takes ownership of it.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="key"/> is <see langword="null"/>.</exception>
     [Experimental(Experiments.PostQuantumCryptography)]
-#pragma warning disable SYSLIB5006
     public CertificateKey(MLDsa key)
     {
         ArgumentNullException.ThrowIfNull(key);
         _key = key;
         Family = KeyAlgorithmFamily.MLDsa;
+    }
+
+
+    /// <summary>Wraps an SLH-DSA key.</summary>
+    /// <param name="key">The key to wrap. This instance takes ownership of it.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="key"/> is <see langword="null"/>.</exception>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public CertificateKey(SlhDsa key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        _key = key;
+        Family = KeyAlgorithmFamily.SlhDsa;
+    }
+
+
+    /// <summary>Wraps a Composite ML-DSA key.</summary>
+    /// <param name="key">The key to wrap. This instance takes ownership of it.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="key"/> is <see langword="null"/>.</exception>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public CertificateKey(CompositeMLDsa key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        _key = key;
+        Family = KeyAlgorithmFamily.CompositeMLDsa;
     }
 
 
@@ -211,11 +245,47 @@ public sealed class CertificateKey : IDisposable
     public MLDsa? AsMLDsa => _key as MLDsa;
 
 
+    /// <summary>
+    /// Gets the wrapped key as an <see cref="SlhDsa"/>, or <see langword="null"/> if it is not one.
+    /// </summary>
+    /// <remarks>
+    /// The returned instance belongs to this <see cref="CertificateKey"/>. Do not dispose it separately.
+    /// </remarks>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public SlhDsa? AsSlhDsa => _key as SlhDsa;
+
+
+    /// <summary>
+    /// Gets the wrapped key as a <see cref="CompositeMLDsa"/>, or <see langword="null"/> if it is not one.
+    /// </summary>
+    /// <remarks>
+    /// The returned instance belongs to this <see cref="CertificateKey"/>. Do not dispose it separately.
+    /// </remarks>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public CompositeMLDsa? AsCompositeMLDsa => _key as CompositeMLDsa;
+
+
     /// <summary>Implicitly wraps an ML-DSA key.</summary>
     /// <param name="key">The key to wrap.</param>
     [Experimental(Experiments.PostQuantumCryptography)]
     [return: NotNullIfNotNull(nameof(key))]
     public static implicit operator CertificateKey?(MLDsa? key)
+        => key == null ? null : new CertificateKey(key);
+
+
+    /// <summary>Implicitly wraps an SLH-DSA key.</summary>
+    /// <param name="key">The key to wrap.</param>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    [return: NotNullIfNotNull(nameof(key))]
+    public static implicit operator CertificateKey?(SlhDsa? key)
+        => key == null ? null : new CertificateKey(key);
+
+
+    /// <summary>Implicitly wraps a Composite ML-DSA key.</summary>
+    /// <param name="key">The key to wrap.</param>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    [return: NotNullIfNotNull(nameof(key))]
+    public static implicit operator CertificateKey?(CompositeMLDsa? key)
         => key == null ? null : new CertificateKey(key);
 #pragma warning restore SYSLIB5006
 #endif
