@@ -60,6 +60,16 @@ public static class Oids
     /// <summary>Public key algorithm OID <c>1.2.840.113549.1.3.1</c>.</summary>
     public const string DiffieHellmanPkcs3 = "1.2.840.113549.1.3.1";
 
+    // Post-quantum algorithms. Each OID identifies one parameter set exactly, and serves as both the
+    // SubjectPublicKeyInfo algorithm OID and the certificate's signature algorithm OID, since these
+    // algorithms take no separate hash.
+    /// <summary>ML-DSA-44 (FIPS 204) public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.17</c>.</summary>
+    public const string MLDsa44 = "2.16.840.1.101.3.4.3.17";
+    /// <summary>ML-DSA-65 (FIPS 204) public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.18</c>.</summary>
+    public const string MLDsa65 = "2.16.840.1.101.3.4.3.18";
+    /// <summary>ML-DSA-87 (FIPS 204) public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.19</c>.</summary>
+    public const string MLDsa87 = "2.16.840.1.101.3.4.3.19";
+
     // Cryptographic Attribute Types
     /// <summary>Cryptographic attribute type OID <c>1.2.840.113549.1.9.5</c>.</summary>
     public const string SigningTime = "1.2.840.113549.1.9.5";
