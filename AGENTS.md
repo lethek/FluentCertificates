@@ -264,9 +264,14 @@ anchor, while the public `FilterPrivateKeys` extension has no anchor to consult 
 first certificate in the sequence.
 
 Chain and validity helpers on `X509Certificate2` / `X509Chain`:
-- `BuildChain()` - Build certificate chains. Two overloads: `(IEnumerable<X509Certificate2>?, bool)` and
-  `(Action<X509ChainPolicy>)`. Both leave revocation set to `NoCheck`. Read `Verified` from the returned
-  tuple to check the result; the old `VerifyChain()` wrapper has been removed.
+- `BuildChain()` - Starts a fluent `X509ChainBuilder`: `TrustRoot(...)` (custom root trust; system
+  trust when never called), `AddCertificates(...)` (extra path-building candidates),
+  `AllowInvalidTime()`, `WithPolicy(Action<X509ChainPolicy>)` (applied last, always wins; revocation
+  defaults to `NoCheck`). `Create()` returns a disposable `ChainResult` (`Verified`, `Chain`,
+  `ChainStatus`, `EnsureVerified()`, `Export()`) and never throws on verification failure.
+  `Export()` on the builder verifies (throwing on failure, naming the statuses) and returns a
+  `CertificateExportBuilder` anchored on the certificate; the caller's certificate is passed through
+  with its key, the rest are library-created keyless copies that must not be disposed.
 - `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. `IsValidAt(DateTime)` is `[Obsolete]`: a
   `DateTime` carries no offset, so its `DateTimeKind` silently changes the answer.
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks

@@ -555,8 +555,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 |Extension-Method|Description|
 |-|-|
-|`BuildChain(IEnumerable<X509Certificate2>? extraCerts = null, bool customRootTrust = false)`|Builds an `X509Chain`, returning a `(bool Verified, X509Chain Chain)` tuple. `extraCerts` supplies intermediates that are not installed; `customRootTrust` treats them as the only trusted roots.|
-|`BuildChain(Action<X509ChainPolicy> configurePolicy)`|Builds an `X509Chain` after handing the `X509ChainPolicy` to `configurePolicy`, for cases the two-argument overload doesn't cover: revocation checking, `VerificationFlags`, `ApplicationPolicy`, a custom `VerificationTime`, and so on. Revocation is pre-set to `NoCheck` before the action runs, so turn it on there if you want it.|
+|`BuildChain()`|Starts a fluent `X509ChainBuilder` for building and verifying a chain for this certificate. See [Building a certificate chain](#building-a-certificate-chain).|
 |`IsValidNow()`|Whether the current UTC time falls within the certificate's validity period.|
 |`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. The `DateTime` overload is **deprecated**, because a `DateTime` carries no offset and its `DateTimeKind` changes the result.|
 |`IsSelfSigned(bool verifySignature = false)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key.|
@@ -566,6 +565,45 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`GetToBeSignedData()`|The raw "to be signed" (TBS) bytes, i.e. what the issuer's signature covers.|
 |`GetSignatureData()`|The raw signature bytes. Together with `GetToBeSignedData()` this allows verifying a signature yourself.|
 |`Export()`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
+
+---
+
+## Building a Certificate Chain
+
+`cert.BuildChain()` returns an immutable `X509ChainBuilder`. Configure it, then terminate with either
+`Create()` (inspect the outcome) or `Export()` (verify and export in one step).
+
+|Method|Description|
+|-|-|
+|`TrustRoot(params IEnumerable<X509Certificate2> roots)`|Trusts these certificates as the only valid roots (`X509ChainTrustMode.CustomRootTrust`). Never calling it leaves the system trust store in effect.|
+|`AddCertificates(params IEnumerable<X509Certificate2> certs)`|Offers extra certificates, typically intermediates, to path building via `ExtraStore`. Candidates only: an untrusted root stays untrusted however it arrives here.|
+|`AllowInvalidTime()`|Ignores expired or not-yet-valid certificates anywhere in the chain. Structural and trust failures still fail.|
+|`WithPolicy(Action<X509ChainPolicy> configure)`|Escape hatch for anything else: revocation checking, `ApplicationPolicy`, a custom `VerificationTime`, and so on. Applied after the builder's own settings, so it always wins; multiple calls run in registration order.|
+|`Create()`|Builds the chain and returns a disposable `ChainResult`. Never throws on verification failure.|
+|`Export()`|Builds, verifies, and returns a `CertificateExportBuilder` over the chain's certificates, leaf first. Throws `CryptographicException` naming the failed statuses when the chain does not verify, so a gap can never silently reach the exported file.|
+
+Revocation defaults to `NoCheck`, so a chain build never reaches the network unless `WithPolicy` says so.
+
+`ChainResult` owns the built chain and exposes `Verified`, `Chain`, `ChainStatus`, `EnsureVerified()`
+(throws unless verified, otherwise returns itself) and `Export()`.
+
+```csharp
+//Verify and write a leaf-first fullchain in one line
+leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export().AsPem().ToFile("fullchain.pem");
+
+//Or inspect the outcome rather than throwing on it
+using var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
+if (!result.Verified) {
+    Console.WriteLine(String.Join("; ", result.ChainStatus.Select(x => x.Status)));
+}
+result.Export().AsPkcs12().ToFile("bundle.pfx");
+```
+
+`builder.Export()` disposes its internal chain before returning: the certificate you started from is
+passed through as-is, keeping its private key, while the remaining chain certificates are keyless copies
+created by the library which you must **not** dispose (the same rule as `FilterPrivateKeys`; see
+[Key ownership](#key-ownership-and-disposal)). `result.Export()` copies nothing, so keep the `ChainResult`
+undisposed until that export terminates.
 
 ---
 
