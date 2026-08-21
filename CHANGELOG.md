@@ -13,6 +13,10 @@ they summarise each release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `net10.0` target framework for all packages.
+
 ## [0.17.0] - 2026-08-21
 
 ### Added
