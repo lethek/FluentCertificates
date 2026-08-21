@@ -70,6 +70,84 @@ public static class Oids
     /// <summary>ML-DSA-87 (FIPS 204) public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.19</c>.</summary>
     public const string MLDsa87 = "2.16.840.1.101.3.4.3.19";
 
+    // SLH-DSA (FIPS 205). Note the arc is not in declaration order: SHA2 takes .20-.25 and
+    // SHAKE takes .26-.31.
+    /// <summary>SLH-DSA-SHA2-128s public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.20</c>.</summary>
+    public const string SlhDsaSha2_128s = "2.16.840.1.101.3.4.3.20";
+    /// <summary>SLH-DSA-SHA2-128f public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.21</c>.</summary>
+    public const string SlhDsaSha2_128f = "2.16.840.1.101.3.4.3.21";
+    /// <summary>SLH-DSA-SHA2-192s public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.22</c>.</summary>
+    public const string SlhDsaSha2_192s = "2.16.840.1.101.3.4.3.22";
+    /// <summary>SLH-DSA-SHA2-192f public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.23</c>.</summary>
+    public const string SlhDsaSha2_192f = "2.16.840.1.101.3.4.3.23";
+    /// <summary>SLH-DSA-SHA2-256s public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.24</c>.</summary>
+    public const string SlhDsaSha2_256s = "2.16.840.1.101.3.4.3.24";
+    /// <summary>SLH-DSA-SHA2-256f public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.25</c>.</summary>
+    public const string SlhDsaSha2_256f = "2.16.840.1.101.3.4.3.25";
+    /// <summary>SLH-DSA-SHAKE-128s public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.26</c>.</summary>
+    public const string SlhDsaShake128s = "2.16.840.1.101.3.4.3.26";
+    /// <summary>SLH-DSA-SHAKE-128f public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.27</c>.</summary>
+    public const string SlhDsaShake128f = "2.16.840.1.101.3.4.3.27";
+    /// <summary>SLH-DSA-SHAKE-192s public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.28</c>.</summary>
+    public const string SlhDsaShake192s = "2.16.840.1.101.3.4.3.28";
+    /// <summary>SLH-DSA-SHAKE-192f public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.29</c>.</summary>
+    public const string SlhDsaShake192f = "2.16.840.1.101.3.4.3.29";
+    /// <summary>SLH-DSA-SHAKE-256s public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.30</c>.</summary>
+    public const string SlhDsaShake256s = "2.16.840.1.101.3.4.3.30";
+    /// <summary>SLH-DSA-SHAKE-256f public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.31</c>.</summary>
+    public const string SlhDsaShake256f = "2.16.840.1.101.3.4.3.31";
+
+    // Composite ML-DSA, arc 1.3.6.1.5.5.7.6.x. Five of these parameter sets are not implemented by
+    // .NET on any platform tested, so their OIDs could not be read back off a generated key the way
+    // the rest were; they are inferred from the arc being contiguous and are marked below.
+    // CompositeMLDsaOidMatchesGeneratedKey in the test suite asserts the declared OID against the
+    // real one for every set the running platform supports, so an inference that is wrong fails the
+    // moment a platform implements it.
+    /// <summary>MLDSA44-RSA2048-PSS-SHA256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.37</c>.</summary>
+    public const string MLDsa44WithRSA2048Pss = "1.3.6.1.5.5.7.6.37";
+    /// <summary>MLDSA44-RSA2048-PKCS15-SHA256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.38</c>.</summary>
+    public const string MLDsa44WithRSA2048Pkcs15 = "1.3.6.1.5.5.7.6.38";
+    /// <summary>MLDSA44-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.39</c>. Inferred, not yet verified against a generated key.</summary>
+    public const string MLDsa44WithEd25519 = "1.3.6.1.5.5.7.6.39";
+    /// <summary>MLDSA44-ECDSA-P256-SHA256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.40</c>.</summary>
+    public const string MLDsa44WithECDsaP256 = "1.3.6.1.5.5.7.6.40";
+    /// <summary>MLDSA65-RSA3072-PSS-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.41</c>.</summary>
+    public const string MLDsa65WithRSA3072Pss = "1.3.6.1.5.5.7.6.41";
+    /// <summary>MLDSA65-RSA3072-PKCS15-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.42</c>.</summary>
+    public const string MLDsa65WithRSA3072Pkcs15 = "1.3.6.1.5.5.7.6.42";
+    /// <summary>MLDSA65-RSA4096-PSS-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.43</c>.</summary>
+    public const string MLDsa65WithRSA4096Pss = "1.3.6.1.5.5.7.6.43";
+    /// <summary>MLDSA65-RSA4096-PKCS15-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.44</c>.</summary>
+    public const string MLDsa65WithRSA4096Pkcs15 = "1.3.6.1.5.5.7.6.44";
+    /// <summary>MLDSA65-ECDSA-P256-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.45</c>.</summary>
+    public const string MLDsa65WithECDsaP256 = "1.3.6.1.5.5.7.6.45";
+    /// <summary>MLDSA65-ECDSA-P384-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.46</c>.</summary>
+    public const string MLDsa65WithECDsaP384 = "1.3.6.1.5.5.7.6.46";
+    /// <summary>MLDSA65-ECDSA-brainpoolP256r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.47</c>. Inferred, not yet verified against a generated key.</summary>
+    public const string MLDsa65WithECDsaBrainpoolP256r1 = "1.3.6.1.5.5.7.6.47";
+    /// <summary>MLDSA65-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.48</c>. Inferred, not yet verified against a generated key.</summary>
+    public const string MLDsa65WithEd25519 = "1.3.6.1.5.5.7.6.48";
+    /// <summary>MLDSA87-ECDSA-P384-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.49</c>.</summary>
+    public const string MLDsa87WithECDsaP384 = "1.3.6.1.5.5.7.6.49";
+    /// <summary>MLDSA87-ECDSA-brainpoolP384r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.50</c>. Inferred, not yet verified against a generated key.</summary>
+    public const string MLDsa87WithECDsaBrainpoolP384r1 = "1.3.6.1.5.5.7.6.50";
+    /// <summary>MLDSA87-Ed448-SHAKE256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.51</c>. Inferred, not yet verified against a generated key.</summary>
+    public const string MLDsa87WithEd448 = "1.3.6.1.5.5.7.6.51";
+    /// <summary>MLDSA87-RSA3072-PSS-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.52</c>.</summary>
+    public const string MLDsa87WithRSA3072Pss = "1.3.6.1.5.5.7.6.52";
+    /// <summary>MLDSA87-RSA4096-PSS-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.53</c>.</summary>
+    public const string MLDsa87WithRSA4096Pss = "1.3.6.1.5.5.7.6.53";
+    /// <summary>MLDSA87-ECDSA-P521-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.54</c>.</summary>
+    public const string MLDsa87WithECDsaP521 = "1.3.6.1.5.5.7.6.54";
+
+    // ML-KEM (FIPS 203). Key encapsulation, not signature.
+    /// <summary>ML-KEM-512 (FIPS 203) public key algorithm OID <c>2.16.840.1.101.3.4.4.1</c>.</summary>
+    public const string MLKem512 = "2.16.840.1.101.3.4.4.1";
+    /// <summary>ML-KEM-768 (FIPS 203) public key algorithm OID <c>2.16.840.1.101.3.4.4.2</c>.</summary>
+    public const string MLKem768 = "2.16.840.1.101.3.4.4.2";
+    /// <summary>ML-KEM-1024 (FIPS 203) public key algorithm OID <c>2.16.840.1.101.3.4.4.3</c>.</summary>
+    public const string MLKem1024 = "2.16.840.1.101.3.4.4.3";
+
     // Cryptographic Attribute Types
     /// <summary>Cryptographic attribute type OID <c>1.2.840.113549.1.9.5</c>.</summary>
     public const string SigningTime = "1.2.840.113549.1.9.5";

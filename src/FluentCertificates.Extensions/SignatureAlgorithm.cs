@@ -69,6 +69,30 @@ public sealed record SignatureAlgorithm
 
 
     /// <summary>
+    /// The signature algorithm matching a post-quantum key algorithm.
+    /// </summary>
+    /// <remarks>
+    /// For the post-quantum families the key algorithm and the signature algorithm share an OID, since the
+    /// parameter set fixes both and there is no separate hash to name. That correspondence is what lets this
+    /// be derived rather than listed: SLH-DSA alone would otherwise need twelve members and Composite ML-DSA
+    /// eighteen, each duplicating an OID already declared on <see cref="KeyAlgorithm"/>.
+    /// </remarks>
+    /// <param name="algorithm">A post-quantum signing algorithm.</param>
+    /// <exception cref="ArgumentException">Thrown if the algorithm is not a post-quantum signing one.</exception>
+    [Experimental(Experiments.PostQuantumCryptography)]
+    public static SignatureAlgorithm ForPostQuantum(KeyAlgorithm algorithm)
+    {
+        ArgumentNullException.ThrowIfNull(algorithm);
+
+        if (!algorithm.IsPostQuantum || !algorithm.CanSign) {
+            throw new ArgumentException($"{algorithm.Name} is not a post-quantum signature algorithm", nameof(algorithm));
+        }
+
+        return new SignatureAlgorithm(algorithm.Family, null, null, algorithm.Oid);
+    }
+
+
+    /// <summary>
     /// Gets the family of key this signature algorithm applies to.
     /// </summary>
     /// <remarks>
@@ -153,7 +177,12 @@ public sealed record SignatureAlgorithm
     /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 #pragma warning disable FLUENTCERT001 // Post-quantum support is experimental
-    private static readonly ImmutableDictionary<string, SignatureAlgorithm> InstanceLookup = new Dictionary<string, SignatureAlgorithm> {
+    private static readonly ImmutableDictionary<string, SignatureAlgorithm> InstanceLookup = BuildLookup();
+
+
+    private static ImmutableDictionary<string, SignatureAlgorithm> BuildLookup()
+    {
+        var classical = new Dictionary<string, SignatureAlgorithm> {
         [SHA1DSA.Oid] = SHA1DSA,
         [SHA256DSA.Oid] = SHA256DSA,
         [SHA1ECDSA.Oid] = SHA1ECDSA,
@@ -164,11 +193,17 @@ public sealed record SignatureAlgorithm
         [SHA1RSA.Oid] = SHA1RSA,
         [SHA256RSA.Oid] = SHA256RSA,
         [SHA384RSA.Oid] = SHA384RSA,
-        [SHA512RSA.Oid] = SHA512RSA,
-        [MLDsa44.Oid] = MLDsa44,
-        [MLDsa65.Oid] = MLDsa65,
-        [MLDsa87.Oid] = MLDsa87
-    }.ToImmutableDictionary();
+            [SHA512RSA.Oid] = SHA512RSA
+        };
+
+        //Every post-quantum signing parameter set resolves through its own OID. Derived from the one
+        //list on KeyAlgorithm so a new parameter set cannot be added there and forgotten here.
+        foreach (var algorithm in KeyAlgorithm.PostQuantumAlgorithms.Where(x => x.CanSign)) {
+            classical[algorithm.Oid] = ForPostQuantum(algorithm);
+        }
+
+        return classical.ToImmutableDictionary();
+    }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore CS0618 // Type or member is obsolete
 }

@@ -225,7 +225,7 @@ public record CertificateBuilder
     /// certificate while the private key never leaves the device.
     /// </para>
     /// <para>
-    /// It is mutually exclusive with <see cref="SetKeyPair"/>, which it clears, and it suppresses the
+    /// It is mutually exclusive with <see cref="SetKeyPair(AsymmetricAlgorithm)"/>, which it clears, and it suppresses the
     /// automatic key generation that would otherwise happen during <see cref="Create"/>. The resulting
     /// certificate has no private key attached.
     /// </para>
@@ -250,9 +250,9 @@ public record CertificateBuilder
 
 
     /// <summary>
-    /// An EC public key reads back as <see cref="KeyAlgorithm.ECDsa"/> whether it was made for signing or for
+    /// An EC public key reads back as <see cref="KeyAlgorithm.ECDsa()"/> whether it was made for signing or for
     /// key agreement, so that guess must not overwrite a caller who already said
-    /// <see cref="KeyAlgorithm.ECDiffieHellman"/>. Call <see cref="SetKeyAlgorithm"/> before
+    /// <see cref="KeyAlgorithm.ECDiffieHellman()"/>. Call <see cref="SetKeyAlgorithm"/> before
     /// <see cref="SetPublicKey"/> to certify an ECDH key held elsewhere.
     /// </summary>
     private KeyAlgorithm? KeepEcChoice(KeyAlgorithm? derived)
@@ -306,7 +306,7 @@ public record CertificateBuilder
     /// The generator replaces whichever signature would otherwise have been produced. When
     /// <see cref="Issuer"/> is set that is the issuer's signature, and the issuer certificate no longer needs
     /// an attached private key. Otherwise it is the self-signature, which requires the matching key pair from
-    /// <see cref="SetKeyPair"/> so the certificate's own public key agrees with the signature.
+    /// <see cref="SetKeyPair(AsymmetricAlgorithm)"/> so the certificate's own public key agrees with the signature.
     /// </para>
     /// <para>
     /// <see cref="HashAlgorithm"/> and <see cref="RSASignaturePadding"/> are not applied to a supplied
@@ -444,7 +444,7 @@ public record CertificateBuilder
     /// Creates a <see cref="CertificateRequest"/> based on the builder's parameters.
     /// </summary>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if no key pair is set. Make sure to call the <see cref="SetKeyPair"/> method as
+    /// <exception cref="ArgumentNullException">Thrown if no key pair is set. Make sure to call the <see cref="SetKeyPair(AsymmetricAlgorithm)"/> method as
     /// certificate requests require a manually specified key pair.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
@@ -584,6 +584,14 @@ public record CertificateBuilder
         if (keys.AsMLDsa is { } mldsa) {
             return X509SignatureGenerator.CreateForMLDsa(mldsa);
         }
+
+        if (keys.AsSlhDsa is { } slhdsa) {
+            return X509SignatureGenerator.CreateForSlhDsa(slhdsa);
+        }
+
+        if (keys.AsCompositeMLDsa is { } composite) {
+            return X509SignatureGenerator.CreateForCompositeMLDsa(composite);
+        }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
 #endif
@@ -607,8 +615,13 @@ public record CertificateBuilder
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006
 #pragma warning disable FLUENTCERT001
-        if (KeyAlgorithm.Family == KeyAlgorithmFamily.MLDsa) {
-            return SetKeyPair(new CertificateKey(MLDsa.GenerateKey(MLDsaAlgorithmFor(KeyAlgorithm))));
+        switch (KeyAlgorithm.Family) {
+            case KeyAlgorithmFamily.MLDsa:
+                return SetKeyPair(new CertificateKey(MLDsa.GenerateKey(PostQuantumSupport.MLDsaAlgorithmFor(KeyAlgorithm))));
+            case KeyAlgorithmFamily.SlhDsa:
+                return SetKeyPair(new CertificateKey(SlhDsa.GenerateKey(PostQuantumSupport.SlhDsaAlgorithmFor(KeyAlgorithm))));
+            case KeyAlgorithmFamily.CompositeMLDsa:
+                return SetKeyPair(new CertificateKey(CompositeMLDsa.GenerateKey(PostQuantumSupport.CompositeAlgorithmFor(KeyAlgorithm))));
         }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
@@ -628,17 +641,6 @@ public record CertificateBuilder
     }
 
 
-#if NET10_0_OR_GREATER
-#pragma warning disable SYSLIB5006
-    private static MLDsaAlgorithm MLDsaAlgorithmFor(KeyAlgorithm algorithm)
-        => algorithm.Oid switch {
-            Oids.MLDsa44 => MLDsaAlgorithm.MLDsa44,
-            Oids.MLDsa65 => MLDsaAlgorithm.MLDsa65,
-            Oids.MLDsa87 => MLDsaAlgorithm.MLDsa87,
-            _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, "Unknown ML-DSA parameter set")
-        };
-#pragma warning restore SYSLIB5006
-#endif
 
 
     private static ImmutableHashSet<X509Extension> BuildExtensions(CertificateBuilder builder)
@@ -770,10 +772,10 @@ public record CertificateBuilder
     /// an error here: the builder only has to put the key in the certificate, not produce one like it.
     /// </summary>
     /// <remarks>
-    /// <see cref="Oids.EcPublicKey"/> maps to <see cref="KeyAlgorithm.ECDsa"/> because an ECDH public key is
+    /// <see cref="Oids.EcPublicKey"/> maps to <see cref="KeyAlgorithm.ECDsa()"/> because an ECDH public key is
     /// indistinguishable from an ECDsa one: both carry that OID and the same curve parameters, so the intended
     /// use cannot be read back off the key. <see cref="SetPublicKey"/> keeps an explicit
-    /// <see cref="KeyAlgorithm.ECDiffieHellman"/> choice rather than overwriting it with this guess.
+    /// <see cref="KeyAlgorithm.ECDiffieHellman()"/> choice rather than overwriting it with this guess.
     /// </remarks>
     private static KeyAlgorithm? GetKeyAlgorithm(PublicKey? key)
     {
@@ -783,9 +785,8 @@ public record CertificateBuilder
             Oids.Rsa => KeyAlgorithm.RSA(),
             Oids.EcPublicKey => KeyAlgorithm.ECDsa(),
             Oids.Dsa => KeyAlgorithm.DSA(),
-            Oids.MLDsa44 => KeyAlgorithm.MLDsa44,
-            Oids.MLDsa65 => KeyAlgorithm.MLDsa65,
-            Oids.MLDsa87 => KeyAlgorithm.MLDsa87,
+            //A post-quantum OID names its parameter set exactly, so the lookup is unambiguous
+            { } oid when KeyAlgorithm.PostQuantumAlgorithms.FirstOrDefault(x => x.Oid == oid) is { } pqc => pqc,
             _ => null
         };
 #pragma warning restore FLUENTCERT001
@@ -821,13 +822,15 @@ public record CertificateBuilder
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006
 #pragma warning disable FLUENTCERT001
-        if (keys.AsMLDsa is { } mldsa) {
-            return mldsa.Algorithm.Name switch {
-                "ML-DSA-44" => KeyAlgorithm.MLDsa44,
-                "ML-DSA-65" => KeyAlgorithm.MLDsa65,
-                "ML-DSA-87" => KeyAlgorithm.MLDsa87,
-                var name => throw new NotSupportedException($"Unsupported ML-DSA parameter set: {name}")
-            };
+        //The BCL algorithm's Name matches the parameter-set name this library uses, so one lookup by
+        //name covers all three post-quantum signature families
+        var name = keys.AsMLDsa?.Algorithm.Name
+            ?? keys.AsSlhDsa?.Algorithm.Name
+            ?? keys.AsCompositeMLDsa?.Algorithm.Name;
+
+        if (name != null) {
+            return KeyAlgorithm.PostQuantumAlgorithms.FirstOrDefault(x => x.Name == name)
+                ?? throw new NotSupportedException($"Unsupported post-quantum parameter set: {name}");
         }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
@@ -852,6 +855,14 @@ public record CertificateBuilder
 #pragma warning disable FLUENTCERT001
         if (keys.AsMLDsa is { } mldsa) {
             return new PublicKey(mldsa);
+        }
+
+        if (keys.AsSlhDsa is { } slhdsa) {
+            return new PublicKey(slhdsa);
+        }
+
+        if (keys.AsCompositeMLDsa is { } composite) {
+            return new PublicKey(composite);
         }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
