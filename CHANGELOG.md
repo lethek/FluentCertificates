@@ -13,6 +13,24 @@ they summarise each release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `X509ChainBuilder`, a fluent chain builder started by `cert.BuildChain()`: `TrustRoot`, `AddCertificates`, `AllowInvalidTime`, `WithPolicy`, `Create()` and `Export()`.
+- `ChainResult`, the disposable result of `X509ChainBuilder.Create()`: `Verified`, `Chain`, `ChainStatus`, `EnsureVerified()` and `Export()`.
+- `CertificateExportBuilder.WithAllPrivateKeys()`, replacing `WithPrivateKeys()`.
+
+### Changed
+
+- **Breaking:** Private keys are now opt-in. `CertificateExportBuilder.Keys` and `X509Chain.ToCollection(ExportKeys)` default to `ExportKeys.None` instead of `ExportKeys.All`, so `cert.Export().AsPkcs12()` writes a keyless PFX. Call `WithPrivateKey()` for the anchor's key or `WithAllPrivateKeys()` for every key held.
+
+### Deprecated
+
+- `CertificateExportBuilder.WithPrivateKeys()`, renamed to `WithAllPrivateKeys()` so it cannot be misread as the singular `WithPrivateKey()`. The old name forwards to the new one.
+
+### Removed
+
+- **Breaking:** the `BuildChain(IEnumerable<X509Certificate2>?, bool)` and `BuildChain(Action<X509ChainPolicy>)` overloads returning `(bool Verified, X509Chain Chain)`. Use `BuildChain()` with `TrustRoot`/`AddCertificates`/`WithPolicy` and `Create()` instead.
+
 ## [0.16.0] - 2026-08-21
 
 ### Added

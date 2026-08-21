@@ -285,9 +285,14 @@ using var key = cert.GetPrivateKey();
 Certificates the library returns to you are always yours. Nothing in `CertificateFinder` or the export
 path disposes a certificate you can still reach.
 
-One exception, on `FilterPrivateKeys`: when it strips a private key it returns a keyless copy, and
-otherwise passes your original through. The resulting sequence mixes objects you own with objects the
-call created, and there's no way to tell them apart, so don't dispose its elements.
+Two exceptions, both producing a sequence that mixes objects you own with objects the call created, with
+no way to tell them apart, so don't dispose their elements:
+
+- `FilterPrivateKeys`: when it strips a private key it returns a keyless copy, and otherwise passes your
+  original through.
+- `X509ChainBuilder.Export()`: it hands back your own instances wherever you supplied them, and a keyless
+  copy only for a chain element the platform supplied itself. See
+  [Building a Certificate Chain](#building-a-certificate-chain).
 
 ---
 
@@ -297,15 +302,19 @@ Exporting requires the [FluentCertificates.Extensions](https://www.nuget.org/pac
 
 Everything goes through the `Export()` extension method, available on `X509Certificate2`, `X509Certificate2Collection`, `X509Chain` and `IEnumerable<X509Certificate2>`. It returns a `CertificateExportBuilder`: configure it with `With*`, choose a format with `As*`, then finish with `To*`.
 
+**Private keys are opt-in.** An export carries certificates and nothing else until you ask for a key, so
+`cert.Export().AsPkcs12().ToFile("cert.pfx")` writes a PFX with **no** private key in it. Add
+`WithPrivateKey()` for the anchor's key (see below), or `WithAllPrivateKeys()` for every key you hold.
+
 ```csharp
 //PEM, certificate only
-cert.Export().WithoutPrivateKeys().AsPem().ToPemString();
+cert.Export().AsPem().ToPemString();
 
 //PEM including the private key
 cert.Export().WithPrivateKey().AsPem().ToFile("cert.pem");
 
-//Password-protected PKCS#12 (PFX)
-cert.Export().WithPassword("hunter2").AsPkcs12().ToFile("cert.pfx");
+//Password-protected PKCS#12 (PFX), key included
+cert.Export().WithPrivateKey().WithPassword("hunter2").AsPkcs12().ToFile("cert.pfx");
 
 //Raw DER/CER bytes
 cert.Export().AsCert().ToByteArray();
@@ -313,19 +322,23 @@ cert.Export().AsCert().ToByteArray();
 //A whole chain as PKCS#7
 chain.Export().AsPkcs7().ToByteArray();
 
-//A leaf plus its issuers, with all private keys stripped
-leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).WithoutPrivateKeys().AsPkcs12().ToByteArray();
+//A leaf plus its issuers, no private keys anywhere
+leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().ToByteArray();
 ```
 
 |Stage|Methods|
 |-|-|
-|Configure|`WithPrivateKey()`, `WithPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`|
+|Configure|`WithPrivateKey()`, `WithAllPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`|
 |Add|`AddChain(X509Chain)`, `AddChain(...)`, `AddCertificates(...)`|
 |Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsCert()`|
 |Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
 `With*` configures the export and replaces whatever was set before; `Add*` appends certificates to it.
 Every `Add*` method deduplicates by thumbprint, so a certificate already present is skipped.
+
+`WithPrivateKey()` (singular, the anchor's key) and `WithAllPrivateKeys()` (every key) do different
+things, so they are named to be hard to confuse. `WithPrivateKeys()` was the old name for the latter and
+is **deprecated**; it still forwards to `WithAllPrivateKeys()`.
 
 `AddChain` and `AddCertificates` take `params IEnumerable<X509Certificate2>`, so an array, a LINQ query,
 an `X509Certificate2Collection`, or a handful of individual certificates all bind to the same method:
@@ -382,7 +395,8 @@ intermediateCert.Export().AddChain([rootCert, leafCert]).AsCert().ToByteArray();
 
 `collection.Export()` and the `IEnumerable<X509Certificate2>` overload designate no leaf, so both throw
 `InvalidOperationException` there. This holds even when the certificates do form a chain: a bundle names
-no primary certificate, and arriving first is not evidence of being one.
+no primary certificate, and arriving first is not evidence of being one. Since keys are opt-in, the
+`ExportKeys.Primary` half of that only bites when you actually write `WithPrivateKey()` on a bundle.
 
 ```csharp
 //Throws: a bundle, so nothing says which certificate to export
@@ -555,8 +569,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 |Extension-Method|Description|
 |-|-|
-|`BuildChain(IEnumerable<X509Certificate2>? extraCerts = null, bool customRootTrust = false)`|Builds an `X509Chain`, returning a `(bool Verified, X509Chain Chain)` tuple. `extraCerts` supplies intermediates that are not installed; `customRootTrust` treats them as the only trusted roots.|
-|`BuildChain(Action<X509ChainPolicy> configurePolicy)`|Builds an `X509Chain` after handing the `X509ChainPolicy` to `configurePolicy`, for cases the two-argument overload doesn't cover: revocation checking, `VerificationFlags`, `ApplicationPolicy`, a custom `VerificationTime`, and so on. Revocation is pre-set to `NoCheck` before the action runs, so turn it on there if you want it.|
+|`BuildChain()`|Starts a fluent `X509ChainBuilder` for building and verifying a chain for this certificate. See [Building a certificate chain](#building-a-certificate-chain).|
 |`IsValidNow()`|Whether the current UTC time falls within the certificate's validity period.|
 |`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. The `DateTime` overload is **deprecated**, because a `DateTime` carries no offset and its `DateTimeKind` changes the result.|
 |`IsSelfSigned(bool verifySignature = false)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key.|
@@ -569,6 +582,58 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 ---
 
+## Building a Certificate Chain
+
+`cert.BuildChain()` returns an immutable `X509ChainBuilder`. Configure it, then terminate with either
+`Create()` (inspect the outcome) or `Export()` (verify and export in one step).
+
+|Method|Description|
+|-|-|
+|`TrustRoot(params IEnumerable<X509Certificate2> roots)`|Trusts these certificates as the only valid roots (`X509ChainTrustMode.CustomRootTrust`). Never calling it leaves the system trust store in effect. Calling it is what replaces system trust, not the number of roots passed, so an empty set trusts no root at all rather than falling back.|
+|`AddCertificates(params IEnumerable<X509Certificate2> certs)`|Offers extra certificates, typically intermediates, to path building via `ExtraStore`. Candidates only: an untrusted root stays untrusted however it arrives here.|
+|`AllowInvalidTime()`|Ignores expired or not-yet-valid certificates anywhere in the chain. Structural and trust failures still fail.|
+|`WithPolicy(Action<X509ChainPolicy> configure)`|Escape hatch for anything else: revocation checking, `ApplicationPolicy`, a custom `VerificationTime`, and so on. Applied after the builder's own settings, so it always wins; multiple calls run in registration order.|
+|`Create()`|Builds the chain and returns a disposable `ChainResult`. Never throws on verification failure.|
+|`Export()`|Builds, verifies, and returns a `CertificateExportBuilder` over the chain's certificates, leaf first. Throws `CryptographicException` naming the failed statuses when the chain does not verify, so a gap can never silently reach the exported file.|
+
+Revocation defaults to `NoCheck`, so a chain build never reaches the network unless `WithPolicy` says so.
+
+`ChainResult` owns the built chain and exposes `Verified`, `Chain`, `ChainStatus`, `EnsureVerified()`
+(throws unless verified, otherwise returns itself) and `Export()`.
+
+```csharp
+//Verify and write a leaf-first fullchain in one line
+leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export().AsPem().ToFile("fullchain.pem");
+
+//Or inspect the outcome rather than throwing on it
+using var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
+if (!result.Verified) {
+    Console.WriteLine(String.Join("; ", result.ChainStatus.Select(x => x.Status)));
+    return;
+}
+result.Export().WithPrivateKey().AsPkcs12().ToFile("bundle.pfx");
+```
+
+`ChainResult.Export()` does **not** verify, matching every other `Export()` in the library: exporting an
+unverified result writes whatever was built, which for a partial chain is an incomplete bundle. Check
+`Verified` first as above, or write `result.EnsureVerified().Export()`. Only `builder.Export()` verifies
+on your behalf, because it is a one-liner with nowhere to intervene.
+
+Neither terminator carries a private key until you ask, the same as every other export. Call
+`WithPrivateKey()` for the leaf's, which is what a fullchain wants, or `WithAllPrivateKeys()` to include
+any CA keys you happen to hold.
+
+`builder.Export()` disposes its internal chain before returning, so it cannot hand out the chain's own
+element certificates. Each element is mapped back to the instance you supplied through the certificate
+itself, `TrustRoot(...)`, `AddCertificates(...)` or a `WithPolicy(...)` action that populated `ExtraStore`
+or `CustomTrustStore`, which you already own and dispose. Only an element the platform supplied itself,
+such as a root from the system store or an intermediate fetched via AIA, has no such instance and is
+copied; that copy is keyless and must **not** be disposed by you (the same rule as `FilterPrivateKeys`;
+see [Key ownership](#key-ownership-and-disposal)). `result.Export()` copies nothing, so keep the
+`ChainResult` undisposed until that export terminates.
+
+---
+
 ## X509Chain Extension Methods
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
@@ -576,7 +641,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |Extension-Method|Description|
 |-|-|
 |`ToEnumerable()`|Returns the chain's certificates in **leaf-first** order, matching `X509Chain.ChainElements`. The root is therefore last.|
-|`ToCollection(ExportKeys include = ExportKeys.All)`|As `ToEnumerable()`, but returns an `X509Certificate2Collection` and applies `FilterPrivateKeys(include)`.|
+|`ToCollection(ExportKeys include = ExportKeys.None)`|As `ToEnumerable()`, but returns an `X509Certificate2Collection` and applies `FilterPrivateKeys(include)`. Keys are opt-in, as everywhere else.|
 |`Export()`|Returns a `CertificateExportBuilder`; see [Exporting Certificates](#exporting-certificates)|
 
 ---

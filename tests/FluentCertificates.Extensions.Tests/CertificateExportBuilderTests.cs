@@ -415,12 +415,12 @@ public class CertificateExportBuilderTests
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Route Root").Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Route Leaf").SetIssuer(root).Create();
 
-        var (_, chain) = leaf.BuildChain([root], true);
-        using (chain) {
-            var viaLeaf = leaf.Export().AddChain(chain).WithoutPrivateKeys().AsPem().ToPemString();
-            var viaChain = chain.Export().WithoutPrivateKeys().AsPem().ToPemString();
-            await Assert.That(viaLeaf).IsEqualTo(viaChain);
-        }
+        using var result = leaf.BuildChain().TrustRoot(root).Create();
+        var chain = result.Chain;
+
+        var viaLeaf = leaf.Export().AddChain(chain).WithoutPrivateKeys().AsPem().ToPemString();
+        var viaChain = chain.Export().WithoutPrivateKeys().AsPem().ToPemString();
+        await Assert.That(viaLeaf).IsEqualTo(viaChain);
     }
 
 
@@ -493,11 +493,10 @@ public class CertificateExportBuilderTests
         using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Cert X509Chain Root").Create();
         using var leaf = new CertificateBuilder().SetSubject("CN=Cert X509Chain Leaf").SetIssuer(root).Create();
 
-        var (_, chain) = leaf.BuildChain([root], true);
-        using (chain) {
-            var bytes = chain.Export().AsCert().ToByteArray();
-            await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
-        }
+        using var result = leaf.BuildChain().TrustRoot(root).Create();
+
+        var bytes = result.Chain.Export().AsCert().ToByteArray();
+        await Assert.That(bytes).IsEquivalentTo(leaf.RawData, CollectionOrdering.Matching);
     }
 
 
@@ -651,7 +650,7 @@ public class CertificateExportBuilderTests
 
         //Only ExportKeys.Primary and AsCert() need a designated certificate; the rest never ask.
         var certs = new[] { root, leafA, leafB };
-        await Assert.That(certs.Export().WithPrivateKeys().AsPem().ToPemString()).IsNotEmpty();
+        await Assert.That(certs.Export().WithAllPrivateKeys().AsPem().ToPemString()).IsNotEmpty();
         await Assert.That(certs.Export().WithoutPrivateKeys().AsPkcs12().ToByteArray()).IsNotEmpty();
         await Assert.That(certs.Export().AsPkcs7().ToByteArray()).IsNotEmpty();
     }
@@ -669,7 +668,7 @@ public class CertificateExportBuilderTests
         var orphaned = leaf.Export() with { Certificates = [root, stranger] };
 
         await Assert.That(() => orphaned.AsCert().ToByteArray()).ThrowsExactly<ArgumentException>();
-        await Assert.That(() => orphaned.WithPrivateKeys().AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => orphaned.WithAllPrivateKeys().AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
     }
 
 
@@ -827,6 +826,39 @@ public class CertificateExportBuilderTests
         var viaNew = leaf.Export().AddChain([root, mid]).WithoutPrivateKeys().AsPem().ToPemString();
 
         await Assert.That(viaOld).IsEqualTo(viaNew);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_WithPrivateKeys_StillForwardsToWithAllPrivateKeys()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Rename Root").Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Rename Leaf").SetIssuer(root).Create();
+
+#pragma warning disable CS0618 // deliberately exercising the obsolete forwarding overload
+        var viaOld = leaf.Export().AddChain([root]).WithPrivateKeys().AsPem().ToPemString();
+#pragma warning restore CS0618
+        var viaNew = leaf.Export().AddChain([root]).WithAllPrivateKeys().AsPem().ToPemString();
+
+        await Assert.That(viaOld).IsEqualTo(viaNew);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_DefaultsToNoPrivateKeys()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Opt In").Create();
+
+        //Keys are opt-in: an export nobody asked for a key from must not carry one
+        await Assert.That(cert.HasPrivateKey).IsTrue();
+        await Assert.That(cert.Export().Keys).IsEqualTo(ExportKeys.None);
+
+        await Assert.That(cert.Export().AsPem().ToPemString()).DoesNotContain("PRIVATE KEY");
+
+        //Including PKCS#12, where a keyless PFX is the surprising half of this default
+        using var loaded = CertTools.LoadPkcs12(cert.Export().AsPkcs12().ToByteArray(), null);
+        await Assert.That(loaded.Thumbprint).IsEqualTo(cert.Thumbprint);
+        await Assert.That(loaded.HasPrivateKey).IsFalse();
     }
 
 

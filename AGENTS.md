@@ -182,8 +182,13 @@ Several projects expose internals to test projects and LINQPad via `InternalsVis
 Check rule 3 when adding any call to `Get*PrivateKey`, `Get*PublicKey` or `CopyWithPrivateKey`. Disposing
 an extracted key does not affect the certificate it came from, or any sibling instance.
 
-`FilterPrivateKeys` is the exception: it emits a mix of caller-owned originals and library-created keyless
-copies, indistinguishable to the caller, so its output must not be disposed. See #46.
+Two APIs are the exception, both emitting a mix of caller-owned originals and library-created copies that
+are indistinguishable to the caller, so neither's output may be disposed:
+
+- `FilterPrivateKeys`, whose stripped certificates are keyless copies. See #46.
+- `X509ChainBuilder.Export()`, whose `Certificates` are the caller's own instances wherever the caller
+  supplied them and keyless copies only for elements the platform supplied (a system-store root, an
+  AIA-fetched intermediate).
 
 ## Working with Certificates
 
@@ -217,7 +222,7 @@ Provides LINQ-queryable interface for finding certificates across:
 ### Extension Methods
 
 Export, via `Export()` and the `CertificateExportBuilder` it returns:
-- Configure, replacing state: `WithPrivateKey()` / `WithPrivateKeys()` / `WithoutPrivateKeys()` /
+- Configure, replacing state: `WithPrivateKey()` / `WithAllPrivateKeys()` / `WithoutPrivateKeys()` /
   `WithKeys(ExportKeys)` / `WithPassword(string?)` / `WithPassword(SecureString)` / `WithoutPassword()`
 - Add, appending certificates: `AddChain(X509Chain)` / `AddChain(params IEnumerable<X509Certificate2>)` /
   `AddCertificates(params IEnumerable<X509Certificate2>)`. The C# 13 params-collections form means loose
@@ -226,8 +231,15 @@ Export, via `Export()` and the `CertificateExportBuilder` it returns:
 - Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
 
 `With*` configures and `Add*` accumulates; keep that split when adding methods. All the `Add*` methods
-deduplicate by thumbprint, so a certificate already present is skipped. `WithChain(...)` is `[Obsolete]`
-and forwards to `AddChain(...)`.
+deduplicate by thumbprint, so a certificate already present is skipped. `WithChain(...)` and
+`WithPrivateKeys(...)` are `[Obsolete]` and forward to `AddChain(...)` and `WithAllPrivateKeys(...)`.
+
+**Private keys are opt-in.** `CertificateExportBuilder.Keys` defaults to `ExportKeys.None`, and so does
+`X509Chain.ToCollection(ExportKeys)`; they are the only two places the enum carries a default, and both
+say `None`. Every entry point inherits it, so an export writes a key only where the caller wrote
+`WithPrivateKey()` (the anchor's) or `WithAllPrivateKeys()` (every one held). This is why `AsPkcs12()`
+produces a keyless PFX unless asked otherwise. Keep any new default at `None`: a key the caller did not
+request must never reach a file.
 
 `WithPassword(SecureString)` is honoured by every format, but only `AsPem()` keeps it out of the managed
 heap: the platform's PKCS#12 export takes a `string`, so `AsPkcs12()` has to materialise one. Each
@@ -264,9 +276,24 @@ anchor, while the public `FilterPrivateKeys` extension has no anchor to consult 
 first certificate in the sequence.
 
 Chain and validity helpers on `X509Certificate2` / `X509Chain`:
-- `BuildChain()` - Build certificate chains. Two overloads: `(IEnumerable<X509Certificate2>?, bool)` and
-  `(Action<X509ChainPolicy>)`. Both leave revocation set to `NoCheck`. Read `Verified` from the returned
-  tuple to check the result; the old `VerifyChain()` wrapper has been removed.
+- `BuildChain()` - Starts a fluent `X509ChainBuilder`: `TrustRoot(...)` (custom root trust; system
+  trust when never called), `AddCertificates(...)` (extra path-building candidates),
+  `AllowInvalidTime()`, `WithPolicy(Action<X509ChainPolicy>)` (applied last, always wins; revocation
+  defaults to `NoCheck`). Calling `TrustRoot` is what switches to `CustomRootTrust`, tracked by
+  `CustomTrustEnabled` rather than inferred from `TrustedRoots` being non-empty, so trusting an empty
+  set trusts nothing instead of falling back to system trust. `Create()` returns a disposable
+  `ChainResult` (`Verified`, `Chain`, `ChainStatus`, `EnsureVerified()`, `Export()`) and never throws
+  on verification failure; it disposes the chain itself if a `WithPolicy` action or `Build` throws.
+  `Export()` on the builder verifies (throwing on failure, naming the statuses) and returns a
+  `CertificateExportBuilder` anchored on the certificate. It disposes its internal chain, so each
+  element is mapped back by thumbprint to the instance the caller supplied via the certificate,
+  `TrustRoot`, `AddCertificates` or a `WithPolicy` action that populated `ExtraStore` or
+  `CustomTrustStore` (later sources win, so the anchor always keeps its own instance); only an element
+  the platform supplied itself (system-store root, AIA-fetched intermediate) is copied, and that copy
+  is keyless and must not be disposed.
+  Neither `Export()` seeds any key: like every export they default to `ExportKeys.None`, so a
+  fullchain needs `WithPrivateKey()` for the leaf's key. `ChainResult.Export()` does not verify,
+  matching every other `Export()`; use `EnsureVerified().Export()` for the guarded form.
 - `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. `IsValidAt(DateTime)` is `[Obsolete]`: a
   `DateTime` carries no offset, so its `DateTimeKind` silently changes the answer.
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks

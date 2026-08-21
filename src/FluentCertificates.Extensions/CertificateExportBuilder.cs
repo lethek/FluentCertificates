@@ -41,9 +41,11 @@ public record CertificateExportBuilder
 
     /// <summary>
     /// Controls which private keys are included in the export.
-    /// Defaults to <see cref="ExportKeys.All"/>.
+    /// Defaults to <see cref="ExportKeys.None"/>: an export writes certificates, and every private key
+    /// it carries is one the caller asked for, via <see cref="WithPrivateKey"/> or
+    /// <see cref="WithAllPrivateKeys"/>.
     /// </summary>
-    public ExportKeys Keys { get; init; } = ExportKeys.All;
+    public ExportKeys Keys { get; init; } = ExportKeys.None;
 
     /// <summary>
     /// Plain-text password used to protect private keys (e.g. in PKCS#12 output).
@@ -88,15 +90,21 @@ public record CertificateExportBuilder
         => this with { Keys = ExportKeys.Primary };
 
     /// <summary>
-    /// Returns a new builder that will include all private keys in the export
-    /// (i.e. <see cref="ExportKeys.All"/>).
+    /// Returns a new builder that will include every private key the caller holds in the export
+    /// (i.e. <see cref="ExportKeys.All"/>), CA keys among them.
     /// </summary>
-    public CertificateExportBuilder WithPrivateKeys()
+    public CertificateExportBuilder WithAllPrivateKeys()
         => this with { Keys = ExportKeys.All };
+
+    /// <inheritdoc cref="WithAllPrivateKeys"/>
+    [Obsolete($"Renamed to {nameof(WithAllPrivateKeys)}, which cannot be misread as the singular "
+        + nameof(WithPrivateKey) + ". This method behaves identically.")]
+    public CertificateExportBuilder WithPrivateKeys()
+        => WithAllPrivateKeys();
 
     /// <summary>
     /// Returns a new builder that will strip all private keys from the export
-    /// (i.e. <see cref="ExportKeys.None"/>).
+    /// (i.e. <see cref="ExportKeys.None"/>), which is also the default.
     /// </summary>
     public CertificateExportBuilder WithoutPrivateKeys()
         => this with { Keys = ExportKeys.None };
