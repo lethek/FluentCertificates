@@ -2,6 +2,8 @@
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
     <File Path=".github/workflows/dotnet.yml" />
+    <File Path="AGENTS.md" />
+    <File Path="CHANGELOG.md" />
     <File Path="Directory.Build.props" />
     <File Path="LICENSE" />
     <File Path="README.md" />

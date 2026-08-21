@@ -1,4 +1,4 @@
-# Changelog
+# FluentCertificates Changelog
 
 All notable changes to this project are documented in this file.
 
@@ -12,6 +12,8 @@ Entries for v0.14.0 and earlier were reconstructed from the release history afte
 they summarise each release rather than record it as it happened.
 
 ## [Unreleased]
+
+## [0.17.0] - 2026-08-21
 
 ### Added
 
@@ -414,7 +416,8 @@ they summarise each release rather than record it as it happened.
 - Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
   including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
 
-[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/lethek/FluentCertificates/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/lethek/FluentCertificates/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/lethek/FluentCertificates/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/lethek/FluentCertificates/compare/v0.13.0...v0.14.0
