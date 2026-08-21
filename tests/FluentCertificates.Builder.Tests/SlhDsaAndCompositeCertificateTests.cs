@@ -207,15 +207,19 @@ public class SlhDsaAndCompositeCertificateTests
         await Assert.That(SlhDsaAlgorithms().Count()).IsEqualTo(12);
         await Assert.That(CompositeAlgorithms().Count()).IsEqualTo(18);
 
-        var supported = KeyAlgorithm.PostQuantumAlgorithms.Count(x => x.IsSupported);
-
-        if (Environment.Version.Major >= 10) {
-            //ML-DSA is available on every platform .NET 10 runs on, so at least those three must be usable
-            await Assert.That(supported).IsGreaterThanOrEqualTo(3);
-        } else {
-            //Before net10.0 the types do not exist, so nothing can be supported
-            await Assert.That(supported).IsEqualTo(0);
-        }
+#if NET10_0_OR_GREATER
+        //Cross-check the gate against the BCL's own flag rather than against a hardcoded expectation of what
+        //this platform can do. No count is portable: Ubuntu 24.04 ships OpenSSL 3.0, where every post-quantum
+        //family reports unsupported, while Alpine 3.24 and Windows CNG support ML-DSA. Asserting a minimum
+        //here is what broke CI. What must hold everywhere is that our answer tracks the platform's.
+        #pragma warning disable SYSLIB5006
+        await Assert.That(KeyAlgorithm.MLDsa65.IsSupported).IsEqualTo(System.Security.Cryptography.MLDsa.IsSupported);
+        await Assert.That(KeyAlgorithm.SlhDsaSha2_128f.IsSupported).IsEqualTo(System.Security.Cryptography.SlhDsa.IsSupported);
+        #pragma warning restore SYSLIB5006
+#else
+        //Before net10.0 the types do not exist, so nothing can be supported
+        await Assert.That(KeyAlgorithm.PostQuantumAlgorithms.Count(x => x.IsSupported)).IsEqualTo(0);
+#endif
     }
 
 
