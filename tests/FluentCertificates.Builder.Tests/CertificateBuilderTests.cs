@@ -59,7 +59,7 @@ public class CertificateBuilderTests
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Create();
         await Assert.That(cert1.GetKeyAlgorithm()).IsEqualTo(PkcsObjectIdentifiers.RsaEncryption.Id);
 
-        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.RSA).Create();
+        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.RSA()).Create();
         await Assert.That(cert2.GetKeyAlgorithm()).IsEqualTo(PkcsObjectIdentifiers.RsaEncryption.Id);
     }
 
@@ -71,7 +71,7 @@ public class CertificateBuilderTests
         using var cert1 = new CertificateBuilder().SetKeyPair(keys).Create();
         await Assert.That(cert1.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdECPublicKey.Id);
 
-        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDsa).Create();
+        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
         await Assert.That(cert2.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdECPublicKey.Id);
     }
 
@@ -86,7 +86,7 @@ public class CertificateBuilderTests
         await Assert.That(cert1.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdDsa.Id);
 
 #pragma warning disable CS0618 // Type or member is obsolete
-        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.DSA).Create();
+        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.DSA()).Create();
 #pragma warning restore CS0618 // Type or member is obsolete
         await Assert.That(cert2.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdDsa.Id);
     }
@@ -101,12 +101,12 @@ public class CertificateBuilderTests
             .SetUsage(CertificateUsage.CA)
             .SetSubject(x => x.SetCommonName("Root CA Test"))
             .SetNotAfter(now.AddHours(1))
-            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa())
             .Create();
 
         using var cert = new CertificateBuilder()
             .SetIssuer(rootCA)
-            .SetKeyAlgorithm(KeyAlgorithm.RSA)
+            .SetKeyAlgorithm(KeyAlgorithm.RSA())
             .Create();
 
         await Assert.That(cert.IsIssuedBy(rootCA, true)).IsTrue();
@@ -122,12 +122,12 @@ public class CertificateBuilderTests
             .SetUsage(CertificateUsage.CA)
             .SetSubject(x => x.SetCommonName("Root CA Test"))
             .SetNotAfter(now.AddHours(1))
-            .SetKeyAlgorithm(KeyAlgorithm.RSA)
+            .SetKeyAlgorithm(KeyAlgorithm.RSA())
             .Create();
 
         using var cert = new CertificateBuilder()
             .SetIssuer(rootCA)
-            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa())
             .Create();
 
         await Assert.That(cert.IsIssuedBy(rootCA, true)).IsTrue();
@@ -149,19 +149,17 @@ public class CertificateBuilderTests
 
 
     [Test]
-    public async Task Build_InvalidKeyLength_ThrowsException()
+    public async Task KeyAlgorithm_InvalidKeyLength_ThrowsAtConstruction()
     {
+        //A key length now belongs to the algorithm rather than sitting beside it, so an invalid one is
+        //rejected where it is named instead of surviving until Create()
+        await Assert.That(() => KeyAlgorithm.RSA(0)).ThrowsExactly<ArgumentOutOfRangeException>();
+        await Assert.That(() => KeyAlgorithm.RSA(-1024)).ThrowsExactly<ArgumentOutOfRangeException>();
+
+        //A positive but unusably small length is still the platform's to reject, not ours
         await Assert.That(() => {
-            using var cert = new CertificateBuilder().SetKeyLength(10).Create();
+            using var cert = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.RSA(10)).Create();
         }).Throws<Exception>();
-
-        await Assert.That(() => {
-            using var cert = new CertificateBuilder().SetKeyLength(0).Create();
-        }).ThrowsExactly<ArgumentException>();
-
-        await Assert.That(() => {
-            using var cert = new CertificateBuilder().SetKeyLength(-1024).Create();
-        }).ThrowsExactly<ArgumentException>();
     }
 
 
@@ -269,7 +267,7 @@ public class CertificateBuilderTests
         var sig = csr.GetSignatureData().ToArray();
 
         await Assert.That(algorithm).IsEqualTo(SignatureAlgorithm.SHA256RSA);
-        await Assert.That(cr.PublicKey.GetRSAPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm, algorithm.RSASignaturePadding!)).IsTrue();
+        await Assert.That(cr.PublicKey.GetRSAPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm!.Value, algorithm.RSASignaturePadding!)).IsTrue();
     }
 
 
@@ -293,7 +291,7 @@ public class CertificateBuilderTests
 #pragma warning disable CS0618 // Type or member is obsolete
         await Assert.That(algorithm).IsEqualTo(SignatureAlgorithm.SHA256DSA);
 #pragma warning restore CS0618 // Type or member is obsolete
-        await Assert.That(cr.PublicKey.GetDSAPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence)).IsTrue();
+        await Assert.That(cr.PublicKey.GetDSAPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence)).IsTrue();
     }
 
 
@@ -315,7 +313,7 @@ public class CertificateBuilderTests
         var sig = csr.GetSignatureData().ToArray();
 
         await Assert.That(algorithm).IsEqualTo(SignatureAlgorithm.SHA256ECDSA);
-        await Assert.That(cr.PublicKey.GetECDsaPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm, DSASignatureFormat.Rfc3279DerSequence)).IsTrue();
+        await Assert.That(cr.PublicKey.GetECDsaPublicKey()!.VerifyData(cri, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence)).IsTrue();
     }
 
 
@@ -379,13 +377,13 @@ public class CertificateBuilderTests
 
 
     [Test]
-    [Arguments(KeyAlgorithm.RSA, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation | X509KeyUsageFlags.KeyEncipherment)]
-    [Arguments(KeyAlgorithm.ECDsa, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation)]
-    public async Task Build_SMimeCertificate_HasEmailProtectionEKU(KeyAlgorithm algorithm, X509KeyUsageFlags expectedUsages)
+    [Arguments(KeyAlgorithmFamily.Rsa, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation | X509KeyUsageFlags.KeyEncipherment)]
+    [Arguments(KeyAlgorithmFamily.ECDsa, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation)]
+    public async Task Build_SMimeCertificate_HasEmailProtectionEKU(KeyAlgorithmFamily family, X509KeyUsageFlags expectedUsages)
     {
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.SMime)
-            .SetKeyAlgorithm(algorithm)
+            .SetKeyAlgorithm(KeyAlgorithm.Default(family))
             .SetSubject(x => x.SetCommonName("SMime Test"))
             .Create();
 
@@ -395,13 +393,13 @@ public class CertificateBuilderTests
 
 
     [Test]
-    [Arguments(KeyAlgorithm.RSA, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment)]
-    [Arguments(KeyAlgorithm.ECDsa, X509KeyUsageFlags.DigitalSignature)]
-    public async Task Build_ServerCertificate_HasServerAuthEKU(KeyAlgorithm algorithm, X509KeyUsageFlags expectedUsages)
+    [Arguments(KeyAlgorithmFamily.Rsa, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment)]
+    [Arguments(KeyAlgorithmFamily.ECDsa, X509KeyUsageFlags.DigitalSignature)]
+    public async Task Build_ServerCertificate_HasServerAuthEKU(KeyAlgorithmFamily family, X509KeyUsageFlags expectedUsages)
     {
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
-            .SetKeyAlgorithm(algorithm)
+            .SetKeyAlgorithm(KeyAlgorithm.Default(family))
             .SetSubject(x => x.SetCommonName("Server Test"))
             .Create();
 
@@ -538,17 +536,15 @@ public class CertificateBuilderTests
 
 
     [Test]
-    public async Task SetECCurve_GeneratesKeyOnTheRequestedCurve()
+    public async Task ECDsaWithCurve_GeneratesKeyOnTheRequestedCurve()
     {
         using var p384 = new CertificateBuilder()
-            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
-            .SetECCurve(ECCurve.NamedCurves.nistP384)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP384))
             .SetSubject(x => x.SetCommonName("P-384 Test"))
             .Create();
 
         using var p521 = new CertificateBuilder()
-            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
-            .SetECCurve(ECCurve.NamedCurves.nistP521)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP521))
             .SetSubject(x => x.SetCommonName("P-521 Test"))
             .Create();
 
@@ -564,7 +560,7 @@ public class CertificateBuilderTests
     public async Task GenerateKeyPair_ECDsaWithoutExplicitCurve_DefaultsToNistP256()
     {
         using var cert = new CertificateBuilder()
-            .SetKeyAlgorithm(KeyAlgorithm.ECDsa)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa())
             .SetSubject(x => x.SetCommonName("Default Curve Test"))
             .Create();
 
@@ -575,50 +571,49 @@ public class CertificateBuilderTests
 
 
     [Test]
-    [Arguments(KeyAlgorithm.RSA)]
-#pragma warning disable CS0618 // Type or member is obsolete
-    [Arguments(KeyAlgorithm.DSA)]
-#pragma warning restore CS0618 // Type or member is obsolete
-    public async Task Validate_ECCurveWithNonECDsaKeyAlgorithm_Throws(KeyAlgorithm algorithm)
+    public async Task KeyAlgorithm_CarriesItsOwnParameters_SoMismatchesCannotBeExpressed()
     {
-        //Silently ignoring the curve would leave the caller with a key they did not ask for
-        var builder = new CertificateBuilder()
-            .SetKeyAlgorithm(algorithm)
-            .SetECCurve(ECCurve.NamedCurves.nistP384);
+        //A curve used to be a separate property that Validate() had to reject when paired with RSA or DSA.
+        //It now belongs to the algorithm that takes one, so there is no combination left to reject: the
+        //non-EC families expose no way to name a curve at all.
+        await Assert.That(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP384).Curve).IsNotNull();
+        await Assert.That(KeyAlgorithm.RSA(2048).Curve).IsNull();
+        await Assert.That(KeyAlgorithm.RSA(2048).KeyLength).IsEqualTo(2048);
+        await Assert.That(KeyAlgorithm.ECDsa().KeyLength).IsNull();
 
-        await Assert.That(() => builder.Validate()).ThrowsExactly<ArgumentException>();
-        await Assert.That(() => {
-            using var cert = builder.Create();
-        }).ThrowsExactly<ArgumentException>();
-
-        //The same curve is fine once the algorithm agrees, and either ordering of the two calls behaves alike
-        await Assert.That(() => builder.SetKeyAlgorithm(KeyAlgorithm.ECDsa).Validate()).ThrowsNothing();
+        //Two curves of the same family are distinguishable, so a builder configured with one is not equal
+        //to a builder configured with the other
         await Assert
-            .That(() => new CertificateBuilder().SetECCurve(ECCurve.NamedCurves.nistP384).SetKeyAlgorithm(algorithm).Validate())
-            .ThrowsExactly<ArgumentException>();
+            .That(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP384))
+            .IsNotEqualTo(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP521));
+
+        await Assert
+            .That(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP384))
+            .IsEqualTo(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP384));
     }
 
 
     [Test]
-    public async Task Validate_ECCurveWithSuppliedKeyPair_DoesNotThrow()
+    public async Task Validate_AlgorithmSupersededBySuppliedKeyPair_DoesNotThrow()
     {
-        //A supplied key overrides generation settings rather than conflicting with them, matching KeyLength
+        //A supplied key overrides generation settings rather than conflicting with them
         using var keys = RSA.Create(2048);
         var builder = new CertificateBuilder()
-            .SetECCurve(ECCurve.NamedCurves.nistP384)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP384))
             .SetKeyPair(keys);
 
         await Assert.That(() => builder.Validate()).ThrowsNothing();
+        await Assert.That(builder.KeyAlgorithm.Family).IsEqualTo(KeyAlgorithmFamily.Rsa);
     }
 
 
     [Test]
-    public async Task SetECCurve_IsIgnoredWhenAKeyPairIsSupplied()
+    public async Task SuppliedKeyPair_KeepsItsOwnCurve()
     {
         //A supplied key already carries its own curve; the builder must not try to regenerate it
         using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP384);
         using var cert = new CertificateBuilder()
-            .SetECCurve(ECCurve.NamedCurves.nistP521)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP521))
             .SetKeyPair(keys)
             .SetSubject(x => x.SetCommonName("Supplied Curve Test"))
             .Create();
@@ -763,7 +758,7 @@ public class CertificateBuilderTests
             .SetKeyPair(rsaKeys)
             .SetPublicKey(new PublicKey(ecKeys));
 
-        await Assert.That(builder.KeyAlgorithm).IsEqualTo(KeyAlgorithm.ECDsa);
+        await Assert.That(builder.KeyAlgorithm).IsEqualTo(KeyAlgorithm.ECDsa());
 
         //With the key pair cleared there is nothing left to self-sign with
         await Assert.That(() => builder.Validate()).ThrowsExactly<ArgumentException>();
@@ -868,7 +863,7 @@ public class CertificateBuilderTests
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.SMime)
             .SetSubject("CN=ECDH Subject")
-            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman())
             .SetIssuer(issuer)
             .Create();
 
@@ -895,12 +890,12 @@ public class CertificateBuilderTests
     {
         //Nothing in a self-signed build could produce the signature
         await Assert
-            .That(() => new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman).Validate())
+            .That(() => new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman()).Validate())
             .ThrowsExactly<ArgumentException>();
 
         using var issuer = BuildEcdhIssuer();
         await Assert
-            .That(() => new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman).SetIssuer(issuer).Validate())
+            .That(() => new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman()).SetIssuer(issuer).Validate())
             .ThrowsNothing();
     }
 
@@ -916,7 +911,7 @@ public class CertificateBuilderTests
 
         await Assert
             .That(() => new CertificateBuilder()
-                .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+                .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman())
                 .SetUsage(usage)
                 .SetIssuer(issuer)
                 .Validate())
@@ -933,7 +928,7 @@ public class CertificateBuilderTests
         using var issuer = BuildEcdhIssuer();
 
         using var cert = new CertificateBuilder()
-            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman())
             .SetUsage(usage)
             .SetSubject($"CN=ECDH {usage}")
             .SetIssuer(issuer)
@@ -968,14 +963,13 @@ public class CertificateBuilderTests
 
 
     [Test]
-    public async Task SetECCurve_AppliesToGeneratedECDiffieHellmanKeys()
+    public async Task Curve_AppliesToGeneratedECDiffieHellmanKeys()
     {
         using var issuer = BuildEcdhIssuer();
 
         using var cert = new CertificateBuilder()
             .SetSubject("CN=ECDH P-521")
-            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
-            .SetECCurve(ECCurve.NamedCurves.nistP521)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman(ECCurve.NamedCurves.nistP521))
             .SetIssuer(issuer)
             .Create();
 
@@ -1027,7 +1021,7 @@ public class CertificateBuilderTests
         await Assert
             .That(() => new CertificateBuilder()
                 .SetSubject("CN=ECDH CSR")
-                .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+                .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman())
                 .SetPublicKey(new PublicKey(keys))
                 .SetSignatureGenerator(generator)
                 .CreateCertificateSigningRequest())
@@ -1065,7 +1059,7 @@ public class CertificateBuilderTests
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Client)
             .SetSubject("CN=ECDH via HSM CA")
-            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman())
             .SetIssuer(issuer)
             .SetSignatureGenerator(generator)
             .Create();
@@ -1091,9 +1085,11 @@ public class CertificateBuilderTests
 
 
     [Test]
-    public async Task Create_WithUnsupportedKeyAlgorithm_Throws()
+    public async Task Default_ForFamilyWithNoDefault_Throws()
+        //An unknown algorithm can no longer be forged by casting an out-of-range value, so the remaining
+        //boundary is a family the library has no default parameters for
         => await Assert
-            .That(() => new CertificateBuilder().SetKeyAlgorithm((KeyAlgorithm)999).Create())
+            .That(() => KeyAlgorithm.Default((KeyAlgorithmFamily)999))
             .ThrowsExactly<ArgumentOutOfRangeException>();
 
 

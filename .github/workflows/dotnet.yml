@@ -5,7 +5,9 @@ on:
     branches: [ main, master ]
     tags: [ v* ]
   pull_request:
-    branches: [ main, master ]
+    # epic/** integration branches get CI too. Deliberately not added to the push trigger
+    # above: a push event with NUGET_USER set runs the publish step.
+    branches: [ main, master, 'epic/**' ]
 
 permissions:
   contents: read
@@ -21,6 +23,29 @@ env:
   publishEnabled: 'true'
 
 jobs:
+  # .NET's post-quantum algorithms need OpenSSL 3.5+. The ubuntu-24.04 image ships OpenSSL 3.0.13,
+  # where ML-DSA, SLH-DSA, Composite ML-DSA and ML-KEM all report IsSupported = false, so every PQC
+  # test skips there. ubuntu-latest currently resolves to ubuntu-24.04, so the main job below cannot
+  # verify any of this; ubuntu-26.04 ships OpenSSL 3.5.5 and is pinned explicitly here rather than
+  # tracking ubuntu-latest, so this job keeps testing what it is meant to when that alias moves on.
+  pqc:
+    runs-on: ubuntu-26.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: 10.x
+
+    - name: Report OpenSSL version
+      run: openssl version
+
+    - name: Test (net10.0, PQC-capable)
+      run: dotnet test -f net10.0 -c ${{ env.buildConfiguration }}
+
   build:
     runs-on: ubuntu-latest
 

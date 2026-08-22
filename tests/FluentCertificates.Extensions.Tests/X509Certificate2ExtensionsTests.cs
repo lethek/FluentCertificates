@@ -258,8 +258,8 @@ public class X509Certificate2ExtensionsTests
 
     public static IEnumerable<KeyAlgorithm> KeyAlgorithmsTestData()
     {
-        yield return KeyAlgorithm.ECDsa;
-        yield return KeyAlgorithm.RSA;
+        yield return KeyAlgorithm.ECDsa();
+        yield return KeyAlgorithm.RSA();
     }
 
 
@@ -364,18 +364,18 @@ public class X509Certificate2ExtensionsTests
 
     public static IEnumerable<(KeyAlgorithm, ExportKeys, string?)> KeyAlgorithmsAndExportKeysTestData()
     {
-        yield return (KeyAlgorithm.ECDsa, ExportKeys.None, TestPassword);
-        yield return (KeyAlgorithm.ECDsa, ExportKeys.Primary, TestPassword);
-        yield return (KeyAlgorithm.ECDsa, ExportKeys.All, TestPassword);
-        yield return (KeyAlgorithm.ECDsa, ExportKeys.None, null);
-        yield return (KeyAlgorithm.ECDsa, ExportKeys.Primary, null);
-        yield return (KeyAlgorithm.ECDsa, ExportKeys.All, null);
-        yield return (KeyAlgorithm.RSA, ExportKeys.None, TestPassword);
-        yield return (KeyAlgorithm.RSA, ExportKeys.Primary, TestPassword);
-        yield return (KeyAlgorithm.RSA, ExportKeys.All, TestPassword);
-        yield return (KeyAlgorithm.RSA, ExportKeys.None, null);
-        yield return (KeyAlgorithm.RSA, ExportKeys.Primary, null);
-        yield return (KeyAlgorithm.RSA, ExportKeys.All, null);
+        yield return (KeyAlgorithm.ECDsa(), ExportKeys.None, TestPassword);
+        yield return (KeyAlgorithm.ECDsa(), ExportKeys.Primary, TestPassword);
+        yield return (KeyAlgorithm.ECDsa(), ExportKeys.All, TestPassword);
+        yield return (KeyAlgorithm.ECDsa(), ExportKeys.None, null);
+        yield return (KeyAlgorithm.ECDsa(), ExportKeys.Primary, null);
+        yield return (KeyAlgorithm.ECDsa(), ExportKeys.All, null);
+        yield return (KeyAlgorithm.RSA(), ExportKeys.None, TestPassword);
+        yield return (KeyAlgorithm.RSA(), ExportKeys.Primary, TestPassword);
+        yield return (KeyAlgorithm.RSA(), ExportKeys.All, TestPassword);
+        yield return (KeyAlgorithm.RSA(), ExportKeys.None, null);
+        yield return (KeyAlgorithm.RSA(), ExportKeys.Primary, null);
+        yield return (KeyAlgorithm.RSA(), ExportKeys.All, null);
     }
 
 
@@ -401,7 +401,7 @@ public class X509Certificate2ExtensionsTests
         //DSA signs, however deprecated it is for certificate use
         #pragma warning disable CS0618 // Type or member is obsolete
         using var cert = new CertificateBuilder()
-            .SetKeyAlgorithm(KeyAlgorithm.DSA)
+            .SetKeyAlgorithm(KeyAlgorithm.DSA())
             .SetSubject("CN=DSA Signer")
             .Create();
         #pragma warning restore CS0618 // Type or member is obsolete
@@ -432,7 +432,7 @@ public class X509Certificate2ExtensionsTests
 
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.SMime)
-            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman)
+            .SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman())
             .SetSubject("CN=ECDH Subject")
             .SetIssuer(issuer)
             .Create();
@@ -442,9 +442,9 @@ public class X509Certificate2ExtensionsTests
         //Whether an EC key was meant for agreement or signing lives in KeyAlgorithm and the KeyUsage
         //bits, never in the key, so CanSign can only report what the platform will hand back
         using var key = cert.GetPrivateKey();
-        await Assert.That(cert.CanSign()).IsEqualTo(key is not ECDiffieHellman);
+        await Assert.That(cert.CanSign()).IsEqualTo(key.AsAsymmetricAlgorithm is not ECDiffieHellman);
 
-        if (key is ECDsa ecdsa) {
+        if (key.AsAsymmetricAlgorithm is ECDsa ecdsa) {
             //Windows takes this branch, and the true answer is not a lie: the key really does sign
             await Assert
                 .That(() => ecdsa.SignData(new byte[] { 1, 2, 3 }, HashAlgorithmName.SHA256))
