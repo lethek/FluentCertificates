@@ -13,6 +13,8 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-22
+
 ### Added
 
 - `net10.0` target framework for all packages.
@@ -37,7 +39,7 @@ release rather than record it as it happened.
 
 ### Removed
 
-- **Breaking:** `CertificateBuilder.KeyLength` and `CertificateBuilder.ECCurve`, along with `SetKeyLength(...)` and `SetECCurve(...)`. Both are now part of `KeyAlgorithm`, which makes an invalid combination unrepresentable rather than rejected at build time.
+- **Breaking:** `CertificateBuilder.KeyLength` and `CertificateBuilder.ECCurve`, along with `SetKeyLength(...)` and `SetECCurve(...)`, removed without a prior deprecation release. Both are now part of `KeyAlgorithm`, which makes an invalid combination unrepresentable rather than rejected at build time.
 
 ## [0.17.0] - 2026-08-21
 
@@ -442,7 +444,8 @@ release rather than record it as it happened.
 - Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
   including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
 
-[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/lethek/FluentCertificates/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/lethek/FluentCertificates/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/lethek/FluentCertificates/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/lethek/FluentCertificates/compare/v0.14.0...v0.15.0
