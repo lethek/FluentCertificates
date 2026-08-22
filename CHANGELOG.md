@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While the version number remains below 1.0.0 this library is under initial development, and
 breaking changes may occur between minor versions.
 
-Entries for v0.14.0 and earlier were reconstructed from the release history after the fact, so
-they summarise each release rather than record it as it happened.
+Entries for v0.14.0 and earlier were reconstructed from the release history, so they summarise each
+release rather than record it as it happened.
 
 ## [Unreleased]
 
@@ -22,7 +22,7 @@ they summarise each release rather than record it as it happened.
 - `KeyAlgorithm.IsSupported`, reporting whether the algorithm can be used on the current runtime and platform.
 - `SignatureAlgorithm.MLDsa44` / `MLDsa65` / `MLDsa87`, so `SignatureAlgorithm.FromOid` resolves an ML-DSA certificate instead of throwing.
 - SLH-DSA (FIPS 205) support: all twelve `KeyAlgorithm.SlhDsa*` parameter sets. Unavailable on Windows, where `KeyAlgorithm.IsSupported` reports `false`.
-- Composite ML-DSA support: all eighteen `KeyAlgorithm.MLDsa*With*` parameter sets. No .NET 10 platform can yet sign a certificate with a composite key, so `IsSupported` reports `false` for all of them; the API is present so it lights up when the platform does.
+- Composite ML-DSA support: all eighteen `KeyAlgorithm.MLDsa*With*` parameter sets. No .NET 10 platform can yet sign a certificate with a composite key, so `IsSupported` reports `false` for all of them.
 - `KeyAlgorithm.PostQuantumAlgorithms`, listing every post-quantum parameter set the library knows.
 - `SignatureAlgorithm.ForPostQuantum(KeyAlgorithm)`, and `FromOid` now resolves every post-quantum signature OID.
 - `SkipUnlessAlgorithmSupportedAttribute` in the test-support library, for gating a test on runtime capability rather than on OS.
@@ -46,7 +46,7 @@ they summarise each release rather than record it as it happened.
 - `X509ChainBuilder`, a fluent chain builder started by `cert.BuildChain()`: `TrustRoot`, `AddCertificates`, `AllowInvalidTime`, `WithPolicy`, `Create()` and `Export()`.
 - `ChainResult`, the disposable result of `X509ChainBuilder.Create()`: `Verified`, `Chain`, `ChainStatus`, `EnsureVerified()` and `Export()`.
 - `CertificateExportBuilder.WithAllPrivateKeys()`, replacing `WithPrivateKeys()`.
-- `X509Certificate2.CanSign()`, reporting whether the private key is usable for signing rather than merely associated, which is all `HasPrivateKey` reports.
+- `X509Certificate2.CanSign()`, reporting whether the private key is usable for signing, rather than merely associated as `HasPrivateKey` reports.
 
 ### Changed
 
@@ -66,7 +66,7 @@ they summarise each release rather than record it as it happened.
 ### Added
 
 - `CertificateExportBuilder.WithoutPassword()`, clearing both password kinds.
-- `CertificateExportBuilder.Anchor`, naming the certificate `ExportKeys.Primary` and `AsCert()` target. Set by `cert.Export()` and `chain.Export()`.
+- `CertificateExportBuilder.Anchor`, naming the certificate that `ExportKeys.Primary` and `AsCert()` target. Set by `cert.Export()` and `chain.Export()`.
 - `CertificateExportBuilder.AddCertificates(...)`, appending certificates without declaring them a chain, so they are never reordered.
 - `AddChain` and `AddCertificates` take `params IEnumerable<X509Certificate2>`, so loose certificates, an array, a collection or a lazy sequence all work.
 

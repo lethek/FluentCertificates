@@ -1,14 +1,14 @@
 # 📖 FluentCertificates Overview
 
-⚠️ **Note:** *while version numbers are v0.x.y, this software is under initial development and there may be breaking-changes in its API between minor versions.* ⚠️
+⚠️ **Note:** while version numbers are v0.x.y, this software is under initial development and there may be breaking changes in its API between minor versions. ⚠️
 
 [![NuGet](https://img.shields.io/nuget/v/FluentCertificates.svg)](https://www.nuget.org/packages/FluentCertificates)
 [![Build & Publish](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml/badge.svg)](https://github.com/lethek/FluentCertificates/actions/workflows/dotnet.yml)
 [![GitHub license](https://img.shields.io/github/license/lethek/FluentCertificates)](https://github.com/lethek/FluentCertificates/blob/main/LICENSE)
 
-FluentCertificates is a library using the Immutable Fluent Builder pattern for easily creating, finding, and exporting certificates. It makes it simple to generate your own certificate chains or just stand-alone self-signed certificates.
+FluentCertificates is a library for creating, finding, and exporting certificates, built around an immutable fluent builder pattern. Use it to generate your own certificate chains, or just stand-alone self-signed certificates.
 
-## NuGet Packages
+## NuGet packages
 
 This project is published in several NuGet packages:
 
@@ -19,11 +19,11 @@ This project is published in several NuGet packages:
 
 Documentation is incomplete. More examples can be found in the project's [unit tests](https://github.com/lethek/FluentCertificates/tree/main/tests).
 
-## CertificateBuilder Examples
+## CertificateBuilder examples
 
 `CertificateBuilder` requires the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and is found under the `FluentCertificates` namespace.
 
-### **Minimum Example**
+### Minimum example
 
 _The absolute minimum needed to create a certificate, whether it's useful or not._
 
@@ -31,7 +31,7 @@ _The absolute minimum needed to create a certificate, whether it's useful or not
 using var cert = new CertificateBuilder().Create();
 ```
 
-### **Create a Certificate Signing Request**
+### Create a certificate signing request
 
 _For signing, exporting and passing to a 3rd party CA._
 
@@ -57,7 +57,7 @@ Console.WriteLine(csr.ToPemString());
 csr.ExportAsPem("csr.pem");
 ```
 
-### **Build a Self-Signed Web Server Certificate**
+### Build a self-signed web server certificate
 
 _Using the fluent style:_
 
@@ -83,7 +83,7 @@ var builder = new CertificateBuilder() {
 using var webCert = builder.Create();
 ```
 
-### **Build a Certificate Authority (CA)**
+### Build a certificate authority (CA)
 
 ```csharp
 //A CA's expiry date must be later than that of any certificates it will issue
@@ -95,7 +95,7 @@ using var issuer = new CertificateBuilder()
     .Create();
 ```
 
-### **Build a Client-Auth Certificate Signed by a CA**
+### Build a client-auth certificate signed by a CA
 
 ```csharp
 //Note: the 'issuer' certificate used must have a private-key attached in order to sign this new certificate
@@ -108,7 +108,7 @@ using var clientAuthCert = new CertificateBuilder()
     .Create();
 ```
 
-### **Set a Validity Period from a Duration**
+### Set a validity period from a duration
 
 `SetValidity` sets `NotBefore` and `NotAfter` together. The single-argument overload starts at the
 current time; note that it does not backdate the start, so use the two-argument overload if you need
@@ -129,7 +129,7 @@ using var skewTolerant = new CertificateBuilder()
     .Create();
 ```
 
-### **Choose a Key Algorithm**
+### Choose a key algorithm
 
 A `KeyAlgorithm` carries its own parameters: a key length for RSA and DSA, a curve for the
 elliptic-curve algorithms, a parameter set for the post-quantum ones. There is no separate
@@ -151,7 +151,7 @@ using var cert = new CertificateBuilder()
 A key supplied through `SetKeyPair` already carries its own parameters and takes precedence over
 anything set here.
 
-### **Build an OCSP Responder or Time-Stamping Certificate**
+### Build an OCSP responder or time-stamping certificate
 
 ```csharp
 using var ocspResponder = new CertificateBuilder()
@@ -168,11 +168,11 @@ using var timeStampingAuthority = new CertificateBuilder()
     .Create();
 ```
 
-### **Build a Key Agreement (ECDH) Certificate**
+### Build a key agreement (ECDH) certificate
 
 An ECDH key derives a shared secret and cannot sign anything, so these certificates assert
 `keyAgreement` rather than `digitalSignature` and must be issued by a CA. Self-signing, CSRs, and the
-`CA`, `CodeSign`, `OcspSigning` and `TimeStamping` usages, are all rejected. Supplying a
+`CA`, `CodeSign`, `OcspSigning` and `TimeStamping` usages are all rejected. Supplying a
 `SignatureGenerator` does not lift those restrictions, since it signs with an unrelated key.
 
 ```csharp
@@ -191,7 +191,7 @@ same curve parameters. The builder therefore takes the distinction from `SetKeyA
 runtime type of a key passed to `SetKeyPair`. If you use `SetPublicKey` for an ECDH key held elsewhere,
 call `SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman())` first, or the key will be treated as ECDsa.
 
-### **Build a Post-Quantum Certificate**
+### Build a post-quantum certificate
 
 > ⚠️ **Experimental.** The post-quantum surface is marked `[Experimental("FLUENTCERT001")]` and may
 > change. Suppress it per call site with `#pragma warning disable FLUENTCERT001`, or project-wide
@@ -211,8 +211,8 @@ using var cert = new CertificateBuilder()
     .Create();
 ```
 
-**Availability is a runtime capability, not an operating system.** It depends on the platform's
-cryptographic provider, so test it rather than inferring it:
+Availability depends on the platform's cryptographic provider at runtime, so test for it rather than
+inferring it from the operating system:
 
 ```csharp
 if (KeyAlgorithm.SlhDsaSha2_128f.IsSupported) {
@@ -243,7 +243,7 @@ issued by a CA, cannot self-sign, cannot be a CA or a code-signing, OCSP-signing
 certificate, and has no CSR. It asserts `keyEncipherment`, not `keyAgreement`: encapsulating to the
 certified key is key transport rather than Diffie-Hellman agreement.
 
-### **Advanced: Signing with a Key Held in an HSM, TPM or Cloud KMS**
+### Advanced: signing with a key held in an HSM, TPM or cloud KMS
 
 When the private key can't leave the device, supply the public key to certify with `SetPublicKey` and
 an `X509SignatureGenerator` to do the signing with `SetSignatureGenerator`. The builder never needs
@@ -274,7 +274,7 @@ Nothing checks that the generator matches the public key you supplied; that pair
 right. What is checked is that you supply both when self-signing, since either one alone produces a
 certificate that cannot verify.
 
-### **Advanced: Certificate with Customized Extensions**
+### Advanced: certificate with customized extensions
 
 ```csharp
 using var customCert = new CertificateBuilder()
@@ -287,7 +287,7 @@ using var customCert = new CertificateBuilder()
     .Create();
 ```
 
-### **Advanced: Certificates with Custom Name Constraints and CRL Distribution Points**
+### Advanced: certificates with custom name constraints and CRL distribution points
 
 ```csharp
 //Permit the CA cert to issue certificates for specific names and IP addresses
@@ -319,16 +319,16 @@ using var webCert = new CertificateBuilder()
 
 ---
 
-## Key Ownership and Disposal
+## Key ownership and disposal
 
 `X509Certificate2`, every `AsymmetricAlgorithm` and every `CertificateKey` are disposable. Three
 rules cover who releases what:
 
-* **Keys the builder generates** are disposed by the builder, as soon as `Create()` no longer needs
+* Keys the builder generates are disposed by the builder, as soon as `Create()` no longer needs
   them. You never see them.
-* **Keys you supply**, through `SetKeyPair` or `SetPublicKey`, are yours. The builder never disposes
+* Keys you supply, through `SetKeyPair` or `SetPublicKey`, are yours. The builder never disposes
   them, so the same key can be reused across as many certificates as you like.
-* **Keys you extract from a certificate**, through `GetPrivateKey()` or .NET's own
+* Keys you extract from a certificate, through `GetPrivateKey()` or .NET's own
   `GetRSAPrivateKey()` and friends, are yours to dispose. Each call hands back a *new* instance, so
   calling it in a loop without a `using` leaks one handle per iteration.
 
@@ -355,7 +355,7 @@ no way to tell them apart, so don't dispose their elements:
 
 ---
 
-## Exporting Certificates
+## Exporting certificates
 
 Exporting requires the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package (included in the top-level `FluentCertificates` package) and is found under the `FluentCertificates` namespace.
 
@@ -468,13 +468,13 @@ leafCert.Export().AddChain([rootCert, midCert]).AsCert().ToByteArray();
 
 ---
 
-## CertificateFinder Examples
+## CertificateFinder examples
 
 `CertificateFinder` requires the [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder) package and is found under the `FluentCertificates` namespace.
 
-The CertificateFinder class allows you to configure, add, and query certificate sources (stores and directories) in a fluent and immutable manner. It supports LINQ queries for flexible certificate searching.
+`CertificateFinder` configures, adds, and queries certificate sources (stores and directories). Like the other builders it is immutable, and it supports LINQ queries.
 
-### **Find a Specific Certificate by Thumbprint**
+### Find a specific certificate by thumbprint
 
 _The "common stores" include the CurrentUser and LocalMachine certificate stores, such as "My", "Root", "CA", etc. You can also add custom directories or other X509 stores to search for certificates._
 
@@ -486,7 +486,7 @@ var cert = new CertificateFinder()
     .FirstOrDefault(x => x.Certificate.Thumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
 ```
 
-### **Find a Valid Certificate with Matching Subject, Giving Preference to Included Private Keys**
+### Find a valid certificate with matching subject, giving preference to included private keys
 
 ```csharp
 var subject = new X500NameBuilder()
@@ -502,7 +502,7 @@ var cert = new CertificateFinder()
     .FirstOrDefault(x => subject.EquivalentTo(x.SubjectName, false));
 ```
 
-### **Find a Certificate Whose Private Key Can Actually Sign**
+### Find a certificate whose private key can actually sign
 
 `HasPrivateKey` only reports that the certificate carries metadata naming a key. Picking an issuer on
 that basis can select one whose key container was deleted, whose key ACL excludes you, or whose token
@@ -523,7 +523,7 @@ thumbprint first and apply it last, as above.
 
 ---
 
-## X500NameBuilder Examples
+## X500NameBuilder examples
 
 `X500NameBuilder` requires the [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder) package and is found under the `FluentCertificates` namespace.
 
@@ -531,7 +531,7 @@ thumbprint first and apply it last, as above.
 the other builders it is immutable: every method returns a new instance, so a builder can be shared
 and used as a template safely.
 
-### **Building a subject name**
+### Building a subject name
 
 ```csharp
 var subject = new X500NameBuilder()
@@ -560,7 +560,7 @@ using var cert = new CertificateBuilder()
     .Create();
 ```
 
-### **Reading values back**
+### Reading values back
 
 Every `Set*` method has a matching `Get*`. Single-valued attributes return `null` when absent, and
 multi-valued ones return an empty sequence.
@@ -572,7 +572,7 @@ IEnumerable<string> ous = subject.GetOrganizationalUnits();  //"Engineering", "P
 string? missing = new X500NameBuilder().GetCommonName();     //null
 ```
 
-### **Starting from an existing name**
+### Starting from an existing name
 
 ```csharp
 var fromString = new X500NameBuilder("CN=example.com, O=Example Pty Ltd");
@@ -582,7 +582,7 @@ var fromDn = new X500NameBuilder(cert.SubjectName);
 var renamed = fromString.SetCommonName("other.example.com");
 ```
 
-### **Attributes without a dedicated method**
+### Attributes without a dedicated method
 
 Use `Add` or `Set` with an OID, optionally choosing the ASN.1 string encoding. `Add` appends another
 RDN with the same OID; `Set` replaces any existing ones.
@@ -594,7 +594,7 @@ var custom = new X500NameBuilder()
     .Remove(Oids.EmailAddressOid);
 ```
 
-### **Comparing names**
+### Comparing names
 
 `EquivalentTo` compares the attributes themselves and ignores ordering by default, which is usually
 what you want when asking whether two names describe the same entity.
@@ -624,7 +624,7 @@ built.EquivalentTo("CN=example.com, C=AU"); //true
 Reach for `EquivalentTo` unless you specifically need byte-for-byte identity. If you do need the
 encoding to match, set it explicitly with `Set(oid, UniversalTagNumber.PrintableString, value)`.
 
-### **Method summary**
+### Method summary
 
 |Method|Description|
 |-|-|
@@ -641,7 +641,7 @@ encoding to match, set it explicitly with `Set(oid, UniversalTagNumber.Printable
 
 ---
 
-## X509Certificate2 Extension Methods
+## X509Certificate2 extension methods
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
@@ -661,7 +661,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 ---
 
-## Building a Certificate Chain
+## Building a certificate chain
 
 `cert.BuildChain()` returns an immutable `X509ChainBuilder`. Configure it, then terminate with either
 `Create()` (inspect the outcome) or `Export()` (verify and export in one step).
@@ -713,7 +713,7 @@ see [Key ownership](#key-ownership-and-disposal)). `result.Export()` copies noth
 
 ---
 
-## X509Chain Extension Methods
+## X509Chain extension methods
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
@@ -725,7 +725,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 ---
 
-## X509Certificate2Collection Extension Methods
+## X509Certificate2Collection extension methods
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
@@ -736,7 +736,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 ---
 
-## IEnumerable<X509Certificate2> Extension Methods
+## IEnumerable<X509Certificate2> extension methods
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
@@ -748,7 +748,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 ---
 
-## AsymmetricAlgorithm Extension Methods
+## AsymmetricAlgorithm extension methods
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 
@@ -763,7 +763,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 
 ---
 
-## CertificateRequest Extension Methods
+## CertificateRequest extension methods
 
 These extension methods require the [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions) package and are found under the `FluentCertificates` namespace.
 

@@ -1,12 +1,12 @@
 # AGENTS.md
 
-## Project Overview
+## Project overview
 
-FluentCertificates is a .NET library for working with X.509 certificates using an immutable fluent builder pattern. It's published as multiple NuGet packages and supports certificate creation, finding/querying, and export operations.
+FluentCertificates is a .NET library for working with X.509 certificates using an immutable fluent builder pattern. It's published as multiple NuGet packages and covers certificate creation, finding, querying and export.
 
 **Important:** The API is under initial development (v0.x.y) and may include breaking changes between minor versions.
 
-## Build System
+## Build system
 
 Plain `dotnet` CLI. There is no build-system wrapper; CI in `.github/workflows/dotnet.yml` calls
 `dotnet` directly.
@@ -24,7 +24,7 @@ from the diff, promotes the changelog and tags, stopping before the push that pu
 `### Deprecated` / `### Removed` / `### Fixed` / `### Security`. One terse line per change. Repo-only
 changes (tests, CI, docs for agents) get no entry.
 
-### Common Build Commands
+### Common build commands
 
 ```bash
 # Build
@@ -53,7 +53,7 @@ dotnet pack -c Release -p:PackageOutputPath="$PWD/artifacts/"
 
 ## Architecture
 
-### Package Structure
+### Package structure
 
 The solution is organized into five NuGet packages. Every project under `src/` is published; there are no internal-only projects.
 
@@ -99,10 +99,10 @@ Those projects take their own `BouncyCastle.Cryptography` package reference, and
 helpers they need (`X509Name.ConvertToDotNet()`, `X509Extension.ConvertToBouncyCastle()`) live in
 `tests/FluentCertificates.Builder.Tests/BouncyCastleTestExtensions.cs`.
 
-### Key Design Patterns
+### Key design patterns
 
-**Immutable Fluent Builder Pattern:**
-All builder classes (CertificateBuilder, X500NameBuilder, GeneralNameListBuilder, CertificateFinder) are implemented as C# records with immutability. Each builder method returns a new instance rather than mutating state.
+**Immutable fluent builder pattern:**
+All builder classes (CertificateBuilder, X500NameBuilder, GeneralNameListBuilder, CertificateFinder) are immutable C# records. Each builder method returns a new instance rather than mutating state.
 
 Example:
 ```csharp
@@ -112,7 +112,7 @@ var builder = new CertificateBuilder()
 // 'builder' is unchanged, methods return new instances
 ```
 
-**Fluent Export Builder:**
+**Fluent export builder:**
 Export is reached through an `Export()` extension method on `X509Certificate2`, `X509Certificate2Collection`,
 `X509Chain` and `IEnumerable<X509Certificate2>`, which returns a `CertificateExportBuilder`. Configure with
 `With*`, choose a format with `As*`, then terminate with `To*`:
@@ -126,7 +126,7 @@ cert.Export().WithPassword(pw).AsPkcs12().ToFile(path);
 (in `CertificateRequestExtensions`) and the `AsymmetricAlgorithm.ExportAs*Pem()` methods have no builder
 equivalent and are not deprecated: the export builder works on certificates, not CSRs or bare keys.
 
-### Target Frameworks
+### Target frameworks
 
 - All five library projects under `src/`: net8.0, net9.0 and net10.0
 - Test projects: net8.0, net9.0 and net10.0
@@ -136,7 +136,7 @@ equivalent and are not deprecated: the export builder works on certificates, not
 
 Some dependencies use conditional package references based on target framework (see .csproj files).
 
-### Test Framework
+### Test framework
 
 - **TUnit**, running on Microsoft.Testing.Platform (see `global.json`)
 - `[Test]` for test methods, `[Arguments]` for inline cases, `[MethodDataSource]` for generated cases
@@ -157,27 +157,32 @@ Test projects live in `tests/` with the naming pattern `{ProjectName}.Tests`. Al
 `tests/FluentCertificates.TestSupport` holds support types shared between them and runs no tests of its
 own; it is a library rather than a test project, so it takes `TUnit.Core` alone.
 
-## Code Conventions
+## Code conventions
 
 ### Namespace
+
 All code uses the root namespace `FluentCertificates` regardless of which sub-package it belongs to. This provides a consistent API surface for consumers.
 
 ### Immutability
+
 Builder classes use C# records with init-only properties. Internal state is stored in immutable collections (ImmutableHashSet, ImmutableList). Use `with` expressions for modifications.
 
-### XML Documentation
+### XML documentation
+
 All public APIs require XML documentation comments (`///`). Documentation is generated for all packable projects (`GenerateDocumentationFile = true`).
 
-### Internals Visibility
+### Internals visibility
+
 Several projects expose internals to test projects and LINQPad via `InternalsVisibleTo`. Check .csproj files before making members internal.
 
-### Key and Certificate Ownership
+### Key and certificate ownership
+
 `X509Certificate2`, `AsymmetricAlgorithm` and `CertificateKey` are all disposable, and three rules decide
 who releases them.
 
 `CertificateKey` is the library's own abstraction over a key of any kind, and exists because .NET's
-post-quantum key types derive from `object` rather than `AsymmetricAlgorithm`, making every
-`AsymmetricAlgorithm`-typed signature a wall they cannot pass. It owns and disposes the key it wraps, so
+post-quantum key types derive from `object` rather than `AsymmetricAlgorithm`, so no
+`AsymmetricAlgorithm`-typed signature can accept one. It owns and disposes the key it wraps, so
 never dispose something reached through `AsAsymmetricAlgorithm`, `AsMLDsa` and friends - dispose the
 `CertificateKey`. `GetPrivateKey()` returns one.
 
@@ -198,9 +203,10 @@ are indistinguishable to the caller, so neither's output may be disposed:
   supplied them and keyless copies only for elements the platform supplied (a system-store root, an
   AIA-fetched intermediate).
 
-## Working with Certificates
+## Working with certificates
 
 ### CertificateBuilder
+
 The main API for creating certificates. Supports:
 - Self-signed certificates
 - CA-signed certificates
@@ -214,7 +220,7 @@ The main API for creating certificates. Supports:
   separate `KeyLength` or `ECCurve` on the builder, so an invalid combination is unrepresentable rather than
   rejected, and `Validate()` has no combination guards to enforce. `KeyAlgorithm.Default(KeyAlgorithmFamily)`
   covers callers holding only a family, which is what an attribute or switch label can carry. Defaults are
-  unchanged: RSA 4096, DSA 1024, EC nistP256.
+  RSA 4096, DSA 1024 and EC nistP256.
 - Non-signing certificates, via `KeyAlgorithm.CanSign`. This is `false` for `ECDiffieHellman` and the
   `MLKem` sets, and it alone drives the guards: `Validate()` requires an `Issuer` and rejects the `CA`,
   `CodeSign`, `OcspSigning` and `TimeStamping` usages, and `CreateCertificateSigningRequest` throws. A
@@ -232,12 +238,12 @@ The main API for creating certificates. Supports:
   certificate that cannot verify.
 
 ### CertificateFinder
-Provides LINQ-queryable interface for finding certificates across:
-- X509Store instances (CurrentUser, LocalMachine, etc.)
-- File system directories
-- Supports filtering, ordering, and projection via standard LINQ operators
 
-### Extension Methods
+A LINQ-queryable interface for finding certificates across X509Store instances (CurrentUser,
+LocalMachine, etc.) and file system directories. Filtering, ordering and projection all go through the
+standard LINQ operators.
+
+### Extension methods
 
 Export, via `Export()` and the `CertificateExportBuilder` it returns:
 - Configure, replacing state: `WithPrivateKey()` / `WithAllPrivateKeys()` / `WithoutPrivateKeys()` /
@@ -297,7 +303,7 @@ Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 - `BuildChain()` - Starts a fluent `X509ChainBuilder`: `TrustRoot(...)` (custom root trust; system
   trust when never called), `AddCertificates(...)` (extra path-building candidates),
   `AllowInvalidTime()`, `WithPolicy(Action<X509ChainPolicy>)` (applied last, always wins; revocation
-  defaults to `NoCheck`). Calling `TrustRoot` is what switches to `CustomRootTrust`, tracked by
+  defaults to `NoCheck`). Calling `TrustRoot` switches to `CustomRootTrust`, tracked by
   `CustomTrustEnabled` rather than inferred from `TrustedRoots` being non-empty, so trusting an empty
   set trusts nothing instead of falling back to system trust. `Create()` returns a disposable
   `ChainResult` (`Verified`, `Chain`, `ChainStatus`, `EnsureVerified()`, `Export()`) and never throws
@@ -324,8 +330,8 @@ Chain and validity helpers on `X509Certificate2` / `X509Chain`:
 
 The PQC surface carries `[Experimental(Experiments.PostQuantumCryptography)]`, which is
 `FLUENTCERT001`. The .NET types underneath are themselves `[Experimental]` under `SYSLIB5006`, so a
-consumer naming one already has to suppress that; the library's own ID is deliberate rather than
-hiding behind Microsoft's.
+consumer naming one already has to suppress that. The library still declares its own ID, so its
+experimental surface stays visible independently of Microsoft's.
 
 The public API does not vary by target framework. Every parameter set exists on net8.0 and net9.0
 too, where selecting one throws `PlatformNotSupportedException`. Do not put PQC members behind
@@ -333,8 +339,8 @@ too, where selecting one throws `PlatformNotSupportedException`. Do not put PQC 
 
 ### `IsSupported` means "usable to build a certificate"
 
-Not "the key generates". The two come apart repeatedly, and this is the single most important rule
-here: a `true` that fails later in `Create()` is worse than a `false`.
+Not "the key generates". The two come apart repeatedly, and a `true` that fails later in `Create()`
+is worse than a `false`.
 
 - Composite ML-DSA keys generate on Windows and Linux, but `X509SignatureGenerator.CreateForCompositeMLDsa`
   throws on both, so no platform can currently produce a composite certificate.
@@ -358,8 +364,8 @@ silently matches nothing is a defect: a skipped test must report as skipped, nev
 |ML-KEM|no|yes|no|
 |Composite ML-DSA|no|no|no|
 
-What decides it is the OpenSSL version, not the distribution: 3.5+ supports PQC, 3.0 supports none of
-it. Check `openssl version` before concluding a platform is broken.
+The OpenSSL version decides it, not the distribution: 3.5+ supports PQC, 3.0 supports none of it.
+Check `openssl version` before concluding a platform is broken.
 
 The `pqc` job in `.github/workflows/dotnet.yml` runs the net10.0 leg on **`ubuntu-26.04`** (OpenSSL
 3.5.5), which is where PQC is actually verified in CI. It is pinned to that label rather than
@@ -382,11 +388,11 @@ relaxing it.
 Note SLH-DSA's arc is not in declaration order: SHA2 takes `.20`-`.25`, SHAKE takes `.26`-`.31`.
 
 A post-quantum parameter set fixes both the key algorithm and the signature algorithm, so the two
-share an OID and `SignatureAlgorithm` carries no `HashAlgorithm` for them - which is why that
+share an OID and `SignatureAlgorithm` carries no `HashAlgorithm` for them, which is why that
 property is nullable. `SignatureAlgorithm`'s lookup is built from
 `KeyAlgorithm.PostQuantumAlgorithms`, so adding a parameter set there cannot be forgotten here.
 
-## Additional Notes
+## Additional notes
 
 - Source Link is enabled for debugging into the library
 - Symbol packages (snupkg) are generated alongside NuGet packages
