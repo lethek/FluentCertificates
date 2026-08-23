@@ -22,7 +22,6 @@ release rather than record it as it happened.
 ### Changed
 
 - `Oids.MacAddressPurpose` is now `Oids.MacAddress`: `1.3.6.1.1.1.1.22` is RFC 2307's `macAddress` attribute type, not an extended key usage.
-
 - The post-quantum members of `KeyAlgorithmFamily` are `[Experimental("FLUENTCERT001")]`. Code naming one, including in a `switch` or comparison, now fails to build until it suppresses the diagnostic.
 
 ### Fixed

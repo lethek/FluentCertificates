@@ -447,8 +447,7 @@ registration table in draft-ietf-lamps-pq-composite-sigs-19 s7 - OID and algorit
 what `KeyAlgorithm.Name` carries. Five Composite sets are unimplemented everywhere, so those are
 spec-confirmed only and marked as such; `DeclaredOid_MatchesTheGeneratedKey` asserts every declared OID
 against the real encoding for whatever the running platform supports, so a wrong one fails as soon as a
-platform implements it. Keep that test passing rather than
-relaxing it.
+platform implements it. Keep that test passing rather than relaxing it.
 
 Note SLH-DSA's arc is not in declaration order: SHA2 takes `.20`-`.25`, SHAKE takes `.26`-`.31`.
 
