@@ -255,6 +255,58 @@ public class KeyAlgorithmTests
     }
 
 
+    /// <summary>
+    /// Only one half of a named curve's OID is guaranteed: an <see cref="Oid"/> built with a null value keeps
+    /// its friendly name, and an unregistered OID has no name. Each is keyed under its own prefix, so a curve
+    /// whose friendly name happens to be an OID string cannot be mistaken for the curve bearing that OID.
+    /// </summary>
+    [Test]
+    public async Task ECDsa_FriendlyNameThatLooksLikeAnOid_DoesNotCollideWithThatCurve()
+    {
+        //Unregistered, so it resolves no friendly name and is identified by its value alone
+        const string Unknown = "1.2.3.4.5.6.7.8.9";
+
+        var real = KeyAlgorithm.ECDsa(ECCurve.CreateFromValue(Unknown));
+        var mislabelled = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid(null, Unknown)));
+
+        //Indistinguishable by Name: one has only that value, the other only that label
+        await Assert.That(real.Name).IsEqualTo($"ECDsa-{Unknown}");
+        await Assert.That(mislabelled.Name).IsEqualTo($"ECDsa-{Unknown}");
+
+        //Only the curve key's prefix separates them
+        await Assert.That(real).IsNotEqualTo(mislabelled);
+    }
+
+
+    [Test]
+    public async Task ECDsa_CurveWithNoOidValue_IsIdentifiedByItsFriendlyName()
+    {
+        var a = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid(null, "nistP256")));
+        var alsoA = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid(null, "nistP256")));
+        var b = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid(null, "nistP384")));
+
+        await Assert.That(a).IsEqualTo(alsoA);
+        await Assert.That(a.GetHashCode()).IsEqualTo(alsoA.GetHashCode());
+        await Assert.That(a).IsNotEqualTo(b);
+    }
+
+
+    /// <summary>
+    /// An OID the platform does not know resolves no friendly name, so the curve is identified by its value
+    /// alone and is still usable.
+    /// </summary>
+    [Test]
+    public async Task ECDsa_UnregisteredOid_IsIdentifiedByItsValue()
+    {
+        var a = KeyAlgorithm.ECDsa(ECCurve.CreateFromValue("1.2.3.4.5.6.7.8.9"));
+        var b = KeyAlgorithm.ECDsa(ECCurve.CreateFromValue("1.2.3.4.5.6.7.8.10"));
+
+        await Assert.That(a.Name).IsEqualTo("ECDsa-1.2.3.4.5.6.7.8.9");
+        await Assert.That(a).IsEqualTo(KeyAlgorithm.ECDsa(ECCurve.CreateFromValue("1.2.3.4.5.6.7.8.9")));
+        await Assert.That(a).IsNotEqualTo(b);
+    }
+
+
     [Test]
     public async Task Default_UnknownFamily_MessageNamesTheFamily()
     {

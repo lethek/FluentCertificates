@@ -384,6 +384,14 @@ public sealed record KeyAlgorithm
     /// an explicit one has to be identified by its actual parameters, since two unrelated explicit curves
     /// would otherwise compare equal.
     /// </summary>
+    /// <remarks>
+    /// The prefix says how the curve is identified: <c>oid:</c>, <c>name:</c> or <c>explicit:</c>. An OID value
+    /// and a friendly name need separate prefixes because only one of the two is guaranteed to be present -
+    /// <c>new Oid(null, "nistP256")</c> has no value, and an unregistered OID has no name - and sharing one
+    /// prefix would let a curve labelled with an OID string collide with the curve actually bearing it.
+    /// The value is preferred because it identifies the curve, while a friendly name does not: two different
+    /// curves can carry the same one.
+    /// </remarks>
     private static string? CurveKey(ECCurveType? curve)
     {
         if (curve == null) {
@@ -392,7 +400,9 @@ public sealed record KeyAlgorithm
 
         var value = curve.Value;
         if (value.IsNamed) {
-            return $"named:{value.Oid.Value ?? value.Oid.FriendlyName}";
+            return value.Oid.Value is { } oid
+                ? $"oid:{oid}"
+                : $"name:{value.Oid.FriendlyName}";
         }
 
         return "explicit:" + String.Join(
@@ -425,8 +435,9 @@ public sealed record KeyAlgorithm
     /// Returns <paramref name="curve"/> once it is known to be usable as an identity.
     /// </summary>
     /// <remarks>
-    /// Every factory on <see cref="ECCurveType"/> populates both halves of a named curve's OID, and
-    /// <c>CreateFromOid</c> refuses one carrying neither, so a named curve reaching here has an identity.
+    /// A named curve carries an OID value, a friendly name, or both: the factories fill in the missing half
+    /// only when the OID is one the platform knows, and <c>CreateFromOid</c> refuses an <see cref="Oid"/>
+    /// carrying neither. So a named curve reaching here has at least one of the two.
     /// The exception is an object initialiser, which leaves <c>Oid</c> null: without this, that curve would
     /// fail with a <see cref="NullReferenceException"/> from inside the library rather than saying what is
     /// wrong with it. This is why <see cref="DescribeCurve"/> and <see cref="CurveKey"/> can then assume at
