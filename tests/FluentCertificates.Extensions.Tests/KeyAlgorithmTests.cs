@@ -224,6 +224,37 @@ public class KeyAlgorithmTests
     }
 
 
+    /// <summary>
+    /// A named curve is identified by its OID value, not its friendly name. The two can disagree: an
+    /// <see cref="Oid"/> built with both halves supplied takes them verbatim, with no lookup to reconcile
+    /// them, so two curves can share a friendly name while naming different curves. Keying identity off the
+    /// friendly name would collapse them onto each other.
+    /// </summary>
+    [Test]
+    public async Task ECDsa_SameFriendlyNameDifferentOidValue_AreNotEqual()
+    {
+        var p256 = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid("1.2.840.10045.3.1.7", "nistP256")));
+        var p384 = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid("1.3.132.0.34", "nistP256")));
+
+        //The label is the friendly name, so these are indistinguishable by Name alone
+        await Assert.That(p256.Name).IsEqualTo(p384.Name);
+
+        await Assert.That(p256).IsNotEqualTo(p384);
+        await Assert.That(p256.GetHashCode()).IsNotEqualTo(p384.GetHashCode());
+    }
+
+
+    [Test]
+    public async Task ECDsa_SameOidValueDifferentFriendlyName_AreDistinguishedByName()
+    {
+        var byName = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid("1.2.840.10045.3.1.7", "nistP256")));
+        var byLabel = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid("1.2.840.10045.3.1.7", "ECDSA_P256")));
+
+        //Same curve, different label: Name separates them even though the curve key matches
+        await Assert.That(byName).IsNotEqualTo(byLabel);
+    }
+
+
     [Test]
     public async Task Default_UnknownFamily_MessageNamesTheFamily()
     {
