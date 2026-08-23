@@ -137,9 +137,12 @@ public static class Oids
     /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.46</c> (HashSLH-DSA-SHAKE-256f with SHAKE256).</summary>
     public const string SlhDsaShake256fPreHashShake256 = "2.16.840.1.101.3.4.3.46";
 
-    // Composite ML-DSA, arc 1.3.6.1.5.5.7.6.x. Five of these parameter sets are not implemented by
-    // .NET on any platform tested, so their OIDs could not be read back off a generated key the way
-    // the rest were; they are inferred from the arc being contiguous and are marked below.
+    // Composite ML-DSA, arc 1.3.6.1.5.5.7.6.x. Every set here matches the registration table in
+    // draft-ietf-lamps-pq-composite-sigs-19 s7, both in OID and in algorithm name. Five of them are
+    // not implemented by .NET on any platform tested, so those could not also be read back off a
+    // generated key the way the rest were, and are marked below.
+    // Note there is no separate arc for a pure variant: every registered composite OID is prehashed,
+    // which is why these names carry no PreHash suffix and cannot be ambiguous without one.
     // CompositeMLDsaOidMatchesGeneratedKey in the test suite asserts the declared OID against the
     // real one for every set the running platform supports, so an inference that is wrong fails the
     // moment a platform implements it.
@@ -147,7 +150,7 @@ public static class Oids
     public const string MLDsa44WithRSA2048Pss = "1.3.6.1.5.5.7.6.37";
     /// <summary>MLDSA44-RSA2048-PKCS15-SHA256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.38</c>.</summary>
     public const string MLDsa44WithRSA2048Pkcs15 = "1.3.6.1.5.5.7.6.38";
-    /// <summary>MLDSA44-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.39</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA44-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.39</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa44WithEd25519 = "1.3.6.1.5.5.7.6.39";
     /// <summary>MLDSA44-ECDSA-P256-SHA256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.40</c>.</summary>
     public const string MLDsa44WithECDsaP256 = "1.3.6.1.5.5.7.6.40";
@@ -163,15 +166,15 @@ public static class Oids
     public const string MLDsa65WithECDsaP256 = "1.3.6.1.5.5.7.6.45";
     /// <summary>MLDSA65-ECDSA-P384-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.46</c>.</summary>
     public const string MLDsa65WithECDsaP384 = "1.3.6.1.5.5.7.6.46";
-    /// <summary>MLDSA65-ECDSA-brainpoolP256r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.47</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA65-ECDSA-brainpoolP256r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.47</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa65WithECDsaBrainpoolP256r1 = "1.3.6.1.5.5.7.6.47";
-    /// <summary>MLDSA65-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.48</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA65-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.48</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa65WithEd25519 = "1.3.6.1.5.5.7.6.48";
     /// <summary>MLDSA87-ECDSA-P384-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.49</c>.</summary>
     public const string MLDsa87WithECDsaP384 = "1.3.6.1.5.5.7.6.49";
-    /// <summary>MLDSA87-ECDSA-brainpoolP384r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.50</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA87-ECDSA-brainpoolP384r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.50</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa87WithECDsaBrainpoolP384r1 = "1.3.6.1.5.5.7.6.50";
-    /// <summary>MLDSA87-Ed448-SHAKE256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.51</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA87-Ed448-SHAKE256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.51</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa87WithEd448 = "1.3.6.1.5.5.7.6.51";
     /// <summary>MLDSA87-RSA3072-PSS-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.52</c>.</summary>
     public const string MLDsa87WithRSA3072Pss = "1.3.6.1.5.5.7.6.52";
