@@ -43,7 +43,14 @@ jobs:
     - name: Report OpenSSL version
       run: openssl version
 
+    # FLUENTCERT_REQUIRE_PQC turns the capability gate around for this job. Every post-quantum test is
+    # skipped where the algorithms are unavailable, so without this the job would stay green on an image
+    # that had lost PQC support, having built no post-quantum certificate at all. Setting it makes
+    # PostQuantumRequiredTests assert that ML-DSA, SLH-DSA and ML-KEM are supported and that a certificate
+    # really is produced for each. Set it anywhere else PQC is expected, such as a local Alpine container.
     - name: Test (net10.0, PQC-capable)
+      env:
+        FLUENTCERT_REQUIRE_PQC: '1'
       run: dotnet test -f net10.0 -c ${{ env.buildConfiguration }}
 
   build:

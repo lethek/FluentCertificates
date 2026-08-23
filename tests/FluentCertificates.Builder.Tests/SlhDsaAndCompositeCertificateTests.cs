@@ -33,7 +33,7 @@ public class SlhDsaAndCompositeCertificateTests
     [MethodDataSource(nameof(SlhDsaAlgorithms))]
     public async Task SlhDsa_SelfSigned_BuildsAndVerifies(KeyAlgorithm algorithm)
     {
-        Skip.Unless(algorithm.IsSupported, $"{algorithm.Name} is not available on this runtime or platform");
+        PostQuantumGate.SkipUnlessSupported(algorithm);
 
         using var cert = new CertificateBuilder()
             .SetKeyAlgorithm(algorithm)
@@ -51,7 +51,7 @@ public class SlhDsaAndCompositeCertificateTests
     [MethodDataSource(nameof(CompositeAlgorithms))]
     public async Task Composite_SelfSigned_BuildsAndVerifies(KeyAlgorithm algorithm)
     {
-        Skip.Unless(algorithm.IsSupported, $"{algorithm.Name} is not available on this runtime or platform");
+        PostQuantumGate.SkipUnlessSupported(algorithm);
 
         using var cert = new CertificateBuilder()
             .SetKeyAlgorithm(algorithm)
@@ -69,7 +69,7 @@ public class SlhDsaAndCompositeCertificateTests
     [MethodDataSource(nameof(SlhDsaAlgorithms))]
     public async Task SlhDsa_KeyRoundTripsThroughPkcs12(KeyAlgorithm algorithm)
     {
-        Skip.Unless(algorithm.IsSupported, $"{algorithm.Name} is not available on this runtime or platform");
+        PostQuantumGate.SkipUnlessSupported(algorithm);
 
         using var cert = new CertificateBuilder()
             .SetKeyAlgorithm(algorithm)
@@ -98,7 +98,7 @@ public class SlhDsaAndCompositeCertificateTests
     [MethodDataSource(nameof(AllPostQuantumSigningAlgorithms))]
     public async Task DeclaredOid_MatchesTheGeneratedKey(KeyAlgorithm algorithm)
     {
-        Skip.Unless(algorithm.IsSupported, $"{algorithm.Name} is not available on this runtime or platform");
+        PostQuantumGate.SkipUnlessSupported(algorithm);
 
         using var cert = new CertificateBuilder()
             .SetKeyAlgorithm(algorithm)
@@ -137,7 +137,7 @@ public class SlhDsaAndCompositeCertificateTests
     public async Task SlhDsa_MixedChain_SignsAClassicalLeaf()
     {
         var algorithm = KeyAlgorithm.SlhDsaSha2_128f;
-        Skip.Unless(algorithm.IsSupported, $"{algorithm.Name} is not available on this runtime or platform");
+        PostQuantumGate.SkipUnlessSupported(algorithm);
 
         using var rootCa = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
@@ -160,7 +160,7 @@ public class SlhDsaAndCompositeCertificateTests
     public async Task Composite_MixedChain_SignsAClassicalLeaf()
     {
         var algorithm = KeyAlgorithm.MLDsa44WithECDsaP256;
-        Skip.Unless(algorithm.IsSupported, $"{algorithm.Name} is not available on this runtime or platform");
+        PostQuantumGate.SkipUnlessSupported(algorithm);
 
         using var rootCa = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)

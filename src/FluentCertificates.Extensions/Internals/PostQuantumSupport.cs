@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 
 
@@ -11,7 +12,7 @@ namespace FluentCertificates;
 /// none of this can be expressed with <c>[SupportedOSPlatform]</c>. On .NET 9 and earlier the types do not
 /// exist at all; on .NET 10 they exist but the provider may still not implement them, which is why SLH-DSA is
 /// unavailable on Windows while ML-DSA and ML-KEM are not, and why several Composite ML-DSA parameter sets
-/// are unavailable everywhere tested.
+/// are unavailable everywhere tested. Availability is therefore resolved per parameter set, never per family.
 /// </remarks>
 internal static class PostQuantumSupport
 {
@@ -29,6 +30,7 @@ internal static class PostQuantumSupport
     {
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006 // The BCL's post-quantum types are themselves experimental
+#pragma warning disable FLUENTCERT001 // Deciding whether the experimental surface works is not use of it
         return algorithm.Family switch {
             KeyAlgorithmFamily.MLDsa => MLDsa.IsSupported,
             KeyAlgorithmFamily.SlhDsa => SlhDsa.IsSupported,
@@ -37,11 +39,12 @@ internal static class PostQuantumSupport
             KeyAlgorithmFamily.CompositeMLDsa =>
                 CompositeMLDsa.IsSupported
                 && CompositeMLDsa.IsAlgorithmSupported(CompositeAlgorithmFor(algorithm))
-                && CompositeCertificateSigning.Value,
+                && CanSignCertificatesWithComposite(algorithm),
             //An ML-KEM certificate builds anywhere, but attaching the private key to it is Windows's gap
             KeyAlgorithmFamily.MLKem => MLKem.IsSupported && MLKemCertificateKeys.Value,
             _ => true
         };
+#pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
 #else
         return !algorithm.IsPostQuantum;
@@ -51,32 +54,74 @@ internal static class PostQuantumSupport
 
 #if NET10_0_OR_GREATER
     /// <summary>
-    /// Whether this runtime can build an <c>X509SignatureGenerator</c> from a composite key.
+    /// Whether this runtime can build an <c>X509SignatureGenerator</c> from a key of the given composite
+    /// parameter set, cached per set against its OID.
     /// </summary>
     /// <remarks>
-    /// Determined by trying it once rather than by naming the platforms that lack it, so that a runtime
-    /// which gains support starts working without a change here. The probe uses the cheapest composite
-    /// parameter set to generate, and never throws.
+    /// Determined by trying it rather than by naming the platforms that lack it, so that a runtime which
+    /// gains support starts working without a change here. Resolved per parameter set rather than once for
+    /// the family, because a provider is free to implement some sets and not others, and a single probe
+    /// would both deny the sets it implements and vouch for the ones it does not.
     /// </remarks>
-    private static readonly Lazy<bool> CompositeCertificateSigning = new(() => {
-#pragma warning disable SYSLIB5006
-        try {
-            if (!CompositeMLDsa.IsSupported || !CompositeMLDsa.IsAlgorithmSupported(CompositeMLDsaAlgorithm.MLDsa44WithECDsaP256)) {
-                return false;
-            }
+    private static readonly ConcurrentDictionary<string, Lazy<bool>> CompositeCertificateSigning = new(StringComparer.Ordinal);
 
-            using var probe = CompositeMLDsa.GenerateKey(CompositeMLDsaAlgorithm.MLDsa44WithECDsaP256);
-            System.Security.Cryptography.X509Certificates.X509SignatureGenerator.CreateForCompositeMLDsa(probe);
-            return true;
 
-        } catch (PlatformNotSupportedException) {
-            return false;
+    /// <summary>
+    /// The cheapest composite parameter set to generate a key for, used to answer the family-wide question
+    /// before any expensive per-set probe runs.
+    /// </summary>
+    private const string CheapestCompositeOid = Oids.MLDsa44WithECDsaP256;
 
-        } catch (CryptographicException) {
+
+#pragma warning disable SYSLIB5006 // The BCL's post-quantum types are themselves experimental
+    /// <inheritdoc cref="CompositeCertificateSigning"/>
+    private static bool CanSignCertificatesWithComposite(KeyAlgorithm algorithm)
+    {
+        //Answer the family-wide question first, on the one set whose key is cheap to generate. A
+        //PlatformNotSupportedException from CreateForCompositeMLDsa says the API is absent from this runtime,
+        //which is a property of the runtime and not of the parameter set, so there is nothing to learn from
+        //asking again with an RSA-4096 key - and asking costs half a second per set. Under-reporting is the
+        //safe direction: a false that a later runtime turns true beats a true that fails inside Create().
+        if (!Probe(CheapestCompositeOid, CompositeMLDsaAlgorithm.MLDsa44WithECDsaP256)) {
             return false;
         }
+
+        //The API is present, so availability really can differ per set from here on.
+        return algorithm.Oid == CheapestCompositeOid
+            || Probe(algorithm.Oid, CompositeAlgorithmFor(algorithm));
+    }
+
+
+    /// <summary>
+    /// Runs the certificate-signing probe for one parameter set, caching the answer against its OID.
+    /// </summary>
+    /// <remarks>
+    /// The cache holds a <see cref="Lazy{T}"/> rather than a bare <see langword="bool"/> because
+    /// <see cref="ConcurrentDictionary{TKey, TValue}.GetOrAdd(TKey, Func{TKey, TValue})"/> may invoke its
+    /// factory more than once for the same key under contention, and each invocation here generates a key.
+    /// <see cref="Lazy{T}"/> defaults to <see cref="LazyThreadSafetyMode.ExecutionAndPublication"/>, so the
+    /// generation happens exactly once per set however many threads ask at once. Never throws: an unmapped
+    /// parameter set is an unsupported one, not an error.
+    /// </remarks>
+    private static bool Probe(string oid, CompositeMLDsaAlgorithm set)
+        => CompositeCertificateSigning.GetOrAdd(oid, _ => new Lazy<bool>(() => {
+            try {
+                using var probe = CompositeMLDsa.GenerateKey(set);
+                System.Security.Cryptography.X509Certificates.X509SignatureGenerator.CreateForCompositeMLDsa(probe);
+                return true;
+
+            } catch (PlatformNotSupportedException) {
+                return false;
+
+            } catch (CryptographicException) {
+                return false;
+
+            } catch (ArgumentOutOfRangeException) {
+                //A parameter set with no BCL counterpart cannot be probed, so it is not supported
+                return false;
+            }
+        })).Value;
 #pragma warning restore SYSLIB5006
-    });
 
 
     /// <summary>

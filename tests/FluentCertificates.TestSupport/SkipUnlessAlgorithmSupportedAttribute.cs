@@ -16,6 +16,10 @@ namespace FluentCertificates;
 /// A skipped test reports as skipped. A capability gate that silently turned into a no-op passing test would
 /// be worse than no gate at all, since the suite would then claim coverage it never had.
 /// </para>
+/// <para>
+/// On a run that sets <c>FLUENTCERT_REQUIRE_PQC</c> this stops skipping altogether, so a CI job meant to
+/// cover post-quantum support cannot pass by skipping everything. See <see cref="PostQuantumGate"/>.
+/// </para>
 /// </remarks>
 /// <param name="family">The algorithm family the test needs.</param>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
@@ -26,7 +30,11 @@ public sealed class SkipUnlessAlgorithmSupportedAttribute(KeyAlgorithmFamily fam
     public override Task<bool> ShouldSkip(TestRegisteredContext context)
     {
         try {
-            return Task.FromResult(!KeyAlgorithm.Default(family).IsSupported);
+            var algorithm = KeyAlgorithm.Default(family);
+
+            //A run that declares the algorithms must work does not get to skip: letting the test proceed
+            //turns a silent skip into the PlatformNotSupportedException it really is. See PostQuantumGate.
+            return Task.FromResult(!algorithm.IsSupported && PostQuantumGate.MaySkip(algorithm));
 
         } catch (ArgumentOutOfRangeException) {
             //A family the library has no default parameters for cannot be exercised either
