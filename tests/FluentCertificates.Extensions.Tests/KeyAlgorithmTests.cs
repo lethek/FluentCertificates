@@ -186,6 +186,7 @@ public class KeyAlgorithmTests
             .ThrowsExactly<ArgumentException>();
 
         await Assert.That(ex!.Message).Contains("named elliptic curve must carry an OID");
+        await Assert.That(ex.Message).Contains("ECCurve.CreateFromFriendlyName");
         await Assert.That(ex.ParamName).IsEqualTo("curve");
     }
 
