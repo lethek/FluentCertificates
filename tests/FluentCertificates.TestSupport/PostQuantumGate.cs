@@ -53,8 +53,10 @@ public static class PostQuantumGate
     /// Whether an algorithm being unavailable should skip the test rather than fail it.
     /// </summary>
     /// <param name="algorithm">The algorithm the test needs.</param>
+#pragma warning disable FLUENTCERT001 // Classifying a family is not use of the experimental surface
     public static bool MaySkip(KeyAlgorithm algorithm)
         => !Required || algorithm.Family == KeyAlgorithmFamily.CompositeMLDsa;
+#pragma warning restore FLUENTCERT001
 
 
     /// <summary>

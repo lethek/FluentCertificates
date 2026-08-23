@@ -13,6 +13,10 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Changed
+
+- The post-quantum members of `KeyAlgorithmFamily` are `[Experimental("FLUENTCERT001")]`. Code naming one, including in a `switch` or comparison, now fails to build until it suppresses the diagnostic.
+
 ### Fixed
 
 - `KeyAlgorithm.IsSupported` resolves Composite ML-DSA certificate signing per parameter set rather than applying one set's result to all eighteen.

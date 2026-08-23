@@ -30,6 +30,7 @@ internal static class PostQuantumSupport
     {
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006 // The BCL's post-quantum types are themselves experimental
+#pragma warning disable FLUENTCERT001 // Deciding whether the experimental surface works is not use of it
         return algorithm.Family switch {
             KeyAlgorithmFamily.MLDsa => MLDsa.IsSupported,
             KeyAlgorithmFamily.SlhDsa => SlhDsa.IsSupported,
@@ -43,6 +44,7 @@ internal static class PostQuantumSupport
             KeyAlgorithmFamily.MLKem => MLKem.IsSupported && MLKemCertificateKeys.Value,
             _ => true
         };
+#pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
 #else
         return !algorithm.IsPostQuantum;

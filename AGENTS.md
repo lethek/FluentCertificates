@@ -333,14 +333,19 @@ The PQC surface carries `[Experimental(Experiments.PostQuantumCryptography)]`, w
 consumer naming one already has to suppress that. The library still declares its own ID, so its
 experimental surface stays visible independently of Microsoft's.
 
-`KeyAlgorithmFamily` deliberately carries no `[Experimental]`, on its PQC members or as a whole, so
-`KeyAlgorithm.Default(KeyAlgorithmFamily.MLDsa)` reaches the surface without the diagnostic. That is a
-known hole and not a defect to fix: an `ExperimentalAttribute` diagnostic is an *error* by default, and
-a family is a classifier rather than the surface itself, so annotating the members breaks consumer code
-that only reads `Family` off a key - `k.Family == KeyAlgorithmFamily.MLKem`, a `switch` over families -
-without ever naming a PQC algorithm. The library's own `CanSign`, `IsPostQuantum` and key-usage switches
-are exactly that pattern. `Enum.Parse<KeyAlgorithmFamily>("MLDsa")` is unclosable regardless. The
-attribute belongs on the `KeyAlgorithm` members and the PQC APIs, where it is.
+That includes the four post-quantum members of `KeyAlgorithmFamily`, annotated individually rather than
+the enum as a whole, so `KeyAlgorithm.Default(KeyAlgorithmFamily.MLDsa)` reports the diagnostic while
+`Default(KeyAlgorithmFamily.Rsa)` stays clean. Annotating `Default` itself would flag the classical
+families too. Every route into the surface must report `FLUENTCERT001`: when adding one, check that it
+does.
+
+The diagnostic fires only where a PQC member is *named in source*. Reaching one indirectly does not
+trigger it and cannot be made to - `Enum.Parse<KeyAlgorithmFamily>("MLDsa")`, `Enum.GetValues`, a cast,
+a `_ =>` arm that sweeps the PQC families into a default - so that hole stays open by construction.
+Consumers who only ask *about* a key are unaffected anyway: `CanSign`, `IsPostQuantum`, `IsSupported`
+and `IsEllipticCurve` are public, unannotated, and answer the ordinary questions without the enum.
+Internal code implementing those classifiers has to name the members, so it suppresses at the call
+site.
 
 The public API does not vary by target framework. Every parameter set exists on net8.0 and net9.0
 too, where selecting one throws `PlatformNotSupportedException`. Do not put PQC members behind
