@@ -1,0 +1,11 @@
+{
+  "stryker-config": {
+    "test-runner": "mtp",
+    "target-framework": "net9.0",
+    "coverage-analysis": "perTestInIsolation",
+    "reporters": ["json", "cleartext"],
+    "mutate": [
+      "!**/DSAX509SignatureGenerator.cs"
+    ]
+  }
+}

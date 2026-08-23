@@ -245,6 +245,110 @@ public class X500NameBuilderTests
     }
 
 
+    [Test]
+    public async Task Getters_ReturnTheMatchingRelativeDistinguishedNameValues()
+    {
+        //SetEmail is obsolete in favour of a SAN rfc822Name, but the getter still has to read
+        //an emailAddress RDN that an existing name carries
+#pragma warning disable CS0618 // Type or member is obsolete
+        var builder = new X500NameBuilder()
+            .SetCommonName("Common")
+            .SetOrganization("Org")
+            .SetCountry("AU")
+            .SetLocality("Brisbane")
+            .SetState("QLD")
+            .SetPostalCode("4000")
+            .SetStreetAddress("1 Example St")
+            .SetPhoneNumber("+61700000000")
+            .SetUserId("uid-1")
+            .SetSerialNumber("SN-1")
+            .SetGivenName("Given")
+            .SetSurname("Sur")
+            .SetTitle("Title")
+            .SetDistinguishedNameQualifier("Qualifier")
+            .SetEmail("user@example.com")
+            .AddOrganizationalUnits("Eng", "Ops")
+            .AddDomainComponents("example", "com");
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        await Assert.That(builder.GetCommonName()).IsEqualTo("Common");
+        await Assert.That(builder.GetOrganization()).IsEqualTo("Org");
+        await Assert.That(builder.GetCountry()).IsEqualTo("AU");
+        await Assert.That(builder.GetLocality()).IsEqualTo("Brisbane");
+        await Assert.That(builder.GetState()).IsEqualTo("QLD");
+        await Assert.That(builder.GetPostalCode()).IsEqualTo("4000");
+        await Assert.That(builder.GetStreetAddress()).IsEqualTo("1 Example St");
+        await Assert.That(builder.GetPhoneNumber()).IsEqualTo("+61700000000");
+        await Assert.That(builder.GetUserId()).IsEqualTo("uid-1");
+        await Assert.That(builder.GetSerialNumber()).IsEqualTo("SN-1");
+        await Assert.That(builder.GetGivenName()).IsEqualTo("Given");
+        await Assert.That(builder.GetSurname()).IsEqualTo("Sur");
+        await Assert.That(builder.GetTitle()).IsEqualTo("Title");
+        await Assert.That(builder.GetDistinguishedNameQualifier()).IsEqualTo("Qualifier");
+        await Assert.That(builder.GetEmail()).IsEqualTo("user@example.com");
+
+        //The multi-valued getters return every match, in order, rather than only the first
+        await Assert.That(builder.GetOrganizationalUnits()).IsEquivalentTo(["Eng", "Ops"]);
+        await Assert.That(builder.GetDomainComponents()).IsEquivalentTo(["example", "com"]);
+    }
+
+
+    [Test]
+    public async Task Getters_ReturnNullOrEmptyWhenAbsent()
+    {
+        var builder = new X500NameBuilder();
+
+        await Assert.That(builder.GetCommonName()).IsNull();
+        await Assert.That(builder.GetEmail()).IsNull();
+        await Assert.That(builder.GetOrganizationalUnits()).IsEmpty();
+    }
+
+
+    [Test]
+    public async Task Remove_DropsEveryRelativeDistinguishedNameWithThatOid()
+    {
+        var builder = new X500NameBuilder()
+            .SetCommonName("Common")
+            .AddOrganizationalUnits("Eng", "Ops");
+
+        var byOid = builder.Remove(Oids.OrganizationalUnitOid);
+        var byString = builder.Remove(Oids.OrganizationalUnitOid.Value!);
+
+        await Assert.That(byOid.GetOrganizationalUnits()).IsEmpty();
+        await Assert.That(byOid.GetCommonName()).IsEqualTo("Common");
+        await Assert.That(byString.GetOrganizationalUnits()).IsEmpty();
+
+        //The builder is immutable, so the original still holds both units
+        await Assert.That(builder.GetOrganizationalUnits()).IsEquivalentTo(["Eng", "Ops"]);
+    }
+
+
+    [Test]
+    public async Task EquivalentTo_SameCountDifferentValues_IsFalse()
+    {
+        var a = new X500NameBuilder().SetCommonName("A");
+        var b = new X500NameBuilder().SetCommonName("B");
+
+        await Assert.That(a.EquivalentTo(b)).IsFalse();
+        await Assert.That(b.EquivalentTo(a)).IsFalse();
+    }
+
+
+    /// <summary>
+    /// Same length and same set of OIDs and values, but different multiplicities, so some per-key
+    /// tallies land on zero and others do not. Equivalence requires every tally to be zero.
+    /// </summary>
+    [Test]
+    public async Task EquivalentTo_SameValuesWithDifferentMultiplicities_IsFalse()
+    {
+        var a = new X500NameBuilder().AddOrganizationalUnits("A", "A", "B", "C");
+        var b = new X500NameBuilder().AddOrganizationalUnits("A", "B", "B", "C");
+
+        await Assert.That(a.EquivalentTo(b)).IsFalse();
+        await Assert.That(b.EquivalentTo(a)).IsFalse();
+    }
+
+
     private static readonly IEqualityComparer<(Oid, UniversalTagNumber, string)> X500RdnTupleComparer
         = new DelegateEqualityComparer<(Oid OID, UniversalTagNumber ValueEncoding, string Value)>(
             (x, y) =>

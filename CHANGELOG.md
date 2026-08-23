@@ -20,6 +20,9 @@ release rather than record it as it happened.
 ### Fixed
 
 - `KeyAlgorithm.IsSupported` resolves Composite ML-DSA certificate signing per parameter set rather than applying one set's result to all eighteen.
+- `KeyAlgorithm.ECDsa` and `ECDiffieHellman` reject a named curve carrying no OID with an `ArgumentException` naming the parameter, rather than throwing `NullReferenceException`.
+- `KeyAlgorithm` equality no longer conflates a named curve identified by an OID value with one whose friendly name is that same string.
+- `KeyAlgorithm` equality and hashing include `Oid`, so post-quantum parameter sets within a family no longer rest on `Name` alone to tell them apart.
 
 ## [0.18.0] - 2026-08-22
 

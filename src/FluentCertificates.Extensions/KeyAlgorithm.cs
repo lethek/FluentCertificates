@@ -62,8 +62,9 @@ public sealed record KeyAlgorithm
 
     /// <summary>ECDsa on the specified curve.</summary>
     /// <param name="curve">The elliptic curve to generate the key on.</param>
+    /// <exception cref="ArgumentException">Thrown if <paramref name="curve"/> is a named curve carrying no OID.</exception>
     public static KeyAlgorithm ECDsa(ECCurveType curve)
-        => new(KeyAlgorithmFamily.ECDsa, $"ECDsa-{DescribeCurve(curve)}", Oids.EcPublicKey, canSign: true) { Curve = curve };
+        => new(KeyAlgorithmFamily.ECDsa, $"ECDsa-{DescribeCurve(Validated(curve))}", Oids.EcPublicKey, canSign: true) { Curve = curve };
 
     /// <summary>ECDH key agreement on the default curve, nistP256.</summary>
     public static KeyAlgorithm ECDiffieHellman() => ECDiffieHellman(ECCurveType.NamedCurves.nistP256);
@@ -73,8 +74,9 @@ public sealed record KeyAlgorithm
     /// issued by a CA and cannot itself be a CA or a code-signing, OCSP-signing or time-stamping certificate.
     /// </summary>
     /// <param name="curve">The elliptic curve to generate the key on.</param>
+    /// <exception cref="ArgumentException">Thrown if <paramref name="curve"/> is a named curve carrying no OID.</exception>
     public static KeyAlgorithm ECDiffieHellman(ECCurveType curve)
-        => new(KeyAlgorithmFamily.ECDiffieHellman, $"ECDH-{DescribeCurve(curve)}", Oids.EcPublicKey, canSign: false) { Curve = curve };
+        => new(KeyAlgorithmFamily.ECDiffieHellman, $"ECDH-{DescribeCurve(Validated(curve))}", Oids.EcPublicKey, canSign: false) { Curve = curve };
 
 
     /// <summary>
@@ -355,16 +357,22 @@ public sealed record KeyAlgorithm
 
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// <see cref="Oid"/> is compared as well as <see cref="Name"/> because it, not the name, is what makes a
+    /// post-quantum parameter set distinct: every ML-DSA set shares a <see cref="Family"/> and carries no key
+    /// length or curve, so without the OID the name alone would be separating them.
+    /// </remarks>
     public bool Equals(KeyAlgorithm? other)
         => other != null
             && Family == other.Family
             && Name == other.Name
+            && Oid == other.Oid
             && KeyLength == other.KeyLength
             && CurveKey(Curve) == CurveKey(other.Curve);
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => HashCode.Combine(Family, Name, KeyLength, CurveKey(Curve));
+        => HashCode.Combine(Family, Name, Oid, KeyLength, CurveKey(Curve));
 
 
     private KeyAlgorithm(KeyAlgorithmFamily family, string name, string oid, bool canSign)
@@ -382,6 +390,14 @@ public sealed record KeyAlgorithm
     /// an explicit one has to be identified by its actual parameters, since two unrelated explicit curves
     /// would otherwise compare equal.
     /// </summary>
+    /// <remarks>
+    /// The prefix says how the curve is identified: <c>oid:</c>, <c>name:</c> or <c>explicit:</c>. An OID value
+    /// and a friendly name need separate prefixes because only one of the two is guaranteed to be present -
+    /// <c>new Oid(null, "nistP256")</c> has no value, and an unregistered OID has no name - and sharing one
+    /// prefix would let a curve labelled with an OID string collide with the curve actually bearing it.
+    /// The value is preferred because it identifies the curve, while a friendly name does not: two different
+    /// curves can carry the same one.
+    /// </remarks>
     private static string? CurveKey(ECCurveType? curve)
     {
         if (curve == null) {
@@ -390,7 +406,13 @@ public sealed record KeyAlgorithm
 
         var value = curve.Value;
         if (value.IsNamed) {
-            return $"named:{value.Oid.Value ?? value.Oid.FriendlyName}";
+            //The friendly-name branch is reachable but its result is never the deciding factor in an
+            //equality test: Name is compared too, and for a curve with no OID value Name is that same
+            //friendly name. Mutation testing reports dropping it as a surviving mutant for that reason,
+            //and no test can kill it. It stays because the alternative is a null key for such a curve.
+            return value.Oid.Value is { } oid
+                ? $"oid:{oid}"
+                : $"name:{value.Oid.FriendlyName}";
         }
 
         return "explicit:" + String.Join(
@@ -415,6 +437,32 @@ public sealed record KeyAlgorithm
     /// </summary>
     private static string DescribeCurve(ECCurveType curve)
         => curve.IsNamed
-            ? curve.Oid.FriendlyName ?? curve.Oid.Value ?? "named"
+            ? curve.Oid.FriendlyName ?? curve.Oid.Value!
             : "explicit";
+
+
+    /// <summary>
+    /// Returns <paramref name="curve"/> once it is known to be usable as an identity.
+    /// </summary>
+    /// <remarks>
+    /// A named curve carries an OID value, a friendly name, or both: the factories fill in the missing half
+    /// only when the OID is one the platform knows, and <c>CreateFromOid</c> refuses an <see cref="Oid"/>
+    /// carrying neither. So a named curve reaching here has at least one of the two.
+    /// The exception is an object initialiser, which leaves <c>Oid</c> null: without this, that curve would
+    /// fail with a <see cref="NullReferenceException"/> from inside the library rather than saying what is
+    /// wrong with it. This is why <see cref="DescribeCurve"/> and <see cref="CurveKey"/> can then assume at
+    /// least one half is present.
+    /// </remarks>
+    /// <exception cref="ArgumentException">Thrown if the curve is named but carries no OID.</exception>
+    private static ECCurveType Validated(ECCurveType curve)
+    {
+        if (curve.IsNamed && curve.Oid is null) {
+            throw new ArgumentException(
+                "A named elliptic curve must carry an OID. Build one with ECCurve.CreateFromValue, "
+                + "ECCurve.CreateFromFriendlyName or ECCurve.NamedCurves rather than an object initialiser.",
+                nameof(curve));
+        }
+
+        return curve;
+    }
 }

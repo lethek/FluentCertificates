@@ -9,6 +9,11 @@
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <RootNamespace>FluentCertificates</RootNamespace>
+    <!-- Stryker's mutated compilation loses the #pragma trivia around the post-quantum call sites when it
+         rolls a mutant back, so FLUENTCERT001 resurfaces as an error and no mutant can be built. Gated on an
+         environment variable so only a mutation-testing run relaxes it: every ordinary build keeps the
+         diagnostic live and the #pragma directives in CertificateBuilder.cs doing the real suppression. -->
+    <NoWarn Condition="'$(FLUENTCERT_MUTATION_TESTING)' == 'true'">$(NoWarn);FLUENTCERT001</NoWarn>
 
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
