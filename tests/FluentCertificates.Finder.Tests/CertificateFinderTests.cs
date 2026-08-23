@@ -323,9 +323,123 @@ public class CertificateFinderTests
 
     [Test]
     public async Task AddStore_UnsupportedStoreName_Throws()
-        => await Assert
+    {
+        var ex = await Assert
             .That(() => new CertificateFinder(MockFileSystem).AddStore((StoreName)999, StoreLocation.CurrentUser))
             .ThrowsExactly<ArgumentException>();
+
+        await Assert.That(ex!.Message).Contains("Unsupported StoreName value: 999");
+        await Assert.That(ex.ParamName).IsEqualTo("name");
+    }
+
+
+    [Test]
+    [Arguments(StoreName.AddressBook, "AddressBook")]
+    [Arguments(StoreName.AuthRoot, "AuthRoot")]
+    [Arguments(StoreName.CertificateAuthority, "CA")]
+    [Arguments(StoreName.Disallowed, "Disallowed")]
+    [Arguments(StoreName.My, "My")]
+    [Arguments(StoreName.Root, "Root")]
+    [Arguments(StoreName.TrustedPeople, "TrustedPeople")]
+    [Arguments(StoreName.TrustedPublisher, "TrustedPublisher")]
+    public async Task CertificateStore_MapsStoreNameToItsSystemName(StoreName name, string expected)
+    {
+        //CertificateAuthority is the one whose system name differs from its enum name
+        var store = new CertificateStore(name, StoreLocation.CurrentUser);
+
+        await Assert.That(store.Name).IsEqualTo(expected);
+        await Assert.That(store.Location).IsEqualTo(StoreLocation.CurrentUser);
+    }
+
+
+    /// <summary>
+    /// A store that does not exist yields no results rather than throwing, and is not created by being
+    /// searched: the finder opens read-only and existing-only.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_StoreDoesNotExist_ReturnsEmpty()
+    {
+        var name = "FluentCertificatesMissing" + Guid.NewGuid().ToString("N")[..8];
+
+        var results = new CertificateFinder().AddStore(name, StoreLocation.CurrentUser).ToList();
+
+        await Assert.That(results).IsEmpty();
+    }
+
+
+    /// <summary>
+    /// Recursion is opt-in: the default enumerates the top directory alone, so a certificate one level down
+    /// is found only when the caller asks for it.
+    /// </summary>
+    [Test]
+    [Arguments(false, 1)]
+    [Arguments(true, 2)]
+    public async Task EnumerateCertificates_Recurse_ControlsWhetherSubdirectoriesAreSearched(bool recurse, int expected)
+    {
+        using var top = CreateSelfSignedCertificate("Top");
+        using var nested = CreateSelfSignedCertificate("Nested");
+        var dir = CreateRealTempDirectory();
+        try {
+            var sub = Path.Combine(dir, "sub");
+            Directory.CreateDirectory(sub);
+            File.WriteAllText(Path.Combine(dir, "top.pem"), top.ExportCertificatePem());
+            File.WriteAllText(Path.Combine(sub, "nested.pem"), nested.ExportCertificatePem());
+
+            var results = new CertificateFinder().AddDirectory(dir, recurse).ToList();
+
+            await Assert.That(results.Count).IsEqualTo(expected);
+            await Assert.That(results.Select(x => x.Certificate.Thumbprint)).Contains(top.Thumbprint);
+        } finally {
+            Directory.Delete(dir, true);
+        }
+    }
+
+
+    /// <summary>
+    /// The params overload of <see cref="CertificateFinder.AddDirectories(string[])"/> does not recurse,
+    /// which is why the recursing form is a separate overload.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_AddDirectoriesParams_DoesNotRecurse()
+    {
+        using var top = CreateSelfSignedCertificate("Top");
+        using var nested = CreateSelfSignedCertificate("Nested");
+        var dir = CreateRealTempDirectory();
+        try {
+            var sub = Path.Combine(dir, "sub");
+            Directory.CreateDirectory(sub);
+            File.WriteAllText(Path.Combine(dir, "top.pem"), top.ExportCertificatePem());
+            File.WriteAllText(Path.Combine(sub, "nested.pem"), nested.ExportCertificatePem());
+
+            var results = new CertificateFinder().AddDirectories(dir).ToList();
+
+            await Assert.That(results.Count).IsEqualTo(1);
+            await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(top.Thumbprint);
+        } finally {
+            Directory.Delete(dir, true);
+        }
+    }
+
+
+    /// <summary>
+    /// The enumeration pattern matches every file and filters by extension afterwards, so a certificate whose
+    /// name has no extension-like prefix is still seen.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_FindsFilesWhateverTheirName()
+    {
+        using var cert = CreateSelfSignedCertificate("Odd");
+        var dir = CreateRealTempDirectory();
+        try {
+            File.WriteAllText(Path.Combine(dir, ".hidden.pem"), cert.ExportCertificatePem());
+
+            var results = new CertificateFinder().AddDirectory(dir).ToList();
+
+            await Assert.That(results.Count).IsEqualTo(1);
+        } finally {
+            Directory.Delete(dir, true);
+        }
+    }
 
 
     [Test]

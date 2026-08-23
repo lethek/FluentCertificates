@@ -377,6 +377,34 @@ public class CertificateBuilderTests
 
 
     [Test]
+    [Arguments(CertificateUsage.Server, false)]
+    [Arguments(CertificateUsage.Client, false)]
+    [Arguments(CertificateUsage.CodeSign, false)]
+    [Arguments(CertificateUsage.SMime, false)]
+    [Arguments(CertificateUsage.OcspSigning, false)]
+    [Arguments(CertificateUsage.TimeStamping, true)]
+    public async Task Build_EndEntityCertificate_MarksConstraintsAndKeyUsageCritical(CertificateUsage usage, bool ekuIsCritical)
+    {
+        using var cert = new CertificateBuilder()
+            .SetUsage(usage)
+            .SetSubject(x => x.SetCommonName($"{usage} Criticality Test"))
+            .Create();
+
+        //RFC 5280 s4.2.1.9 requires basicConstraints to be critical wherever it appears in a CA
+        //certificate, and s4.2.1.3 says the same of keyUsage; an end-entity certificate that leaves
+        //either non-critical lets a relying party ignore the limits it is asserting.
+        var basicConstraints = cert.Extensions.OfType<X509BasicConstraintsExtension>().Single();
+        await Assert.That(basicConstraints.Critical).IsTrue();
+        await Assert.That(basicConstraints.CertificateAuthority).IsFalse();
+        await Assert.That(basicConstraints.HasPathLengthConstraint).IsFalse();
+        await Assert.That(basicConstraints.PathLengthConstraint).IsEqualTo(0);
+
+        await Assert.That(cert.Extensions.OfType<X509KeyUsageExtension>().Single().Critical).IsTrue();
+        await Assert.That(cert.Extensions.OfType<X509EnhancedKeyUsageExtension>().Single().Critical).IsEqualTo(ekuIsCritical);
+    }
+
+
+    [Test]
     [Arguments(KeyAlgorithmFamily.Rsa, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation | X509KeyUsageFlags.KeyEncipherment)]
     [Arguments(KeyAlgorithmFamily.ECDsa, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation)]
     public async Task Build_SMimeCertificate_HasEmailProtectionEKU(KeyAlgorithmFamily family, X509KeyUsageFlags expectedUsages)
