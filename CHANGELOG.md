@@ -20,6 +20,7 @@ release rather than record it as it happened.
 ### Fixed
 
 - `KeyAlgorithm.IsSupported` resolves Composite ML-DSA certificate signing per parameter set rather than applying one set's result to all eighteen.
+- `KeyAlgorithm.ECDsa` and `ECDiffieHellman` reject a named curve carrying no OID with an `ArgumentException` naming the parameter, rather than throwing `NullReferenceException`.
 
 ## [0.18.0] - 2026-08-22
 

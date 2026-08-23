@@ -173,6 +173,56 @@ public class KeyAlgorithmTests
     }
 
 
+    /// <summary>
+    /// An object initialiser is the one way to make a named curve with no OID, and it is not a usable
+    /// identity: the curve cannot be named or compared. It has to be refused by name rather than failing
+    /// with a <see cref="NullReferenceException"/> from inside the library.
+    /// </summary>
+    [Test]
+    public async Task ECDsa_NamedCurveWithoutAnOid_Throws()
+    {
+        var ex = await Assert
+            .That(() => KeyAlgorithm.ECDsa(new ECCurve { CurveType = ECCurve.ECCurveType.Named }))
+            .ThrowsExactly<ArgumentException>();
+
+        await Assert.That(ex!.Message).Contains("named elliptic curve must carry an OID");
+        await Assert.That(ex.ParamName).IsEqualTo("curve");
+    }
+
+
+    [Test]
+    public async Task ECDiffieHellman_NamedCurveWithoutAnOid_Throws()
+        => await Assert
+            .That(() => KeyAlgorithm.ECDiffieHellman(new ECCurve { CurveType = ECCurve.ECCurveType.Named }))
+            .ThrowsExactly<ArgumentException>();
+
+
+    /// <summary>
+    /// An explicit curve has no OID by definition, so the guard must not catch it.
+    /// </summary>
+    [Test]
+    public async Task ECDsa_ExplicitCurveWithoutAnOid_IsAccepted()
+        => await Assert.That(() => KeyAlgorithm.ECDsa(ExplicitPrimeCurve())).ThrowsNothing();
+
+
+    /// <summary>
+    /// Every <see cref="ECCurve"/> factory fills in both halves of a named curve's OID, whichever half it was
+    /// given, so the label is the friendly name in each case.
+    /// </summary>
+    [Test]
+    public async Task ECDsa_NamedCurve_IsLabelledByItsFriendlyNameWhicheverFactoryBuiltIt()
+    {
+        await Assert.That(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP256).Name).IsEqualTo("ECDsa-nistP256");
+        await Assert.That(KeyAlgorithm.ECDsa(ECCurve.CreateFromFriendlyName("nistP256")).Name)
+            .IsEqualTo("ECDsa-nistP256");
+
+        //CreateFromValue resolves a friendly name of its own, so the label is that rather than the OID
+        var fromValue = KeyAlgorithm.ECDsa(ECCurve.CreateFromValue("1.2.840.10045.3.1.7"));
+        await Assert.That(fromValue.Name).StartsWith("ECDsa-");
+        await Assert.That(fromValue.Name).IsNotEqualTo("ECDsa-explicit");
+    }
+
+
     [Test]
     public async Task Default_UnknownFamily_MessageNamesTheFamily()
     {

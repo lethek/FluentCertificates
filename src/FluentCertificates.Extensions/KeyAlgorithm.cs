@@ -62,8 +62,9 @@ public sealed record KeyAlgorithm
 
     /// <summary>ECDsa on the specified curve.</summary>
     /// <param name="curve">The elliptic curve to generate the key on.</param>
+    /// <exception cref="ArgumentException">Thrown if <paramref name="curve"/> is a named curve carrying no OID.</exception>
     public static KeyAlgorithm ECDsa(ECCurveType curve)
-        => new(KeyAlgorithmFamily.ECDsa, $"ECDsa-{DescribeCurve(curve)}", Oids.EcPublicKey, canSign: true) { Curve = curve };
+        => new(KeyAlgorithmFamily.ECDsa, $"ECDsa-{DescribeCurve(Validated(curve))}", Oids.EcPublicKey, canSign: true) { Curve = curve };
 
     /// <summary>ECDH key agreement on the default curve, nistP256.</summary>
     public static KeyAlgorithm ECDiffieHellman() => ECDiffieHellman(ECCurveType.NamedCurves.nistP256);
@@ -73,8 +74,9 @@ public sealed record KeyAlgorithm
     /// issued by a CA and cannot itself be a CA or a code-signing, OCSP-signing or time-stamping certificate.
     /// </summary>
     /// <param name="curve">The elliptic curve to generate the key on.</param>
+    /// <exception cref="ArgumentException">Thrown if <paramref name="curve"/> is a named curve carrying no OID.</exception>
     public static KeyAlgorithm ECDiffieHellman(ECCurveType curve)
-        => new(KeyAlgorithmFamily.ECDiffieHellman, $"ECDH-{DescribeCurve(curve)}", Oids.EcPublicKey, canSign: false) { Curve = curve };
+        => new(KeyAlgorithmFamily.ECDiffieHellman, $"ECDH-{DescribeCurve(Validated(curve))}", Oids.EcPublicKey, canSign: false) { Curve = curve };
 
 
     /// <summary>
@@ -415,6 +417,31 @@ public sealed record KeyAlgorithm
     /// </summary>
     private static string DescribeCurve(ECCurveType curve)
         => curve.IsNamed
-            ? curve.Oid.FriendlyName ?? curve.Oid.Value ?? "named"
+            ? curve.Oid.FriendlyName ?? curve.Oid.Value!
             : "explicit";
+
+
+    /// <summary>
+    /// Returns <paramref name="curve"/> once it is known to be usable as an identity.
+    /// </summary>
+    /// <remarks>
+    /// Every factory on <see cref="ECCurveType"/> populates both halves of a named curve's OID, and
+    /// <c>CreateFromOid</c> refuses one carrying neither, so a named curve reaching here has an identity.
+    /// The exception is an object initialiser, which leaves <c>Oid</c> null: without this, that curve would
+    /// fail with a <see cref="NullReferenceException"/> from inside the library rather than saying what is
+    /// wrong with it. This is why <see cref="DescribeCurve"/> and <see cref="CurveKey"/> can then assume at
+    /// least one half is present.
+    /// </remarks>
+    /// <exception cref="ArgumentException">Thrown if the curve is named but carries no OID.</exception>
+    private static ECCurveType Validated(ECCurveType curve)
+    {
+        if (curve.IsNamed && curve.Oid is null) {
+            throw new ArgumentException(
+                "A named elliptic curve must carry an OID. Build one with ECCurve.CreateFromValue, "
+                + "ECCurve.CreateFromFriendlyName or ECCurve.NamedCurves rather than an object initialiser.",
+                nameof(curve));
+        }
+
+        return curve;
+    }
 }
