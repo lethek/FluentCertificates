@@ -279,7 +279,6 @@ public static class X509Certificate2Extensions
 #if NET10_0_OR_GREATER
             //The post-quantum algorithms absorb the message directly, so there is no hash to pass and no
             //signature format to pick
-            #pragma warning disable FLUENTCERT001 // Verifying a post-quantum signature is internal plumbing
             case KeyAlgorithmFamily.MLDsa: {
                 #pragma warning disable SYSLIB5006
                 using var key = issuer.GetMLDsaPublicKey()!;
@@ -298,7 +297,6 @@ public static class X509Certificate2Extensions
                 return key.VerifyData(tbs, sig);
                 #pragma warning restore SYSLIB5006
             }
-            #pragma warning restore FLUENTCERT001
 #endif
             default:
                 return false;

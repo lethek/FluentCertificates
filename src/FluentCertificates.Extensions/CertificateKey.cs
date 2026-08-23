@@ -53,18 +53,14 @@ public sealed class CertificateKey : IDisposable
     /// Gets whether this key can produce signatures. This is <see langword="false"/> for the key-agreement and
     /// key-encapsulation families, which have no signing operation at all.
     /// </summary>
-#pragma warning disable FLUENTCERT001 // Naming a post-quantum family to classify one is not experimental use
     public bool CanSign
         => Family is not (KeyAlgorithmFamily.ECDiffieHellman or KeyAlgorithmFamily.MLKem);
-#pragma warning restore FLUENTCERT001
 
 
     /// <summary>Gets whether this holds a post-quantum key.</summary>
-#pragma warning disable FLUENTCERT001 // Naming a post-quantum family to classify one is not experimental use
     public bool IsPostQuantum
         => Family is KeyAlgorithmFamily.MLDsa or KeyAlgorithmFamily.SlhDsa
             or KeyAlgorithmFamily.CompositeMLDsa or KeyAlgorithmFamily.MLKem;
-#pragma warning restore FLUENTCERT001
 
 
     /// <summary>

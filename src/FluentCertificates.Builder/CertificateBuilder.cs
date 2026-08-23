@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
@@ -747,7 +747,6 @@ public record CertificateBuilder
     /// public key, because it has to: an ECDH and an ECDsa public key are byte-identical in
     /// SubjectPublicKeyInfo, carrying the same algorithm OID and the same curve parameters.
     /// </remarks>
-#pragma warning disable FLUENTCERT001 // Naming a post-quantum family to classify one is not experimental use
     private static X509KeyUsageFlags SigningOrKeyAgreement(CertificateBuilder builder)
         => builder.KeyAlgorithm.Family switch {
             //An ECDH key really does perform Diffie-Hellman key agreement
@@ -758,7 +757,6 @@ public record CertificateBuilder
             KeyAlgorithmFamily.MLKem => X509KeyUsageFlags.None,
             _ => X509KeyUsageFlags.DigitalSignature
         };
-#pragma warning restore FLUENTCERT001
 
 
     /// <summary>

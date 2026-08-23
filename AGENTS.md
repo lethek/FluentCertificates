@@ -333,12 +333,14 @@ The PQC surface carries `[Experimental(Experiments.PostQuantumCryptography)]`, w
 consumer naming one already has to suppress that. The library still declares its own ID, so its
 experimental surface stays visible independently of Microsoft's.
 
-That includes the four post-quantum members of `KeyAlgorithmFamily`, annotated individually rather
-than the enum as a whole, so `KeyAlgorithm.Default(KeyAlgorithmFamily.MLDsa)` reports the diagnostic
-while `Default(KeyAlgorithmFamily.Rsa)` stays clean. Annotating `Default` itself would flag the
-classical families too. Every route into the surface must report `FLUENTCERT001`: when adding one,
-check that it does. Internal code that merely *classifies* a family (`IsPostQuantum`, a key-usage
-switch, `PostQuantumSupport.IsSupported`) suppresses it at the call site.
+`KeyAlgorithmFamily` deliberately carries no `[Experimental]`, on its PQC members or as a whole, so
+`KeyAlgorithm.Default(KeyAlgorithmFamily.MLDsa)` reaches the surface without the diagnostic. That is a
+known hole and not a defect to fix: an `ExperimentalAttribute` diagnostic is an *error* by default, and
+a family is a classifier rather than the surface itself, so annotating the members breaks consumer code
+that only reads `Family` off a key - `k.Family == KeyAlgorithmFamily.MLKem`, a `switch` over families -
+without ever naming a PQC algorithm. The library's own `CanSign`, `IsPostQuantum` and key-usage switches
+are exactly that pattern. `Enum.Parse<KeyAlgorithmFamily>("MLDsa")` is unclosable regardless. The
+attribute belongs on the `KeyAlgorithm` members and the PQC APIs, where it is.
 
 The public API does not vary by target framework. Every parameter set exists on net8.0 and net9.0
 too, where selecting one throws `PlatformNotSupportedException`. Do not put PQC members behind
@@ -357,15 +359,26 @@ Both are settled by a cached probe in `PostQuantumSupport` rather than by naming
 so a runtime that gains support starts working with no change to the library. Add a probe, never an
 OS check, when the next gap appears.
 
-Probe at the granularity the answer varies at. Composite ML-DSA is probed per parameter set and
-cached by OID, because a provider may implement some sets and not others; a single family-wide probe
-would deny the sets it does implement and vouch for the ones it does not. ML-KEM's gap is
-family-wide, so one probe covers it.
+Probe at the granularity the answer varies at, and pay for it at that granularity too. Composite
+ML-DSA is cached per parameter set by OID, because a provider may implement some sets and not others
+and a single family-wide probe would deny the sets it does implement and vouch for the ones it does
+not. But probing every set costs a key generation each, and the RSA-4096 sets take over half a second
+apiece - `IsSupported` is a property, so that has to stay cheap. The family-wide question is therefore
+settled first on the cheapest set to generate: a `PlatformNotSupportedException` from
+`CreateForCompositeMLDsa` says the API is absent from this runtime, which no other set can contradict,
+so the remaining seventeen are answered without generating anything. Per-set probing resumes the moment
+that call succeeds. ML-KEM's gap is family-wide, so one probe covers it.
+
+Both caches hold `Lazy<bool>`, not `bool`. `ConcurrentDictionary.GetOrAdd` may run its factory more
+than once for the same key under contention, and the factory here generates a key; `Lazy<bool>`
+defaults to `ExecutionAndPublication`, so it runs exactly once however many test threads ask at once.
 
 Availability is a runtime capability, so `[SupportedOSPlatform]` cannot express it. Tests gate on
-`SkipUnlessAlgorithmSupportedAttribute` (whole class) or `Skip.Unless(algorithm.IsSupported, ...)`
-(per parameter set, needed because Composite availability varies per set). A capability gate that
-silently matches nothing is a defect: a skipped test must report as skipped, never as passed.
+`SkipUnlessAlgorithmSupportedAttribute` (whole class) or `PostQuantumGate.SkipUnlessSupported(algorithm)`
+(per parameter set, needed because Composite availability varies per set). Both route through
+`PostQuantumGate`, so never call `Skip.Unless(algorithm.IsSupported, ...)` directly - that is the form
+that cannot be turned off. A capability gate that silently matches nothing is a defect: a skipped test
+must report as skipped, never as passed.
 
 ### Platform matrix as of .NET 10
 
@@ -384,11 +397,14 @@ The `pqc` job in `.github/workflows/dotnet.yml` runs the net10.0 leg on **`ubunt
 `ubuntu-latest`, which resolves to `ubuntu-24.04` (OpenSSL 3.0.13) and would silently stop testing
 anything; the main `build` job stays on `ubuntu-latest` and skips every PQC test as a result.
 
-That job sets **`FLUENTCERT_REQUIRE_PQC=1`**, which inverts the capability gate for
-`PostQuantumRequiredTests`: ML-DSA, SLH-DSA and ML-KEM must report supported and must each yield a
-real certificate. Without it the job would stay green on an image that had lost PQC support, having
-built nothing. Set it on any run that is meant to prove PQC works, and nowhere else - on Windows it
-fails, correctly. Composite ML-DSA is excluded from it, since no platform can sign with one yet.
+That job sets **`FLUENTCERT_REQUIRE_PQC=1`**, which stops every post-quantum gate from skipping, so an
+unavailable algorithm surfaces as the `PlatformNotSupportedException` it is instead of a silent skip.
+Without it the job would stay green on an image that had lost PQC support, having built nothing. It
+covers all eighteen non-composite parameter sets, not a spot check, so losing one family or a handful of
+sets fails as loudly as losing the lot; `PostQuantumRequiredTests` runs first only to name the missing
+family before the rest of the suite turns it into noise. Composite ML-DSA is exempt, since no platform
+can sign with one yet. Set the variable on any run meant to prove PQC works, and nowhere else - on
+Windows it fails, correctly.
 
 Locally on Windows, run PQC tests in Docker: `mcr.microsoft.com/dotnet/sdk:10.0-alpine3.24` works
 (Alpine 3.22+ carries OpenSSL 3.5), with `-e FLUENTCERT_REQUIRE_PQC=1` to get the same assertion CI

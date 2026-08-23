@@ -13,13 +13,9 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
-### Changed
-
-- The post-quantum members of `KeyAlgorithmFamily` are now `[Experimental("FLUENTCERT001")]`, so `KeyAlgorithm.Default(KeyAlgorithmFamily.MLDsa)` reports the diagnostic like every other route into the PQC surface.
-
 ### Fixed
 
-- `KeyAlgorithm.IsSupported` now probes Composite ML-DSA certificate signing per parameter set instead of applying one set's result to all eighteen.
+- `KeyAlgorithm.IsSupported` resolves Composite ML-DSA certificate signing per parameter set rather than applying one set's result to all eighteen.
 
 ## [0.18.0] - 2026-08-22
 

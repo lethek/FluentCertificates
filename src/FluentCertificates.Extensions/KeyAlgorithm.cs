@@ -321,11 +321,9 @@ public sealed record KeyAlgorithm
     public bool IsEllipticCurve => Family is KeyAlgorithmFamily.ECDsa or KeyAlgorithmFamily.ECDiffieHellman;
 
     /// <summary>Gets whether this algorithm is a post-quantum one.</summary>
-#pragma warning disable FLUENTCERT001 // Naming a post-quantum family to classify one is not experimental use
     public bool IsPostQuantum
         => Family is KeyAlgorithmFamily.MLDsa or KeyAlgorithmFamily.SlhDsa
             or KeyAlgorithmFamily.CompositeMLDsa or KeyAlgorithmFamily.MLKem;
-#pragma warning restore FLUENTCERT001
 
     /// <summary>
     /// Gets whether this algorithm can be used to build a certificate on the current runtime and platform.
