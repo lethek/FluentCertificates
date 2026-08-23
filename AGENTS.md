@@ -333,6 +333,13 @@ The PQC surface carries `[Experimental(Experiments.PostQuantumCryptography)]`, w
 consumer naming one already has to suppress that. The library still declares its own ID, so its
 experimental surface stays visible independently of Microsoft's.
 
+That includes the four post-quantum members of `KeyAlgorithmFamily`, annotated individually rather
+than the enum as a whole, so `KeyAlgorithm.Default(KeyAlgorithmFamily.MLDsa)` reports the diagnostic
+while `Default(KeyAlgorithmFamily.Rsa)` stays clean. Annotating `Default` itself would flag the
+classical families too. Every route into the surface must report `FLUENTCERT001`: when adding one,
+check that it does. Internal code that merely *classifies* a family (`IsPostQuantum`, a key-usage
+switch, `PostQuantumSupport.IsSupported`) suppresses it at the call site.
+
 The public API does not vary by target framework. Every parameter set exists on net8.0 and net9.0
 too, where selecting one throws `PlatformNotSupportedException`. Do not put PQC members behind
 `#if NET10_0_OR_GREATER` - only their implementations.
@@ -346,9 +353,14 @@ is worse than a `false`.
   throws on both, so no platform can currently produce a composite certificate.
 - ML-KEM certificates build anywhere, but `CopyWithPrivateKey(MLKem)` throws on Windows.
 
-Both are settled by a cached one-time probe in `PostQuantumSupport` rather than by naming operating
-systems, so a runtime that gains support starts working with no change to the library. Add a probe,
-never an OS check, when the next gap appears.
+Both are settled by a cached probe in `PostQuantumSupport` rather than by naming operating systems,
+so a runtime that gains support starts working with no change to the library. Add a probe, never an
+OS check, when the next gap appears.
+
+Probe at the granularity the answer varies at. Composite ML-DSA is probed per parameter set and
+cached by OID, because a provider may implement some sets and not others; a single family-wide probe
+would deny the sets it does implement and vouch for the ones it does not. ML-KEM's gap is
+family-wide, so one probe covers it.
 
 Availability is a runtime capability, so `[SupportedOSPlatform]` cannot express it. Tests gate on
 `SkipUnlessAlgorithmSupportedAttribute` (whole class) or `Skip.Unless(algorithm.IsSupported, ...)`
@@ -372,9 +384,15 @@ The `pqc` job in `.github/workflows/dotnet.yml` runs the net10.0 leg on **`ubunt
 `ubuntu-latest`, which resolves to `ubuntu-24.04` (OpenSSL 3.0.13) and would silently stop testing
 anything; the main `build` job stays on `ubuntu-latest` and skips every PQC test as a result.
 
+That job sets **`FLUENTCERT_REQUIRE_PQC=1`**, which inverts the capability gate for
+`PostQuantumRequiredTests`: ML-DSA, SLH-DSA and ML-KEM must report supported and must each yield a
+real certificate. Without it the job would stay green on an image that had lost PQC support, having
+built nothing. Set it on any run that is meant to prove PQC works, and nowhere else - on Windows it
+fails, correctly. Composite ML-DSA is excluded from it, since no platform can sign with one yet.
+
 Locally on Windows, run PQC tests in Docker: `mcr.microsoft.com/dotnet/sdk:10.0-alpine3.24` works
-(Alpine 3.22+ carries OpenSSL 3.5). The default `10.0` tag is Ubuntu 24.04 and will not do, and
-there is no `10.0-trixie` tag.
+(Alpine 3.22+ carries OpenSSL 3.5), with `-e FLUENTCERT_REQUIRE_PQC=1` to get the same assertion CI
+makes. The default `10.0` tag is Ubuntu 24.04 and will not do, and there is no `10.0-trixie` tag.
 
 ### OIDs
 

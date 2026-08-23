@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 
 
@@ -11,7 +12,7 @@ namespace FluentCertificates;
 /// none of this can be expressed with <c>[SupportedOSPlatform]</c>. On .NET 9 and earlier the types do not
 /// exist at all; on .NET 10 they exist but the provider may still not implement them, which is why SLH-DSA is
 /// unavailable on Windows while ML-DSA and ML-KEM are not, and why several Composite ML-DSA parameter sets
-/// are unavailable everywhere tested.
+/// are unavailable everywhere tested. Availability is therefore resolved per parameter set, never per family.
 /// </remarks>
 internal static class PostQuantumSupport
 {
@@ -29,6 +30,7 @@ internal static class PostQuantumSupport
     {
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006 // The BCL's post-quantum types are themselves experimental
+#pragma warning disable FLUENTCERT001 // Deciding whether the experimental surface works is not use of it
         return algorithm.Family switch {
             KeyAlgorithmFamily.MLDsa => MLDsa.IsSupported,
             KeyAlgorithmFamily.SlhDsa => SlhDsa.IsSupported,
@@ -37,11 +39,12 @@ internal static class PostQuantumSupport
             KeyAlgorithmFamily.CompositeMLDsa =>
                 CompositeMLDsa.IsSupported
                 && CompositeMLDsa.IsAlgorithmSupported(CompositeAlgorithmFor(algorithm))
-                && CompositeCertificateSigning.Value,
+                && CanSignCertificatesWithComposite(algorithm),
             //An ML-KEM certificate builds anywhere, but attaching the private key to it is Windows's gap
             KeyAlgorithmFamily.MLKem => MLKem.IsSupported && MLKemCertificateKeys.Value,
             _ => true
         };
+#pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
 #else
         return !algorithm.IsPostQuantum;
@@ -51,32 +54,36 @@ internal static class PostQuantumSupport
 
 #if NET10_0_OR_GREATER
     /// <summary>
-    /// Whether this runtime can build an <c>X509SignatureGenerator</c> from a composite key.
+    /// Whether this runtime can build an <c>X509SignatureGenerator</c> from a key of the given composite
+    /// parameter set.
     /// </summary>
     /// <remarks>
-    /// Determined by trying it once rather than by naming the platforms that lack it, so that a runtime
-    /// which gains support starts working without a change here. The probe uses the cheapest composite
-    /// parameter set to generate, and never throws.
+    /// Determined by trying it rather than by naming the platforms that lack it, so that a runtime which
+    /// gains support starts working without a change here. Probed per parameter set rather than once for
+    /// the family: a provider is free to implement some sets and not others, and a single probe would both
+    /// deny the sets it implements and vouch for the ones it does not. Each answer is cached against the
+    /// set's OID, so the key generation happens at most once per set actually asked about. Never throws.
     /// </remarks>
-    private static readonly Lazy<bool> CompositeCertificateSigning = new(() => {
+    private static readonly ConcurrentDictionary<string, bool> CompositeCertificateSigning = new(StringComparer.Ordinal);
+
+
+    /// <inheritdoc cref="CompositeCertificateSigning"/>
+    private static bool CanSignCertificatesWithComposite(KeyAlgorithm algorithm)
+        => CompositeCertificateSigning.GetOrAdd(algorithm.Oid, static (_, a) => {
 #pragma warning disable SYSLIB5006
-        try {
-            if (!CompositeMLDsa.IsSupported || !CompositeMLDsa.IsAlgorithmSupported(CompositeMLDsaAlgorithm.MLDsa44WithECDsaP256)) {
+            try {
+                using var probe = CompositeMLDsa.GenerateKey(CompositeAlgorithmFor(a));
+                System.Security.Cryptography.X509Certificates.X509SignatureGenerator.CreateForCompositeMLDsa(probe);
+                return true;
+
+            } catch (PlatformNotSupportedException) {
+                return false;
+
+            } catch (CryptographicException) {
                 return false;
             }
-
-            using var probe = CompositeMLDsa.GenerateKey(CompositeMLDsaAlgorithm.MLDsa44WithECDsaP256);
-            System.Security.Cryptography.X509Certificates.X509SignatureGenerator.CreateForCompositeMLDsa(probe);
-            return true;
-
-        } catch (PlatformNotSupportedException) {
-            return false;
-
-        } catch (CryptographicException) {
-            return false;
-        }
 #pragma warning restore SYSLIB5006
-    });
+        }, algorithm);
 
 
     /// <summary>
