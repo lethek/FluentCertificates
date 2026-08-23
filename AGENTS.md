@@ -51,6 +51,30 @@ dotnet test --coverage --coverage-output-format cobertura --results-directory ./
 dotnet pack -c Release -p:PackageOutputPath="$PWD/artifacts/"
 ```
 
+### Mutation testing
+
+`stryker-config.json` drives Stryker.NET: the MTP runner, `perTestInIsolation` coverage, net9.0, and
+`DSAX509SignatureGenerator` excluded (a legacy compatibility shim there is no value in testing).
+
+Set **`FLUENTCERT_MUTATION_TESTING=true`** for the run. It is the only thing that relaxes `FLUENTCERT001`
+to a warning in `FluentCertificates.Builder`, which Stryker needs because its mutated compilation drops the
+`#pragma` trivia around the post-quantum call sites when it rolls a mutant back, leaving the diagnostic as
+an error that no mutant can build through. Every ordinary build leaves the gate closed, so the pragmas in
+`CertificateBuilder.cs` remain the real suppression. Never make that `NoWarn` unconditional.
+
+Two limits are the tool's, not the tests':
+
+- **Static mutants cannot be killed.** The MTP runner reuses one test host across mutants, so a mutated
+  `static` initialiser only takes effect when it lands in a fresh one. At `--concurrency 1` every static
+  mutant is a false survivor; above that they flip at random between runs. Judge those files on the
+  non-static mutants alone.
+- **Timeouts count as kills and track machine load.** The headline score swings a couple of points between
+  identical runs. Compare killed counts across runs rather than the percentage.
+
+A survivor is worth reading before it is dismissed: the ones in `KeyAlgorithm.CurveKey` turned out to be
+hiding a `NullReferenceException` and a real equality collision. Where one genuinely cannot be killed, say
+so in a comment at the site rather than adding an ignore to the config.
+
 ## Architecture
 
 ### Package structure

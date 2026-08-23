@@ -307,6 +307,42 @@ public class KeyAlgorithmTests
     }
 
 
+    /// <summary>
+    /// Post-quantum parameter sets within a family share everything equality looks at except the name and the
+    /// OID: same family, no key length, no curve. The OID is what actually identifies the set.
+    /// </summary>
+    [Test]
+    public async Task PostQuantumParameterSets_WithinAFamily_AreDistinct()
+    {
+#pragma warning disable FLUENTCERT001 // Exercising the experimental post-quantum surface is the point here
+        KeyAlgorithm[] mlDsa = [KeyAlgorithm.MLDsa44, KeyAlgorithm.MLDsa65, KeyAlgorithm.MLDsa87];
+
+        await Assert.That(mlDsa.Select(x => x.Family).Distinct().Count()).IsEqualTo(1);
+        await Assert.That(mlDsa.All(x => x.KeyLength is null)).IsTrue();
+        await Assert.That(mlDsa.All(x => x.Curve is null)).IsTrue();
+
+        //Distinct by OID, by name, and as values
+        await Assert.That(mlDsa.Select(x => x.Oid).Distinct().Count()).IsEqualTo(3);
+        await Assert.That(mlDsa.Distinct().Count()).IsEqualTo(3);
+        await Assert.That(mlDsa.Select(x => x.GetHashCode()).Distinct().Count()).IsEqualTo(3);
+
+        await Assert.That(KeyAlgorithm.MLDsa44).IsNotEqualTo(KeyAlgorithm.MLDsa65);
+        await Assert.That(KeyAlgorithm.MLDsa65).IsEqualTo(KeyAlgorithm.Default(KeyAlgorithmFamily.MLDsa));
+#pragma warning restore FLUENTCERT001
+    }
+
+
+    [Test]
+    public async Task Equals_SameAlgorithmDifferentInstances_MatchesOnEveryComponent()
+    {
+        await Assert.That(KeyAlgorithm.RSA(3072)).IsEqualTo(KeyAlgorithm.RSA(3072));
+        await Assert.That(KeyAlgorithm.RSA(3072).Oid).IsEqualTo(KeyAlgorithm.RSA(4096).Oid);
+
+        //Same OID, different key length: the length still separates them
+        await Assert.That(KeyAlgorithm.RSA(3072)).IsNotEqualTo(KeyAlgorithm.RSA(4096));
+    }
+
+
     [Test]
     public async Task Default_UnknownFamily_MessageNamesTheFamily()
     {

@@ -357,16 +357,22 @@ public sealed record KeyAlgorithm
 
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// <see cref="Oid"/> is compared as well as <see cref="Name"/> because it, not the name, is what makes a
+    /// post-quantum parameter set distinct: every ML-DSA set shares a <see cref="Family"/> and carries no key
+    /// length or curve, so without the OID the name alone would be separating them.
+    /// </remarks>
     public bool Equals(KeyAlgorithm? other)
         => other != null
             && Family == other.Family
             && Name == other.Name
+            && Oid == other.Oid
             && KeyLength == other.KeyLength
             && CurveKey(Curve) == CurveKey(other.Curve);
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => HashCode.Combine(Family, Name, KeyLength, CurveKey(Curve));
+        => HashCode.Combine(Family, Name, Oid, KeyLength, CurveKey(Curve));
 
 
     private KeyAlgorithm(KeyAlgorithmFamily family, string name, string oid, bool canSign)
@@ -400,6 +406,10 @@ public sealed record KeyAlgorithm
 
         var value = curve.Value;
         if (value.IsNamed) {
+            //The friendly-name branch is reachable but its result is never the deciding factor in an
+            //equality test: Name is compared too, and for a curve with no OID value Name is that same
+            //friendly name. Mutation testing reports dropping it as a surviving mutant for that reason,
+            //and no test can kill it. It stays because the alternative is a null key for such a curve.
             return value.Oid.Value is { } oid
                 ? $"oid:{oid}"
                 : $"name:{value.Oid.FriendlyName}";
