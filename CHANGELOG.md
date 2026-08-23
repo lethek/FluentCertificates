@@ -13,6 +13,8 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-08-24
+
 ### Added
 
 - SHA-3 and SHAKE hash OIDs, with the matching `RsaPkcs1Sha3_*` and `ECDsaWithSha3_*` signature OIDs.
@@ -21,8 +23,8 @@ release rather than record it as it happened.
 
 ### Changed
 
-- `Oids.MacAddressPurpose` is now `Oids.MacAddress`: `1.3.6.1.1.1.1.22` is RFC 2307's `macAddress` attribute type, not an extended key usage.
-- The post-quantum members of `KeyAlgorithmFamily` are `[Experimental("FLUENTCERT001")]`. Code naming one, including in a `switch` or comparison, now fails to build until it suppresses the diagnostic.
+- **Breaking:** `Oids.MacAddressPurpose` is now `Oids.MacAddress`: `1.3.6.1.1.1.1.22` is RFC 2307's `macAddress` attribute type, not an extended key usage. Removed without a deprecation cycle, having been wrong since it was introduced in 0.18.0.
+- **Breaking:** the post-quantum members of `KeyAlgorithmFamily` are `[Experimental("FLUENTCERT001")]`. Code naming one, including in a `switch` or comparison, now fails to build until it suppresses the diagnostic.
 
 ### Fixed
 
@@ -462,7 +464,8 @@ release rather than record it as it happened.
 - Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
   including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
 
-[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/lethek/FluentCertificates/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/lethek/FluentCertificates/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/lethek/FluentCertificates/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/lethek/FluentCertificates/compare/v0.15.0...v0.16.0
