@@ -442,11 +442,12 @@ makes. The default `10.0` tag is Ubuntu 24.04 and will not do, and there is no `
 ### OIDs
 
 `Oids.cs` holds all 33 post-quantum OIDs. They were read out of generated keys' SubjectPublicKeyInfo
-rather than transcribed from a spec. Five Composite sets are unimplemented everywhere, so theirs are
-inferred from the arc being contiguous and are marked as such; `DeclaredOid_MatchesTheGeneratedKey`
-asserts every declared OID against the real encoding for whatever the running platform supports, so a
-wrong inference fails as soon as a platform implements it. Keep that test passing rather than
-relaxing it.
+rather than transcribed from a spec, and the 18 Composite sets have since been checked against the
+registration table in draft-ietf-lamps-pq-composite-sigs-19 s7 - OID and algorithm name both, which is
+what `KeyAlgorithm.Name` carries. Five Composite sets are unimplemented everywhere, so those are
+spec-confirmed only and marked as such; `DeclaredOid_MatchesTheGeneratedKey` asserts every declared OID
+against the real encoding for whatever the running platform supports, so a wrong one fails as soon as a
+platform implements it. Keep that test passing rather than relaxing it.
 
 Note SLH-DSA's arc is not in declaration order: SHA2 takes `.20`-`.25`, SHAKE takes `.26`-`.31`.
 

@@ -13,8 +13,15 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- SHA-3 and SHAKE hash OIDs, with the matching `RsaPkcs1Sha3_*` and `ECDsaWithSha3_*` signature OIDs.
+- HashML-DSA and HashSLH-DSA prehash signature OIDs, and the twelve composite ML-KEM OIDs.
+- 28 further X.500 attribute type OIDs, `brainpoolP256r1`, `brainpoolP384r1`, `X25519`, and the Microsoft PKCS#12 attribute OIDs.
+
 ### Changed
 
+- `Oids.MacAddressPurpose` is now `Oids.MacAddress`: `1.3.6.1.1.1.1.22` is RFC 2307's `macAddress` attribute type, not an extended key usage.
 - The post-quantum members of `KeyAlgorithmFamily` are `[Experimental("FLUENTCERT001")]`. Code naming one, including in a `switch` or comparison, now fails to build until it suppresses the diagnostic.
 
 ### Fixed

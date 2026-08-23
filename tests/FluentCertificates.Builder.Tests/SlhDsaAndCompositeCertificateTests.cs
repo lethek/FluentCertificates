@@ -90,9 +90,9 @@ public class SlhDsaAndCompositeCertificateTests
     /// </summary>
     /// <remarks>
     /// Five Composite parameter sets are unimplemented on every platform tested, so their OIDs could not be
-    /// read off a generated key and were inferred from the arc being contiguous. This test is what keeps
-    /// that inference honest: the moment a platform implements one of them, a wrong OID fails here rather
-    /// than silently producing an unusable certificate.
+    /// read off a generated key and rest on the registration table in draft-ietf-lamps-pq-composite-sigs-19
+    /// alone. This test is what closes that gap: the moment a platform implements one of them, an OID that
+    /// disagrees with the runtime fails here rather than silently producing an unusable certificate.
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(AllPostQuantumSigningAlgorithms))]

@@ -51,6 +51,12 @@ public static class Oids
     public const string RsaPkcs1Sha384 = "1.2.840.113549.1.1.12";
     /// <summary>Signature algorithm OID <c>1.2.840.113549.1.1.13</c>.</summary>
     public const string RsaPkcs1Sha512 = "1.2.840.113549.1.1.13";
+    /// <summary>Signature algorithm OID <c>2.16.840.1.101.3.4.3.14</c> (RSASSA-PKCS1-v1_5 with SHA3-256).</summary>
+    public const string RsaPkcs1Sha3_256 = "2.16.840.1.101.3.4.3.14";
+    /// <summary>Signature algorithm OID <c>2.16.840.1.101.3.4.3.15</c> (RSASSA-PKCS1-v1_5 with SHA3-384).</summary>
+    public const string RsaPkcs1Sha3_384 = "2.16.840.1.101.3.4.3.15";
+    /// <summary>Signature algorithm OID <c>2.16.840.1.101.3.4.3.16</c> (RSASSA-PKCS1-v1_5 with SHA3-512).</summary>
+    public const string RsaPkcs1Sha3_512 = "2.16.840.1.101.3.4.3.16";
     /// <summary>Public key algorithm OID <c>1.2.840.113549.1.9.16.3.5</c>.</summary>
     public const string Esdh = "1.2.840.113549.1.9.16.3.5";
     /// <summary>Public key algorithm OID <c>1.3.132.1.12</c>.</summary>
@@ -97,9 +103,46 @@ public static class Oids
     /// <summary>SLH-DSA-SHAKE-256f public key and signature algorithm OID <c>2.16.840.1.101.3.4.3.31</c>.</summary>
     public const string SlhDsaShake256f = "2.16.840.1.101.3.4.3.31";
 
-    // Composite ML-DSA, arc 1.3.6.1.5.5.7.6.x. Five of these parameter sets are not implemented by
-    // .NET on any platform tested, so their OIDs could not be read back off a generated key the way
-    // the rest were; they are inferred from the arc being contiguous and are marked below.
+    // Prehash variants (HashML-DSA and HashSLH-DSA), which sign a digest rather than the message
+    // itself. .NET 10 exposes no API for these, so they are declared for consumers reading a
+    // certificate that carries one and are absent from KeyAlgorithm.PostQuantumAlgorithms.
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.32</c> (HashML-DSA-44 with SHA-512).</summary>
+    public const string MLDsa44PreHashSha512 = "2.16.840.1.101.3.4.3.32";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.33</c> (HashML-DSA-65 with SHA-512).</summary>
+    public const string MLDsa65PreHashSha512 = "2.16.840.1.101.3.4.3.33";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.34</c> (HashML-DSA-87 with SHA-512).</summary>
+    public const string MLDsa87PreHashSha512 = "2.16.840.1.101.3.4.3.34";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.35</c> (HashSLH-DSA-SHA2-128s with SHA-256).</summary>
+    public const string SlhDsaSha2_128sPreHashSha256 = "2.16.840.1.101.3.4.3.35";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.36</c> (HashSLH-DSA-SHA2-128f with SHA-256).</summary>
+    public const string SlhDsaSha2_128fPreHashSha256 = "2.16.840.1.101.3.4.3.36";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.37</c> (HashSLH-DSA-SHA2-192s with SHA-512).</summary>
+    public const string SlhDsaSha2_192sPreHashSha512 = "2.16.840.1.101.3.4.3.37";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.38</c> (HashSLH-DSA-SHA2-192f with SHA-512).</summary>
+    public const string SlhDsaSha2_192fPreHashSha512 = "2.16.840.1.101.3.4.3.38";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.39</c> (HashSLH-DSA-SHA2-256s with SHA-512).</summary>
+    public const string SlhDsaSha2_256sPreHashSha512 = "2.16.840.1.101.3.4.3.39";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.40</c> (HashSLH-DSA-SHA2-256f with SHA-512).</summary>
+    public const string SlhDsaSha2_256fPreHashSha512 = "2.16.840.1.101.3.4.3.40";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.41</c> (HashSLH-DSA-SHAKE-128s with SHAKE128).</summary>
+    public const string SlhDsaShake128sPreHashShake128 = "2.16.840.1.101.3.4.3.41";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.42</c> (HashSLH-DSA-SHAKE-128f with SHAKE128).</summary>
+    public const string SlhDsaShake128fPreHashShake128 = "2.16.840.1.101.3.4.3.42";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.43</c> (HashSLH-DSA-SHAKE-192s with SHAKE256).</summary>
+    public const string SlhDsaShake192sPreHashShake256 = "2.16.840.1.101.3.4.3.43";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.44</c> (HashSLH-DSA-SHAKE-192f with SHAKE256).</summary>
+    public const string SlhDsaShake192fPreHashShake256 = "2.16.840.1.101.3.4.3.44";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.45</c> (HashSLH-DSA-SHAKE-256s with SHAKE256).</summary>
+    public const string SlhDsaShake256sPreHashShake256 = "2.16.840.1.101.3.4.3.45";
+    /// <summary>Post-quantum signature algorithm OID <c>2.16.840.1.101.3.4.3.46</c> (HashSLH-DSA-SHAKE-256f with SHAKE256).</summary>
+    public const string SlhDsaShake256fPreHashShake256 = "2.16.840.1.101.3.4.3.46";
+
+    // Composite ML-DSA, arc 1.3.6.1.5.5.7.6.x. Every set here matches the registration table in
+    // draft-ietf-lamps-pq-composite-sigs-19 s7, both in OID and in algorithm name. Five of them are
+    // not implemented by .NET on any platform tested, so those could not also be read back off a
+    // generated key the way the rest were, and are marked below.
+    // Note there is no separate arc for a pure variant: every registered composite OID is prehashed,
+    // which is why these names carry no PreHash suffix and cannot be ambiguous without one.
     // CompositeMLDsaOidMatchesGeneratedKey in the test suite asserts the declared OID against the
     // real one for every set the running platform supports, so an inference that is wrong fails the
     // moment a platform implements it.
@@ -107,7 +150,7 @@ public static class Oids
     public const string MLDsa44WithRSA2048Pss = "1.3.6.1.5.5.7.6.37";
     /// <summary>MLDSA44-RSA2048-PKCS15-SHA256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.38</c>.</summary>
     public const string MLDsa44WithRSA2048Pkcs15 = "1.3.6.1.5.5.7.6.38";
-    /// <summary>MLDSA44-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.39</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA44-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.39</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa44WithEd25519 = "1.3.6.1.5.5.7.6.39";
     /// <summary>MLDSA44-ECDSA-P256-SHA256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.40</c>.</summary>
     public const string MLDsa44WithECDsaP256 = "1.3.6.1.5.5.7.6.40";
@@ -123,15 +166,15 @@ public static class Oids
     public const string MLDsa65WithECDsaP256 = "1.3.6.1.5.5.7.6.45";
     /// <summary>MLDSA65-ECDSA-P384-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.46</c>.</summary>
     public const string MLDsa65WithECDsaP384 = "1.3.6.1.5.5.7.6.46";
-    /// <summary>MLDSA65-ECDSA-brainpoolP256r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.47</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA65-ECDSA-brainpoolP256r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.47</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa65WithECDsaBrainpoolP256r1 = "1.3.6.1.5.5.7.6.47";
-    /// <summary>MLDSA65-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.48</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA65-Ed25519-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.48</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa65WithEd25519 = "1.3.6.1.5.5.7.6.48";
     /// <summary>MLDSA87-ECDSA-P384-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.49</c>.</summary>
     public const string MLDsa87WithECDsaP384 = "1.3.6.1.5.5.7.6.49";
-    /// <summary>MLDSA87-ECDSA-brainpoolP384r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.50</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA87-ECDSA-brainpoolP384r1-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.50</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa87WithECDsaBrainpoolP384r1 = "1.3.6.1.5.5.7.6.50";
-    /// <summary>MLDSA87-Ed448-SHAKE256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.51</c>. Inferred, not yet verified against a generated key.</summary>
+    /// <summary>MLDSA87-Ed448-SHAKE256 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.51</c>. Confirmed against draft-19; unimplemented everywhere, so not cross-checked against a generated key.</summary>
     public const string MLDsa87WithEd448 = "1.3.6.1.5.5.7.6.51";
     /// <summary>MLDSA87-RSA3072-PSS-SHA512 public key and signature algorithm OID <c>1.3.6.1.5.5.7.6.52</c>.</summary>
     public const string MLDsa87WithRSA3072Pss = "1.3.6.1.5.5.7.6.52";
@@ -147,6 +190,34 @@ public static class Oids
     public const string MLKem768 = "2.16.840.1.101.3.4.4.2";
     /// <summary>ML-KEM-1024 (FIPS 203) public key algorithm OID <c>2.16.840.1.101.3.4.4.3</c>.</summary>
     public const string MLKem1024 = "2.16.840.1.101.3.4.4.3";
+
+    // Composite ML-KEM, arc 1.3.6.1.5.5.7.6.x, pairing ML-KEM with a classical key-establishment
+    // algorithm. .NET 10 exposes no API for these, so they are declared for consumers reading a
+    // certificate that carries one.
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.55</c> (ML-KEM-768 with RSA-OAEP-2048).</summary>
+    public const string MLKem768WithRsaOaep2048Sha3_256 = "1.3.6.1.5.5.7.6.55";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.56</c> (ML-KEM-768 with RSA-OAEP-3072).</summary>
+    public const string MLKem768WithRsaOaep3072Sha3_256 = "1.3.6.1.5.5.7.6.56";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.57</c> (ML-KEM-768 with RSA-OAEP-4096).</summary>
+    public const string MLKem768WithRsaOaep4096Sha3_256 = "1.3.6.1.5.5.7.6.57";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.58</c> (ML-KEM-768 with X25519).</summary>
+    public const string MLKem768WithX25519Sha3_256 = "1.3.6.1.5.5.7.6.58";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.59</c> (ML-KEM-768 with ECDH P-256).</summary>
+    public const string MLKem768WithECDiffieHellmanP256Sha3_256 = "1.3.6.1.5.5.7.6.59";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.60</c> (ML-KEM-768 with ECDH P-384).</summary>
+    public const string MLKem768WithECDiffieHellmanP384Sha3_256 = "1.3.6.1.5.5.7.6.60";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.61</c> (ML-KEM-768 with ECDH brainpoolP256r1).</summary>
+    public const string MLKem768WithECDiffieHellmanBrainpoolP256r1Sha3_256 = "1.3.6.1.5.5.7.6.61";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.62</c> (ML-KEM-1024 with RSA-OAEP-3072).</summary>
+    public const string MLKem1024WithRsaOaep3072Sha3_256 = "1.3.6.1.5.5.7.6.62";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.63</c> (ML-KEM-1024 with ECDH P-384).</summary>
+    public const string MLKem1024WithECDiffieHellmanP384Sha3_256 = "1.3.6.1.5.5.7.6.63";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.64</c> (ML-KEM-1024 with ECDH brainpoolP384r1).</summary>
+    public const string MLKem1024WithECDiffieHellmanBrainpoolP384r1Sha3_256 = "1.3.6.1.5.5.7.6.64";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.65</c> (ML-KEM-1024 with X448).</summary>
+    public const string MLKem1024WithX448Sha3_256 = "1.3.6.1.5.5.7.6.65";
+    /// <summary>Composite key encapsulation OID <c>1.3.6.1.5.5.7.6.66</c> (ML-KEM-1024 with ECDH P-521).</summary>
+    public const string MLKem1024WithECDiffieHellmanP521Sha3_256 = "1.3.6.1.5.5.7.6.66";
 
     // Cryptographic Attribute Types
     /// <summary>Cryptographic attribute type OID <c>1.2.840.113549.1.9.5</c>.</summary>
@@ -216,6 +287,16 @@ public static class Oids
     public const string Sha384 = "2.16.840.1.101.3.4.2.2";
     /// <summary>Hash algorithm OID <c>2.16.840.1.101.3.4.2.3</c>.</summary>
     public const string Sha512 = "2.16.840.1.101.3.4.2.3";
+    /// <summary>Hash algorithm OID <c>2.16.840.1.101.3.4.2.8</c> (SHA3-256).</summary>
+    public const string Sha3_256 = "2.16.840.1.101.3.4.2.8";
+    /// <summary>Hash algorithm OID <c>2.16.840.1.101.3.4.2.9</c> (SHA3-384).</summary>
+    public const string Sha3_384 = "2.16.840.1.101.3.4.2.9";
+    /// <summary>Hash algorithm OID <c>2.16.840.1.101.3.4.2.10</c> (SHA3-512).</summary>
+    public const string Sha3_512 = "2.16.840.1.101.3.4.2.10";
+    /// <summary>Extendable-output function OID <c>2.16.840.1.101.3.4.2.11</c> (SHAKE128).</summary>
+    public const string Shake128 = "2.16.840.1.101.3.4.2.11";
+    /// <summary>Extendable-output function OID <c>2.16.840.1.101.3.4.2.12</c> (SHAKE256).</summary>
+    public const string Shake256 = "2.16.840.1.101.3.4.2.12";
 
     // DSA CMS uses the combined signature+digest OID
     /// <summary>Signature algorithm OID <c>1.2.840.10040.4.3</c>.</summary>
@@ -247,6 +328,12 @@ public static class Oids
     public const string ECDsaWithSha384 = "1.2.840.10045.4.3.3";
     /// <summary>Signature algorithm OID <c>1.2.840.10045.4.3.4</c>.</summary>
     public const string ECDsaWithSha512 = "1.2.840.10045.4.3.4";
+    /// <summary>Signature algorithm OID <c>2.16.840.1.101.3.4.3.10</c> (ECDSA with SHA3-256).</summary>
+    public const string ECDsaWithSha3_256 = "2.16.840.1.101.3.4.3.10";
+    /// <summary>Signature algorithm OID <c>2.16.840.1.101.3.4.3.11</c> (ECDSA with SHA3-384).</summary>
+    public const string ECDsaWithSha3_384 = "2.16.840.1.101.3.4.3.11";
+    /// <summary>Signature algorithm OID <c>2.16.840.1.101.3.4.3.12</c> (ECDSA with SHA3-512).</summary>
+    public const string ECDsaWithSha3_512 = "2.16.840.1.101.3.4.3.12";
 
     /// <summary>RSA mask generation function OID <c>1.2.840.113549.1.1.8</c> (MGF1), used by RSA-OAEP and RSA-PSS.</summary>
     public const string Mgf1 = "1.2.840.113549.1.1.8";
@@ -288,6 +375,62 @@ public static class Oids
     public const string Title = "2.5.4.12";
     /// <summary>X.500 name attribute OID <c>2.5.4.46</c>.</summary>
     public const string DnQualifier = "2.5.4.46";
+    /// <summary>X.500 name attribute OID <c>2.5.4.2</c> (knowledgeInformation).</summary>
+    public const string KnowledgeInformation = "2.5.4.2";
+    /// <summary>X.500 name attribute OID <c>2.5.4.13</c> (description).</summary>
+    public const string Description = "2.5.4.13";
+    /// <summary>X.500 name attribute OID <c>2.5.4.15</c> (businessCategory).</summary>
+    public const string BusinessCategory = "2.5.4.15";
+    /// <summary>X.500 name attribute OID <c>2.5.4.18</c> (postOfficeBox).</summary>
+    public const string PostOfficeBox = "2.5.4.18";
+    /// <summary>X.500 name attribute OID <c>2.5.4.19</c> (physicalDeliveryOfficeName).</summary>
+    public const string PhysicalDeliveryOfficeName = "2.5.4.19";
+    /// <summary>X.500 name attribute OID <c>2.5.4.24</c> (x121Address).</summary>
+    public const string X121Address = "2.5.4.24";
+    /// <summary>X.500 name attribute OID <c>2.5.4.25</c> (internationalISDNNumber).</summary>
+    public const string InternationalISDNNumber = "2.5.4.25";
+    /// <summary>X.500 name attribute OID <c>2.5.4.27</c> (destinationIndicator).</summary>
+    public const string DestinationIndicator = "2.5.4.27";
+    /// <summary>X.500 name attribute OID <c>2.5.4.41</c> (name).</summary>
+    public const string Name = "2.5.4.41";
+    /// <summary>X.500 name attribute OID <c>2.5.4.43</c> (initials).</summary>
+    public const string Initials = "2.5.4.43";
+    /// <summary>X.500 name attribute OID <c>2.5.4.44</c> (generationQualifier).</summary>
+    public const string GenerationQualifier = "2.5.4.44";
+    /// <summary>X.500 name attribute OID <c>2.5.4.51</c> (houseIdentifier).</summary>
+    public const string HouseIdentifier = "2.5.4.51";
+    /// <summary>X.500 name attribute OID <c>2.5.4.54</c> (dmdName).</summary>
+    public const string DmdName = "2.5.4.54";
+    /// <summary>X.500 name attribute OID <c>2.5.4.65</c> (pseudonym).</summary>
+    public const string Pseudonym = "2.5.4.65";
+    /// <summary>X.500 name attribute OID <c>2.5.4.80</c> (uiiInUrn).</summary>
+    public const string UiiInUrn = "2.5.4.80";
+    /// <summary>X.500 name attribute OID <c>2.5.4.81</c> (contentUrl).</summary>
+    public const string ContentUrl = "2.5.4.81";
+    /// <summary>X.500 name attribute OID <c>2.5.4.83</c> (uri).</summary>
+    public const string Uri = "2.5.4.83";
+    /// <summary>X.500 name attribute OID <c>2.5.4.86</c> (urn).</summary>
+    public const string Urn = "2.5.4.86";
+    /// <summary>X.500 name attribute OID <c>2.5.4.87</c> (url).</summary>
+    public const string Url = "2.5.4.87";
+    /// <summary>X.500 name attribute OID <c>2.5.4.89</c> (urnC).</summary>
+    public const string UrnC = "2.5.4.89";
+    /// <summary>X.500 name attribute OID <c>2.5.4.94</c> (epcInUrn).</summary>
+    public const string EpcInUrn = "2.5.4.94";
+    /// <summary>X.500 name attribute OID <c>2.5.4.95</c> (ldapUrl).</summary>
+    public const string LdapUrl = "2.5.4.95";
+    /// <summary>X.500 name attribute OID <c>2.5.4.97</c> (organizationIdentifier).</summary>
+    public const string OrganizationIdentifier = "2.5.4.97";
+    /// <summary>X.500 name attribute OID <c>2.5.4.98</c> (countryCode3c).</summary>
+    public const string CountryOrRegionName3C = "2.5.4.98";
+    /// <summary>X.500 name attribute OID <c>2.5.4.99</c> (countryCode3n).</summary>
+    public const string CountryOrRegionName3N = "2.5.4.99";
+    /// <summary>X.500 name attribute OID <c>2.5.4.100</c> (dnsName).</summary>
+    public const string DnsName = "2.5.4.100";
+    /// <summary>X.500 name attribute OID <c>2.5.4.104</c> (intEmail).</summary>
+    public const string IntEmail = "2.5.4.104";
+    /// <summary>X.500 name attribute OID <c>2.5.4.105</c> (jabberId).</summary>
+    public const string JabberId = "2.5.4.105";
 
     // Cert Extensions
     /// <summary>Certificate extension OID <c>2.5.29.10</c>.</summary>
@@ -405,8 +548,6 @@ public static class Oids
 
     /// <summary>Extended key usage purpose OID <c>1.3.6.1.4.1.311.20.2.2</c>.</summary>
     public const string SmartCardLogonPurpose = "1.3.6.1.4.1.311.20.2.2";
-    /// <summary>Extended key usage purpose OID <c>1.3.6.1.1.1.1.22</c>.</summary>
-    public const string MacAddressPurpose = "1.3.6.1.1.1.1.22";
     /// <summary>Extended key usage purpose OID <c>1.3.6.1.4.1.311.10.3.13</c>.</summary>
     public const string LifetimeSigningPurpose = "1.3.6.1.4.1.311.10.3.13";
 
@@ -437,6 +578,10 @@ public static class Oids
     public const string Pkcs12SafeContentsBag = Pkcs12BagTypesPrefix + "6";
     /// <summary>PKCS#12 OID <c>1.2.840.113549.1.9.22.1</c>.</summary>
     public const string Pkcs12X509CertBagType = "1.2.840.113549.1.9.22.1";
+    /// <summary>Microsoft PKCS#12 attribute OID <c>1.3.6.1.4.1.311.17.1</c> (key provider name).</summary>
+    public const string MsPkcs12KeyProviderName = "1.3.6.1.4.1.311.17.1";
+    /// <summary>Microsoft PKCS#12 attribute OID <c>1.3.6.1.4.1.311.17.2</c> (machine key set).</summary>
+    public const string MsPkcs12MachineKeySet = "1.3.6.1.4.1.311.17.2";
     /// <summary>PKCS#12 OID <c>1.2.840.113549.1.9.22.2</c>.</summary>
     public const string Pkcs12SdsiCertBagType = "1.2.840.113549.1.9.22.2";
 
@@ -472,12 +617,23 @@ public static class Oids
     public const string secp384r1 = "1.3.132.0.34";
     /// <summary>Named elliptic curve OID <c>1.3.132.0.35</c>.</summary>
     public const string secp521r1 = "1.3.132.0.35";
+    /// <summary>Named elliptic curve OID <c>1.3.36.3.3.2.8.1.1.7</c> (brainpoolP256r1).</summary>
+    public const string brainpoolP256r1 = "1.3.36.3.3.2.8.1.1.7";
+    /// <summary>Named elliptic curve OID <c>1.3.36.3.3.2.8.1.1.11</c> (brainpoolP384r1).</summary>
+    public const string brainpoolP384r1 = "1.3.36.3.3.2.8.1.1.11";
+    /// <summary>Key agreement algorithm OID <c>1.3.101.110</c> (X25519, RFC 8410).</summary>
+    public const string X25519 = "1.3.101.110";
 
     // LDAP
     /// <summary>LDAP attribute OID <c>0.9.2342.19200300.100.1.25</c>.</summary>
     public const string DomainComponent = "0.9.2342.19200300.100.1.25";
     /// <summary>LDAP attribute OID <c>0.9.2342.19200300.100.1.1</c>.</summary>
     public const string UserId = "0.9.2342.19200300.100.1.1";
+    /// <summary>
+    /// LDAP attribute OID <c>1.3.6.1.1.1.1.22</c> (<c>macAddress</c>), from the NIS schema in
+    /// RFC 2307 s2.3. An attribute type, not an extended key usage purpose.
+    /// </summary>
+    public const string MacAddress = "1.3.6.1.1.1.1.22";
 
 
 
