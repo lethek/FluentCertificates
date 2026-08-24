@@ -10,10 +10,14 @@ namespace FluentCertificates.Internals;
 /// Supports loading certificates from various file formats within a directory,
 /// yielding <see cref="CertificateFinderResult"/> for each successfully loaded certificate.
 /// </summary>
-/// <param name="fileSystem">The file system abstraction to use for file operations.</param>
-/// <param name="directory">The certificate directory source.</param>
-/// <param name="recurse">Indicates whether to search subdirectories.</param>
-internal sealed class CertificateDirectoryEnumerable(IFileSystem fileSystem, CertificateDirectory directory, bool recurse = false) : IEnumerable<CertificateFinderResult>
+/// <remarks>
+/// A record, so two instances naming the same directory and recursion setting compare equal and
+/// <see cref="CertificateFinder"/> enumerates that directory once however many times it was added.
+/// </remarks>
+/// <param name="FileSystem">The file system abstraction to use for file operations.</param>
+/// <param name="Directory">The certificate directory source.</param>
+/// <param name="Recurse">Indicates whether to search subdirectories.</param>
+internal sealed record CertificateDirectoryEnumerable(IFileSystem FileSystem, CertificateDirectory Directory, bool Recurse = false) : IEnumerable<CertificateFinderResult>
 {
     /// <summary>
     /// Initializes a new instance of <see cref="CertificateDirectoryEnumerable"/> using a directory path.
@@ -26,17 +30,11 @@ internal sealed class CertificateDirectoryEnumerable(IFileSystem fileSystem, Cer
 
     
     /// <summary>
-    /// Gets the <see cref="CertificateDirectory"/> this instance enumerates.
-    /// </summary>
-    public CertificateDirectory Directory => directory;
-
-
-    /// <summary>
     /// Returns an enumerator that iterates through the certificates in the directory.
     /// </summary>
     /// <returns>An enumerator of <see cref="CertificateFinderResult"/>.</returns>
     public IEnumerator<CertificateFinderResult> GetEnumerator()
-        => GetCertificatesFromDirectory(fileSystem, directory, recurse).GetEnumerator();
+        => GetCertificatesFromDirectory(FileSystem, Directory, Recurse).GetEnumerator();
 
     
     /// <summary>

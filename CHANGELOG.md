@@ -22,6 +22,7 @@ release rather than record it as it happened.
 ### Fixed
 
 - `CertificateFinder` reads DER-encoded certificates (`.crt`, `.cer`, `.der`, `.ca-bundle`) through the `IFileSystem` it was given, instead of going to the real disk and silently finding none of them.
+- `CertificateFinder` no longer returns a certificate once per time its store or directory was added. The sources compared by reference, so the deduplication it applies while enumerating never matched anything.
 
 ## [0.19.0] - 2026-08-24
 

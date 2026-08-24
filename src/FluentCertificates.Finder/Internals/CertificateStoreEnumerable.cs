@@ -8,7 +8,12 @@ namespace FluentCertificates.Internals;
 /// Enumerates certificates from a specified <see cref="CertificateStore"/>.
 /// Provides multiple constructors for different store representations and yields <see cref="CertificateFinderResult"/> for each certificate found.
 /// </summary>
-internal sealed class CertificateStoreEnumerable(CertificateStore certStore) : IEnumerable<CertificateFinderResult>
+/// <remarks>
+/// A record, so two instances naming the same store compare equal and <see cref="CertificateFinder"/>
+/// enumerates that store once however many times it was added.
+/// </remarks>
+/// <param name="Store">The certificate store to enumerate.</param>
+internal sealed record CertificateStoreEnumerable(CertificateStore Store) : IEnumerable<CertificateFinderResult>
 {
     /// <summary>
     /// Initializes a new instance of <see cref="CertificateStoreEnumerable"/> using an <see cref="X509Store"/>.
@@ -37,17 +42,11 @@ internal sealed class CertificateStoreEnumerable(CertificateStore certStore) : I
 
     
     /// <summary>
-    /// Gets the <see cref="CertificateStore"/> this instance enumerates.
-    /// </summary>
-    public CertificateStore Store => certStore;
-
-
-    /// <summary>
     /// Returns an enumerator that iterates through the certificates in the store.
     /// </summary>
     /// <returns>An enumerator of <see cref="CertificateFinderResult"/>.</returns>
     public IEnumerator<CertificateFinderResult> GetEnumerator()
-        => GetCertificatesFromStore(certStore).GetEnumerator();
+        => GetCertificatesFromStore(Store).GetEnumerator();
 
     
     /// <summary>

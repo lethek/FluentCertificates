@@ -205,6 +205,12 @@ public record CertificateFinder : IQueryable<CertificateFinderResult>
     /// <summary>
     /// Gets the underlying LINQ queryable for the current set of stores.
     /// </summary>
+    /// <remarks>
+    /// Sources are deduplicated here rather than as they are added, so <see cref="Sources"/> records what
+    /// the caller asked for while enumeration reads each store or directory once. The store and directory
+    /// sources are records, and it is their value equality that makes that work; a source added through
+    /// <see cref="AddCustomSource"/> is an arbitrary sequence, so only the same instance counts as a repeat.
+    /// </remarks>
     protected IQueryable<CertificateFinderResult> Queryable
         => Sources
             .Distinct()

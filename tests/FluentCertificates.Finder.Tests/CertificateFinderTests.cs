@@ -168,6 +168,79 @@ public class CertificateFinderTests
 
 
     [Test]
+    public async Task EnumerateCertificates_WithTheSameDirectoryAddedTwice_ReturnsEachCertificateOnce()
+    {
+        using var expectedNoKey = TestTools.LoadCertificateResource("ecdsa-no-key.pem");
+        using var expectedWithKey = TestTools.LoadCertificateResource("ecdsa-with-key.pem");
+
+        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/certs").AddDirectory("/certs");
+
+        //Both additions are kept, so the caller still sees what they asked for
+        await Assert.That(finder.Sources.Count).IsEqualTo(2);
+
+        //...but the directory is read once, so no certificate is reported twice
+        await Assert
+            .That(finder.ToList().Select(r => r.Certificate.Thumbprint))
+            .IsEquivalentTo([expectedNoKey.Thumbprint, expectedWithKey.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    [Test]
+    public async Task EnumerateCertificates_WithTheSameDirectoryAddedRecursivelyAndNot_KeepsBothSources()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        using var top = CreateSelfSignedCertificate("Top");
+        using var nested = CreateSelfSignedCertificate("Nested");
+        fs.AddFile("/tree/top.cer", new MockFileData(top.RawData));
+        fs.AddFile("/tree/sub/nested.cer", new MockFileData(nested.RawData));
+
+        //Same path, different recursion: two distinct sources, so the top-level file is found by both
+        var finder = new CertificateFinder(fs).AddDirectory("/tree").AddDirectory("/tree", recurse: true);
+
+        await Assert
+            .That(finder.ToList().Select(r => r.Certificate.Thumbprint))
+            .IsEquivalentTo([top.Thumbprint, top.Thumbprint, nested.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// Deduplication rests on the sources comparing by value, so a store named twice is one source however
+    /// it was named, and a different store or location is a different one.
+    /// </summary>
+    [Test]
+    public async Task StoreSources_CompareByTheStoreTheyName()
+    {
+        var byName = new CertificateStoreEnumerable("My", StoreLocation.CurrentUser);
+        var byEnum = new CertificateStoreEnumerable(StoreName.My, StoreLocation.CurrentUser);
+        var elsewhere = new CertificateStoreEnumerable(StoreName.My, StoreLocation.LocalMachine);
+        var other = new CertificateStoreEnumerable(StoreName.Root, StoreLocation.CurrentUser);
+
+        await Assert.That(byName).IsEqualTo(byEnum);
+        await Assert.That(byName).IsNotEqualTo(elsewhere);
+        await Assert.That(byName).IsNotEqualTo(other);
+    }
+
+
+    /// <summary>
+    /// The same, for directories: the path and the recursion setting both count, since searching a tree is
+    /// not the same search as searching its top level.
+    /// </summary>
+    [Test]
+    public async Task DirectorySources_CompareByPathAndRecursion()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        var top = new CertificateDirectoryEnumerable(fs, "/certs");
+        var same = new CertificateDirectoryEnumerable(fs, new CertificateDirectory("/certs"));
+        var deep = new CertificateDirectoryEnumerable(fs, "/certs", recurse: true);
+        var other = new CertificateDirectoryEnumerable(fs, "/elsewhere");
+
+        await Assert.That(top).IsEqualTo(same);
+        await Assert.That(top).IsNotEqualTo(deep);
+        await Assert.That(top).IsNotEqualTo(other);
+    }
+
+
+    [Test]
     public async Task EnumerateCertificates_WithNonExistentPath_ThrowsDirectoryNotFoundException()
     {
         var finder = new CertificateFinder(MockFileSystem).AddDirectory("/nonexistent");
