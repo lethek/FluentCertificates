@@ -43,15 +43,18 @@ public class X509Certificate2ExtensionsTests
     {
         using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
 
+        var pem = expected.Export().WithPassword(password).WithKeys(include).AsPem().ToPemString();
+
         using var stream = new MemoryStream();
         using (var writer = new StreamWriter(stream, Encoding.ASCII, leaveOpen: true)) {
-            writer.Write(expected.Export().WithPassword(password).WithKeys(include).AsPem().ToPemString());
+            writer.Write(pem);
         }
 
         var parser = new X509CertificateParser();
         var bcCert = parser.ReadCertificate(stream.ToArray());
         using var actual = CertTools.LoadCertificate(bcCert.GetEncoded());
-        //TODO: load the private key if one was in the export
+
+        await AssertExportedKeyBelongsToTheCertificate(pem, include, password, expected);
 
         stream.Position = 0;
         using var streamReader = new StreamReader(stream, Encoding.ASCII);
@@ -87,7 +90,9 @@ public class X509Certificate2ExtensionsTests
             var parser = new X509CertificateParser();
             var bcCert = parser.ReadCertificate(File.ReadAllBytes(tmpFile));
             using var actual = CertTools.LoadCertificate(bcCert.GetEncoded());
-            //TODO: load the private key if one was in the export
+
+            await AssertExportedKeyBelongsToTheCertificate(
+                File.ReadAllText(tmpFile), include, password, expected);
 
             using var streamReader = new StreamReader(tmpFile, Encoding.ASCII);
             var pemReader = new PemReader(streamReader);
@@ -253,6 +258,27 @@ public class X509Certificate2ExtensionsTests
         } finally {
             File.Delete(tmpFile);
         }
+    }
+
+
+    /// <summary>
+    /// A PEM export that was asked for a key has to carry that certificate's own private half, readable
+    /// with the password it was given. The block's presence and label say neither.
+    /// </summary>
+    private static async Task AssertExportedKeyBelongsToTheCertificate(
+        string pem, ExportKeys include, string? password, X509Certificate2 expected)
+    {
+        if (include == ExportKeys.None) {
+            await Assert.That(pem).DoesNotContain("PRIVATE KEY");
+            return;
+        }
+
+        using var withKey = password != null
+            ? X509Certificate2.CreateFromEncryptedPem(pem, pem, password)
+            : X509Certificate2.CreateFromPem(pem, pem);
+
+        await Assert.That(withKey.HasPrivateKey).IsTrue();
+        await Assert.That(withKey.Thumbprint).IsEqualTo(expected.Thumbprint);
     }
 
 

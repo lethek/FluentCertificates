@@ -156,7 +156,13 @@ public class CertificateExportBuilderTests
 #pragma warning disable SYSLIB0057
         loaded.Import(bytes);
 #pragma warning restore SYSLIB0057
-        await Assert.That(loaded.Count).IsEqualTo(2);
+
+        //Two entries, and they are leaf and root: a count alone would pass if leafCert appeared twice and
+        //rootCert were dropped, which is the failure this test exists to catch
+        var thumbprints = loaded.Cast<X509Certificate2>().Select(c => c.Thumbprint).ToList();
+        await Assert.That(thumbprints.Count(x => x == leafCert.Thumbprint)).IsEqualTo(1);
+        await Assert.That(thumbprints.Count(x => x == rootCert.Thumbprint)).IsEqualTo(1);
+        await Assert.That(thumbprints.Count).IsEqualTo(2);
     }
 
     [Test]

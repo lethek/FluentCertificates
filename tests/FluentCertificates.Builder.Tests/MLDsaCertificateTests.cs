@@ -3,6 +3,8 @@ using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
 
+using TUnit.Assertions.Enums;
+
 
 namespace FluentCertificates;
 
@@ -237,7 +239,35 @@ public class MLDsaCertificateTests
             .SetSubject(x => x.SetCommonName("ML-DSA CSR"))
             .CreateCertificateSigningRequest();
 
-        await Assert.That(csr.ToPemString()).Contains("BEGIN CERTIFICATE REQUEST");
+        //The PEM body must be the request's own DER, not merely a well-formed block
+        var pem = csr.ToPemString();
+        var fields = PemEncoding.Find(pem);
+        await Assert.That(pem[fields.Label].ToString()).IsEqualTo("CERTIFICATE REQUEST");
+        await Assert
+            .That(Convert.FromBase64String(pem[fields.Base64Data].ToString()))
+            .IsEquivalentTo(csr.GetRawData().ToArray(), CollectionOrdering.Matching);
+
+        //The parameter set fixes both halves, so the request is signed under the same OID it certifies
+        await Assert.That(csr.GetSignatureAlgorithm().Oid).IsEqualTo(KeyAlgorithm.MLDsa65.Oid);
+        await Assert
+            .That(csr.CertificateRequest.PublicKey.ExportSubjectPublicKeyInfo())
+            .IsEquivalentTo(cert.PublicKey.ExportSubjectPublicKeyInfo(), CollectionOrdering.Matching);
+
+#if NET10_0_OR_GREATER
+        //Proof of possession is the point of a PKCS#10 request: the signature must verify under the very
+        //public key the request is asking to have certified, not merely be present
+        #pragma warning disable SYSLIB5006
+        using var certified = MLDsa.ImportSubjectPublicKeyInfo(cert.PublicKey.ExportSubjectPublicKeyInfo());
+        await Assert
+            .That(certified.VerifyData(csr.GetRequestData().Span, csr.GetSignatureData().Span))
+            .IsTrue();
+
+        //A tampered request must not verify, so the check above is not vacuously true
+        var tampered = csr.GetRequestData().ToArray();
+        tampered[^1] ^= 0xFF;
+        await Assert.That(certified.VerifyData(tampered, csr.GetSignatureData().Span)).IsFalse();
+        #pragma warning restore SYSLIB5006
+#endif
     }
 
 

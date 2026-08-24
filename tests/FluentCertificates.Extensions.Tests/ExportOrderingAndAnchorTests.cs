@@ -117,11 +117,41 @@ public class ExportOrderingAndAnchorTests
 
 
     /// <summary>
-    /// The anchor keeps its key wherever it lands in the list, so a chain appended after it cannot retarget
-    /// which certificate <see cref="ExportKeys.Primary"/> means.
+    /// The anchor keeps its key wherever it lands in the list, so neither an appended chain nor a reordered
+    /// <c>Certificates</c> can retarget which certificate <see cref="ExportKeys.Primary"/> means.
     /// </summary>
     [Test]
     public async Task Primary_ResolvesThroughTheAnchorNotThePosition()
+    {
+        using var root = Root();
+        using var leaf = Leaf(root);
+
+        //Certificates is publicly settable, so the anchor can be put anywhere but first. That is what
+        //separates the two rules: reading position instead of the anchor would write the root's key here.
+        var pem = (leaf.Export() with { Certificates = [root, leaf] })
+            .WithKeys(ExportKeys.Primary)
+            .AsPem()
+            .ToPemString();
+
+        await Assert.That(SubjectsInOrder(pem)).IsEquivalentTo(
+            ["CN=Root", "CN=Leaf"], CollectionOrdering.Matching);
+
+        //Exactly one private key, and it is the anchor's rather than the first-listed certificate's
+        await Assert.That(pem.Split("-----BEGIN PRIVATE KEY-----").Length - 1).IsEqualTo(1);
+
+        using var leafKey = leaf.GetPrivateKey();
+        using var rootKey = root.GetPrivateKey();
+        await Assert.That(pem).Contains(leafKey.ExportPkcs8PrivateKeyPem().Trim());
+        await Assert.That(pem).DoesNotContain(rootKey.ExportPkcs8PrivateKeyPem().Trim());
+    }
+
+
+    /// <summary>
+    /// A chain appended after the anchor leaves it first, and it is still the anchor rather than the
+    /// position that decides whose key is written.
+    /// </summary>
+    [Test]
+    public async Task Primary_AddChainCannotRetargetTheAnchor()
     {
         using var root = Root();
         using var leaf = Leaf(root);
@@ -132,8 +162,10 @@ public class ExportOrderingAndAnchorTests
         await Assert.That(SubjectsInOrder(pem)).IsEquivalentTo(
             ["CN=Root", "CN=Leaf"], CollectionOrdering.Matching);
 
-        //Exactly one private key, and it is the anchor's rather than the first-listed certificate's
-        await Assert.That(pem.Split("-----BEGIN PRIVATE KEY-----").Length - 1).IsEqualTo(1);
+        using var rootKey = root.GetPrivateKey();
+        using var leafKey = leaf.GetPrivateKey();
+        await Assert.That(pem).Contains(rootKey.ExportPkcs8PrivateKeyPem().Trim());
+        await Assert.That(pem).DoesNotContain(leafKey.ExportPkcs8PrivateKeyPem().Trim());
     }
 
 

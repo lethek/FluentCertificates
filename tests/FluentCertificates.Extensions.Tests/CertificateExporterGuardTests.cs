@@ -94,7 +94,10 @@ public class CertificateExporterGuardTests
         var builder = cert.Export().WithPassword("first").WithPassword(secure);
 
         await Assert.That(builder.Password).IsNull();
-        await Assert.That(builder.SecurePassword).IsNotNull();
+
+        //The SecureString that survived has to be the second one, not merely some SecureString
+        using var loaded = CertTools.LoadPkcs12(builder.AsPkcs12().ToByteArray(), "second");
+        await Assert.That(loaded.Thumbprint).IsEqualTo(cert.Thumbprint);
     }
 
 
@@ -108,6 +111,18 @@ public class CertificateExporterGuardTests
 
         await Assert.That(pem).Contains("-----BEGIN ENCRYPTED PRIVATE KEY-----");
         await Assert.That(pem).Contains("-----BEGIN CERTIFICATE-----");
+
+        //The header only says something encrypted it. Opening it is what proves the SecureString's
+        //characters reached the exporter rather than some other password.
+        using var reloaded = X509Certificate2.CreateFromEncryptedPem(pem, pem, "s3cret");
+        await Assert.That(reloaded.Thumbprint).IsEqualTo(cert.Thumbprint);
+        await Assert.That(reloaded.HasPrivateKey).IsTrue();
+
+        await Assert
+            .That(() => {
+                using var wrong = X509Certificate2.CreateFromEncryptedPem(pem, pem, "wrong");
+            })
+            .ThrowsException();
     }
 
 

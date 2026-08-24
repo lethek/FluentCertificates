@@ -711,10 +711,18 @@ public class CertificateBuilderTests
             .SetSignatureGenerator(generator)
             .CreateCertificateSigningRequest();
 
-        var pem = csr.ToPemString();
-
         await Assert.That(generator.SignCount).IsGreaterThan(0);
-        await Assert.That(pem).Contains("BEGIN CERTIFICATE REQUEST");
+
+        //The builder's own default is Pkcs1, so a PSS signature can only have come from the generator
+        var algorithm = csr.GetSignatureAlgorithm();
+        await Assert.That(algorithm.Oid).IsEqualTo(Oids.RsaPss);
+        await Assert
+            .That(keys.VerifyData(
+                csr.GetRequestData().Span,
+                csr.GetSignatureData().Span,
+                algorithm.HashAlgorithm!.Value,
+                algorithm.RSASignaturePadding!))
+            .IsTrue();
     }
 
 
@@ -1092,7 +1100,8 @@ public class CertificateBuilderTests
             .SetSignatureGenerator(generator)
             .Create();
 
-        await Assert.That(cert.IsIssuedBy(issuer)).IsTrue();
+        //verifySignature: the generator doing the signing is the whole point, so a name match is not enough
+        await Assert.That(cert.IsIssuedBy(issuer, true)).IsTrue();
         await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.KeyAgreement);
     }
 

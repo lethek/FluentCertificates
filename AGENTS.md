@@ -57,9 +57,11 @@ dotnet pack -c Release -p:PackageOutputPath="$PWD/artifacts/"
 `DSAX509SignatureGenerator` excluded (a legacy compatibility shim there is no value in testing).
 
 Set **`FLUENTCERT_MUTATION_TESTING=true`** for the run. It is the only thing that relaxes `FLUENTCERT001`
-to a warning in `FluentCertificates.Builder`, which Stryker needs because its mutated compilation drops the
-`#pragma` trivia around the post-quantum call sites when it rolls a mutant back, leaving the diagnostic as
-an error that no mutant can build through. Every ordinary build leaves the gate closed, so the pragmas in
+to a warning in `FluentCertificates.Builder`, and Stryker cannot mutate the project without it. Its
+*rollback* is what forces this: the mutation itself preserves the `#pragma` directives around the
+post-quantum call sites, but when a compile error makes Stryker restore the original code it drops them,
+so `FLUENTCERT001` fires against code that was suppressed in both the original and the mutated tree, and
+it reports the file as unfixable. Every ordinary build leaves the gate closed, so the pragmas in
 `CertificateBuilder.cs` remain the real suppression. Never make that `NoWarn` unconditional.
 
 Two limits are the tool's, not the tests':

@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
+using TUnit.Assertions.Enums;
+
 namespace FluentCertificates;
 
 public class GetPrivateKeyAndSignatureAlgorithmTests
@@ -16,7 +18,20 @@ public class GetPrivateKeyAndSignatureAlgorithmTests
         using var key = cert.GetPrivateKey();
 
         await Assert.That(key.Family).IsEqualTo(KeyAlgorithmFamily.Rsa);
-        await Assert.That(key.AsAsymmetricAlgorithm).IsTypeOf<RSA>().Or.IsAssignableTo<RSA>();
+
+        //Family is read off the runtime type, so asserting the type as well says nothing new. What matters
+        //is that the key returned is this certificate's, and that its private half works.
+        await Assert
+            .That(key.ExportSubjectPublicKeyInfo())
+            .IsEquivalentTo(cert.PublicKey.ExportSubjectPublicKeyInfo(), CollectionOrdering.Matching);
+
+        var rsa = (RSA)key.AsAsymmetricAlgorithm!;
+        var data = new byte[] { 1, 2, 3 };
+        var signature = rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var certPublic = cert.GetRSAPublicKey()!;
+        await Assert
+            .That(certPublic.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
+            .IsTrue();
     }
 
 
