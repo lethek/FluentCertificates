@@ -174,6 +174,9 @@ public record X509ChainBuilder
         //the anchor among the exported certificates even when it also appears as a trusted root
         supplied[Certificate.Thumbprint] = Certificate;
 
+        //The copy is only reached by an element the platform supplied itself, so no test covers it: every
+        //other source is in `supplied` by construction, and reaching this one hermetically would mean
+        //writing a certificate into a real store or serving an AIA fetch
         var certs = result.Chain.ToEnumerable()
             .Select(x => supplied.TryGetValue(x.Thumbprint, out var mine)
                 ? mine
