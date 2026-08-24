@@ -13,6 +13,10 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Fixed
+
+- `CertificateFinder` reads DER-encoded certificates (`.crt`, `.cer`, `.der`, `.ca-bundle`) through the `IFileSystem` it was given, instead of going to the real disk and silently finding none of them.
+
 ## [0.19.0] - 2026-08-24
 
 ### Added

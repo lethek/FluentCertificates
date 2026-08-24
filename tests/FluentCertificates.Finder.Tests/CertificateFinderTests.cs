@@ -1,7 +1,9 @@
+using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 using FluentCertificates.Internals;
 
@@ -467,14 +469,7 @@ public class CertificateFinderTests
         using var cert = CreateSelfSignedCertificate("Formats");
         var dir = CreateRealTempDirectory();
         try {
-            var path = Path.Combine(dir, fileName);
-            switch (format) {
-                case "pem": File.WriteAllText(path, cert.ExportCertificatePem()); break;
-                case "der": File.WriteAllBytes(path, cert.RawData); break;
-                case "pkcs12": File.WriteAllBytes(path, cert.Export(X509ContentType.Pkcs12)!); break;
-                case "pkcs7": File.WriteAllBytes(path, BuildPkcs7(cert)); break;
-                default: throw new ArgumentOutOfRangeException(nameof(format), format, null);
-            }
+            File.WriteAllBytes(Path.Combine(dir, fileName), CertificateFileBytes(cert, format));
 
             var results = new CertificateFinder().AddDirectory(dir).ToList();
 
@@ -484,6 +479,47 @@ public class CertificateFinderTests
             Directory.Delete(dir, true);
         }
     }
+
+
+    /// <summary>
+    /// Every format has to be read through the <see cref="IFileSystem"/> the finder was given. A loader
+    /// taking a path goes to the real disk whatever that file system is, so on any other one it finds
+    /// nothing, and the enumerator's catch turns the resulting <see cref="FileNotFoundException"/> into a
+    /// silently skipped file rather than an error. The real-directory test above cannot see that, because
+    /// there the two file systems are the same one.
+    /// </summary>
+    [Test]
+    [Arguments("cert.pem", "pem")]
+    [Arguments("cert.ca-bundle", "pem")]
+    [Arguments("cert.crt", "der")]
+    [Arguments("cert.cer", "der")]
+    [Arguments("cert.der", "der")]
+    [Arguments("cert.pfx", "pkcs12")]
+    [Arguments("cert.p12", "pkcs12")]
+    [Arguments("cert.p7b", "pkcs7")]
+    [Arguments("cert.p7c", "pkcs7")]
+    public async Task EnumerateCertificates_EachSupportedExtension_IsReadThroughTheGivenFileSystem(
+        string fileName, string format)
+    {
+        using var cert = CreateSelfSignedCertificate("MockFormats");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/formats/{fileName}", new MockFileData(CertificateFileBytes(cert, format)));
+
+        var results = new CertificateFinder(fs).AddDirectory("/formats").ToList();
+
+        await Assert.That(results.Count).IsEqualTo(1);
+        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+    }
+
+
+    private static byte[] CertificateFileBytes(X509Certificate2 cert, string format)
+        => format switch {
+            "pem" => Encoding.ASCII.GetBytes(cert.ExportCertificatePem()),
+            "der" => cert.RawData,
+            "pkcs12" => cert.Export(X509ContentType.Pkcs12)!,
+            "pkcs7" => BuildPkcs7(cert),
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
+        };
 
 
     private static byte[] BuildPkcs7(X509Certificate2 cert)
