@@ -37,6 +37,11 @@ public class KeyAlgorithmTests
         await Assert.That(KeyAlgorithm.Default(KeyAlgorithmFamily.Rsa)).IsEqualTo(KeyAlgorithm.RSA(4096));
         await Assert.That(KeyAlgorithm.Default(KeyAlgorithmFamily.ECDsa)).IsEqualTo(KeyAlgorithm.ECDsa());
         await Assert.That(KeyAlgorithm.Default(KeyAlgorithmFamily.ECDiffieHellman)).IsEqualTo(KeyAlgorithm.ECDiffieHellman());
+
+#pragma warning disable CS0618 // DSA is obsolete, but the family still has a documented default
+        await Assert.That(KeyAlgorithm.Default(KeyAlgorithmFamily.Dsa)).IsEqualTo(KeyAlgorithm.DSA(1024));
+        await Assert.That(KeyAlgorithm.DSA()).IsEqualTo(KeyAlgorithm.DSA(1024));
+#pragma warning restore CS0618
     }
 
 
