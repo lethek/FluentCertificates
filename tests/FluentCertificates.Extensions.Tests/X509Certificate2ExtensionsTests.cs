@@ -37,6 +37,29 @@ public class X509Certificate2ExtensionsTests
     }
 
 
+    /// <summary>
+    /// DSA has its own arm in the verifier, and the certificates it signs are the only ones that reach it.
+    /// </summary>
+    [Test]
+    [SupportedOSPlatform("Windows")]
+    [SupportedOSPlatform("Linux")]
+    public async Task Certificate_IssuedByADSAIssuer_VerifiesIssuerSignature()
+    {
+        #pragma warning disable CS0618 // Type or member is obsolete
+        var builder = new CertificateBuilder().SetSubject("CN=DSA Issuer").SetKeyAlgorithm(KeyAlgorithm.DSA());
+        #pragma warning restore CS0618 // Type or member is obsolete
+
+        using var faker = builder.Create();
+        using var issuer = builder.Create();
+
+        using var cert = new CertificateBuilder().SetIssuer(issuer).Create();
+
+        await Assert.That(cert.IsIssuedBy(faker, verifySignature: false)).IsTrue();
+        await Assert.That(cert.IsIssuedBy(faker, verifySignature: true)).IsFalse();
+        await Assert.That(cert.IsIssuedBy(issuer, true)).IsTrue();
+    }
+
+
     [Test]
     [MethodDataSource(nameof(KeyAlgorithmsAndExportKeysTestData))]
     public async Task ExportAsPem_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)

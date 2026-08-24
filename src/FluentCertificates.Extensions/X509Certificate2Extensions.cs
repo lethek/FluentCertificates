@@ -247,8 +247,12 @@ public static class X509Certificate2Extensions
         switch (algorithm.Family) {
             #pragma warning disable CS0618 // Type or member is obsolete
             case KeyAlgorithmFamily.Dsa: {
-                using var key = issuer.GetDSAPublicKey()!;
-                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value);
+                //Built from the SubjectPublicKeyInfo rather than through GetDSAPublicKey, which on Windows
+                //hands back a legacy CSP key that knows no hash algorithm beyond SHA-1 and throws for the
+                //SHA-256 the certificate was signed with
+                using var key = DSA.Create();
+                key.ImportSubjectPublicKeyInfo(issuer.PublicKey.ExportSubjectPublicKeyInfo(), out _);
+                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
             }
             #pragma warning restore CS0618 // Type or member is obsolete
             case KeyAlgorithmFamily.Rsa: {
