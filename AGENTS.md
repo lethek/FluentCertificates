@@ -281,8 +281,7 @@ Export, via `Export()` and the `CertificateExportBuilder` it returns:
 - Terminate: `ToPemString()` (PEM only) / `ToByteArray()` / `ToFile(path)` / `ToStream(stream)`
 
 `With*` configures and `Add*` accumulates; keep that split when adding methods. All the `Add*` methods
-deduplicate by thumbprint, so a certificate already present is skipped. `WithChain(...)` and
-`WithPrivateKeys(...)` are `[Obsolete]` and forward to `AddChain(...)` and `WithAllPrivateKeys(...)`.
+deduplicate by thumbprint, so a certificate already present is skipped.
 
 **Private keys are opt-in.** `CertificateExportBuilder.Keys` defaults to `ExportKeys.None`, and so does
 `X509Chain.ToCollection(ExportKeys)`; they are the only two places the enum carries a default, and both
@@ -344,8 +343,8 @@ Chain and validity helpers on `X509Certificate2` / `X509Chain`:
   Neither `Export()` seeds any key: like every export they default to `ExportKeys.None`, so a
   fullchain needs `WithPrivateKey()` for the leaf's key. `ChainResult.Export()` does not verify,
   matching every other `Export()`; use `EnsureVerified().Export()` for the guarded form.
-- `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. `IsValidAt(DateTime)` is `[Obsolete]`: a
-  `DateTime` carries no offset, so its `DateTimeKind` silently changes the answer.
+- `IsValidNow()` / `IsValidAt(DateTimeOffset)` - Validity checks. There is deliberately no `DateTime`
+  overload: a `DateTime` carries no offset, so its `DateTimeKind` would silently change the answer.
 - `IsSelfSigned()` / `IsIssuedBy()` - Relationship checks
 - `CanSign()` - Whether the private key is usable for signing, rather than merely associated as
   `HasPrivateKey` reports. Every "cannot sign" outcome returns `false` rather than throwing, and it is

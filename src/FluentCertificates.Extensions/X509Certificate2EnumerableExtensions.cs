@@ -46,27 +46,31 @@ public static class X509Certificate2EnumerableExtensions
     /// whoever supplied them. Note the sequence is lazy, so <paramref name="created"/> is only complete after
     /// it has been enumerated.
     /// </summary>
-    internal static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include, ICollection<X509Certificate2> created)
+    /// <param name="enumerable">The certificates to filter.</param>
+    /// <param name="include">Which private keys to keep.</param>
+    /// <param name="created">Receives the keyless certificates this call creates.</param>
+    /// <param name="primary">
+    /// The certificate whose key <see cref="ExportKeys.Primary"/> keeps, so a caller's anchor survives
+    /// whatever order the list ends up in. When <see langword="null"/>, the first certificate in the sequence
+    /// is taken as the primary one, since a bare sequence designates none.
+    /// </param>
+    internal static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include, ICollection<X509Certificate2> created, X509Certificate2? primary = null)
         => include switch {
             ExportKeys.All => enumerable,
-            ExportKeys.Primary => enumerable.Select((x, i) => x.HasPrivateKey && i > 0 ? StripPrivateKey(x, created) : x),
+            ExportKeys.Primary => enumerable.Select((x, i) => x.HasPrivateKey && !IsPrimary(x, i, primary) ? StripPrivateKey(x, created) : x),
             ExportKeys.None => enumerable.Select(x => x.HasPrivateKey ? StripPrivateKey(x, created) : x),
             _ => throw new ArgumentOutOfRangeException(nameof(include))
         };
 
 
     /// <summary>
-    /// As <see cref="FilterPrivateKeys(IEnumerable{X509Certificate2},ExportKeys,ICollection{X509Certificate2})"/>,
-    /// but <see cref="ExportKeys.Primary"/> keeps <paramref name="primary"/>'s key rather than the first
-    /// certificate's, so a caller's anchor survives whatever order the list ends up in.
+    /// Reports whether <paramref name="cert"/> is the one <see cref="ExportKeys.Primary"/> keeps the key of:
+    /// <paramref name="primary"/> where one was named, and otherwise whichever certificate arrived first.
     /// </summary>
-    internal static IEnumerable<X509Certificate2> FilterPrivateKeys(this IEnumerable<X509Certificate2> enumerable, ExportKeys include, X509Certificate2 primary, ICollection<X509Certificate2> created)
-        => include switch {
-            ExportKeys.All => enumerable,
-            ExportKeys.Primary => enumerable.Select(x => x.HasPrivateKey && !String.Equals(x.Thumbprint, primary.Thumbprint, StringComparison.OrdinalIgnoreCase) ? StripPrivateKey(x, created) : x),
-            ExportKeys.None => enumerable.Select(x => x.HasPrivateKey ? StripPrivateKey(x, created) : x),
-            _ => throw new ArgumentOutOfRangeException(nameof(include))
-        };
+    private static bool IsPrimary(X509Certificate2 cert, int index, X509Certificate2? primary)
+        => primary == null
+            ? index == 0
+            : String.Equals(cert.Thumbprint, primary.Thumbprint, StringComparison.OrdinalIgnoreCase);
 
 
     private static X509Certificate2 StripPrivateKey(X509Certificate2 cert, ICollection<X509Certificate2> created)
@@ -75,13 +79,6 @@ public static class X509Certificate2EnumerableExtensions
         created.Add(keyless);
         return keyless;
     }
-
-
-    #region Export to a Writer
-
-    // ReSharper disable once SuspiciousTypeConversion.Global
-
-    #endregion
 
 
     /// <summary>

@@ -13,6 +13,12 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Removed
+
+- `CertificateExportBuilder.WithChain(...)`, deprecated since 0.16.0. Use `AddChain(...)`.
+- `CertificateExportBuilder.WithPrivateKeys()`, deprecated since 0.17.0. Use `WithAllPrivateKeys()`.
+- `X509Certificate2.IsValidAt(DateTime)`, deprecated since 0.15.0. Use the `DateTimeOffset` overload.
+
 ### Fixed
 
 - `CertificateFinder` reads DER-encoded certificates (`.crt`, `.cer`, `.der`, `.ca-bundle`) through the `IFileSystem` it was given, instead of going to the real disk and silently finding none of them.

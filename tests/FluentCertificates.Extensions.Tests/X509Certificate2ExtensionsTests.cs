@@ -362,32 +362,6 @@ public class X509Certificate2ExtensionsTests
     }
 
 
-    [Test]
-    public async Task IsValidAt_ObsoleteDateTimeOverload_ConvertsToUniversalTime()
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        using var cert = new CertificateBuilder()
-            .SetSubject(x => x.SetCommonName("Kind Test"))
-            .SetNotBefore(now.AddMinutes(-5))
-            .SetNotAfter(now.AddMinutes(5))
-            .Create();
-
-        //The same instant must give the same answer however its DateTimeKind expresses it
-        #pragma warning disable CS0618 // Type or member is obsolete
-        await Assert.That(cert.IsValidAt(DateTime.UtcNow)).IsTrue();
-        await Assert
-            .That(cert.IsValidAt(DateTime.Now))
-            .IsTrue()
-            .Because("a local DateTime is converted to UTC before being compared");
-
-        //Unspecified is treated as local time, matching DateTime.ToUniversalTime
-        var unspecified = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
-        await Assert.That(cert.IsValidAt(unspecified)).IsTrue();
-        #pragma warning restore CS0618 // Type or member is obsolete
-    }
-
-
     public static IEnumerable<(KeyAlgorithm, ExportKeys, string?)> KeyAlgorithmsAndExportKeysTestData()
     {
         yield return (KeyAlgorithm.ECDsa(), ExportKeys.None, TestPassword);

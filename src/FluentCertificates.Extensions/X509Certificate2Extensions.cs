@@ -211,23 +211,6 @@ public static class X509Certificate2Extensions
 
 
     /// <summary>
-    /// Determines if the certificate is valid at a specific time. Both bounds are inclusive.
-    /// </summary>
-    /// <remarks>
-    /// Deprecated. A <see cref="DateTime"/> does not carry an offset, so the result depends on its
-    /// <see cref="DateTimeKind"/>: <see cref="DateTimeKind.Unspecified"/> is treated as local time,
-    /// following the behaviour of <see cref="DateTime.ToUniversalTime"/>. Use the
-    /// <see cref="IsValidAt(X509Certificate2,DateTimeOffset)"/> overload, which is unambiguous.
-    /// </remarks>
-    /// <param name="cert">The certificate.</param>
-    /// <param name="atTime">The time to check validity for.</param>
-    /// <returns>True if valid at the specified time; otherwise, false.</returns>
-    [Obsolete("Use the IsValidAt(DateTimeOffset) overload instead: a DateTime has no offset, so the result depends on its DateTimeKind.")]
-    public static bool IsValidAt(this X509Certificate2 cert, DateTime atTime)
-        => cert.IsValidAt(new DateTimeOffset(atTime.ToUniversalTime()));
-
-
-    /// <summary>
     /// Determines if the certificate is self-signed.
     /// </summary>
     /// <param name="cert">The certificate.</param>

@@ -59,7 +59,7 @@ public class CertificateExporter
                 + "target a certificate it does not contain.", nameof(anchor));
         }
 
-        //The list is written as given. A chain was sorted when WithChain declared it one; a collection
+        //The list is written as given. A chain was sorted when AddChain declared it one; a collection
         //keeps the caller's order. Nothing here re-reads the certificates to second-guess either.
         _certs = certs;
 
@@ -197,9 +197,11 @@ public class CertificateExporter
     /// </summary>
     /// <param name="stripped">Receives the keyless certificates this call creates, for the caller to dispose.</param>
     private IEnumerable<X509Certificate2> FilterKeys(ICollection<X509Certificate2> stripped)
-        => _keys == ExportKeys.Primary
-            ? _certs.FilterPrivateKeys(_keys, RequirePrimary("ExportKeys.Primary"), stripped)
-            : _certs.FilterPrivateKeys(_keys, stripped);
+        => _certs.FilterPrivateKeys(
+            _keys,
+            stripped,
+            _keys == ExportKeys.Primary ? RequirePrimary("ExportKeys.Primary") : null
+        );
 
 
     /// <summary>
