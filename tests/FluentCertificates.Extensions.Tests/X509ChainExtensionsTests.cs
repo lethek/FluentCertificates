@@ -170,6 +170,33 @@ public class X509ChainExtensionsTests
     }
 
 
+    /// <summary>
+    /// A chain that was never built has no elements, so there is no end certificate to anchor on. The
+    /// builder still comes back; it is the export that refuses.
+    /// </summary>
+    [Test]
+    public async Task Export_UnbuiltChain_YieldsAnEmptyUnanchoredBuilder()
+    {
+        using var chain = new X509Chain();
+
+        var builder = chain.Export();
+
+        await Assert.That(builder.Certificates).IsEmpty();
+        await Assert.That(builder.Anchor).IsNull();
+        await Assert.That(() => builder.AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task ToCollection_UnbuiltChain_IsEmpty()
+    {
+        using var chain = new X509Chain();
+
+        await Assert.That(chain.ToEnumerable()).IsEmpty();
+        await Assert.That(chain.ToCollection()).IsEmpty();
+    }
+
+
     private static X509Certificate2 BuildRootCa()
         => new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)

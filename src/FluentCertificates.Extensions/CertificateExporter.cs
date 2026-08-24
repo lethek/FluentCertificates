@@ -155,10 +155,8 @@ public class CertificateExporter
     {
         var stripped = new List<X509Certificate2>();
         try {
+            //Never empty: the constructor rejects an empty set and key filtering maps one-for-one
             var list = FilterKeys(stripped).ToList();
-            if (list.Count == 0) {
-                return string.Empty;
-            }
 
             using var sw = new StringWriter();
             if (_keys != ExportKeys.None) {
