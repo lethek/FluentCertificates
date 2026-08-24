@@ -376,11 +376,15 @@ public class GeneralNameListBuilderTests
     [Test]
     public async Task AddMethods_AreImmutable()
     {
-        var builder = new GeneralNameListBuilder();
-        var builder2 = builder.AddDnsName("a.com");
+        var builder = new GeneralNameListBuilder().AddDnsName("a.com");
+        var builder2 = builder.AddDnsName("b.com");
 
-        await Assert.That(builder2).IsNotSameReferenceAs(builder);
-        await Assert.That(builder.Create()).IsEmpty();
-        await Assert.That(builder2.Create()).HasSingleItem();
+        //The original keeps only what it was given, and the new one carries both, in order
+        await Assert
+            .That(builder.Create().Cast<DnsNameAsn>().Select(x => x.DnsName))
+            .IsEquivalentTo(["a.com"], CollectionOrdering.Matching);
+        await Assert
+            .That(builder2.Create().Cast<DnsNameAsn>().Select(x => x.DnsName))
+            .IsEquivalentTo(["a.com", "b.com"], CollectionOrdering.Matching);
     }
 }

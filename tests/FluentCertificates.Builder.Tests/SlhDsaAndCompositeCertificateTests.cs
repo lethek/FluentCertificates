@@ -152,7 +152,9 @@ public class SlhDsaAndCompositeCertificateTests
             .SetSubject(x => x.SetCommonName("RSA Leaf"))
             .Create();
 
-        await Assert.That(leaf.IsIssuedBy(rootCa)).IsTrue();
+        //verifySignature: the default only compares issuer and subject names, which says nothing about
+        //whether the post-quantum key actually signed anything
+        await Assert.That(leaf.IsIssuedBy(rootCa, true)).IsTrue();
     }
 
 
@@ -175,7 +177,7 @@ public class SlhDsaAndCompositeCertificateTests
             .SetSubject(x => x.SetCommonName("ECDsa Leaf"))
             .Create();
 
-        await Assert.That(leaf.IsIssuedBy(rootCa)).IsTrue();
+        await Assert.That(leaf.IsIssuedBy(rootCa, true)).IsTrue();
     }
 
 
@@ -204,8 +206,12 @@ public class SlhDsaAndCompositeCertificateTests
         //Guards the gate itself. If PostQuantumAlgorithms were ever empty, or IsSupported wrongly returned
         //false everywhere, every test above would skip and the suite would still be green.
         await Assert.That(KeyAlgorithm.PostQuantumAlgorithms).IsNotEmpty();
-        await Assert.That(SlhDsaAlgorithms().Count()).IsEqualTo(12);
-        await Assert.That(CompositeAlgorithms().Count()).IsEqualTo(18);
+
+        //FIPS 205 defines 12 SLH-DSA parameter sets (SHA2 and SHAKE, at 128/192/256 bits, each small or
+        //fast) and draft-ietf-lamps-pq-composite-sigs-19 s7 registers 18 composite sets. Both lists are
+        //fixed by their specs, so a count that moves means a set was lost or invented rather than added.
+        await Assert.That(SlhDsaAlgorithms().Select(x => x.Oid).Distinct().Count()).IsEqualTo(12);
+        await Assert.That(CompositeAlgorithms().Select(x => x.Oid).Distinct().Count()).IsEqualTo(18);
 
 #if NET10_0_OR_GREATER
         //Cross-check the gate against the BCL's own flag rather than against a hardcoded expectation of what

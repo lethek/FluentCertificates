@@ -33,14 +33,17 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task ClearSources_ReturnsNewInstanceWithNoSources()
+    public async Task ClearSources_LeavesTheOriginalFinderIntact()
     {
-        var finder = new CertificateFinder(MockFileSystem);
+        var finder = new CertificateFinder(MockFileSystem).AddStore(StoreName.My, StoreLocation.CurrentUser);
+
         var cleared = finder.ClearSources();
 
-        await Assert.That(cleared).IsNotNull();
-        await Assert.That(cleared).IsNotSameReferenceAs(finder);
+        //Clearing produces a new finder rather than emptying this one, so the original still has its store
         await Assert.That(cleared.Sources).IsEmpty();
+        await Assert
+            .That(StoresOf(finder))
+            .IsEquivalentTo([("My", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
     }
 
 
@@ -146,12 +149,19 @@ public class CertificateFinderTests
     [Test]
     public async Task EnumerateCertificates_WithValidPath_ReturnsExpectedResults()
     {
+        using var expectedNoKey = TestTools.LoadCertificateResource("ecdsa-no-key.pem");
+        using var expectedWithKey = TestTools.LoadCertificateResource("ecdsa-with-key.pem");
+
         var finder = new CertificateFinder(MockFileSystem).AddDirectory("/certs");
         var results = finder.ToList();
 
-        await Assert.That(results.Count).IsEqualTo(2);
-        await Assert.That(results).All(r => r.Certificate != null);
-        await Assert.That(results).All(r => r.Directory != null);
+        //Both files in the directory, identified rather than merely counted
+        await Assert
+            .That(results.Select(r => r.Certificate.Thumbprint))
+            .IsEquivalentTo([expectedNoKey.Thumbprint, expectedWithKey.Thumbprint], CollectionOrdering.Any);
+
+        //Directory is nullable and records where each result came from, so it has to be the one searched
+        await Assert.That(results.Select(r => r.Directory!.Path).Distinct()).IsEquivalentTo(["/certs"]);
     }
 
 

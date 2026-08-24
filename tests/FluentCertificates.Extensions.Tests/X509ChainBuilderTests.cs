@@ -148,9 +148,12 @@ public class X509ChainBuilderTests
         var builder = leaf.BuildChain();
         var withRoot = builder.TrustRoot(root);
 
-        await Assert.That(ReferenceEquals(builder, withRoot)).IsFalse();
+        //The original is left alone and the new one carries the root, which is what immutability buys.
+        //Whether the two are the same instance is a record's own guarantee, not this builder's.
         await Assert.That(builder.TrustedRoots).IsEmpty();
-        await Assert.That(withRoot.TrustedRoots).Count().IsEqualTo(1);
+        await Assert.That(builder.CustomTrustEnabled).IsFalse();
+        await Assert.That(withRoot.TrustedRoots).IsEquivalentTo([root], EqualityComparer<X509Certificate2>.Default);
+        await Assert.That(withRoot.CustomTrustEnabled).IsTrue();
     }
 
 
@@ -326,11 +329,17 @@ public class X509ChainBuilderTests
 
         leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Export().AsPem().ToPemString();
 
-        //Accessing RawData after disposal throws, so this proves the internal chain's disposal
-        //did not reach the caller's instances
-        await Assert.That(leaf.RawData).IsNotNull();
-        await Assert.That(mid.RawData).IsNotNull();
-        await Assert.That(root.RawData).IsNotNull();
+        //Accessing RawData after disposal throws, so reading it back unchanged proves the internal
+        //chain's disposal did not reach the caller's instances
+        await Assert.That(() => {
+            _ = leaf.RawData;
+            _ = mid.RawData;
+            _ = root.RawData;
+        }).ThrowsNothing();
+
+        await Assert.That(leaf.Subject).IsEqualTo("CN=Leaf");
+        await Assert.That(mid.Subject).IsEqualTo("CN=SubCA");
+        await Assert.That(root.Subject).IsEqualTo("CN=RootCA");
         await Assert.That(leaf.HasPrivateKey).IsTrue();
     }
 
@@ -390,7 +399,12 @@ public class X509ChainBuilderTests
 
         var pem = leaf.BuildChain().TrustRoot(root).Export().WithAllPrivateKeys().AsPem().ToPemString();
 
+        //Two keys, and both distinct: a count alone would pass if the same key were written twice
         await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(4);
+        using var leafKey = leaf.GetPrivateKey();
+        using var rootKey = root.GetPrivateKey();
+        await Assert.That(pem).Contains(leafKey.ExportPkcs8PrivateKeyPem().Trim());
+        await Assert.That(pem).Contains(rootKey.ExportPkcs8PrivateKeyPem().Trim());
     }
 
 
@@ -412,6 +426,15 @@ public class X509ChainBuilderTests
 
         var pem = export.WithAllPrivateKeys().AsPem().ToPemString();
         await Assert.That(pem.Split("PRIVATE KEY").Length - 1).IsEqualTo(6);
+
+        //Including mid's own key, which is only reachable if the policy's instance was reused rather
+        //than replaced by a keyless copy
+        using var midKey = mid.GetPrivateKey();
+        using var leafKey = leaf.GetPrivateKey();
+        using var rootKey = root.GetPrivateKey();
+        await Assert.That(pem).Contains(midKey.ExportPkcs8PrivateKeyPem().Trim());
+        await Assert.That(pem).Contains(leafKey.ExportPkcs8PrivateKeyPem().Trim());
+        await Assert.That(pem).Contains(rootKey.ExportPkcs8PrivateKeyPem().Trim());
     }
 
 

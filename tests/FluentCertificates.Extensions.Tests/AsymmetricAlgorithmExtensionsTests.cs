@@ -29,7 +29,15 @@ public class AsymmetricAlgorithmExtensionsTests
     {
         using var key = ECDsa.Create();
 
-        await Assert.That(key.ToPrivateKeyPemString(password)).Contains("-----BEGIN PRIVATE KEY-----");
+        var pem = key.ToPrivateKeyPemString(password);
+
+        await Assert.That(pem).Contains("-----BEGIN PRIVATE KEY-----");
+        await Assert.That(pem).DoesNotContain("ENCRYPTED");
+
+        //Readable without a password, which is what "not encrypted" has to mean
+        using var reloaded = ECDsa.Create();
+        reloaded.ImportFromPem(pem);
+        await Assert.That(reloaded.ExportPkcs8PrivateKey()).IsEquivalentTo(key.ExportPkcs8PrivateKey());
     }
 
 
@@ -94,7 +102,13 @@ public class AsymmetricAlgorithmExtensionsTests
 
         key.ExportAsPrivateKeyPem(writer, "s3cret");
 
-        await Assert.That(writer.ToString()).Contains("-----BEGIN ENCRYPTED PRIVATE KEY-----");
+        var pem = writer.ToString();
+        await Assert.That(pem).Contains("-----BEGIN ENCRYPTED PRIVATE KEY-----");
+
+        //The header only says something encrypted it; opening it is what ties it to this password and key
+        using var reloaded = ECDsa.Create();
+        reloaded.ImportFromEncryptedPem(pem, "s3cret");
+        await Assert.That(reloaded.ExportPkcs8PrivateKey()).IsEquivalentTo(key.ExportPkcs8PrivateKey());
     }
 
 
@@ -130,7 +144,12 @@ public class AsymmetricAlgorithmExtensionsTests
 
             key.ExportAsPrivateKeyPem(path, "s3cret");
 
-            await Assert.That(File.ReadAllText(path)).Contains("-----BEGIN ENCRYPTED PRIVATE KEY-----");
+            var pem = File.ReadAllText(path);
+            await Assert.That(pem).Contains("-----BEGIN ENCRYPTED PRIVATE KEY-----");
+
+            using var reloaded = ECDsa.Create();
+            reloaded.ImportFromEncryptedPem(pem, "s3cret");
+            await Assert.That(reloaded.ExportPkcs8PrivateKey()).IsEquivalentTo(key.ExportPkcs8PrivateKey());
         } finally {
             Directory.Delete(dir, true);
         }
