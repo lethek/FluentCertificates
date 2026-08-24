@@ -349,6 +349,56 @@ public class X500NameBuilderTests
     }
 
 
+    [Test]
+    public async Task Add_WithoutAnEncoding_DefaultsToUtf8String()
+    {
+        var ou = Oids.OrganizationalUnitOid;
+        var expected = new[] {
+            (ou, UniversalTagNumber.UTF8String, "Eng"),
+            (ou, UniversalTagNumber.UTF8String, "Ops")
+        };
+
+        //By Oid instance and by OID value string, which are the two overloads that take no encoding
+        await Assert
+            .That(new X500NameBuilder().Add(ou, "Eng", "Ops").RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
+
+        await Assert
+            .That(new X500NameBuilder().Add(ou.Value!, "Eng", "Ops").RelativeDistinguishedNames)
+            .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Set_ByOid_ReplacesOnlyTheMatchingAttributes()
+    {
+        var ou = Oids.OrganizationalUnitOid;
+
+        //An explicit encoding, given the OID as a string
+        var withEncoding = new X500NameBuilder()
+            .SetCommonName("Common")
+            .AddOrganizationalUnits("old", "units")
+            .Set(ou.Value!, UniversalTagNumber.PrintableString, "Eng", "Ops");
+
+        await Assert.That(withEncoding.GetOrganizationalUnits()).IsEquivalentTo(["Eng", "Ops"], CollectionOrdering.Matching);
+        await Assert.That(withEncoding.GetCommonName()).IsEqualTo("Common");
+        await Assert
+            .That(withEncoding.RelativeDistinguishedNames.Where(x => x.OID.Value == ou.Value).Select(x => x.ValueEncoding))
+            .IsEquivalentTo([UniversalTagNumber.PrintableString, UniversalTagNumber.PrintableString], CollectionOrdering.Matching);
+
+        //The default encoding, given the OID as a string and as an Oid instance
+        var byString = new X500NameBuilder().AddOrganizationalUnits("old", "units").Set(ou.Value!, "Eng", "Ops");
+        var byOid = new X500NameBuilder().AddOrganizationalUnits("old", "units").Set(ou, "Eng", "Ops");
+
+        foreach (var builder in new[] { byString, byOid }) {
+            await Assert.That(builder.GetOrganizationalUnits()).IsEquivalentTo(["Eng", "Ops"], CollectionOrdering.Matching);
+            await Assert
+                .That(builder.RelativeDistinguishedNames.Select(x => x.ValueEncoding))
+                .IsEquivalentTo([UniversalTagNumber.UTF8String, UniversalTagNumber.UTF8String], CollectionOrdering.Matching);
+        }
+    }
+
+
     private static readonly IEqualityComparer<(Oid, UniversalTagNumber, string)> X500RdnTupleComparer
         = new DelegateEqualityComparer<(Oid OID, UniversalTagNumber ValueEncoding, string Value)>(
             (x, y) =>

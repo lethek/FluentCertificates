@@ -37,6 +37,29 @@ public class X509Certificate2ExtensionsTests
     }
 
 
+    /// <summary>
+    /// DSA has its own arm in the verifier, and the certificates it signs are the only ones that reach it.
+    /// </summary>
+    [Test]
+    [SupportedOSPlatform("Windows")]
+    [SupportedOSPlatform("Linux")]
+    public async Task Certificate_IssuedByADSAIssuer_VerifiesIssuerSignature()
+    {
+        #pragma warning disable CS0618 // Type or member is obsolete
+        var builder = new CertificateBuilder().SetSubject("CN=DSA Issuer").SetKeyAlgorithm(KeyAlgorithm.DSA());
+        #pragma warning restore CS0618 // Type or member is obsolete
+
+        using var faker = builder.Create();
+        using var issuer = builder.Create();
+
+        using var cert = new CertificateBuilder().SetIssuer(issuer).Create();
+
+        await Assert.That(cert.IsIssuedBy(faker, verifySignature: false)).IsTrue();
+        await Assert.That(cert.IsIssuedBy(faker, verifySignature: true)).IsFalse();
+        await Assert.That(cert.IsIssuedBy(issuer, true)).IsTrue();
+    }
+
+
     [Test]
     [MethodDataSource(nameof(KeyAlgorithmsAndExportKeysTestData))]
     public async Task ExportAsPem_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
@@ -359,32 +382,6 @@ public class X509Certificate2ExtensionsTests
         await Assert.That(current.IsValidNow()).IsTrue();
         await Assert.That(expired.IsValidNow()).IsFalse();
         await Assert.That(notYetValid.IsValidNow()).IsFalse();
-    }
-
-
-    [Test]
-    public async Task IsValidAt_ObsoleteDateTimeOverload_ConvertsToUniversalTime()
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        using var cert = new CertificateBuilder()
-            .SetSubject(x => x.SetCommonName("Kind Test"))
-            .SetNotBefore(now.AddMinutes(-5))
-            .SetNotAfter(now.AddMinutes(5))
-            .Create();
-
-        //The same instant must give the same answer however its DateTimeKind expresses it
-        #pragma warning disable CS0618 // Type or member is obsolete
-        await Assert.That(cert.IsValidAt(DateTime.UtcNow)).IsTrue();
-        await Assert
-            .That(cert.IsValidAt(DateTime.Now))
-            .IsTrue()
-            .Because("a local DateTime is converted to UTC before being compared");
-
-        //Unspecified is treated as local time, matching DateTime.ToUniversalTime
-        var unspecified = DateTime.SpecifyKind(DateTime.Now, DateTimeKind.Unspecified);
-        await Assert.That(cert.IsValidAt(unspecified)).IsTrue();
-        #pragma warning restore CS0618 // Type or member is obsolete
     }
 
 

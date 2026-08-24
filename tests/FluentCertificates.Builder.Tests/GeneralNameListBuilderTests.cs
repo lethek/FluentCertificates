@@ -374,6 +374,34 @@ public class GeneralNameListBuilderTests
 
 
     [Test]
+    public async Task Encode_ToASpan_WritesTheSameBytesAsTheArrayOverload()
+    {
+        var names = new GeneralNameListBuilder()
+            .AddDnsName("a.com")
+            .AddEmailAddress("user@example.com")
+            .Create();
+
+        var expected = names.Encode();
+        var destination = new byte[expected.Length];
+
+        var written = names.Encode(destination);
+
+        await Assert.That(written).IsEqualTo(expected.Length);
+        await Assert.That(destination).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Encode_ToATooSmallSpan_Throws()
+    {
+        var names = new GeneralNameListBuilder().AddDnsName("a.com").Create();
+        var destination = new byte[1];
+
+        await Assert.That(() => names.Encode(destination)).Throws<ArgumentException>();
+    }
+
+
+    [Test]
     public async Task AddMethods_AreImmutable()
     {
         var builder = new GeneralNameListBuilder().AddDnsName("a.com");

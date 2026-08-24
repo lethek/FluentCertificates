@@ -89,6 +89,57 @@ public class CertificateFinderTests
 
 
     [Test]
+    public async Task AddStores_WithAnEnumerableOfStores_AddsAllStores()
+    {
+        var stores = new List<X509Store> {
+            new(StoreName.My, StoreLocation.CurrentUser),
+            new(StoreName.Root, StoreLocation.LocalMachine)
+        };
+
+        var finder = new CertificateFinder(MockFileSystem).AddStores(stores);
+
+        await Assert
+            .That(StoresOf(finder))
+            .IsEquivalentTo([
+                ("My", StoreLocation.CurrentUser),
+                ("Root", StoreLocation.LocalMachine)
+            ], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AddStores_WithNameAndLocationPairs_AddsAllStores()
+    {
+        (string, StoreLocation)[] expected = [("My", StoreLocation.CurrentUser), ("Root", StoreLocation.LocalMachine)];
+
+        var fromParams = new CertificateFinder(MockFileSystem)
+            .AddStores(("My", StoreLocation.CurrentUser), ("Root", StoreLocation.LocalMachine));
+
+        var fromEnumerable = new CertificateFinder(MockFileSystem)
+            .AddStores(new List<(string, StoreLocation)> { ("My", StoreLocation.CurrentUser), ("Root", StoreLocation.LocalMachine) });
+
+        await Assert.That(StoresOf(fromParams)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(StoresOf(fromEnumerable)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AddStores_WithStoreNameAndLocationPairs_AddsAllStores()
+    {
+        (string, StoreLocation)[] expected = [("My", StoreLocation.CurrentUser), ("Root", StoreLocation.LocalMachine)];
+
+        var fromParams = new CertificateFinder(MockFileSystem)
+            .AddStores((StoreName.My, StoreLocation.CurrentUser), (StoreName.Root, StoreLocation.LocalMachine));
+
+        var fromEnumerable = new CertificateFinder(MockFileSystem)
+            .AddStores(new List<(StoreName, StoreLocation)> { (StoreName.My, StoreLocation.CurrentUser), (StoreName.Root, StoreLocation.LocalMachine) });
+
+        await Assert.That(StoresOf(fromParams)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(StoresOf(fromEnumerable)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
     public async Task AddDirectory_WithValidPath_AddsDirectorySource()
     {
         var finder = new CertificateFinder(MockFileSystem).AddDirectory("/certs");
@@ -130,6 +181,21 @@ public class CertificateFinderTests
 
 
     [Test]
+    public async Task AddCustomSources_EnumeratesEverySourceGiven()
+    {
+        var first = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-no-key.pem");
+        var second = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-with-key.pem");
+
+        var finder = new CertificateFinder(MockFileSystem).AddCustomSources([[first], [second]]);
+
+        await Assert.That(finder.Sources.Count).IsEqualTo(2);
+        await Assert
+            .That(finder.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Certificate.Thumbprint, second.Certificate.Thumbprint], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
     public async Task AddCommonStores_AddsExpectedStores()
     {
         var finder = new CertificateFinder(MockFileSystem).AddCommonStores();
@@ -164,6 +230,79 @@ public class CertificateFinderTests
 
         //Directory is nullable and records where each result came from, so it has to be the one searched
         await Assert.That(results.Select(r => r.Directory!.Path).Distinct()).IsEquivalentTo(["/certs"]);
+    }
+
+
+    [Test]
+    public async Task EnumerateCertificates_WithTheSameDirectoryAddedTwice_ReturnsEachCertificateOnce()
+    {
+        using var expectedNoKey = TestTools.LoadCertificateResource("ecdsa-no-key.pem");
+        using var expectedWithKey = TestTools.LoadCertificateResource("ecdsa-with-key.pem");
+
+        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/certs").AddDirectory("/certs");
+
+        //Both additions are kept, so the caller still sees what they asked for
+        await Assert.That(finder.Sources.Count).IsEqualTo(2);
+
+        //...but the directory is read once, so no certificate is reported twice
+        await Assert
+            .That(finder.ToList().Select(r => r.Certificate.Thumbprint))
+            .IsEquivalentTo([expectedNoKey.Thumbprint, expectedWithKey.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    [Test]
+    public async Task EnumerateCertificates_WithTheSameDirectoryAddedRecursivelyAndNot_KeepsBothSources()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        using var top = CreateSelfSignedCertificate("Top");
+        using var nested = CreateSelfSignedCertificate("Nested");
+        fs.AddFile("/tree/top.cer", new MockFileData(top.RawData));
+        fs.AddFile("/tree/sub/nested.cer", new MockFileData(nested.RawData));
+
+        //Same path, different recursion: two distinct sources, so the top-level file is found by both
+        var finder = new CertificateFinder(fs).AddDirectory("/tree").AddDirectory("/tree", recurse: true);
+
+        await Assert
+            .That(finder.ToList().Select(r => r.Certificate.Thumbprint))
+            .IsEquivalentTo([top.Thumbprint, top.Thumbprint, nested.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// Deduplication rests on the sources comparing by value, so a store named twice is one source however
+    /// it was named, and a different store or location is a different one.
+    /// </summary>
+    [Test]
+    public async Task StoreSources_CompareByTheStoreTheyName()
+    {
+        var byName = new CertificateStoreEnumerable("My", StoreLocation.CurrentUser);
+        var byEnum = new CertificateStoreEnumerable(StoreName.My, StoreLocation.CurrentUser);
+        var elsewhere = new CertificateStoreEnumerable(StoreName.My, StoreLocation.LocalMachine);
+        var other = new CertificateStoreEnumerable(StoreName.Root, StoreLocation.CurrentUser);
+
+        await Assert.That(byName).IsEqualTo(byEnum);
+        await Assert.That(byName).IsNotEqualTo(elsewhere);
+        await Assert.That(byName).IsNotEqualTo(other);
+    }
+
+
+    /// <summary>
+    /// The same, for directories: the path and the recursion setting both count, since searching a tree is
+    /// not the same search as searching its top level.
+    /// </summary>
+    [Test]
+    public async Task DirectorySources_CompareByPathAndRecursion()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        var top = new CertificateDirectoryEnumerable(fs, "/certs");
+        var same = new CertificateDirectoryEnumerable(fs, new CertificateDirectory("/certs"));
+        var deep = new CertificateDirectoryEnumerable(fs, "/certs", recurse: true);
+        var other = new CertificateDirectoryEnumerable(fs, "/elsewhere");
+
+        await Assert.That(top).IsEqualTo(same);
+        await Assert.That(top).IsNotEqualTo(deep);
+        await Assert.That(top).IsNotEqualTo(other);
     }
 
 

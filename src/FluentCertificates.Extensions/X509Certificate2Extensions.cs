@@ -211,23 +211,6 @@ public static class X509Certificate2Extensions
 
 
     /// <summary>
-    /// Determines if the certificate is valid at a specific time. Both bounds are inclusive.
-    /// </summary>
-    /// <remarks>
-    /// Deprecated. A <see cref="DateTime"/> does not carry an offset, so the result depends on its
-    /// <see cref="DateTimeKind"/>: <see cref="DateTimeKind.Unspecified"/> is treated as local time,
-    /// following the behaviour of <see cref="DateTime.ToUniversalTime"/>. Use the
-    /// <see cref="IsValidAt(X509Certificate2,DateTimeOffset)"/> overload, which is unambiguous.
-    /// </remarks>
-    /// <param name="cert">The certificate.</param>
-    /// <param name="atTime">The time to check validity for.</param>
-    /// <returns>True if valid at the specified time; otherwise, false.</returns>
-    [Obsolete("Use the IsValidAt(DateTimeOffset) overload instead: a DateTime has no offset, so the result depends on its DateTimeKind.")]
-    public static bool IsValidAt(this X509Certificate2 cert, DateTime atTime)
-        => cert.IsValidAt(new DateTimeOffset(atTime.ToUniversalTime()));
-
-
-    /// <summary>
     /// Determines if the certificate is self-signed.
     /// </summary>
     /// <param name="cert">The certificate.</param>
@@ -264,8 +247,12 @@ public static class X509Certificate2Extensions
         switch (algorithm.Family) {
             #pragma warning disable CS0618 // Type or member is obsolete
             case KeyAlgorithmFamily.Dsa: {
-                using var key = issuer.GetDSAPublicKey()!;
-                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value);
+                //Built from the SubjectPublicKeyInfo rather than through GetDSAPublicKey, which on Windows
+                //hands back a legacy CSP key that knows no hash algorithm beyond SHA-1 and throws for the
+                //SHA-256 the certificate was signed with
+                using var key = DSA.Create();
+                key.ImportSubjectPublicKeyInfo(issuer.PublicKey.ExportSubjectPublicKeyInfo(), out _);
+                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
             }
             #pragma warning restore CS0618 // Type or member is obsolete
             case KeyAlgorithmFamily.Rsa: {

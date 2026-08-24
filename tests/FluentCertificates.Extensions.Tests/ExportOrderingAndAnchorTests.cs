@@ -56,6 +56,63 @@ public class ExportOrderingAndAnchorTests
     }
 
 
+    /// <summary>
+    /// A cross-signed CA puts two certificates in the group carrying the same subject, so the leaf names an
+    /// issuer that both of them answer to. Which one belongs on that rung is not the library's to guess.
+    /// </summary>
+    [Test]
+    public async Task AddChain_TwoCandidatesForTheSameRung_AreAppendedAsGiven()
+    {
+        using var anchor = Root("Anchor");
+        using var ca1 = Root("Shared CA");
+        using var ca2 = Root("Shared CA");
+        using var leaf = Leaf(ca1);
+
+        var pem = anchor.Export().AddChain([ca1, leaf, ca2]).AsPem().ToPemString();
+
+        //Sorting would have put the leaf first; the group is left exactly as it was given instead
+        await Assert.That(ThumbprintsInOrder(pem)).IsEquivalentTo(
+            [anchor.Thumbprint, ca1.Thumbprint, leaf.Thumbprint, ca2.Thumbprint], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// One unambiguous leaf, but its issuer is not in the group, so the walk up the chain stops before it
+    /// has placed every certificate.
+    /// </summary>
+    [Test]
+    public async Task AddChain_LeafWhoseIssuerIsMissing_IsAppendedAsGiven()
+    {
+        using var anchor = Root("Anchor");
+        using var absentCa = Root("Absent CA");
+        using var orphan = Leaf(absentCa);
+        using var ca1 = Root("Shared CA");
+        using var ca2 = Root("Shared CA");
+
+        var pem = anchor.Export().AddChain([ca1, orphan, ca2]).AsPem().ToPemString();
+
+        await Assert.That(ThumbprintsInOrder(pem)).IsEquivalentTo(
+            [anchor.Thumbprint, ca1.Thumbprint, orphan.Thumbprint, ca2.Thumbprint], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// Every certificate in the group is named as an issuer by another, so there is no leaf to start from.
+    /// </summary>
+    [Test]
+    public async Task AddChain_GroupWithNoLeaf_IsAppendedAsGiven()
+    {
+        using var anchor = Root("Anchor");
+        using var ca1 = Root("Shared CA");
+        using var ca2 = Root("Shared CA");
+
+        var pem = anchor.Export().AddChain([ca1, ca2]).AsPem().ToPemString();
+
+        await Assert.That(ThumbprintsInOrder(pem)).IsEquivalentTo(
+            [anchor.Thumbprint, ca1.Thumbprint, ca2.Thumbprint], CollectionOrdering.Matching);
+    }
+
+
     [Test]
     public async Task AddCertificates_IsNeverReordered()
     {
@@ -180,9 +237,15 @@ public class ExportOrderingAndAnchorTests
         => new CertificateBuilder().SetSubject(x => x.SetCommonName("Leaf")).SetIssuer(issuer).Create();
 
     private static List<string> SubjectsInOrder(string pem)
+        => CertificatesInOrder(pem).Select(x => x.Subject).ToList();
+
+    private static List<string> ThumbprintsInOrder(string pem)
+        => CertificatesInOrder(pem).Select(x => x.Thumbprint).ToList();
+
+    private static X509Certificate2Collection CertificatesInOrder(string pem)
     {
         var collection = new X509Certificate2Collection();
         collection.ImportFromPem(pem);
-        return collection.Select(x => x.Subject).ToList();
+        return collection;
     }
 }

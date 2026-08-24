@@ -139,4 +139,44 @@ public class GetPrivateKeyAndSignatureAlgorithmTests
         await Assert.That(algorithm.Oid).IsEqualTo(KeyAlgorithm.MLDsa65.Oid);
 #pragma warning restore FLUENTCERT001
     }
+
+
+    [Test]
+    public async Task FromOid_KnownAlgorithm_ResolvesTheSameInstanceAsTheStringLookup()
+    {
+        var algorithm = SignatureAlgorithm.FromOid(new Oid(SignatureAlgorithm.SHA256RSA.Oid));
+
+        await Assert.That(algorithm).IsSameReferenceAs(SignatureAlgorithm.SHA256RSA);
+        await Assert.That(algorithm.Family).IsEqualTo(KeyAlgorithmFamily.Rsa);
+        await Assert.That(algorithm.HashAlgorithm).IsEqualTo(HashAlgorithmName.SHA256);
+        await Assert.That(algorithm.RSASignaturePadding).IsEqualTo(RSASignaturePadding.Pkcs1);
+    }
+
+
+    [Test]
+    public async Task FromOid_UnknownOid_Throws()
+    {
+        var ex = await Assert
+            .That(() => SignatureAlgorithm.FromOid(new Oid("1.3.6.1.4.1.99999.7", "Nothing")))
+            .ThrowsExactly<NotSupportedException>();
+
+        await Assert.That(ex!.Message).Contains("1.3.6.1.4.1.99999.7");
+        await Assert.That(ex.Message).Contains("Nothing");
+    }
+
+
+    [Test]
+    public async Task FromOid_OidCarryingNoValue_Throws()
+        //An Oid can name a friendly name alone, and nothing can be looked up from that
+        => await Assert
+            .That(() => SignatureAlgorithm.FromOid(new Oid(null, "Nothing")))
+            .ThrowsExactly<NotSupportedException>();
+
+
+    [Test]
+    public async Task FromOidValue_UnknownOrMissingOid_Throws()
+    {
+        await Assert.That(() => SignatureAlgorithm.FromOidValue("1.3.6.1.4.1.99999.7")).ThrowsExactly<NotSupportedException>();
+        await Assert.That(() => SignatureAlgorithm.FromOidValue(null)).ThrowsExactly<NotSupportedException>();
+    }
 }

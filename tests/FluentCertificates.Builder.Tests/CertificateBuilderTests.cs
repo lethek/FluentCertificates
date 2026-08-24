@@ -1199,6 +1199,158 @@ public class CertificateBuilderTests
     }
 
 
+    [Test]
+    [Arguments(0)]
+    [Arguments(2)]
+    public async Task Build_CACertificate_WithPathLength_ConstrainsTheChainDepth(int pathLength)
+    {
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName("Path Length Test"))
+            .SetPathLength(pathLength)
+            .Create();
+
+        var basicConstraints = cert.Extensions.OfType<X509BasicConstraintsExtension>().Single();
+
+        await Assert.That(basicConstraints.CertificateAuthority).IsTrue();
+        await Assert.That(basicConstraints.HasPathLengthConstraint).IsTrue();
+        await Assert.That(basicConstraints.PathLengthConstraint).IsEqualTo(pathLength);
+    }
+
+
+    [Test]
+    public async Task Build_CACertificate_WithoutPathLength_LeavesTheChainDepthUnconstrained()
+    {
+        //A path length of 0 and an absent one are different constraints, so the unset case must not encode as 0
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName("No Path Length Test"))
+            .Create();
+
+        var basicConstraints = cert.Extensions.OfType<X509BasicConstraintsExtension>().Single();
+
+        await Assert.That(basicConstraints.CertificateAuthority).IsTrue();
+        await Assert.That(basicConstraints.HasPathLengthConstraint).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Build_Certificate_WithSerialNumberGenerator_UsesTheGeneratedSerialNumber()
+    {
+        byte[] serialNumber = [0x4D, 0x58, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
+        var calls = 0;
+
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("Serial Number Test"))
+            .SetSerialNumberGenerator(() => {
+                calls++;
+                return serialNumber;
+            })
+            .Create();
+
+        await Assert.That(cert.SerialNumber).IsEqualTo(Convert.ToHexString(serialNumber));
+        await Assert.That(calls).IsEqualTo(1);
+    }
+
+
+    [Test]
+    public async Task Build_Certificate_WithoutSerialNumberGenerator_GeneratesADistinctSerialNumberEachTime()
+    {
+        using var cert1 = new CertificateBuilder().SetSubject(x => x.SetCommonName("Default Serial Test")).Create();
+        using var cert2 = new CertificateBuilder().SetSubject(x => x.SetCommonName("Default Serial Test")).Create();
+
+        await Assert.That(cert1.SerialNumber).IsNotEqualTo(cert2.SerialNumber);
+    }
+
+
+    [Test]
+    public async Task Build_RSACertificate_WithPssPadding_SignsWithRSASSAPSS()
+    {
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("RSA-PSS Test"))
+            .SetKeyAlgorithm(KeyAlgorithm.RSA(2048))
+            .SetRSASignaturePadding(RSASignaturePadding.Pss)
+            .Create();
+
+        await Assert.That(cert.SignatureAlgorithm.Value).IsEqualTo(PkcsObjectIdentifiers.IdRsassaPss.Id);
+        await Assert.That(cert.IsSelfSigned(true)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Build_RSACertificate_WithoutPaddingSpecified_SignsWithPkcs1()
+    {
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("RSA Default Padding Test"))
+            .SetKeyAlgorithm(KeyAlgorithm.RSA(2048))
+            .Create();
+
+        await Assert.That(cert.SignatureAlgorithm.Value).IsEqualTo(PkcsObjectIdentifiers.Sha256WithRsaEncryption.Id);
+        await Assert.That(cert.IsSelfSigned(true)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Build_AddExtensions_AddsEveryExtensionGiven()
+    {
+        using var certFromParams = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("AddExtensions Params Test"))
+            .AddExtensions(TestExtension(TestExtensionOid1), TestExtension(TestExtensionOid2))
+            .Create();
+
+        await Assert.That(GetExtensionOids(certFromParams)).Contains(TestExtensionOid1);
+        await Assert.That(GetExtensionOids(certFromParams)).Contains(TestExtensionOid2);
+
+        using var certFromEnumerable = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("AddExtensions Enumerable Test"))
+            .AddExtension(TestExtension(TestExtensionOid1))
+            .AddExtensions(new List<X509Extension> { TestExtension(TestExtensionOid2), TestExtension(TestExtensionOid3) })
+            .Create();
+
+        await Assert.That(GetExtensionOids(certFromEnumerable)).Contains(TestExtensionOid1);
+        await Assert.That(GetExtensionOids(certFromEnumerable)).Contains(TestExtensionOid2);
+        await Assert.That(GetExtensionOids(certFromEnumerable)).Contains(TestExtensionOid3);
+    }
+
+
+    [Test]
+    public async Task Build_SetExtensions_DiscardsExtensionsAddedEarlier()
+    {
+        using var certFromParams = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("SetExtensions Params Test"))
+            .AddExtension(TestExtension(TestExtensionOid1))
+            .SetExtensions(TestExtension(TestExtensionOid2), TestExtension(TestExtensionOid3))
+            .Create();
+
+        await Assert.That(GetExtensionOids(certFromParams)).DoesNotContain(TestExtensionOid1);
+        await Assert.That(GetExtensionOids(certFromParams)).Contains(TestExtensionOid2);
+        await Assert.That(GetExtensionOids(certFromParams)).Contains(TestExtensionOid3);
+
+        using var certFromEnumerable = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("SetExtensions Enumerable Test"))
+            .AddExtension(TestExtension(TestExtensionOid1))
+            .SetExtensions(new List<X509Extension> { TestExtension(TestExtensionOid2) })
+            .Create();
+
+        await Assert.That(GetExtensionOids(certFromEnumerable)).DoesNotContain(TestExtensionOid1);
+        await Assert.That(GetExtensionOids(certFromEnumerable)).Contains(TestExtensionOid2);
+    }
+
+
+    private const string TestExtensionOid1 = "1.3.6.1.4.1.99999.1";
+    private const string TestExtensionOid2 = "1.3.6.1.4.1.99999.2";
+    private const string TestExtensionOid3 = "1.3.6.1.4.1.99999.3";
+
+
+    //DER NULL as the payload: an arbitrary OID carries no meaning to the platform, so any well-formed value does
+    private static X509Extension TestExtension(string oid)
+        => new(new Oid(oid), [0x05, 0x00], false);
+
+
+    private static IEnumerable<string> GetExtensionOids(X509Certificate2 cert)
+        => cert.Extensions.Select(x => x.Oid!.Value!);
+
+
     private static IEnumerable<string> GetEkuOids(X509Certificate2 cert)
         => cert.Extensions
             .OfType<X509EnhancedKeyUsageExtension>()

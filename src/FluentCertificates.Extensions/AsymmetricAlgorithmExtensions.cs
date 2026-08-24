@@ -100,28 +100,16 @@ public static class AsymmetricAlgorithmExtensions
 
     /// <summary>
     /// Writes the private key to <paramref name="writer"/> as PEM, encrypted with
-    /// <paramref name="password"/> when it is non-empty.
+    /// <paramref name="password"/> when it is non-empty. Takes a <see cref="CertificateKey"/> so it covers
+    /// the post-quantum key types too, which have no common base with <see cref="AsymmetricAlgorithm"/>.
     /// </summary>
     /// <remarks>
     /// Takes the password as characters rather than a <see cref="string"/> so a caller holding it in a
     /// <see cref="System.Security.SecureString"/> can hand over a buffer it is able to zero afterwards.
     /// </remarks>
-    /// <param name="keys">The <see cref="AsymmetricAlgorithm"/> instance.</param>
+    /// <param name="key">The key to write.</param>
     /// <param name="writer">The <see cref="TextWriter"/> to write the PEM to.</param>
     /// <param name="password">The password to encrypt the private key, or empty for no encryption.</param>
-    internal static void WritePrivateKeyPem(this AsymmetricAlgorithm keys, TextWriter writer, ReadOnlySpan<char> password)
-        => writer.Write(
-            password.IsEmpty
-                ? PemEncoding.Write("PRIVATE KEY", keys.ExportPkcs8PrivateKey())
-                : PemEncoding.Write("ENCRYPTED PRIVATE KEY", keys.ExportEncryptedPkcs8PrivateKey(password, DefaultPbeParameters))
-        );
-
-
-    /// <summary>
-    /// Writes a key as PEM, whether it is classical or post-quantum. The post-quantum key types have no
-    /// common base with <see cref="AsymmetricAlgorithm"/>, so they export through
-    /// <see cref="CertificateKey"/> rather than through the overload above.
-    /// </summary>
     internal static void WritePrivateKeyPem(this CertificateKey key, TextWriter writer, ReadOnlySpan<char> password)
         => writer.Write(
             password.IsEmpty

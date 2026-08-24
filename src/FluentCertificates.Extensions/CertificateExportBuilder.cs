@@ -96,12 +96,6 @@ public record CertificateExportBuilder
     public CertificateExportBuilder WithAllPrivateKeys()
         => this with { Keys = ExportKeys.All };
 
-    /// <inheritdoc cref="WithAllPrivateKeys"/>
-    [Obsolete($"Renamed to {nameof(WithAllPrivateKeys)}, which cannot be misread as the singular "
-        + nameof(WithPrivateKey) + ". This method behaves identically.")]
-    public CertificateExportBuilder WithPrivateKeys()
-        => WithAllPrivateKeys();
-
     /// <summary>
     /// Returns a new builder that will strip all private keys from the export
     /// (i.e. <see cref="ExportKeys.None"/>), which is also the default.
@@ -157,17 +151,6 @@ public record CertificateExportBuilder
             ? this
             : this with { Certificates = Certificates.AddRange(arrange(toAdd)) };
     }
-
-    /// <inheritdoc cref="AddChain(X509Chain)"/>
-    [Obsolete("Renamed to AddChain, which says that it appends rather than configures. This forwarding overload will be removed in a future version.")]
-    public CertificateExportBuilder WithChain(X509Chain chain)
-        => AddChain(chain);
-
-    /// <inheritdoc cref="AddChain(IEnumerable{X509Certificate2})"/>
-    [Obsolete("Renamed to AddChain, which says that it appends rather than configures. Use AddCertificates to append certificates without declaring them a chain. This forwarding overload will be removed in a future version.")]
-    public CertificateExportBuilder WithChain(IEnumerable<X509Certificate2> certs)
-        => AddChain(certs);
-
 
     /// <summary>
     /// Returns <paramref name="certs"/> ordered leaf-first, root last, when they form a single unambiguous

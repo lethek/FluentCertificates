@@ -396,8 +396,7 @@ leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().To
 Every `Add*` method deduplicates by thumbprint, so a certificate already present is skipped.
 
 `WithPrivateKey()` (singular, the anchor's key) and `WithAllPrivateKeys()` (every key) do different
-things, so they are named to be hard to confuse. `WithPrivateKeys()` was the old name for the latter and
-is **deprecated**; it still forwards to `WithAllPrivateKeys()`.
+things, so they are named to be hard to confuse.
 
 `AddChain` and `AddCertificates` take `params IEnumerable<X509Certificate2>`, so an array, a LINQ query,
 an `X509Certificate2Collection`, or a handful of individual certificates all bind to the same method:
@@ -649,7 +648,7 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |-|-|
 |`BuildChain()`|Starts a fluent `X509ChainBuilder` for building and verifying a chain for this certificate. See [Building a certificate chain](#building-a-certificate-chain).|
 |`IsValidNow()`|Whether the current UTC time falls within the certificate's validity period.|
-|`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. The `DateTime` overload is **deprecated**, because a `DateTime` carries no offset and its `DateTimeKind` changes the result.|
+|`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. There is no `DateTime` overload, because a `DateTime` carries no offset and its `DateTimeKind` would change the result.|
 |`IsSelfSigned(bool verifySignature = false)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key.|
 |`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name.|
 |`CanSign()`|Whether the private key can actually be used for signing, as opposed to merely being associated with the certificate. Every "cannot sign" outcome returns `false` rather than throwing. Costs a key-store lookup. See [Find a certificate whose private key can actually sign](#find-a-certificate-whose-private-key-can-actually-sign).|
