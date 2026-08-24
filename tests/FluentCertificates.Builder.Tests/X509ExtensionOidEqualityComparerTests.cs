@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
@@ -55,11 +56,39 @@ public class X509ExtensionOidEqualityComparerTests
     }
 
 
+    /// <summary>
+    /// <see cref="AsnEncodedData.Oid"/> is publicly settable and nullable, so both the comparison and the
+    /// hash have to read through a missing OID rather than dereference it.
+    /// </summary>
+    [Test]
+    public async Task Equals_ExtensionWithNoOid_ComparesOnTheMissingValue()
+    {
+        var first = RawExtension();
+        var second = RawExtension();
+        var withOid = RawExtension(BasicConstraintsOid);
+
+        await Assert.That(Comparer.Equals(first, second)).IsTrue();
+        await Assert.That(Comparer.Equals(first, withOid)).IsFalse();
+        await Assert.That(Comparer.Equals(withOid, first)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task GetHashCode_ExtensionWithNoOid_DoesNotThrow()
+        => await Assert.That(Comparer.GetHashCode(RawExtension())).IsEqualTo(Comparer.GetHashCode(RawExtension()));
+
+
     [Test]
     public async Task GetHashCode_MatchesForSameOid()
         => await Assert.That(Comparer.GetHashCode(BasicConstraints()))
             .IsEqualTo(Comparer.GetHashCode(BasicConstraints(pathLength: 7)));
 
+
+    private const string BasicConstraintsOid = "2.5.29.19";
+
+    //DER NULL as the payload; the comparer reads nothing but the OID
+    private static X509Extension RawExtension(string? oid = null)
+        => new(new Oid(BasicConstraintsOid), [0x05, 0x00], false) { Oid = oid == null ? null : new Oid(oid) };
 
     private static readonly X509ExtensionOidEqualityComparer Comparer = new();
 
