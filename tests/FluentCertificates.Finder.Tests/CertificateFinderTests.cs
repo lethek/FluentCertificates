@@ -89,6 +89,57 @@ public class CertificateFinderTests
 
 
     [Test]
+    public async Task AddStores_WithAnEnumerableOfStores_AddsAllStores()
+    {
+        var stores = new List<X509Store> {
+            new(StoreName.My, StoreLocation.CurrentUser),
+            new(StoreName.Root, StoreLocation.LocalMachine)
+        };
+
+        var finder = new CertificateFinder(MockFileSystem).AddStores(stores);
+
+        await Assert
+            .That(StoresOf(finder))
+            .IsEquivalentTo([
+                ("My", StoreLocation.CurrentUser),
+                ("Root", StoreLocation.LocalMachine)
+            ], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AddStores_WithNameAndLocationPairs_AddsAllStores()
+    {
+        (string, StoreLocation)[] expected = [("My", StoreLocation.CurrentUser), ("Root", StoreLocation.LocalMachine)];
+
+        var fromParams = new CertificateFinder(MockFileSystem)
+            .AddStores(("My", StoreLocation.CurrentUser), ("Root", StoreLocation.LocalMachine));
+
+        var fromEnumerable = new CertificateFinder(MockFileSystem)
+            .AddStores(new List<(string, StoreLocation)> { ("My", StoreLocation.CurrentUser), ("Root", StoreLocation.LocalMachine) });
+
+        await Assert.That(StoresOf(fromParams)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(StoresOf(fromEnumerable)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AddStores_WithStoreNameAndLocationPairs_AddsAllStores()
+    {
+        (string, StoreLocation)[] expected = [("My", StoreLocation.CurrentUser), ("Root", StoreLocation.LocalMachine)];
+
+        var fromParams = new CertificateFinder(MockFileSystem)
+            .AddStores((StoreName.My, StoreLocation.CurrentUser), (StoreName.Root, StoreLocation.LocalMachine));
+
+        var fromEnumerable = new CertificateFinder(MockFileSystem)
+            .AddStores(new List<(StoreName, StoreLocation)> { (StoreName.My, StoreLocation.CurrentUser), (StoreName.Root, StoreLocation.LocalMachine) });
+
+        await Assert.That(StoresOf(fromParams)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+        await Assert.That(StoresOf(fromEnumerable)).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
     public async Task AddDirectory_WithValidPath_AddsDirectorySource()
     {
         var finder = new CertificateFinder(MockFileSystem).AddDirectory("/certs");
@@ -126,6 +177,21 @@ public class CertificateFinderTests
 
         await Assert.That(finder.Sources).HasSingleItem();
         await Assert.That(finder.Sources[0]).IsSameReferenceAs(customSource);
+    }
+
+
+    [Test]
+    public async Task AddCustomSources_EnumeratesEverySourceGiven()
+    {
+        var first = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-no-key.pem");
+        var second = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-with-key.pem");
+
+        var finder = new CertificateFinder(MockFileSystem).AddCustomSources([[first], [second]]);
+
+        await Assert.That(finder.Sources.Count).IsEqualTo(2);
+        await Assert
+            .That(finder.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Certificate.Thumbprint, second.Certificate.Thumbprint], CollectionOrdering.Matching);
     }
 
 
