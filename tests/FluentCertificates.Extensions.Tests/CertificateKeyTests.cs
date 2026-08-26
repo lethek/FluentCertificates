@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 using TUnit.Assertions.Enums;
 
@@ -81,21 +82,32 @@ public class CertificateKeyTests
     }
 
 
+#pragma warning disable FLUENTCERT001 // Exercising the experimental post-quantum surface is the point here
+
+    /// <summary>
+    /// One set from each post-quantum family that any platform can currently put in a certificate.
+    /// Composite ML-DSA is left out because no platform can sign with one yet.
+    /// </summary>
+    public static IEnumerable<KeyAlgorithm> PostQuantumExportSets()
+    {
+        yield return KeyAlgorithm.MLDsa65;
+        yield return KeyAlgorithm.SlhDsaSha2_128f;
+        yield return KeyAlgorithm.MLKem768;
+    }
+
+
     /// <summary>
     /// The export methods reach a post-quantum key through its own type rather than through
-    /// <see cref="AsymmetricAlgorithm"/>, so each one needs its own arm and each arm needs exercising.
+    /// <see cref="AsymmetricAlgorithm"/>, so each family needs its own arm and each arm needs exercising.
     /// </summary>
     [Test]
-#pragma warning disable FLUENTCERT001 // Exercising the experimental post-quantum surface is the point here
-    [SkipUnlessAlgorithmSupported(KeyAlgorithmFamily.MLDsa)]
-    public async Task PostQuantumKey_ExportsTheSameMaterialThroughEveryFormat()
+    [MethodDataSource(nameof(PostQuantumExportSets))]
+    public async Task PostQuantumKey_ExportsTheSameMaterialThroughEveryFormat(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder()
-            .SetKeyAlgorithm(KeyAlgorithm.MLDsa65)
-            .SetSubject(x => x.SetCommonName("ML-DSA Export"))
-            .Create();
-#pragma warning restore FLUENTCERT001
+        //Gated per parameter set rather than per family, since availability varies within one
+        PostQuantumGate.SkipUnlessSupported(algorithm);
 
+        using var cert = CertificateCarrying(algorithm);
         using var key = cert.GetPrivateKey();
 
         //The public half is the one the certificate carries
@@ -115,6 +127,33 @@ public class CertificateKeyTests
 
         await Assert.That(encrypted).StartsWith("-----BEGIN ENCRYPTED PRIVATE KEY-----");
         await Assert.That(Base64BodyOf(encrypted)).IsNotEquivalentTo(key.ExportPkcs8PrivateKey());
+    }
+#pragma warning restore FLUENTCERT001
+
+
+    /// <summary>
+    /// Builds a certificate carrying a key of the given algorithm, self-signing where the algorithm can sign
+    /// and taking a CA where it cannot.
+    /// </summary>
+    private static X509Certificate2 CertificateCarrying(KeyAlgorithm algorithm)
+    {
+        if (algorithm.CanSign) {
+            return new CertificateBuilder()
+                .SetKeyAlgorithm(algorithm)
+                .SetSubject(x => x.SetCommonName($"{algorithm.Name} Export"))
+                .Create();
+        }
+
+        using var issuer = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName($"{algorithm.Name} Export CA"))
+            .Create();
+
+        return new CertificateBuilder()
+            .SetIssuer(issuer)
+            .SetKeyAlgorithm(algorithm)
+            .SetSubject(x => x.SetCommonName($"{algorithm.Name} Export"))
+            .Create();
     }
 
 
