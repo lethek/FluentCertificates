@@ -34,11 +34,11 @@ public sealed class CertificateKey : IDisposable
         ArgumentNullException.ThrowIfNull(key);
         _key = key;
         Family = key switch {
-            System.Security.Cryptography.ECDsa => KeyAlgorithmFamily.ECDsa,
-            System.Security.Cryptography.ECDiffieHellman => KeyAlgorithmFamily.ECDiffieHellman,
-            System.Security.Cryptography.RSA => KeyAlgorithmFamily.Rsa,
+            ECDsa => KeyAlgorithmFamily.ECDsa,
+            ECDiffieHellman => KeyAlgorithmFamily.ECDiffieHellman,
+            RSA => KeyAlgorithmFamily.Rsa,
 #pragma warning disable CS0618 // Type or member is obsolete
-            System.Security.Cryptography.DSA => KeyAlgorithmFamily.Dsa,
+            DSA => KeyAlgorithmFamily.Dsa,
 #pragma warning restore CS0618 // Type or member is obsolete
             _ => throw new NotSupportedException($"Unsupported {nameof(AsymmetricAlgorithm)}: {key.GetType()}")
         };
@@ -168,11 +168,11 @@ public sealed class CertificateKey : IDisposable
         ArgumentNullException.ThrowIfNull(cert);
         return _key switch {
 #pragma warning disable CS0618 // Type or member is obsolete
-            System.Security.Cryptography.DSA dsa => cert.CopyWithPrivateKey(dsa),
+            DSA dsa => cert.CopyWithPrivateKey(dsa),
 #pragma warning restore CS0618 // Type or member is obsolete
-            System.Security.Cryptography.RSA rsa => cert.CopyWithPrivateKey(rsa),
-            System.Security.Cryptography.ECDsa ecdsa => cert.CopyWithPrivateKey(ecdsa),
-            System.Security.Cryptography.ECDiffieHellman ecdh => cert.CopyWithPrivateKey(ecdh),
+            RSA rsa => cert.CopyWithPrivateKey(rsa),
+            ECDsa ecdsa => cert.CopyWithPrivateKey(ecdsa),
+            ECDiffieHellman ecdh => cert.CopyWithPrivateKey(ecdh),
 #if NET10_0_OR_GREATER
 #pragma warning disable SYSLIB5006
             MLDsa mldsa => cert.CopyWithPrivateKey(mldsa),

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 
 namespace FluentCertificates;
@@ -107,7 +108,7 @@ internal static class PostQuantumSupport
         => CompositeCertificateSigning.GetOrAdd(oid, _ => new Lazy<bool>(() => {
             try {
                 using var probe = CompositeMLDsa.GenerateKey(set);
-                System.Security.Cryptography.X509Certificates.X509SignatureGenerator.CreateForCompositeMLDsa(probe);
+                X509SignatureGenerator.CreateForCompositeMLDsa(probe);
                 return true;
 
             } catch (PlatformNotSupportedException) {
@@ -142,17 +143,17 @@ internal static class PostQuantumSupport
             }
 
             using var kem = MLKem.GenerateKey(MLKemAlgorithm.MLKem512);
-            using var signer = System.Security.Cryptography.ECDsa.Create();
+            using var signer = ECDsa.Create();
 
-            var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
-                new System.Security.Cryptography.X509Certificates.X500DistinguishedName("CN=probe"),
-                new System.Security.Cryptography.X509Certificates.PublicKey(kem),
+            var request = new CertificateRequest(
+                new X500DistinguishedName("CN=probe"),
+                new PublicKey(kem),
                 HashAlgorithmName.SHA256
             );
 
             using var cert = request.Create(
-                new System.Security.Cryptography.X509Certificates.X500DistinguishedName("CN=probe"),
-                System.Security.Cryptography.X509Certificates.X509SignatureGenerator.CreateForECDsa(signer),
+                new X500DistinguishedName("CN=probe"),
+                X509SignatureGenerator.CreateForECDsa(signer),
                 DateTimeOffset.UtcNow.AddHours(-1),
                 DateTimeOffset.UtcNow.AddHours(1),
                 [1]
