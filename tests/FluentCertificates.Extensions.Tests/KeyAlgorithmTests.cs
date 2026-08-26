@@ -45,6 +45,22 @@ public class KeyAlgorithmTests
     }
 
 
+    /// <summary>
+    /// <see cref="KeyAlgorithm.Default"/> only names a parameter set, so it answers on every platform
+    /// whether or not that set can actually be used there. No capability gate is needed.
+    /// </summary>
+    [Test]
+#pragma warning disable FLUENTCERT001 // Naming the post-quantum parameter sets is the point of this test
+    public async Task Defaults_ForThePostQuantumFamilies_MatchTheDocumentedParameterSets()
+    {
+        await Assert.That(KeyAlgorithm.Default(KeyAlgorithmFamily.MLDsa)).IsEqualTo(KeyAlgorithm.MLDsa65);
+        await Assert.That(KeyAlgorithm.Default(KeyAlgorithmFamily.SlhDsa)).IsEqualTo(KeyAlgorithm.SlhDsaSha2_128f);
+        await Assert.That(KeyAlgorithm.Default(KeyAlgorithmFamily.CompositeMLDsa)).IsEqualTo(KeyAlgorithm.MLDsa65WithECDsaP256);
+        await Assert.That(KeyAlgorithm.Default(KeyAlgorithmFamily.MLKem)).IsEqualTo(KeyAlgorithm.MLKem768);
+    }
+#pragma warning restore FLUENTCERT001
+
+
     [Test]
     public async Task Default_UnknownFamily_Throws()
         => await Assert.That(() => KeyAlgorithm.Default((KeyAlgorithmFamily)999))
