@@ -363,6 +363,8 @@ public class CertificateFinderTests
         await AssertPushesDown(cert, f => f.Any(x => x.Location == "a"));
         await AssertPushesDown(cert, f => f.First(x => x.Location == "a"));
         await AssertPushesDown(cert, f => f.FirstOrDefault(x => x.Location == "a"));
+        await AssertPushesDown(cert, f => f.Last(x => x.Location == "a"));
+        await AssertPushesDown(cert, f => f.LastOrDefault(x => x.Location == "a"));
         await AssertPushesDown(cert, f => f.Single(x => x.Location == "a"));
         await AssertPushesDown(cert, f => f.SingleOrDefault(x => x.Location == "a"));
         await AssertPushesDown(cert, f => f.Count(x => x.Location == "a"));
@@ -385,6 +387,8 @@ public class CertificateFinderTests
         await Assert.That(finder.Count(nothing)).IsEqualTo(0);
         await Assert.That(finder.First(matches).Certificate.Thumbprint).IsEqualTo(match.Thumbprint);
         await Assert.That(finder.FirstOrDefault(nothing)).IsNull();
+        await Assert.That(finder.Last(matches).Certificate.Thumbprint).IsEqualTo(match.Thumbprint);
+        await Assert.That(finder.LastOrDefault(nothing)).IsNull();
         await Assert.That(finder.Single(matches).Certificate.Thumbprint).IsEqualTo(match.Thumbprint);
         await Assert.That(finder.SingleOrDefault(nothing)).IsNull();
 

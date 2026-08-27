@@ -280,13 +280,24 @@ custom source is the supported extension point; `AddCustomSource` wraps loose ce
 methods beat extension methods in overload resolution, so both `finder.Where(x => ...)` and
 `from x in finder where ... select x` bind to it and reach the sources. Sources receive the predicate as
 an expression tree *and* as a compiled delegate, so one able to translate it into a native query can.
-`Any`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault` and `Count` have predicate-taking instance
-overloads that shadow the same way, each defined as `Where(predicate).<Op>()`.
+`Any`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` have
+predicate-taking instance overloads that shadow the same way, each defined as `Where(predicate).<Op>()`.
+Short-circuiting is not what these are for: the point is that the predicate reaches the source at all, so
+the source filters natively and disposes its own rejects. That holds whether or not the terminal can stop
+early.
 
 Every other LINQ operator runs after collation: correct, but not pushed down. The same goes for a
 predicate held in a `Func<CertificateFinderResult, bool>` rather than written inline, since only a lambda
-converts to an expression tree. `Last` and `LastOrDefault` are deliberately absent: they cannot
-short-circuit, so pushing down buys nothing.
+converts to an expression tree.
+
+**Collation order is unspecified, so `Last` is well-defined only in the weak sense that `First` is.**
+Sources are searched in the order added, but neither `Directory.EnumerateFiles` nor a store enumeration
+promises an order within a source. A source could short-circuit `Last` by enumerating itself in reverse
+(a SQL source as `ORDER BY ... DESC LIMIT 1`), and the framework has no hook for that on purpose: a
+reverse hook would let a source optimise toward an answer the framework does not promise. Specify an
+ordering contract first, then add the hook. Note deduplication keeps the first occurrence of a
+(thumbprint, kind, location), so reversing would keep the last instead: the same certificate at the same
+location, but a different `X509Certificate2` instance.
 
 Do not reintroduce `IQueryable`. There is no translation target behind a store (`X509Store` exposes
 `Certificates` and nothing else, and `X509Certificate2Collection.Find` is slower than a lambda and

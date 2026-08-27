@@ -98,6 +98,35 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
 
 
     /// <summary>
+    /// The last certificate matching <paramref name="predicate"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <returns>The last matching result.</returns>
+    /// <exception cref="InvalidOperationException">Nothing matched.</exception>
+    /// <remarks>
+    /// Shadows <see cref="Enumerable.Last{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
+    /// sources. See <see cref="Where"/>. Which result is "last" depends on the order sources are searched
+    /// in and the order each yields, and the latter is unspecified: neither a directory listing nor a
+    /// store enumeration promises one.
+    /// </remarks>
+    public CertificateFinderResult Last(Expression<Func<CertificateFinderResult, bool>> predicate)
+        => Where(predicate).Last();
+
+
+    /// <summary>
+    /// The last certificate matching <paramref name="predicate"/>, or <see langword="null"/> if none does.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <returns>The last matching result, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// Shadows <see cref="Enumerable.LastOrDefault{T}(IEnumerable{T},Func{T,bool})"/> so the predicate
+    /// reaches the sources. See <see cref="Last"/> on what "last" means here.
+    /// </remarks>
+    public CertificateFinderResult? LastOrDefault(Expression<Func<CertificateFinderResult, bool>> predicate)
+        => Where(predicate).LastOrDefault();
+
+
+    /// <summary>
     /// The only certificate matching <paramref name="predicate"/>.
     /// </summary>
     /// <param name="predicate">The predicate a result must satisfy.</param>
