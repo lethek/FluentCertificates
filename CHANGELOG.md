@@ -13,6 +13,8 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-08-27
+
 ### Fixed
 
 - An ML-KEM certificate asserts `keyEncipherment` and nothing else for every usage, as RFC 9935 s5 requires. `CertificateUsage.Client` previously emitted an empty critical `keyUsage`, which RFC 5280 s4.2.1.3 forbids, and `CertificateUsage.SMime` added `nonRepudiation` on top.
@@ -483,7 +485,8 @@ release rather than record it as it happened.
 - Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
   including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
 
-[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.20.1...HEAD
+[0.20.1]: https://github.com/lethek/FluentCertificates/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/lethek/FluentCertificates/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/lethek/FluentCertificates/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/lethek/FluentCertificates/compare/v0.17.0...v0.18.0
