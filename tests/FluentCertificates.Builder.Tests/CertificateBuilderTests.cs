@@ -1337,6 +1337,137 @@ public class CertificateBuilderTests
     }
 
 
+    [Test]
+    public async Task Extensions_ReportsWhatWasAddedAndReplaced()
+    {
+        var added = new CertificateBuilder()
+            .AddExtension(TestExtension(TestExtensionOid1))
+            .AddExtensions(TestExtension(TestExtensionOid2));
+
+        await Assert.That(added.Extensions.Select(x => x.Oid!.Value!))
+            .IsEquivalentTo([TestExtensionOid1, TestExtensionOid2]);
+
+        var replaced = added.SetExtensions(TestExtension(TestExtensionOid3));
+
+        await Assert.That(replaced.Extensions.Select(x => x.Oid!.Value!))
+            .IsEquivalentTo([TestExtensionOid3]);
+
+        //The builder is immutable, so the instance the extensions were added to still reports them
+        await Assert.That(added.Extensions.Count).IsEqualTo(2);
+    }
+
+
+    [Test]
+    public async Task SetKeyPair_CertificateKey_CertifiesThatKeyAndFollowsItsAlgorithm()
+    {
+        using var key = new CertificateKey(ECDsa.Create(ECCurve.NamedCurves.nistP384));
+
+        var builder = new CertificateBuilder()
+            //The supplied key's algorithm wins over whatever was configured before it
+            .SetKeyAlgorithm(KeyAlgorithm.RSA(2048))
+            .SetKeyPair(key)
+            .SetSubject(x => x.SetCommonName(nameof(SetKeyPair_CertificateKey_CertifiesThatKeyAndFollowsItsAlgorithm)));
+
+        await Assert.That(builder.KeyAlgorithm.Family).IsEqualTo(KeyAlgorithmFamily.ECDsa);
+
+        using var cert = builder.Create();
+
+        await Assert.That(cert.PublicKey.ExportSubjectPublicKeyInfo()).IsEquivalentTo(key.ExportSubjectPublicKeyInfo(), CollectionOrdering.Matching);
+        await Assert.That(cert.IsSelfSigned()).IsTrue();
+    }
+
+
+    [Test]
+    public async Task SetKeyPair_CertificateKeyNull_RestoresAutomaticKeyGeneration()
+    {
+        using var supplied = new CertificateKey(ECDsa.Create(ECCurve.NamedCurves.nistP384));
+
+        var builder = new CertificateBuilder()
+            .SetKeyPair(supplied)
+            .SetKeyPair((CertificateKey?)null)
+            .SetSubject(x => x.SetCommonName(nameof(SetKeyPair_CertificateKeyNull_RestoresAutomaticKeyGeneration)));
+
+        //Clearing the key leaves behind the algorithm it brought with it, which is what the fresh key is generated from
+        await Assert.That(builder.KeyAlgorithm.Family).IsEqualTo(KeyAlgorithmFamily.ECDsa);
+
+        using var cert = builder.Create();
+
+        await Assert.That(cert.HasPrivateKey).IsTrue();
+        await Assert.That(cert.PublicKey.ExportSubjectPublicKeyInfo().SequenceEqual(supplied.ExportSubjectPublicKeyInfo())).IsFalse();
+    }
+
+
+    [Test]
+    public async Task SetKeyPair_Null_RestoresAutomaticKeyGeneration()
+    {
+        using var supplied = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+
+        var builder = new CertificateBuilder()
+            .SetKeyPair(supplied)
+            .SetKeyPair((AsymmetricAlgorithm?)null)
+            .SetSubject(x => x.SetCommonName(nameof(SetKeyPair_Null_RestoresAutomaticKeyGeneration)));
+
+        await Assert.That(builder.KeyAlgorithm.Family).IsEqualTo(KeyAlgorithmFamily.ECDsa);
+
+        using var cert = builder.Create();
+
+        await Assert.That(cert.HasPrivateKey).IsTrue();
+        await Assert.That(cert.PublicKey.ExportSubjectPublicKeyInfo().SequenceEqual(supplied.ExportSubjectPublicKeyInfo())).IsFalse();
+    }
+
+
+    [Test]
+    public async Task SetKeyPair_UnrecognisedAsymmetricAlgorithm_Throws()
+    {
+        using var keys = new UnrecognisedAlgorithm();
+
+        await Assert.That(() => new CertificateBuilder().SetKeyPair(keys)).ThrowsExactly<NotSupportedException>();
+    }
+
+
+    [Test]
+    [SupportedOSPlatform("Windows")]
+    [SupportedOSPlatform("Linux")]
+    public async Task SetPublicKey_DSAKey_UpdatesKeyAlgorithmToDSA()
+    {
+        using var keys = DSA.Create(1024);
+
+        var builder = new CertificateBuilder().SetPublicKey(new PublicKey(keys));
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        await Assert.That(builder.KeyAlgorithm.Family).IsEqualTo(KeyAlgorithmFamily.Dsa);
+#pragma warning restore CS0618 // Type or member is obsolete
+    }
+
+
+#pragma warning disable FLUENTCERT001 // Naming a post-quantum parameter set is the point of this test
+    [Test]
+    [SkipUnlessAlgorithmSupported(KeyAlgorithmFamily.MLDsa)]
+    public async Task SetPublicKey_PostQuantumKey_UpdatesKeyAlgorithmToItsParameterSet()
+    {
+        //A post-quantum OID names its parameter set exactly, so it reads back without the ambiguity an EC key has
+        using var source = new CertificateBuilder()
+            .SetKeyAlgorithm(KeyAlgorithm.MLDsa65)
+            .SetSubject(x => x.SetCommonName(nameof(SetPublicKey_PostQuantumKey_UpdatesKeyAlgorithmToItsParameterSet)))
+            .Create();
+
+        var builder = new CertificateBuilder().SetPublicKey(source.PublicKey);
+
+        await Assert.That(builder.KeyAlgorithm.Oid).IsEqualTo(KeyAlgorithm.MLDsa65.Oid);
+        await Assert.That(builder.KeyAlgorithm.Name).IsEqualTo(KeyAlgorithm.MLDsa65.Name);
+    }
+#pragma warning restore FLUENTCERT001
+
+
+    [Test]
+    public async Task Build_UnrecognisedUsage_Throws()
+    {
+        await Assert.That(() => {
+            using var cert = new CertificateBuilder().SetUsage((CertificateUsage)999).Create();
+        }).ThrowsExactly<NotImplementedException>();
+    }
+
+
     private const string TestExtensionOid1 = "1.3.6.1.4.1.99999.1";
     private const string TestExtensionOid2 = "1.3.6.1.4.1.99999.2";
     private const string TestExtensionOid3 = "1.3.6.1.4.1.99999.3";
@@ -1372,6 +1503,12 @@ public class CertificateBuilderTests
         => Asn1Sequence
             .GetInstance(extension.ConvertToBouncyCastle().GetParsedValue())
             .Select(Org.BouncyCastle.Asn1.X509.GeneralName.GetInstance);
+
+
+    /// <summary>
+    /// An <see cref="AsymmetricAlgorithm"/> of no algorithm the builder recognises.
+    /// </summary>
+    private sealed class UnrecognisedAlgorithm : AsymmetricAlgorithm;
 
 
     /// <summary>

@@ -90,6 +90,47 @@ public class GetPrivateKeyAndSignatureAlgorithmTests
     }
 
 
+    /// <summary>
+    /// A certificate can carry a key of an algorithm this library knows nothing about, and asking for its
+    /// private key has to say so rather than reporting the key merely missing.
+    /// </summary>
+    [Test]
+    public async Task GetPrivateKey_UnrecognisedKeyAlgorithm_NamesTheOid()
+    {
+        using var cert = CertificateWithAnUnrecognisedKeyAlgorithm();
+
+        var ex = await Assert.That(() => cert.GetPrivateKey()).ThrowsExactly<NotSupportedException>();
+
+        await Assert.That(ex!.Message).Contains(UnrecognisedKeyOid);
+    }
+
+
+    private const string UnrecognisedKeyOid = "1.3.6.1.4.1.99999.7";
+
+
+    /// <summary>
+    /// Certifies a public key whose algorithm OID belongs to no algorithm at all. The signature comes from an
+    /// unrelated ECDsa key, which is what <see cref="CertificateBuilder.SetSignatureGenerator"/> is for: the
+    /// certificate is well-formed and its own key is simply unreadable.
+    /// </summary>
+    private static X509Certificate2 CertificateWithAnUnrecognisedKeyAlgorithm()
+    {
+        using var signer = ECDsa.Create();
+
+        var publicKey = new PublicKey(
+            new Oid(UnrecognisedKeyOid),
+            new AsnEncodedData([0x05, 0x00]),
+            new AsnEncodedData([0x03, 0x02, 0x00, 0x01])
+        );
+
+        return new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("Unrecognised Key Algorithm"))
+            .SetPublicKey(publicKey)
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(signer))
+            .Create();
+    }
+
+
     [Test]
     [Arguments(KeyAlgorithmFamily.Rsa)]
     [Arguments(KeyAlgorithmFamily.ECDsa)]
