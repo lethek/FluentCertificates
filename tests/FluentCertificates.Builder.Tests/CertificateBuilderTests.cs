@@ -903,9 +903,9 @@ public class CertificateBuilderTests
             .SetIssuer(issuer)
             .Create();
 
-        //An ECDH key agrees on a secret rather than signing, so digitalSignature must not be asserted
-        await Assert.That(GetKeyUsages(cert))
-            .IsEqualTo(X509KeyUsageFlags.KeyAgreement | X509KeyUsageFlags.NonRepudiation);
+        //An ECDH key agrees on a secret rather than signing, so neither digitalSignature nor nonRepudiation
+        //is asserted: there is no signature for the subject to later deny having made
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.KeyAgreement);
         await Assert.That(cert.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdECPublicKey.Id);
         await Assert.That(cert.IsIssuedBy(issuer, true)).IsTrue();
 
