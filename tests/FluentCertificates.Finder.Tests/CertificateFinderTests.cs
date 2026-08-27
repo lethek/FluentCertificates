@@ -1,5 +1,6 @@
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
+using System.Linq.Expressions;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
@@ -346,6 +347,49 @@ public class CertificateFinderTests
 
         await Assert.That(source.ReceivedPredicateCounts).IsEquivalentTo([1], CollectionOrdering.Matching);
         await Assert.That(results).IsEquivalentTo([cert.Thumbprint], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// The predicate-taking terminals shadow their <see cref="Enumerable"/> counterparts for the same
+    /// reason <see cref="CertificateFinder.Where"/> does, so the predicate reaches the source instead of
+    /// filtering after collation. A stub receiving zero predicates would mean the extension method won.
+    /// </summary>
+    [Test]
+    public async Task PredicateOverloads_HandThePredicateToTheSource()
+    {
+        using var cert = CreateSelfSignedCertificate("Overloads");
+
+        await AssertPushesDown(cert, f => f.Any(x => x.Location == "a"));
+        await AssertPushesDown(cert, f => f.First(x => x.Location == "a"));
+        await AssertPushesDown(cert, f => f.FirstOrDefault(x => x.Location == "a"));
+        await AssertPushesDown(cert, f => f.Single(x => x.Location == "a"));
+        await AssertPushesDown(cert, f => f.SingleOrDefault(x => x.Location == "a"));
+        await AssertPushesDown(cert, f => f.Count(x => x.Location == "a"));
+    }
+
+
+    [Test]
+    public async Task PredicateOverloads_ReturnTheSameAnswersAsLinq()
+    {
+        using var match = CreateSelfSignedCertificate("Match");
+        using var other = CreateSelfSignedCertificate("Other");
+
+        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(match, other);
+        var matches = (Expression<Func<CertificateFinderResult, bool>>)(x => x.Certificate.Subject == "CN=Match");
+        Expression<Func<CertificateFinderResult, bool>> nothing = x => x.Certificate.Subject == "CN=Absent";
+
+        await Assert.That(finder.Any(matches)).IsTrue();
+        await Assert.That(finder.Any(nothing)).IsFalse();
+        await Assert.That(finder.Count(matches)).IsEqualTo(1);
+        await Assert.That(finder.Count(nothing)).IsEqualTo(0);
+        await Assert.That(finder.First(matches).Certificate.Thumbprint).IsEqualTo(match.Thumbprint);
+        await Assert.That(finder.FirstOrDefault(nothing)).IsNull();
+        await Assert.That(finder.Single(matches).Certificate.Thumbprint).IsEqualTo(match.Thumbprint);
+        await Assert.That(finder.SingleOrDefault(nothing)).IsNull();
+
+        await Assert.That(() => finder.First(nothing)).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(() => finder.Single(x => true)).ThrowsExactly<InvalidOperationException>();
     }
 
 
@@ -745,6 +789,20 @@ public class CertificateFinderTests
 
         await Assert.That(store.Name).IsEqualTo(expected);
         await Assert.That(store.Location).IsEqualTo(StoreLocation.CurrentUser);
+    }
+
+
+    /// <summary>
+    /// Runs <paramref name="use"/> against a finder holding one stub source, and asserts the stub was
+    /// handed exactly one predicate.
+    /// </summary>
+    private static async Task AssertPushesDown(X509Certificate2 cert, Func<CertificateFinder, object?> use)
+    {
+        var source = new StubSource("Stub", "a", cert);
+
+        _ = use(new CertificateFinder().AddSource(source));
+
+        await Assert.That(source.ReceivedPredicateCounts).IsEquivalentTo([1], CollectionOrdering.Matching);
     }
 
 

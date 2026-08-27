@@ -280,9 +280,13 @@ custom source is the supported extension point; `AddCustomSource` wraps loose ce
 methods beat extension methods in overload resolution, so both `finder.Where(x => ...)` and
 `from x in finder where ... select x` bind to it and reach the sources. Sources receive the predicate as
 an expression tree *and* as a compiled delegate, so one able to translate it into a native query can.
-Every other LINQ operator runs after collation: correct, but not pushed down. `FirstOrDefault(pred)`,
-`Any(pred)`, `First(pred)`, `Single(pred)` and `Count(pred)` need instance overloads before they push
-down too; that is outstanding.
+`Any`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault` and `Count` have predicate-taking instance
+overloads that shadow the same way, each defined as `Where(predicate).<Op>()`.
+
+Every other LINQ operator runs after collation: correct, but not pushed down. The same goes for a
+predicate held in a `Func<CertificateFinderResult, bool>` rather than written inline, since only a lambda
+converts to an expression tree. `Last` and `LastOrDefault` are deliberately absent: they cannot
+short-circuit, so pushing down buys nothing.
 
 Do not reintroduce `IQueryable`. There is no translation target behind a store (`X509Store` exposes
 `Certificates` and nothing else, and `X509Certificate2Collection.Find` is slower than a lambda and

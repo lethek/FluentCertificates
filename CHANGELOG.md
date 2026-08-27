@@ -17,6 +17,7 @@ release rather than record it as it happened.
 
 - `AbstractCertificateSource` is the extension point for custom certificate sources: override `Enumerate(CertificateFilter)` and `CertificateFinder` will search it alongside stores and directories.
 - `CertificateFinder.Where(Expression<Func<CertificateFinderResult, bool>>)` passes the predicate to every source, so a source can filter natively instead of the finder filtering after the fact. `finder.Where(...)` and `from x in finder where ...` both bind to it.
+- `CertificateFinder.Any`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault` and `Count` take a predicate and pass it to the sources, like `Where`.
 - `CertificateFinder.AddSource` and `AddSources`.
 - `CertificateFinderResult.Location` identifies a certificate within its source: the full file path, or the store's location and name.
 

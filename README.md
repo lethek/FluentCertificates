@@ -489,7 +489,10 @@ finder.Where(x => x.Certificate.Subject.Contains("example.com"));
 from x in finder where x.Certificate.HasPrivateKey select x.Certificate;
 ```
 
-Any other LINQ operator runs after collation. That is still correct, just not pushed down to the source.
+`Any`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault` and `Count` take a predicate and push it
+down the same way. Any other LINQ operator runs after collation, which is still correct, just more work.
+So does a predicate you hold in a `Func<>` variable rather than writing inline, since only a lambda
+becomes an expression tree.
 
 Results carry a `Source` and a `Location` saying where the certificate was found, so the same
 certificate present in two stores is reported twice, once for each. A single file reached through two
@@ -504,12 +507,8 @@ const string thumbprint = "622A2B8374D9BBE3969B91EDBC8F5152783AFC78";
 
 var cert = new CertificateFinder()
     .AddCommonStores()
-    .Where(x => x.Certificate.Thumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase))
-    .FirstOrDefault();
+    .FirstOrDefault(x => x.Certificate.Thumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
 ```
-
-_`Where` before `FirstOrDefault`, rather than `FirstOrDefault(predicate)`: only `Where` reaches the
-sources. The predicate overload gives the same answer, but filters after collation._
 
 ### Find a valid certificate with matching subject, giving preference to included private keys
 

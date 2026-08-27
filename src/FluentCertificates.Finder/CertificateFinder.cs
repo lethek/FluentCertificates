@@ -17,8 +17,12 @@ namespace FluentCertificates;
 /// <para>
 /// <see cref="Where"/> is an instance method taking an expression tree, which is what lets ordinary LINQ
 /// reach the sources: <c>finder.Where(x =&gt; ...)</c> and <c>from x in finder where ... select x</c> both
-/// bind to it in preference to <see cref="Enumerable.Where{T}(IEnumerable{T}, Func{T,bool})"/>. Any other
-/// LINQ operator runs after collation, which is correct but does no filtering at the source.
+/// bind to it in preference to <see cref="Enumerable.Where{T}(IEnumerable{T}, Func{T,bool})"/>. The
+/// predicate-taking terminals (<see cref="Any"/>, <see cref="First"/>, <see cref="FirstOrDefault"/>,
+/// <see cref="Single"/>, <see cref="SingleOrDefault"/> and <see cref="Count"/>) shadow their counterparts
+/// the same way. Every other LINQ operator runs after collation, which is correct but does no filtering
+/// at the source; so does a predicate held as a <see cref="Func{T,TResult}"/> rather than written inline,
+/// since only a lambda converts to an expression tree.
 /// </para>
 /// </remarks>
 public record CertificateFinder : IEnumerable<CertificateFinderResult>
@@ -51,6 +55,87 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <exception cref="ArgumentNullException"><paramref name="predicate"/> is null.</exception>
     public CertificateFinder Where(Expression<Func<CertificateFinderResult, bool>> predicate)
         => this with { Filter = Filter.Add(predicate) };
+
+
+    /// <summary>
+    /// Whether any certificate matches <paramref name="predicate"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <returns><see langword="true"/> if at least one matches.</returns>
+    /// <remarks>
+    /// Shadows <see cref="Enumerable.Any{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
+    /// sources. See <see cref="Where"/>.
+    /// </remarks>
+    public bool Any(Expression<Func<CertificateFinderResult, bool>> predicate)
+        => Where(predicate).Any();
+
+
+    /// <summary>
+    /// The first certificate matching <paramref name="predicate"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <returns>The first matching result.</returns>
+    /// <exception cref="InvalidOperationException">Nothing matched.</exception>
+    /// <remarks>
+    /// Shadows <see cref="Enumerable.First{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
+    /// sources. See <see cref="Where"/>.
+    /// </remarks>
+    public CertificateFinderResult First(Expression<Func<CertificateFinderResult, bool>> predicate)
+        => Where(predicate).First();
+
+
+    /// <summary>
+    /// The first certificate matching <paramref name="predicate"/>, or <see langword="null"/> if none does.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <returns>The first matching result, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// Shadows <see cref="Enumerable.FirstOrDefault{T}(IEnumerable{T},Func{T,bool})"/> so the predicate
+    /// reaches the sources. See <see cref="Where"/>.
+    /// </remarks>
+    public CertificateFinderResult? FirstOrDefault(Expression<Func<CertificateFinderResult, bool>> predicate)
+        => Where(predicate).FirstOrDefault();
+
+
+    /// <summary>
+    /// The only certificate matching <paramref name="predicate"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <returns>The single matching result.</returns>
+    /// <exception cref="InvalidOperationException">Nothing matched, or more than one did.</exception>
+    /// <remarks>
+    /// Shadows <see cref="Enumerable.Single{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
+    /// sources. See <see cref="Where"/>.
+    /// </remarks>
+    public CertificateFinderResult Single(Expression<Func<CertificateFinderResult, bool>> predicate)
+        => Where(predicate).Single();
+
+
+    /// <summary>
+    /// The only certificate matching <paramref name="predicate"/>, or <see langword="null"/> if none does.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <returns>The single matching result, or <see langword="null"/>.</returns>
+    /// <exception cref="InvalidOperationException">More than one matched.</exception>
+    /// <remarks>
+    /// Shadows <see cref="Enumerable.SingleOrDefault{T}(IEnumerable{T},Func{T,bool})"/> so the predicate
+    /// reaches the sources. See <see cref="Where"/>.
+    /// </remarks>
+    public CertificateFinderResult? SingleOrDefault(Expression<Func<CertificateFinderResult, bool>> predicate)
+        => Where(predicate).SingleOrDefault();
+
+
+    /// <summary>
+    /// How many certificates match <paramref name="predicate"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <returns>The number of matching results.</returns>
+    /// <remarks>
+    /// Shadows <see cref="Enumerable.Count{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
+    /// sources. See <see cref="Where"/>.
+    /// </remarks>
+    public int Count(Expression<Func<CertificateFinderResult, bool>> predicate)
+        => Where(predicate).Count();
 
 
     /// <summary>
