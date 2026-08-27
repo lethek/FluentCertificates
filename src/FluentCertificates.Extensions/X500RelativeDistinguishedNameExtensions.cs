@@ -36,11 +36,13 @@ public static class X500RelativeDistinguishedNameExtensions
         var rdn = outer.ReadSetOf(skipSortOrderValidation: true);
         var typeAndValue = rdn.ReadSequence();
 
-        var firstType = Oids.GetSharedOrNewOid(ref typeAndValue);
+        //Only the value's encoding is wanted, so the attribute type is read past rather than decoded
+        typeAndValue.ReadEncodedValue();
         var firstValue = typeAndValue.ReadEncodedValue();
         typeAndValue.ThrowIfNotEmpty();
 
-        var overlaps = rawDataSpan.Overlaps(firstValue, out int offset);
+        //firstValue is a slice of rawDataSpan, so it always overlaps and the offset is always found
+        rawDataSpan.Overlaps(firstValue, out int offset);
         var singleElementValue = rawDataSpan.Slice(offset, firstValue.Length);
 
         try {
