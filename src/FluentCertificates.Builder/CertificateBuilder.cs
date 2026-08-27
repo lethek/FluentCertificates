@@ -689,7 +689,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetServerExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(SigningOrKeyAgreement(builder) | KeyEnciphermentIfSupported(builder), true),
+            new X509KeyUsageExtension(EndEntityKeyUsage(builder, SigningOrKeyAgreement(builder) | KeyEnciphermentIfSupported(builder)), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ServerAuthPurpose) }, false)
         ];
 
@@ -697,7 +697,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetClientExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(SigningOrKeyAgreement(builder), true),
+            new X509KeyUsageExtension(EndEntityKeyUsage(builder, SigningOrKeyAgreement(builder)), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ClientAuthPurpose) }, false)
         ];
 
@@ -713,7 +713,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetSMimeExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(SigningOrKeyAgreement(builder) | X509KeyUsageFlags.NonRepudiation | KeyEnciphermentIfSupported(builder), true),
+            new X509KeyUsageExtension(EndEntityKeyUsage(builder, SigningOrKeyAgreement(builder) | NonRepudiationIfSigning(builder) | KeyEnciphermentIfSupported(builder)), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.EmailProtectionPurpose) }, false)
         ];
 
@@ -734,6 +734,35 @@ public record CertificateBuilder
             //extended key usage, and requires that extension to be marked critical
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.TimeStampingPurpose) }, true)
         ];
+
+
+    /// <summary>
+    /// Applies RFC 9935 s5 to an end-entity certificate's key usage: an ML-KEM certificate asserts
+    /// <see cref="X509KeyUsageFlags.KeyEncipherment"/> and nothing else, whatever the usage profile would
+    /// otherwise have composed. Every other algorithm keeps the profile's own flags.
+    /// </summary>
+    /// <remarks>
+    /// The rule is applied here rather than left to each profile's own OR-expression because it is a
+    /// prohibition, not a contribution: "keyEncipherement MUST be the only key usage set". A profile that
+    /// omitted the bit would emit an empty keyUsage, which RFC 5280 s4.2.1.3 forbids, and one that added a
+    /// second bit would break the "only". Signing usages never reach here, since <see cref="Validate"/>
+    /// rejects them for a key that cannot sign.
+    /// </remarks>
+    private static X509KeyUsageFlags EndEntityKeyUsage(CertificateBuilder builder, X509KeyUsageFlags flags)
+        => builder.PublicKey?.Oid.Value is Oids.MLKem512 or Oids.MLKem768 or Oids.MLKem1024
+            ? X509KeyUsageFlags.KeyEncipherment
+            : flags;
+
+
+    /// <summary>
+    /// Returns <see cref="X509KeyUsageFlags.NonRepudiation"/> only for a key that can sign. The bit claims the
+    /// subject cannot later deny having signed something, so it means nothing for a key-agreement or
+    /// key-encapsulation key, which has no signing operation to deny.
+    /// </summary>
+    private static X509KeyUsageFlags NonRepudiationIfSigning(CertificateBuilder builder)
+        => builder.KeyAlgorithm.CanSign
+            ? X509KeyUsageFlags.NonRepudiation
+            : X509KeyUsageFlags.None;
 
 
     /// <summary>
@@ -774,8 +803,8 @@ public record CertificateBuilder
         => builder.PublicKey?.Oid.Value switch {
             Oids.Rsa => X509KeyUsageFlags.KeyEncipherment,
             //ML-KEM is a key-encapsulation mechanism: encapsulating to the certified public key is
-            //key transport, which is what keyEncipherment asserts. RFC 9629 s3 and the draft LAMPS
-            //profile for ML-KEM certificates both put it here rather than under keyAgreement.
+            //key transport, which is what keyEncipherment asserts. RFC 9629 s3 and RFC 9935 s5 both
+            //put it here rather than under keyAgreement.
             Oids.MLKem512 or Oids.MLKem768 or Oids.MLKem1024 => X509KeyUsageFlags.KeyEncipherment,
             _ => X509KeyUsageFlags.None
         };

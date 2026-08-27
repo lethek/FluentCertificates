@@ -57,24 +57,36 @@ public class MLKemCertificateTests
     }
 
 
+    /// <summary>
+    /// RFC 9935 s5: "If the keyUsage extension is present in certificates, then keyEncipherement MUST be the
+    /// only key usage set for certificates that indicate id-alg-ml-kem-* in SubjectPublicKeyInfo." Every usage
+    /// profile an ML-KEM key is allowed to take therefore lands on the same single bit, so each is asserted
+    /// exactly rather than by flag: an extra bit breaks the "only", and none at all leaves an empty critical
+    /// keyUsage, which RFC 5280 s4.2.1.3 forbids.
+    /// </summary>
     [Test]
-    public async Task KeyUsage_IsKeyEncipherment_NotSignatureOrAgreement()
+    [Arguments(CertificateUsage.Server)]
+    [Arguments(CertificateUsage.Client)]
+    [Arguments(CertificateUsage.SMime)]
+    public async Task KeyUsage_IsKeyEnciphermentAlone_WhateverTheUsage(CertificateUsage usage)
     {
         using var issuer = IssuerBuilder().Create();
 
         using var cert = new CertificateBuilder()
-            .SetUsage(CertificateUsage.Server)
+            .SetUsage(usage)
             .SetIssuer(issuer)
             .SetKeyAlgorithm(KeyAlgorithm.MLKem768)
-            .SetSubject(x => x.SetCommonName("ML-KEM Server"))
+            .SetSubject(x => x.SetCommonName($"ML-KEM {usage}"))
             .Create();
 
-        var usages = cert.Extensions.OfType<X509KeyUsageExtension>().Single().KeyUsages;
+        var extension = cert.Extensions.OfType<X509KeyUsageExtension>().Single();
 
-        await Assert.That(usages.HasFlag(X509KeyUsageFlags.KeyEncipherment)).IsTrue();
-        await Assert.That(usages.HasFlag(X509KeyUsageFlags.DigitalSignature)).IsFalse();
-        //Unlike ECDH: encapsulation is key transport, not Diffie-Hellman agreement
-        await Assert.That(usages.HasFlag(X509KeyUsageFlags.KeyAgreement)).IsFalse();
+        //Unlike ECDH: encapsulation is key transport, not Diffie-Hellman agreement, so keyAgreement is
+        //excluded along with digitalSignature and nonRepudiation
+        await Assert.That(extension.KeyUsages).IsEqualTo(X509KeyUsageFlags.KeyEncipherment);
+
+        //A BIT STRING with one bit set, rather than the empty 03 01 00 an unset usage would encode to
+        await Assert.That(extension.RawData).IsEquivalentTo(new byte[] { 0x03, 0x02, 0x05, 0x20 });
     }
 
 

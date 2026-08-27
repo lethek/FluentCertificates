@@ -13,6 +13,11 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Fixed
+
+- An ML-KEM certificate asserts `keyEncipherment` and nothing else for every usage, as RFC 9935 s5 requires. `CertificateUsage.Client` previously emitted an empty critical `keyUsage`, which RFC 5280 s4.2.1.3 forbids, and `CertificateUsage.SMime` added `nonRepudiation` on top.
+- `CertificateUsage.SMime` no longer asserts `nonRepudiation` for a key that cannot sign. An ECDH certificate now carries `keyAgreement` alone.
+
 ## [0.20.0] - 2026-08-24
 
 ### Removed
