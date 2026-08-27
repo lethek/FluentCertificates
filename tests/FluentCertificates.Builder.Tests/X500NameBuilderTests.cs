@@ -399,6 +399,46 @@ public class X500NameBuilderTests
     }
 
 
+    /// <summary>
+    /// Reading a name back reads each RDN's value encoding out of its DER, so a round-trip through
+    /// <see cref="X500DistinguishedName"/> has to return every attribute type with the encoding it went in
+    /// with. Country and emailAddress are the two RFC 5280 pins down, so they are asserted outright.
+    /// </summary>
+    [Test]
+    public async Task RoundTrip_PreservesTheOidAndValueEncodingOfEveryAttributeType()
+    {
+#pragma warning disable CS0618 // SetEmail is obsolete, but emailAddress is one of the types the lookup knows
+        var original = new X500NameBuilder()
+            .SetEmail("someone@example.com")
+            .SetCommonName("Round Trip")
+            .SetCountry("AU")
+            .SetLocality("Sydney")
+            .SetState("NSW")
+            .SetOrganization("Acme")
+            .SetOrganizationalUnits("Engineering");
+#pragma warning restore CS0618
+
+        var roundTripped = new X500NameBuilder(original.Create());
+
+        await Assert
+            .That(roundTripped.RelativeDistinguishedNames)
+            .IsEquivalentTo(original.RelativeDistinguishedNames, X500RdnTupleComparer);
+
+        //Country and email carry the encodings RFC 5280 requires, so they are not merely echoed defaults
+        await Assert
+            .That(EncodingOf(roundTripped, Oids.CountryOrRegionNameOid))
+            .IsEqualTo(UniversalTagNumber.PrintableString);
+
+        await Assert
+            .That(EncodingOf(roundTripped, Oids.EmailAddressOid))
+            .IsEqualTo(UniversalTagNumber.IA5String);
+    }
+
+
+    private static UniversalTagNumber EncodingOf(X500NameBuilder builder, Oid oid)
+        => builder.RelativeDistinguishedNames.Single(x => x.OID.Value == oid.Value).ValueEncoding;
+
+
     private static readonly IEqualityComparer<(Oid, UniversalTagNumber, string)> X500RdnTupleComparer
         = new DelegateEqualityComparer<(Oid OID, UniversalTagNumber ValueEncoding, string Value)>(
             (x, y) =>
