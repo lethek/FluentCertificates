@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
+using TUnit.Assertions.Enums;
+
 namespace FluentCertificates;
 
 public class X509ChainBuilderTests
@@ -247,7 +249,8 @@ public class X509ChainBuilderTests
             .WithPolicy(_ => order.Add(2))
             .Create();
 
-        await Assert.That(order).IsEquivalentTo([1, 2]);
+        //Order is the whole point here, and a bare IsEquivalentTo is order-insensitive
+        await Assert.That(order).IsEquivalentTo([1, 2], CollectionOrdering.Matching);
     }
 
 
