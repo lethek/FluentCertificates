@@ -16,22 +16,22 @@ namespace FluentCertificates;
 /// </remarks>
 /// <param name="Name">The name of the certificate store.</param>
 /// <param name="Location">The location of the certificate store.</param>
-public sealed record CertificateStore(string Name, StoreLocation Location) : AbstractCertificateSource
+public sealed record CertificateStoreSource(string Name, StoreLocation Location) : AbstractCertificateSource
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="CertificateStore"/> class from an <see cref="X509Store"/>.
+    /// Initializes a new instance of the <see cref="CertificateStoreSource"/> class from an <see cref="X509Store"/>.
     /// </summary>
     /// <param name="store">The X509Store instance.</param>
-    public CertificateStore(X509Store store)
+    public CertificateStoreSource(X509Store store)
         : this(store.Name!, store.Location) { }
 
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="CertificateStore"/> class from a <see cref="StoreName"/> and <see cref="StoreLocation"/>.
+    /// Initializes a new instance of the <see cref="CertificateStoreSource"/> class from a <see cref="StoreName"/> and <see cref="StoreLocation"/>.
     /// </summary>
     /// <param name="name">The store name as <see cref="StoreName"/>.</param>
     /// <param name="location">The store location.</param>
-    public CertificateStore(StoreName name, StoreLocation location)
+    public CertificateStoreSource(StoreName name, StoreLocation location)
         : this(GetProperStoreName(name), location) { }
 
 

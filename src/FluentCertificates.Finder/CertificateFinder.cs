@@ -232,7 +232,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="stores">The stores to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(params IEnumerable<X509Store> stores)
-        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStore(x))) };
+        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreSource(x))) };
 
 
     /// <summary>
@@ -241,7 +241,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="stores">The store names and locations to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(params IEnumerable<(string Name, StoreLocation Location)> stores)
-        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStore(x.Name, x.Location))) };
+        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreSource(x.Name, x.Location))) };
 
 
     /// <summary>
@@ -250,7 +250,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="stores">The store names and locations to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(params IEnumerable<(StoreName Name, StoreLocation Location)> stores)
-        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStore(x.Name, x.Location))) };
+        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreSource(x.Name, x.Location))) };
 
 
     /// <summary>
@@ -259,7 +259,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="store">The store to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional store.</returns>
     public CertificateFinder AddStore(X509Store store)
-        => AddSource(new CertificateStore(store));
+        => AddSource(new CertificateStoreSource(store));
 
 
     /// <summary>
@@ -269,7 +269,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="location">The store location.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional store.</returns>
     public CertificateFinder AddStore(string name, StoreLocation location)
-        => AddSource(new CertificateStore(name, location));
+        => AddSource(new CertificateStoreSource(name, location));
 
 
     /// <summary>
@@ -279,7 +279,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="location">The store location.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional store.</returns>
     public CertificateFinder AddStore(StoreName name, StoreLocation location)
-        => AddSource(new CertificateStore(name, location));
+        => AddSource(new CertificateStoreSource(name, location));
 
 
     /// <summary>
@@ -297,7 +297,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="recurse">Whether to search subdirectories.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directory added.</returns>
     public CertificateFinder AddDirectory(string dir, bool recurse = false)
-        => AddSource(new CertificateDirectory(dir, recurse, _fileSystem));
+        => AddSource(new CertificateDirectorySource(dir, recurse, _fileSystem));
 
 
     /// <summary>
@@ -307,7 +307,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="recurse">Whether to search subdirectories.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>
     public CertificateFinder AddDirectories(IEnumerable<string> dirs, bool recurse = false)
-        => this with { Sources = Sources.AddRange(dirs.Select(dir => new CertificateDirectory(dir, recurse, _fileSystem))) };
+        => this with { Sources = Sources.AddRange(dirs.Select(dir => new CertificateDirectorySource(dir, recurse, _fileSystem))) };
 
 
     /// <summary>
@@ -355,7 +355,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <summary>
     /// Gets a list of common certificate stores used by <see cref="AddCommonStores"/>.
     /// </summary>
-    private static readonly ImmutableList<CertificateStore> CommonStores = [
+    private static readonly ImmutableList<CertificateStoreSource> CommonStores = [
         new("My", StoreLocation.CurrentUser),
         new("CA", StoreLocation.CurrentUser),
         new("Root", StoreLocation.CurrentUser),

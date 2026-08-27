@@ -185,7 +185,7 @@ public class CertificateFinderTests
 
         //The result records where it came from, so the source has to be the directory searched
         await Assert
-            .That(results.Select(r => ((CertificateDirectory)r.Source).Path).Distinct())
+            .That(results.Select(r => ((CertificateDirectorySource)r.Source).Path).Distinct())
             .IsEquivalentTo(["/certs"]);
     }
 
@@ -319,7 +319,7 @@ public class CertificateFinderTests
         fs.AddFile("/rev/b.cer", new MockFileData(two.RawData));
         fs.AddFile("/rev/c.cer", new MockFileData(three.RawData));
 
-        var directory = new CertificateDirectory("/rev", false, fs);
+        var directory = new CertificateDirectorySource("/rev", false, fs);
         var forwards = directory.Find(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint).ToList();
         var backwards = directory.FindDescending(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint).ToList();
 
@@ -374,9 +374,9 @@ public class CertificateFinderTests
     /// Skipped rather than silently passing when the store holds nothing.
     /// </summary>
     [Test]
-    public async Task CertificateStore_ReadsARealStore()
+    public async Task CertificateStoreSource_ReadsARealStore()
     {
-        var store = new CertificateStore(StoreName.Root, StoreLocation.CurrentUser);
+        var store = new CertificateStoreSource(StoreName.Root, StoreLocation.CurrentUser);
         var forwards = store.Find(CertificateFilter.Empty).ToList();
         try {
             Skip.Unless(forwards.Count > 0, "CurrentUser\\Root holds no certificates on this machine");
@@ -819,10 +819,10 @@ public class CertificateFinderTests
     [Test]
     public async Task StoreSources_CompareByTheStoreTheyName()
     {
-        var byName = new CertificateStore("My", StoreLocation.CurrentUser);
-        var byEnum = new CertificateStore(StoreName.My, StoreLocation.CurrentUser);
-        var elsewhere = new CertificateStore(StoreName.My, StoreLocation.LocalMachine);
-        var other = new CertificateStore(StoreName.Root, StoreLocation.CurrentUser);
+        var byName = new CertificateStoreSource("My", StoreLocation.CurrentUser);
+        var byEnum = new CertificateStoreSource(StoreName.My, StoreLocation.CurrentUser);
+        var elsewhere = new CertificateStoreSource(StoreName.My, StoreLocation.LocalMachine);
+        var other = new CertificateStoreSource(StoreName.Root, StoreLocation.CurrentUser);
 
         await Assert.That(byName).IsEqualTo(byEnum);
         await Assert.That(byName).IsNotEqualTo(elsewhere);
@@ -838,10 +838,10 @@ public class CertificateFinderTests
     public async Task DirectorySources_CompareByPathAndRecursion()
     {
         var fs = CreateEmptyMockFileSystem();
-        var top = new CertificateDirectory("/certs", false, fs);
-        var same = new CertificateDirectory("/certs", false, fs);
-        var deep = new CertificateDirectory("/certs", true, fs);
-        var other = new CertificateDirectory("/elsewhere", false, fs);
+        var top = new CertificateDirectorySource("/certs", false, fs);
+        var same = new CertificateDirectorySource("/certs", false, fs);
+        var deep = new CertificateDirectorySource("/certs", true, fs);
+        var other = new CertificateDirectorySource("/elsewhere", false, fs);
 
         await Assert.That(top).IsEqualTo(same);
         await Assert.That(top).IsNotEqualTo(deep);
@@ -855,8 +855,8 @@ public class CertificateFinderTests
     [Test]
     public async Task SourcesOfDifferentKinds_AreNeverEqual()
     {
-        AbstractCertificateSource store = new CertificateStore("My", StoreLocation.CurrentUser);
-        AbstractCertificateSource dir = new CertificateDirectory("/certs", false, CreateEmptyMockFileSystem());
+        AbstractCertificateSource store = new CertificateStoreSource("My", StoreLocation.CurrentUser);
+        AbstractCertificateSource dir = new CertificateDirectorySource("/certs", false, CreateEmptyMockFileSystem());
 
         await Assert.That(store).IsNotEqualTo(dir);
         await Assert.That(store.Kind).IsEqualTo("Store");
@@ -1062,10 +1062,10 @@ public class CertificateFinderTests
     [Arguments(StoreName.Root, "Root")]
     [Arguments(StoreName.TrustedPeople, "TrustedPeople")]
     [Arguments(StoreName.TrustedPublisher, "TrustedPublisher")]
-    public async Task CertificateStore_MapsStoreNameToItsSystemName(StoreName name, string expected)
+    public async Task CertificateStoreSource_MapsStoreNameToItsSystemName(StoreName name, string expected)
     {
         //CertificateAuthority is the one whose system name differs from its enum name
-        var store = new CertificateStore(name, StoreLocation.CurrentUser);
+        var store = new CertificateStoreSource(name, StoreLocation.CurrentUser);
 
         await Assert.That(store.Name).IsEqualTo(expected);
         await Assert.That(store.Location).IsEqualTo(StoreLocation.CurrentUser);
@@ -1214,11 +1214,11 @@ public class CertificateFinderTests
 
 
     private static List<(string Name, StoreLocation Location)> StoresOf(CertificateFinder finder)
-        => [.. finder.Sources.Cast<CertificateStore>().Select(x => (x.Name, x.Location))];
+        => [.. finder.Sources.Cast<CertificateStoreSource>().Select(x => (x.Name, x.Location))];
 
 
     private static List<string> DirectoryPathsOf(CertificateFinder finder)
-        => [.. finder.Sources.Cast<CertificateDirectory>().Select(x => x.Path)];
+        => [.. finder.Sources.Cast<CertificateDirectorySource>().Select(x => x.Path)];
 
 
     private static readonly MockFileSystem MockFileSystem = TestTools.CreateMockFileSystemWithCerts();

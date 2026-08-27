@@ -20,21 +20,20 @@ release rather than record it as it happened.
 - `CertificateFinder.Any`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` take a predicate and pass it to the sources, like `Where`.
 - `CertificateFinder.AddSource` and `AddSources`.
 - `CertificateFinderResult.Location` identifies a certificate within its source: the full file path, or the store's location and name.
-- `AbstractCertificateSource.CanEnumerateDescending` and `EnumerateDescending`, so a source able to enumerate backwards cheaply lets `CertificateFinder.Last` stop at the first match instead of reading everything. `CertificateStore`, `CertificateDirectory` and `CustomCertificateSource` all support it.
+- `AbstractCertificateSource.CanEnumerateDescending` and `EnumerateDescending`, so a source able to enumerate backwards cheaply lets `CertificateFinder.Last` stop at the first match instead of reading everything. `CertificateStoreSource`, `CertificateDirectorySource` and `CustomCertificateSource` all support it.
 
 ### Changed
 
 - **Breaking:** `CertificateFinder` implements `IEnumerable<CertificateFinderResult>` instead of `IQueryable<CertificateFinderResult>`; `ElementType`, `Expression` and `Provider` are gone. LINQ still works, and nothing about pushdown is lost: the provider evaluated everything in memory anyway.
-- **Breaking:** `CertificateFinderResult.Store`, `.Directory` and `.CustomSource` are replaced by a single `.Source`. Use `Source` directly, or cast it to `CertificateStore` / `CertificateDirectory` for their details.
+- **Breaking:** `CertificateFinderResult.Store`, `.Directory` and `.CustomSource` are replaced by a single `.Source`. Use `Source` directly, or cast it to `CertificateStoreSource` / `CertificateDirectorySource` for their details.
 - **Breaking:** `CertificateFinder.Sources` is now `ImmutableList<AbstractCertificateSource>` rather than a list of raw sequences.
-- **Breaking:** `CertificateDirectory` gains `Recurse` and `FileSystem` and does its own file loading, replacing the internal directory enumerator.
-- **Breaking:** `CertificateStore` is sealed, does its own store reading, and replaces the internal store enumerator.
+- **Breaking:** `CertificateStore` and `CertificateDirectory` are renamed to `CertificateStoreSource` and `CertificateDirectorySource`. Both are sealed, derive from `AbstractCertificateSource`, and do their own reading and filtering, replacing the internal enumerators. `CertificateDirectorySource` gains `Recurse` and `FileSystem`.
 - **Breaking:** `CertificateFinder.AddCustomSource` takes `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`, so callers no longer construct result objects. `AddCustomSources` is removed; use `AddSources` with a custom `AbstractCertificateSource`, or call `AddCustomSource` more than once.
 - Sources are deduplicated by value, so a store or directory added twice is read once. Results are not: a certificate two different sources both reach is reported by each. Use `DistinctBy` on thumbprint, `Source.Kind` and `Location` to collapse them.
 
 ### Fixed
 
-- `CertificateFinder` disposes the certificates it loads and then discards, whether rejected by a predicate or dropped as a duplicate. Certificates supplied by the caller are never disposed.
+- `CertificateFinder` disposes the certificates a source loaded and then discarded, whether rejected by a predicate or passed over while looking for the last match. Certificates supplied by the caller are never disposed.
 
 ## [0.20.1] - 2026-08-27
 

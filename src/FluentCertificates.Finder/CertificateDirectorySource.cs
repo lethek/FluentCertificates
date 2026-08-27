@@ -18,17 +18,17 @@ namespace FluentCertificates;
 /// hide the good ones beside it.
 /// </para>
 /// </remarks>
-public sealed record CertificateDirectory : AbstractCertificateSource
+public sealed record CertificateDirectorySource : AbstractCertificateSource
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="CertificateDirectory"/> class.
+    /// Initializes a new instance of the <see cref="CertificateDirectorySource"/> class.
     /// </summary>
     /// <param name="path">The file system path to the directory containing certificates.</param>
     /// <param name="recurse">Whether to search subdirectories.</param>
     /// <param name="fileSystem">
     /// The file system to read through. If <see langword="null"/>, the real one is used.
     /// </param>
-    public CertificateDirectory(string path, bool recurse = false, IFileSystem? fileSystem = null)
+    public CertificateDirectorySource(string path, bool recurse = false, IFileSystem? fileSystem = null)
     {
         Path = path;
         Recurse = recurse;
