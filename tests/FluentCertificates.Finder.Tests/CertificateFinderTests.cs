@@ -304,7 +304,7 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// A source claiming <see cref="AbstractCertificateSource.CanEnumerateDescending"/> must yield the
+    /// A source implementing <c>EnumerateDescending</c> must yield the
     /// true reverse of its forward pass, or <see cref="CertificateFinder.Last"/> silently disagrees with
     /// enumerating the finder. Asserted for the two sources that read from outside the process.
     /// </summary>
@@ -321,27 +321,25 @@ public class CertificateFinderTests
 
         var directory = new CertificateDirectorySource("/rev", false, fs);
         var forwards = directory.Find(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint).ToList();
-        var backwards = directory.FindDescending(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint).ToList();
+        var backwards = directory.FindDescending(CertificateFilter.Empty)!.Select(x => x.Certificate.Thumbprint).ToList();
 
         await Assert.That(forwards.Count).IsEqualTo(3);
         await Assert.That(backwards).IsEquivalentTo(Enumerable.Reverse(forwards), CollectionOrdering.Matching);
 
         var custom = new CustomCertificateSource([one, two, three]);
         await Assert
-            .That(custom.FindDescending(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint))
+            .That(custom.FindDescending(CertificateFilter.Empty)!.Select(x => x.Certificate.Thumbprint))
             .IsEquivalentTo([three.Thumbprint, two.Thumbprint, one.Thumbprint], CollectionOrdering.Matching);
     }
 
 
     [Test]
-    public async Task FindDescending_OnASourceThatCannot_Throws()
+    public async Task FindDescending_OnASourceThatCannot_ReturnsNull()
     {
         using var a = CreateSelfSignedCertificate("A");
         var source = new StubSource("Stub", "one", a) { Descending = false };
 
-        await Assert
-            .That(() => source.FindDescending(CertificateFilter.Empty).ToList())
-            .ThrowsExactly<NotSupportedException>();
+        await Assert.That(source.FindDescending(CertificateFilter.Empty)).IsNull();
     }
 
 
@@ -355,16 +353,17 @@ public class CertificateFinderTests
         using var a = CreateSelfSignedCertificate("A");
         var source = new MinimalSource(a);
 
-        await Assert.That(source.CanEnumerateDescending).IsFalse();
-        await Assert.That(source.OwnsCertificates).IsTrue();
-        await Assert
-            .That(() => source.FindDescending(CertificateFilter.Empty).ToList())
-            .ThrowsExactly<NotSupportedException>();
+        await Assert.That(source.FindDescending(CertificateFilter.Empty)).IsNull();
 
         //Reached through the finder it is simply read forwards instead
         await Assert
             .That(new CertificateFinder().AddSource(source).Last(x => true).Certificate.Thumbprint)
             .IsEqualTo(a.Thumbprint);
+
+        //...and it inherits ownership, so a result its filter rejects is disposed. Asserted last, since
+        //it destroys the certificate this source hands out
+        await Assert.That(source.Find(CertificateFilter.Empty.Add(x => false)).ToList()).IsEmpty();
+        await Assert.That(() => a.Subject).ThrowsExactly<CryptographicException>();
     }
 
 
@@ -385,8 +384,8 @@ public class CertificateFinderTests
             await Assert.That(forwards.Select(x => x.Location).Distinct()).IsEquivalentTo(["CurrentUser\\Root"]);
             await Assert.That(forwards.All(x => ReferenceEquals(x.Source, store))).IsTrue();
 
-            await Assert.That(store.CanEnumerateDescending).IsTrue();
-            var backwards = store.FindDescending(CertificateFilter.Empty).ToList();
+            //A store is already materialised, so it can be read backwards
+            var backwards = store.FindDescending(CertificateFilter.Empty)!.ToList();
             try {
                 await Assert
                     .That(backwards.Select(x => x.Certificate.Thumbprint))
@@ -447,7 +446,7 @@ public class CertificateFinderTests
         var source = new CustomCertificateSource([cert]);
 
         await Assert.That(source.Kind).IsEqualTo("Custom");
-        await Assert.That(source.OwnsCertificates).IsFalse();
+        await Assert.That(source.FindDescending(CertificateFilter.Empty)).IsNotNull();
 
         //A supplied certificate has no location of its own, so its thumbprint stands in
         await Assert
@@ -488,22 +487,20 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// A source claiming it can go backwards but not overriding <c>EnumerateDescending</c> is an
-    /// implementer error, and the base says so rather than silently yielding the forward order.
+    /// A source that cannot go backwards is read forwards for its last match, rather than the finder
+    /// giving up. One member decides it, so a source cannot claim the capability without implementing it.
     /// </summary>
     [Test]
-    public async Task Source_ClaimingDescendingWithoutImplementingIt_Throws()
+    public async Task FindLast_FallsBackToAForwardScan()
     {
-        using var cert = CreateSelfSignedCertificate("Lying");
-        var source = new LyingSource(cert);
+        using var first = CreateSelfSignedCertificate("First");
+        using var second = CreateSelfSignedCertificate("Second");
+        var source = new StubSource("Stub", "one", first, second) { Descending = false };
 
-        await Assert
-            .That(() => source.FindDescending(CertificateFilter.Empty).ToList())
-            .ThrowsExactly<NotSupportedException>();
+        await Assert.That(source.FindLast(CertificateFilter.Empty)!.Certificate.Thumbprint).IsEqualTo(second.Thumbprint);
+        await Assert.That(source.Calls).IsEquivalentTo(["forward"], CollectionOrdering.Matching);
 
-        await Assert
-            .That(() => new CertificateFinder().AddSource(source).Last(x => true))
-            .ThrowsExactly<NotSupportedException>();
+        await Assert.That(source.FindLast(CertificateFilter.Empty.Add(x => false))).IsNull();
     }
 
 
@@ -899,20 +896,16 @@ public class CertificateFinderTests
     {
         using var top = CreateSelfSignedCertificate("Top");
         using var nested = CreateSelfSignedCertificate("Nested");
-        var dir = CreateRealTempDirectory();
-        try {
-            var sub = Path.Combine(dir, "sub");
-            Directory.CreateDirectory(sub);
-            File.WriteAllText(Path.Combine(dir, "top.pem"), top.ExportCertificatePem());
-            File.WriteAllText(Path.Combine(sub, "nested.pem"), nested.ExportCertificatePem());
+        using var dir = new TempDirectory();
+        var sub = Path.Combine(dir.Path, "sub");
+        Directory.CreateDirectory(sub);
+        File.WriteAllText(Path.Combine(dir.Path, "top.pem"), top.ExportCertificatePem());
+        File.WriteAllText(Path.Combine(sub, "nested.pem"), nested.ExportCertificatePem());
 
-            var results = new CertificateFinder().AddDirectory(dir, recurse).ToList();
+        var results = new CertificateFinder().AddDirectory(dir.Path, recurse).ToList();
 
-            await Assert.That(results.Count).IsEqualTo(expected);
-            await Assert.That(results.Select(x => x.Certificate.Thumbprint)).Contains(top.Thumbprint);
-        } finally {
-            Directory.Delete(dir, true);
-        }
+        await Assert.That(results.Count).IsEqualTo(expected);
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).Contains(top.Thumbprint);
     }
 
 
@@ -925,20 +918,16 @@ public class CertificateFinderTests
     {
         using var top = CreateSelfSignedCertificate("Top");
         using var nested = CreateSelfSignedCertificate("Nested");
-        var dir = CreateRealTempDirectory();
-        try {
-            var sub = Path.Combine(dir, "sub");
-            Directory.CreateDirectory(sub);
-            File.WriteAllText(Path.Combine(dir, "top.pem"), top.ExportCertificatePem());
-            File.WriteAllText(Path.Combine(sub, "nested.pem"), nested.ExportCertificatePem());
+        using var dir = new TempDirectory();
+        var sub = Path.Combine(dir.Path, "sub");
+        Directory.CreateDirectory(sub);
+        File.WriteAllText(Path.Combine(dir.Path, "top.pem"), top.ExportCertificatePem());
+        File.WriteAllText(Path.Combine(sub, "nested.pem"), nested.ExportCertificatePem());
 
-            var results = new CertificateFinder().AddDirectories(dir).ToList();
+        var results = new CertificateFinder().AddDirectories(dir.Path).ToList();
 
-            await Assert.That(results.Count).IsEqualTo(1);
-            await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(top.Thumbprint);
-        } finally {
-            Directory.Delete(dir, true);
-        }
+        await Assert.That(results.Count).IsEqualTo(1);
+        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(top.Thumbprint);
     }
 
 
@@ -950,43 +939,27 @@ public class CertificateFinderTests
     public async Task EnumerateCertificates_FindsFilesWhateverTheirName()
     {
         using var cert = CreateSelfSignedCertificate("Odd");
-        var dir = CreateRealTempDirectory();
-        try {
-            File.WriteAllText(Path.Combine(dir, ".hidden.pem"), cert.ExportCertificatePem());
+        using var dir = new TempDirectory();
+        File.WriteAllText(Path.Combine(dir.Path, ".hidden.pem"), cert.ExportCertificatePem());
 
-            var results = new CertificateFinder().AddDirectory(dir).ToList();
+        var results = new CertificateFinder().AddDirectory(dir.Path).ToList();
 
-            await Assert.That(results.Count).IsEqualTo(1);
-        } finally {
-            Directory.Delete(dir, true);
-        }
+        await Assert.That(results.Count).IsEqualTo(1);
     }
 
 
     [Test]
-    [Arguments("cert.pem", "pem")]
-    [Arguments("cert.ca-bundle", "pem")]
-    [Arguments("cert.crt", "der")]
-    [Arguments("cert.cer", "der")]
-    [Arguments("cert.der", "der")]
-    [Arguments("cert.pfx", "pkcs12")]
-    [Arguments("cert.p12", "pkcs12")]
-    [Arguments("cert.p7b", "pkcs7")]
-    [Arguments("cert.p7c", "pkcs7")]
+    [MethodDataSource(nameof(SupportedFormats))]
     public async Task EnumerateCertificates_EachSupportedExtension_IsLoaded(string fileName, string format)
     {
         using var cert = CreateSelfSignedCertificate("Formats");
-        var dir = CreateRealTempDirectory();
-        try {
-            File.WriteAllBytes(Path.Combine(dir, fileName), CertificateFileBytes(cert, format));
+        using var dir = new TempDirectory();
+        File.WriteAllBytes(Path.Combine(dir.Path, fileName), CertificateFileBytes(cert, format));
 
-            var results = new CertificateFinder().AddDirectory(dir).ToList();
+        var results = new CertificateFinder().AddDirectory(dir.Path).ToList();
 
-            await Assert.That(results.Count).IsEqualTo(1);
-            await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
-        } finally {
-            Directory.Delete(dir, true);
-        }
+        await Assert.That(results.Count).IsEqualTo(1);
+        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
     }
 
 
@@ -998,15 +971,7 @@ public class CertificateFinderTests
     /// there the two file systems are the same one.
     /// </summary>
     [Test]
-    [Arguments("cert.pem", "pem")]
-    [Arguments("cert.ca-bundle", "pem")]
-    [Arguments("cert.crt", "der")]
-    [Arguments("cert.cer", "der")]
-    [Arguments("cert.der", "der")]
-    [Arguments("cert.pfx", "pkcs12")]
-    [Arguments("cert.p12", "pkcs12")]
-    [Arguments("cert.p7b", "pkcs7")]
-    [Arguments("cert.p7c", "pkcs7")]
+    [MethodDataSource(nameof(SupportedFormats))]
     public async Task EnumerateCertificates_EachSupportedExtension_IsReadThroughTheGivenFileSystem(
         string fileName, string format)
     {
@@ -1022,14 +987,7 @@ public class CertificateFinderTests
 
 
     [Test]
-    [Arguments(StoreName.AddressBook, "AddressBook")]
-    [Arguments(StoreName.AuthRoot, "AuthRoot")]
-    [Arguments(StoreName.CertificateAuthority, "CA")]
-    [Arguments(StoreName.Disallowed, "Disallowed")]
-    [Arguments(StoreName.My, "My")]
-    [Arguments(StoreName.Root, "Root")]
-    [Arguments(StoreName.TrustedPeople, "TrustedPeople")]
-    [Arguments(StoreName.TrustedPublisher, "TrustedPublisher")]
+    [MethodDataSource(nameof(StoreNames))]
     public async Task AddStore_MapsStoreNameToStoreString(StoreName name, string expected)
     {
         //CertificateAuthority maps to "CA": the enum name and the store name deliberately differ
@@ -1054,14 +1012,7 @@ public class CertificateFinderTests
 
 
     [Test]
-    [Arguments(StoreName.AddressBook, "AddressBook")]
-    [Arguments(StoreName.AuthRoot, "AuthRoot")]
-    [Arguments(StoreName.CertificateAuthority, "CA")]
-    [Arguments(StoreName.Disallowed, "Disallowed")]
-    [Arguments(StoreName.My, "My")]
-    [Arguments(StoreName.Root, "Root")]
-    [Arguments(StoreName.TrustedPeople, "TrustedPeople")]
-    [Arguments(StoreName.TrustedPublisher, "TrustedPublisher")]
+    [MethodDataSource(nameof(StoreNames))]
     public async Task CertificateStoreSource_MapsStoreNameToItsSystemName(StoreName name, string expected)
     {
         //CertificateAuthority is the one whose system name differs from its enum name
@@ -1103,10 +1054,6 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// A source with a fixed kind and location, for exercising collation and predicate hand-off without a
-    /// real store or directory behind it.
-    /// </summary>
-    /// <summary>
     /// Overrides nothing but <c>Enumerate</c>, so it exercises what a minimal third-party source inherits.
     /// </summary>
     private sealed record MinimalSource(X509Certificate2 Certificate) : AbstractCertificateSource
@@ -1114,37 +1061,24 @@ public class CertificateFinderTests
         public override string Kind => "Minimal";
 
         protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-            => [new CertificateFinderResult { Source = this, Location = "only", Certificate = Certificate }];
+            => Results([Certificate], _ => "only");
     }
 
 
-    /// <summary>Claims it can enumerate backwards without implementing it.</summary>
-    private sealed record LyingSource(X509Certificate2 Certificate) : AbstractCertificateSource
-    {
-        public override string Kind => "Lying";
-
-        public override bool CanEnumerateDescending => true;
-
-        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-            => [new CertificateFinderResult { Source = this, Location = "only", Certificate = Certificate }];
-    }
-
-
+    /// <summary>
+    /// A source with a fixed kind and location, for exercising collation and predicate hand-off without a
+    /// real store or directory behind it.
+    /// </summary>
     private sealed record StubSource(string SourceKind, string At, params X509Certificate2[] Certificates)
         : AbstractCertificateSource
     {
         public override string Kind => SourceKind;
 
-        //Defaults to leaving them alone: the certificates belong to the test unless Owns says otherwise
-        public override bool OwnsCertificates => Owns;
-
-        /// <summary>Whether this stub claims it can enumerate backwards.</summary>
+        /// <summary>Whether this stub can enumerate backwards.</summary>
         public bool Descending { get; init; }
 
-        /// <summary>Whether this stub claims the certificates are its to dispose.</summary>
+        /// <summary>Whether this stub treats the certificates as its own to dispose.</summary>
         public bool Owns { get; init; }
-
-        public override bool CanEnumerateDescending => Descending;
 
         public List<int> ReceivedPredicateCounts { get; } = [];
 
@@ -1155,23 +1089,56 @@ public class CertificateFinderTests
         {
             ReceivedPredicateCounts.Add(filter.Expressions.Count);
             Calls.Add("forward");
-            return Results(Certificates);
+            return Results(Certificates, _ => At);
         }
 
-        protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
+        protected override IEnumerable<CertificateFinderResult>? EnumerateDescending(CertificateFilter filter)
         {
+            if (!Descending) {
+                return null;
+            }
             ReceivedPredicateCounts.Add(filter.Expressions.Count);
             Calls.Add("descending");
             //Enumerable.Reverse explicitly: on an array the bare call binds to the void span overload
-            return Results(Enumerable.Reverse(Certificates));
+            return Results(Enumerable.Reverse(Certificates), _ => At);
         }
 
-        private IEnumerable<CertificateFinderResult> Results(IEnumerable<X509Certificate2> certificates)
-            => certificates.Select(cert => new CertificateFinderResult {
-                Source = this,
-                Location = At,
-                Certificate = cert
-            });
+        //Defaults to leaving them alone: the certificates belong to the test unless Owns says otherwise
+        protected override void Release(CertificateFinderResult result)
+        {
+            if (Owns) {
+                base.Release(result);
+            }
+        }
+    }
+
+
+    /// <summary>Every file extension the finder claims to support, with the format to write it in.</summary>
+    public static IEnumerable<(string FileName, string Format)> SupportedFormats()
+    {
+        yield return ("cert.pem", "pem");
+        yield return ("cert.ca-bundle", "pem");
+        yield return ("cert.crt", "der");
+        yield return ("cert.cer", "der");
+        yield return ("cert.der", "der");
+        yield return ("cert.pfx", "pkcs12");
+        yield return ("cert.p12", "pkcs12");
+        yield return ("cert.p7b", "pkcs7");
+        yield return ("cert.p7c", "pkcs7");
+    }
+
+
+    /// <summary>Every <see cref="StoreName"/>, with the system store name it maps to.</summary>
+    public static IEnumerable<(StoreName Name, string Expected)> StoreNames()
+    {
+        yield return (StoreName.AddressBook, "AddressBook");
+        yield return (StoreName.AuthRoot, "AuthRoot");
+        yield return (StoreName.CertificateAuthority, "CA");
+        yield return (StoreName.Disallowed, "Disallowed");
+        yield return (StoreName.My, "My");
+        yield return (StoreName.Root, "Root");
+        yield return (StoreName.TrustedPeople, "TrustedPeople");
+        yield return (StoreName.TrustedPublisher, "TrustedPublisher");
     }
 
 
@@ -1193,11 +1160,17 @@ public class CertificateFinderTests
     }
 
 
-    private static string CreateRealTempDirectory()
+    /// <summary>A real directory on disk, removed with everything in it when the test scope ends.</summary>
+    private sealed class TempDirectory : IDisposable
     {
-        var dir = Path.Combine(Path.GetTempPath(), "fluentcerts-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        return dir;
+        public string Path { get; } =
+            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fluentcerts-" + Guid.NewGuid().ToString("N"));
+
+        public TempDirectory()
+            => Directory.CreateDirectory(Path);
+
+        public void Dispose()
+            => Directory.Delete(Path, true);
     }
 
 

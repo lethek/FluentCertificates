@@ -1,3 +1,5 @@
+using System.Security.Cryptography.X509Certificates;
+
 namespace FluentCertificates;
 
 /// <summary>
@@ -14,10 +16,10 @@ namespace FluentCertificates;
 public abstract record AbstractCertificateSource
 {
     /// <summary>
-    /// Identifies the kind of source, for example <c>"Store"</c> or <c>"Directory"</c>. Together with a
-    /// result's <see cref="CertificateFinderResult.Location"/> and thumbprint this forms the identity
-    /// <see cref="CertificateFinder"/> deduplicates on, so two sources whose reach overlaps report the
-    /// same certificate once.
+    /// Identifies the kind of source, for example <c>"Store"</c> or <c>"Directory"</c>. The library does
+    /// not read it; it is there so a caller can group results, or collapse a certificate two overlapping
+    /// sources of the same kind both reach, with
+    /// <c>DistinctBy(r =&gt; (r.Certificate.Thumbprint, r.Source.Kind, r.Location))</c>.
     /// </summary>
     public abstract string Kind { get; }
 
@@ -37,19 +39,49 @@ public abstract record AbstractCertificateSource
 
     /// <summary>
     /// Returns every certificate this source holds that matches <paramref name="filter"/>, in the reverse
-    /// of the order <see cref="Find"/> yields them.
+    /// of the order <see cref="Find"/> yields them, or <see langword="null"/> if this source cannot go
+    /// backwards.
     /// </summary>
     /// <param name="filter">The predicates the results must satisfy.</param>
-    /// <returns>The matching results, last first.</returns>
+    /// <returns>The matching results last first, or <see langword="null"/>.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="filter"/> is null.</exception>
-    /// <exception cref="NotSupportedException"><see cref="CanEnumerateDescending"/> is false.</exception>
-    public IEnumerable<CertificateFinderResult> FindDescending(CertificateFilter filter)
+    public IEnumerable<CertificateFinderResult>? FindDescending(CertificateFilter filter)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        if (!CanEnumerateDescending) {
-            throw new NotSupportedException($"{GetType().Name} cannot enumerate in descending order.");
+        var candidates = EnumerateDescending(filter);
+        return candidates is null ? null : Iterate(candidates, filter);
+    }
+
+
+    /// <summary>
+    /// Returns the last certificate this source holds that matches <paramref name="filter"/>, or
+    /// <see langword="null"/> if none does.
+    /// </summary>
+    /// <param name="filter">The predicates the result must satisfy.</param>
+    /// <returns>The last matching result, or <see langword="null"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is null.</exception>
+    /// <remarks>
+    /// Uses <see cref="EnumerateDescending"/> where the source implements it, stopping at the first match.
+    /// Otherwise it reads forwards and keeps the last match, releasing each one the next supersedes, since
+    /// only the final one is ever returned.
+    /// </remarks>
+    public CertificateFinderResult? FindLast(CertificateFilter filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var descending = FindDescending(filter);
+        if (descending is not null) {
+            return descending.FirstOrDefault();
         }
-        return Iterate(EnumerateDescending(filter), filter);
+
+        CertificateFinderResult? last = null;
+        foreach (var result in Find(filter)) {
+            if (last is not null) {
+                Release(last);
+            }
+            last = result;
+        }
+        return last;
     }
 
 
@@ -63,40 +95,50 @@ public abstract record AbstractCertificateSource
 
 
     /// <summary>
-    /// Whether this source can enumerate backwards, which lets <see cref="CertificateFinder.Last"/> stop
-    /// at the first match instead of reading everything. Override alongside
-    /// <see cref="EnumerateDescending"/>.
-    /// </summary>
-    /// <remarks>
-    /// Only worth claiming when going backwards costs about what going forwards does. A source that would
-    /// have to buffer its whole output to reverse it should leave this <see langword="false"/>: the finder
-    /// then reads it forwards and keeps the last match, which is cheaper than buffering.
-    /// </remarks>
-    public virtual bool CanEnumerateDescending => false;
-
-
-    /// <summary>
-    /// Produces candidate results in the reverse of <see cref="Enumerate"/>'s order. It must be the true
-    /// reverse of what that call would yield, or <see cref="CertificateFinder.Last"/> and
-    /// <see cref="Enumerable.Last{T}(IEnumerable{T})"/> will disagree.
+    /// Produces candidate results in the reverse of <see cref="Enumerate"/>'s order, or
+    /// <see langword="null"/> if this source cannot go backwards. Returning <see langword="null"/> is the
+    /// default, so a source opts in rather than out.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for.</param>
-    /// <returns>Candidate results, last first.</returns>
-    /// <exception cref="NotSupportedException">This source does not support it; see <see cref="CanEnumerateDescending"/>.</exception>
-    protected virtual IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
-        => throw new NotSupportedException($"{GetType().Name} cannot enumerate in descending order.");
+    /// <returns>Candidate results last first, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// What is returned must be the true reverse of what <see cref="Enumerate"/> would yield, or
+    /// <see cref="CertificateFinder.Last"/> will disagree with enumerating the finder. Implement it only
+    /// when going backwards costs about what going forwards does: a source that would have to buffer its
+    /// whole output should return <see langword="null"/> and let <see cref="FindLast"/> read it forwards,
+    /// which is cheaper than buffering.
+    /// </remarks>
+    protected virtual IEnumerable<CertificateFinderResult>? EnumerateDescending(CertificateFilter filter)
+        => null;
 
 
     /// <summary>
-    /// Whether this source creates the certificates it yields, and so may dispose the ones that are
-    /// discarded. A source passing through certificates the caller supplied must return
-    /// <see langword="false"/>, since those are not its to release.
+    /// Releases a result this source produced and then discarded, which happens when the filter rejects it
+    /// or when <see cref="FindLast"/> passes over it. Disposes the certificate by default.
     /// </summary>
+    /// <param name="result">The result being discarded. The caller can never reach it.</param>
     /// <remarks>
-    /// Read by <see cref="Find"/> for the results a filter rejects, and by <see cref="CertificateFinder"/>
-    /// for the ones deduplication drops.
+    /// Override to a no-op in a source that passes through certificates the caller supplied, since those
+    /// are not its to release. A source backed by a cache or pool can return the certificate here instead.
     /// </remarks>
-    public virtual bool OwnsCertificates => true;
+    protected virtual void Release(CertificateFinderResult result)
+        => result.Certificate.Dispose();
+
+
+    /// <summary>
+    /// Projects certificates into results carrying this source and a location.
+    /// </summary>
+    /// <param name="certificates">The certificates found.</param>
+    /// <param name="location">Identifies a certificate within this source. See <see cref="CertificateFinderResult.Location"/>.</param>
+    /// <returns>The results.</returns>
+    protected IEnumerable<CertificateFinderResult> Results(
+        IEnumerable<X509Certificate2> certificates,
+        Func<X509Certificate2, string> location)
+        => certificates.Select(cert => new CertificateFinderResult {
+            Source = this,
+            Location = location(cert),
+            Certificate = cert
+        });
 
 
     private IEnumerable<CertificateFinderResult> Iterate(IEnumerable<CertificateFinderResult> candidates, CertificateFilter filter)
@@ -104,9 +146,9 @@ public abstract record AbstractCertificateSource
         foreach (var result in candidates) {
             if (filter.Matches(result)) {
                 yield return result;
-            } else if (OwnsCertificates) {
+            } else {
                 //This source created it and is discarding it, so it must release it: nothing else can
-                result.Certificate.Dispose();
+                Release(result);
             }
         }
     }

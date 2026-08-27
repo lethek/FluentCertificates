@@ -347,7 +347,7 @@ path disposes a certificate you can still reach.
 `CertificateFinder` does dispose certificates you can't reach: ones it loaded from a store or a file and
 then discarded, because a `Where` rejected them or because deduplication dropped them as a repeat. You
 never see those, and nothing else could release them. Certificates you supplied yourself, through
-`AddCustomSource` or a custom source reporting `OwnsCertificates => false`, are left alone either way.
+`AddCustomSource` or a custom source that overrides `Release` to a no-op, are left alone either way.
 
 Two exceptions, both producing a sequence that mixes objects you own with objects the call created, with
 no way to tell them apart, so don't dispose their elements:

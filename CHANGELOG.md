@@ -20,7 +20,8 @@ release rather than record it as it happened.
 - `CertificateFinder.Any`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` take a predicate and pass it to the sources, like `Where`.
 - `CertificateFinder.AddSource` and `AddSources`.
 - `CertificateFinderResult.Location` identifies a certificate within its source: the full file path, or the store's location and name.
-- `AbstractCertificateSource.CanEnumerateDescending` and `EnumerateDescending`, so a source able to enumerate backwards cheaply lets `CertificateFinder.Last` stop at the first match instead of reading everything. `CertificateStoreSource`, `CertificateDirectorySource` and `CustomCertificateSource` all support it.
+- `AbstractCertificateSource.EnumerateDescending`, so a source able to enumerate backwards cheaply lets `CertificateFinder.Last` stop at the first match instead of reading everything. Returning `null`, the default, means it cannot. `CertificateStoreSource`, `CertificateDirectorySource` and `CustomCertificateSource` all implement it.
+- `AbstractCertificateSource.FindLast` and `FindDescending`, and a `Release` hook a source overrides to keep a discarded certificate alive.
 
 ### Changed
 

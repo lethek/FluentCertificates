@@ -15,15 +15,19 @@ namespace FluentCertificates;
 /// composes sources, hands each one the <see cref="Filter"/>, and collates what comes back. It applies no
 /// predicates of its own.
 /// <para>
-/// <see cref="Where"/> is an instance method taking an expression tree, which is what lets ordinary LINQ
-/// reach the sources: <c>finder.Where(x =&gt; ...)</c> and <c>from x in finder where ... select x</c> both
-/// bind to it in preference to <see cref="Enumerable.Where{T}(IEnumerable{T}, Func{T,bool})"/>. The
+/// <see cref="Where"/> is an instance method, and an instance method beats an extension method in overload
+/// resolution, so <c>finder.Where(x =&gt; ...)</c> and <c>from x in finder where ... select x</c> reach the
+/// sources rather than <see cref="Enumerable.Where{T}(IEnumerable{T}, Func{T,bool})"/>. The
 /// predicate-taking terminals (<see cref="Any"/>, <see cref="First"/>, <see cref="FirstOrDefault"/>,
 /// <see cref="Last"/>, <see cref="LastOrDefault"/>, <see cref="Single"/>, <see cref="SingleOrDefault"/>
 /// and <see cref="Count"/>) shadow their counterparts the same way. Every other LINQ operator runs after
-/// collation, which is correct but does no filtering
-/// at the source; so does a predicate held as a <see cref="Func{T,TResult}"/> rather than written inline,
-/// since only a lambda converts to an expression tree.
+/// collation, which is correct but does no filtering at the source.
+/// </para>
+/// <para>
+/// The parameter is an <see cref="Expression{TDelegate}"/> rather than a delegate so that a source able to
+/// translate a predicate into a native query can read it. That is also why a predicate held in a
+/// <see cref="Func{T,TResult}"/> variable does not reach the sources: only a lambda written inline converts
+/// to an expression tree, so anything else binds to the extension method instead.
 /// </para>
 /// </remarks>
 public record CertificateFinder : IEnumerable<CertificateFinderResult>
@@ -107,10 +111,10 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <remarks>
     /// Shadows <see cref="Enumerable.Last{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
     /// sources. See <see cref="Where"/>. Sources are searched newest-added first and the search stops at
-    /// the first one holding a match, so a source reporting
-    /// <see cref="AbstractCertificateSource.CanEnumerateDescending"/> never reads past its own last match.
-    /// Which result is "last" still depends on the order each source yields, and that is unspecified:
-    /// neither a directory listing nor a store enumeration promises one.
+    /// the first one holding a match, so a source implementing
+    /// <c>EnumerateDescending</c> never reads past its own last match. Which result is "last" still depends
+    /// on the order each source yields, and that is unspecified: neither a directory listing nor a store
+    /// enumeration promises one.
     /// </remarks>
     public CertificateFinderResult Last(Expression<Func<CertificateFinderResult, bool>> predicate)
         => LastOrDefault(predicate)
@@ -130,32 +134,11 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     {
         var filter = Filter.Add(predicate);
 
-        foreach (var source in Sources.Distinct().Reverse()) {
-            var found = LastFrom(source, filter);
-            if (found is not null) {
-                return found;
-            }
-        }
-        return null;
-    }
-
-
-    private static CertificateFinderResult? LastFrom(AbstractCertificateSource source, CertificateFilter filter)
-    {
-        if (source.CanEnumerateDescending) {
-            return source.FindDescending(filter).FirstOrDefault();
-        }
-
-        //Read forwards instead, releasing each match as the next supersedes it: only the final one is
-        //ever returned, so the rest are unreachable the moment they are replaced
-        CertificateFinderResult? last = null;
-        foreach (var result in source.Find(filter)) {
-            if (last is not null && source.OwnsCertificates) {
-                last.Certificate.Dispose();
-            }
-            last = result;
-        }
-        return last;
+        //How a source finds its own last match, and what it releases getting there, is the source's business
+        return Sources.Distinct()
+            .Reverse()
+            .Select(source => source.FindLast(filter))
+            .FirstOrDefault(found => found is not null);
     }
 
 
@@ -232,7 +215,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="stores">The stores to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(params IEnumerable<X509Store> stores)
-        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreSource(x))) };
+        => AddSources(stores.Select(x => new CertificateStoreSource(x)));
 
 
     /// <summary>
@@ -241,7 +224,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="stores">The store names and locations to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(params IEnumerable<(string Name, StoreLocation Location)> stores)
-        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreSource(x.Name, x.Location))) };
+        => AddSources(stores.Select(x => new CertificateStoreSource(x.Name, x.Location)));
 
 
     /// <summary>
@@ -250,7 +233,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="stores">The store names and locations to add.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the additional stores.</returns>
     public CertificateFinder AddStores(params IEnumerable<(StoreName Name, StoreLocation Location)> stores)
-        => this with { Sources = Sources.AddRange(stores.Select(x => new CertificateStoreSource(x.Name, x.Location))) };
+        => AddSources(stores.Select(x => new CertificateStoreSource(x.Name, x.Location)));
 
 
     /// <summary>
@@ -287,7 +270,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// </summary>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the common stores added.</returns>
     public CertificateFinder AddCommonStores()
-        => this with { Sources = Sources.AddRange(CommonStores) };
+        => AddSources(CommonStores);
 
 
     /// <summary>
@@ -307,7 +290,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <param name="recurse">Whether to search subdirectories.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>
     public CertificateFinder AddDirectories(IEnumerable<string> dirs, bool recurse = false)
-        => this with { Sources = Sources.AddRange(dirs.Select(dir => new CertificateDirectorySource(dir, recurse, _fileSystem))) };
+        => AddSources(dirs.Select(dir => new CertificateDirectorySource(dir, recurse, _fileSystem)));
 
 
     /// <summary>

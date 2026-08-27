@@ -14,7 +14,7 @@ public record CertificateFinderResult
     /// <summary>
     /// Identifies the certificate within its source: the full path for a file, or the location and name
     /// for a store. Two sources whose reach overlaps report the same location for the same certificate,
-    /// which is what lets <see cref="CertificateFinder"/> recognise the repeat.
+    /// so a caller who wants one result rather than two can collapse them on it.
     /// </summary>
     public required string Location { get; init; }
 

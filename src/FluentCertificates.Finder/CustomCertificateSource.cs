@@ -25,29 +25,21 @@ public sealed record CustomCertificateSource(IEnumerable<X509Certificate2> Certi
     /// <param name="filter">The predicates the caller asked for; unused.</param>
     /// <returns>The supplied certificates.</returns>
     protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-        => Results(Certificates);
+        //A supplied certificate has no location of its own, so its thumbprint stands in as the id
+        => Results(Certificates, cert => cert.Thumbprint);
 
 
     /// <summary>
-    /// The certificates already exist, so reversing buffers references rather than creating anything.
+    /// Reversing buffers references to certificates that already exist, rather than creating anything.
+    /// A lazy sequence is still run to completion to do it, unlike <see cref="Enumerate"/>.
     /// </summary>
-    public override bool CanEnumerateDescending => true;
-
-
-    /// <inheritdoc/>
+    /// <param name="filter">The predicates the caller asked for; unused.</param>
+    /// <returns>The supplied certificates, last first.</returns>
     protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
-        => Results(Certificates.Reverse());
-
-
-    private IEnumerable<CertificateFinderResult> Results(IEnumerable<X509Certificate2> certificates)
-        => certificates.Select(cert => new CertificateFinderResult {
-            Source = this,
-            //A supplied certificate has no location of its own, so its thumbprint stands in as the id
-            Location = cert.Thumbprint,
-            Certificate = cert
-        });
+        => Results(Certificates.Reverse(), cert => cert.Thumbprint);
 
 
     /// <summary>These certificates are the caller's, so a discarded one must never be disposed.</summary>
-    public override bool OwnsCertificates => false;
+    /// <param name="result">The result being discarded; left alone.</param>
+    protected override void Release(CertificateFinderResult result) { }
 }
