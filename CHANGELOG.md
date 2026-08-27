@@ -20,6 +20,7 @@ release rather than record it as it happened.
 - `CertificateFinder.Any`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` take a predicate and pass it to the sources, like `Where`.
 - `CertificateFinder.AddSource` and `AddSources`.
 - `CertificateFinderResult.Location` identifies a certificate within its source: the full file path, or the store's location and name.
+- `AbstractCertificateSource.CanEnumerateDescending` and `EnumerateDescending`, so a source able to enumerate backwards cheaply lets `CertificateFinder.Last` stop at the first match instead of reading everything. `CertificateStore`, `CertificateDirectory` and `CustomCertificateSource` all support it.
 
 ### Changed
 
@@ -29,7 +30,7 @@ release rather than record it as it happened.
 - **Breaking:** `CertificateDirectory` gains `Recurse` and `FileSystem` and does its own file loading, replacing the internal directory enumerator.
 - **Breaking:** `CertificateStore` is sealed, does its own store reading, and replaces the internal store enumerator.
 - **Breaking:** `CertificateFinder.AddCustomSource` takes `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`, so callers no longer construct result objects. `AddCustomSources` is removed; use `AddSources` with a custom `AbstractCertificateSource`, or call `AddCustomSource` more than once.
-- Results are deduplicated by thumbprint, source kind and location, so one file reached through two overlapping directory roots is reported once. The same certificate in two different stores is still reported for each.
+- Sources are deduplicated by value, so a store or directory added twice is read once. Results are not: a certificate two different sources both reach is reported by each. Use `DistinctBy` on thumbprint, `Source.Kind` and `Location` to collapse them.
 
 ### Fixed
 

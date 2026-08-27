@@ -25,7 +25,22 @@ public sealed record CustomCertificateSource(IEnumerable<X509Certificate2> Certi
     /// <param name="filter">The predicates the caller asked for; unused.</param>
     /// <returns>The supplied certificates.</returns>
     protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-        => Certificates.Select(cert => new CertificateFinderResult {
+        => Results(Certificates);
+
+
+    /// <summary>
+    /// The certificates already exist, so reversing buffers references rather than creating anything.
+    /// </summary>
+    public override bool CanEnumerateDescending => true;
+
+
+    /// <inheritdoc/>
+    protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
+        => Results(Certificates.Reverse());
+
+
+    private IEnumerable<CertificateFinderResult> Results(IEnumerable<X509Certificate2> certificates)
+        => certificates.Select(cert => new CertificateFinderResult {
             Source = this,
             //A supplied certificate has no location of its own, so its thumbprint stands in as the id
             Location = cert.Thumbprint,

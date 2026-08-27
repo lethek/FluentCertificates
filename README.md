@@ -496,8 +496,10 @@ So does a predicate you hold in a `Func<>` variable rather than writing inline, 
 becomes an expression tree.
 
 Results carry a `Source` and a `Location` saying where the certificate was found, so the same
-certificate present in two stores is reported twice, once for each. A single file reached through two
-overlapping directory roots is reported once.
+certificate present in two stores is reported twice, once for each, and a file that two overlapping
+directory sources both reach is reported by each of them. Results are never deduplicated, because where
+a certificate was found is part of the answer. To collapse them, add
+`.DistinctBy(r => (r.Certificate.Thumbprint, r.Source.Kind, r.Location))`.
 
 ### Find a specific certificate by thumbprint
 

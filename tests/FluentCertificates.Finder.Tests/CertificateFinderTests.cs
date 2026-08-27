@@ -208,12 +208,12 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// Two directory sources whose reach overlaps are both searched, but a file found by both is one
-    /// result: same thumbprint, same source kind, same canonical path. The file only one of them reaches
-    /// is unaffected.
+    /// Results are not deduplicated, so a file two sources both reach is reported by each of them. Where a
+    /// certificate was found is part of the answer, and the caller who wants them collapsed can say so
+    /// with <c>DistinctBy</c>.
     /// </summary>
     [Test]
-    public async Task EnumerateCertificates_OverlappingDirectoryRoots_ReportEachFileOnce()
+    public async Task EnumerateCertificates_OverlappingDirectoryRoots_ReportTheSharedFileOncePerSource()
     {
         var fs = CreateEmptyMockFileSystem();
         using var top = CreateSelfSignedCertificate("Top");
@@ -223,11 +223,124 @@ public class CertificateFinderTests
 
         //Same path, different recursion: two distinct sources, and /tree/top.cer is found by both
         var finder = new CertificateFinder(fs).AddDirectory("/tree").AddDirectory("/tree", recurse: true);
+        var results = finder.ToList();
 
         await Assert.That(finder.Sources.Count).IsEqualTo(2);
         await Assert
-            .That(finder.ToList().Select(r => r.Certificate.Thumbprint))
-            .IsEquivalentTo([top.Thumbprint, nested.Thumbprint], CollectionOrdering.Any);
+            .That(results.Select(r => r.Certificate.Thumbprint))
+            .IsEquivalentTo([top.Thumbprint, top.Thumbprint, nested.Thumbprint], CollectionOrdering.Any);
+
+        //Both copies name the same file, which is what a caller would deduplicate on
+        await Assert
+            .That(results.Where(r => r.Certificate.Thumbprint == top.Thumbprint).Select(r => r.Location).Distinct())
+            .HasSingleItem();
+    }
+
+
+    /// <summary>
+    /// <see cref="CertificateFinder.Last"/> searches sources newest-first and stops at the first holding a
+    /// match, so it must agree with reading everything forwards and taking the final result. This is the
+    /// test that keeps the short-circuit honest.
+    /// </summary>
+    [Test]
+    public async Task Last_AgreesWithEnumeratingForwards()
+    {
+        using var a = CreateSelfSignedCertificate("A");
+        using var b = CreateSelfSignedCertificate("B");
+        using var c = CreateSelfSignedCertificate("C");
+        var first = new StubSource("Stub", "one", a, b) { Descending = true };
+        var second = new StubSource("Stub", "two", c) { Descending = true };
+        var finder = new CertificateFinder().AddSources(first, second);
+
+        //Matching everything: the last result overall
+        await Assert
+            .That(finder.Last(x => true).Certificate.Thumbprint)
+            .IsEqualTo(finder.Where(x => true).ToList().Last().Certificate.Thumbprint);
+
+        //A predicate the newest source cannot satisfy, so it has to fall back to the older one
+        Expression<Func<CertificateFinderResult, bool>> notC = x => x.Certificate.Subject != "CN=C";
+        await Assert
+            .That(finder.Last(notC).Certificate.Thumbprint)
+            .IsEqualTo(finder.Where(notC).ToList().Last().Certificate.Thumbprint);
+        await Assert.That(finder.Last(notC).Certificate.Thumbprint).IsEqualTo(b.Thumbprint);
+    }
+
+
+    [Test]
+    public async Task Last_StopsAtTheNewestSourceHoldingAMatch()
+    {
+        using var a = CreateSelfSignedCertificate("A");
+        using var c = CreateSelfSignedCertificate("C");
+        var first = new StubSource("Stub", "one", a) { Descending = true };
+        var second = new StubSource("Stub", "two", c) { Descending = true };
+
+        var found = new CertificateFinder().AddSources(first, second).Last(x => true);
+
+        await Assert.That(found.Certificate.Thumbprint).IsEqualTo(c.Thumbprint);
+        await Assert.That(second.Calls).IsEquivalentTo(["descending"], CollectionOrdering.Matching);
+
+        //The older source was never touched, which is the whole point of searching backwards
+        await Assert.That(first.Calls).IsEmpty();
+    }
+
+
+    /// <summary>
+    /// A source that cannot go backwards is read forwards and the last match kept, which is cheaper than
+    /// making it buffer its whole output to reverse itself.
+    /// </summary>
+    [Test]
+    public async Task Last_ForwardOnlySource_IsReadForwards()
+    {
+        using var a = CreateSelfSignedCertificate("A");
+        using var b = CreateSelfSignedCertificate("B");
+        var source = new StubSource("Stub", "one", a, b) { Descending = false };
+
+        var found = new CertificateFinder().AddSource(source).Last(x => true);
+
+        await Assert.That(found.Certificate.Thumbprint).IsEqualTo(b.Thumbprint);
+        await Assert.That(source.Calls).IsEquivalentTo(["forward"], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// A source claiming <see cref="AbstractCertificateSource.CanEnumerateDescending"/> must yield the
+    /// true reverse of its forward pass, or <see cref="CertificateFinder.Last"/> silently disagrees with
+    /// enumerating the finder. Asserted for the two sources that read from outside the process.
+    /// </summary>
+    [Test]
+    public async Task FindDescending_YieldsTheExactReverseOfFind()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        using var one = CreateSelfSignedCertificate("One");
+        using var two = CreateSelfSignedCertificate("Two");
+        using var three = CreateSelfSignedCertificate("Three");
+        fs.AddFile("/rev/a.cer", new MockFileData(one.RawData));
+        fs.AddFile("/rev/b.cer", new MockFileData(two.RawData));
+        fs.AddFile("/rev/c.cer", new MockFileData(three.RawData));
+
+        var directory = new CertificateDirectory("/rev", false, fs);
+        var forwards = directory.Find(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint).ToList();
+        var backwards = directory.FindDescending(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint).ToList();
+
+        await Assert.That(forwards.Count).IsEqualTo(3);
+        await Assert.That(backwards).IsEquivalentTo(Enumerable.Reverse(forwards), CollectionOrdering.Matching);
+
+        var custom = new CustomCertificateSource([one, two, three]);
+        await Assert
+            .That(custom.FindDescending(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([three.Thumbprint, two.Thumbprint, one.Thumbprint], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task FindDescending_OnASourceThatCannot_Throws()
+    {
+        using var a = CreateSelfSignedCertificate("A");
+        var source = new StubSource("Stub", "one", a) { Descending = false };
+
+        await Assert
+            .That(() => source.FindDescending(CertificateFilter.Empty).ToList())
+            .ThrowsExactly<NotSupportedException>();
     }
 
 
@@ -830,21 +943,45 @@ public class CertificateFinderTests
     /// A source with a fixed kind and location, for exercising collation and predicate hand-off without a
     /// real store or directory behind it.
     /// </summary>
-    private sealed record StubSource(string SourceKind, string At, X509Certificate2 Certificate)
+    private sealed record StubSource(string SourceKind, string At, params X509Certificate2[] Certificates)
         : AbstractCertificateSource
     {
         public override string Kind => SourceKind;
 
-        //Never disposes: the certificate belongs to the test
+        //Never disposes: the certificates belong to the test
         public override bool OwnsCertificates => false;
 
+        /// <summary>Whether this stub claims it can enumerate backwards.</summary>
+        public bool Descending { get; init; }
+
+        public override bool CanEnumerateDescending => Descending;
+
         public List<int> ReceivedPredicateCounts { get; } = [];
+
+        /// <summary>Records which direction the source was read in, and whether it was read at all.</summary>
+        public List<string> Calls { get; } = [];
 
         protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
         {
             ReceivedPredicateCounts.Add(filter.Expressions.Count);
-            return [new CertificateFinderResult { Source = this, Location = At, Certificate = Certificate }];
+            Calls.Add("forward");
+            return Results(Certificates);
         }
+
+        protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
+        {
+            ReceivedPredicateCounts.Add(filter.Expressions.Count);
+            Calls.Add("descending");
+            //Enumerable.Reverse explicitly: on an array the bare call binds to the void span overload
+            return Results(Enumerable.Reverse(Certificates));
+        }
+
+        private IEnumerable<CertificateFinderResult> Results(IEnumerable<X509Certificate2> certificates)
+            => certificates.Select(cert => new CertificateFinderResult {
+                Source = this,
+                Location = At,
+                Certificate = cert
+            });
     }
 
 

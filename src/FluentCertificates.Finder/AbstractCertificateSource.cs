@@ -31,7 +31,25 @@ public abstract record AbstractCertificateSource
     public IEnumerable<CertificateFinderResult> Find(CertificateFilter filter)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        return Iterate(filter);
+        return Iterate(Enumerate(filter), filter);
+    }
+
+
+    /// <summary>
+    /// Returns every certificate this source holds that matches <paramref name="filter"/>, in the reverse
+    /// of the order <see cref="Find"/> yields them.
+    /// </summary>
+    /// <param name="filter">The predicates the results must satisfy.</param>
+    /// <returns>The matching results, last first.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is null.</exception>
+    /// <exception cref="NotSupportedException"><see cref="CanEnumerateDescending"/> is false.</exception>
+    public IEnumerable<CertificateFinderResult> FindDescending(CertificateFilter filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        if (!CanEnumerateDescending) {
+            throw new NotSupportedException($"{GetType().Name} cannot enumerate in descending order.");
+        }
+        return Iterate(EnumerateDescending(filter), filter);
     }
 
 
@@ -42,6 +60,31 @@ public abstract record AbstractCertificateSource
     /// <param name="filter">The predicates the caller asked for.</param>
     /// <returns>Candidate results.</returns>
     protected abstract IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter);
+
+
+    /// <summary>
+    /// Whether this source can enumerate backwards, which lets <see cref="CertificateFinder.Last"/> stop
+    /// at the first match instead of reading everything. Override alongside
+    /// <see cref="EnumerateDescending"/>.
+    /// </summary>
+    /// <remarks>
+    /// Only worth claiming when going backwards costs about what going forwards does. A source that would
+    /// have to buffer its whole output to reverse it should leave this <see langword="false"/>: the finder
+    /// then reads it forwards and keeps the last match, which is cheaper than buffering.
+    /// </remarks>
+    public virtual bool CanEnumerateDescending => false;
+
+
+    /// <summary>
+    /// Produces candidate results in the reverse of <see cref="Enumerate"/>'s order. It must be the true
+    /// reverse of what that call would yield, or <see cref="CertificateFinder.Last"/> and
+    /// <see cref="Enumerable.Last{T}(IEnumerable{T})"/> will disagree.
+    /// </summary>
+    /// <param name="filter">The predicates the caller asked for.</param>
+    /// <returns>Candidate results, last first.</returns>
+    /// <exception cref="NotSupportedException">This source does not support it; see <see cref="CanEnumerateDescending"/>.</exception>
+    protected virtual IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
+        => throw new NotSupportedException($"{GetType().Name} cannot enumerate in descending order.");
 
 
     /// <summary>
@@ -56,9 +99,9 @@ public abstract record AbstractCertificateSource
     public virtual bool OwnsCertificates => true;
 
 
-    private IEnumerable<CertificateFinderResult> Iterate(CertificateFilter filter)
+    private IEnumerable<CertificateFinderResult> Iterate(IEnumerable<CertificateFinderResult> candidates, CertificateFilter filter)
     {
-        foreach (var result in Enumerate(filter)) {
+        foreach (var result in candidates) {
             if (filter.Matches(result)) {
                 yield return result;
             } else if (OwnsCertificates) {

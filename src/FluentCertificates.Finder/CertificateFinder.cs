@@ -19,8 +19,9 @@ namespace FluentCertificates;
 /// reach the sources: <c>finder.Where(x =&gt; ...)</c> and <c>from x in finder where ... select x</c> both
 /// bind to it in preference to <see cref="Enumerable.Where{T}(IEnumerable{T}, Func{T,bool})"/>. The
 /// predicate-taking terminals (<see cref="Any"/>, <see cref="First"/>, <see cref="FirstOrDefault"/>,
-/// <see cref="Single"/>, <see cref="SingleOrDefault"/> and <see cref="Count"/>) shadow their counterparts
-/// the same way. Every other LINQ operator runs after collation, which is correct but does no filtering
+/// <see cref="Last"/>, <see cref="LastOrDefault"/>, <see cref="Single"/>, <see cref="SingleOrDefault"/>
+/// and <see cref="Count"/>) shadow their counterparts the same way. Every other LINQ operator runs after
+/// collation, which is correct but does no filtering
 /// at the source; so does a predicate held as a <see cref="Func{T,TResult}"/> rather than written inline,
 /// since only a lambda converts to an expression tree.
 /// </para>
@@ -105,12 +106,15 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <exception cref="InvalidOperationException">Nothing matched.</exception>
     /// <remarks>
     /// Shadows <see cref="Enumerable.Last{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
-    /// sources. See <see cref="Where"/>. Which result is "last" depends on the order sources are searched
-    /// in and the order each yields, and the latter is unspecified: neither a directory listing nor a
-    /// store enumeration promises one.
+    /// sources. See <see cref="Where"/>. Sources are searched newest-added first and the search stops at
+    /// the first one holding a match, so a source reporting
+    /// <see cref="AbstractCertificateSource.CanEnumerateDescending"/> never reads past its own last match.
+    /// Which result is "last" still depends on the order each source yields, and that is unspecified:
+    /// neither a directory listing nor a store enumeration promises one.
     /// </remarks>
     public CertificateFinderResult Last(Expression<Func<CertificateFinderResult, bool>> predicate)
-        => Where(predicate).Last();
+        => LastOrDefault(predicate)
+            ?? throw new InvalidOperationException("Sequence contains no matching element");
 
 
     /// <summary>
@@ -123,7 +127,36 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// reaches the sources. See <see cref="Last"/> on what "last" means here.
     /// </remarks>
     public CertificateFinderResult? LastOrDefault(Expression<Func<CertificateFinderResult, bool>> predicate)
-        => Where(predicate).LastOrDefault();
+    {
+        var filter = Filter.Add(predicate);
+
+        foreach (var source in Sources.Distinct().Reverse()) {
+            var found = LastFrom(source, filter);
+            if (found is not null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+
+    private static CertificateFinderResult? LastFrom(AbstractCertificateSource source, CertificateFilter filter)
+    {
+        if (source.CanEnumerateDescending) {
+            return source.FindDescending(filter).FirstOrDefault();
+        }
+
+        //Read forwards instead, releasing each match as the next supersedes it: only the final one is
+        //ever returned, so the rest are unreachable the moment they are replaced
+        CertificateFinderResult? last = null;
+        foreach (var result in source.Find(filter)) {
+            if (last is not null && source.OwnsCertificates) {
+                last.Certificate.Dispose();
+            }
+            last = result;
+        }
+        return last;
+    }
 
 
     /// <summary>
@@ -297,36 +330,23 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
 
 
     /// <summary>
-    /// Returns an enumerator over every matching certificate, from every source, deduplicated.
+    /// Returns an enumerator over every matching certificate, source by source, in the order the sources
+    /// were added.
     /// </summary>
     /// <remarks>
     /// Sources are deduplicated by value, so a store or directory added twice is read once. Results are
-    /// then deduplicated by thumbprint, source kind and <see cref="CertificateFinderResult.Location"/>,
-    /// which collapses the same file reached through two overlapping directory roots while keeping the
-    /// same certificate found in two different stores: where a certificate lives is part of the answer.
+    /// not deduplicated: a certificate two sources both reach is reported by each of them, since where a
+    /// certificate was found is part of the answer. To collapse those, add
+    /// <c>.DistinctBy(r =&gt; (r.Certificate.Thumbprint, r.Source.Kind, r.Location))</c>.
     /// </remarks>
     /// <returns>An enumerator for <see cref="CertificateFinderResult"/>.</returns>
     public IEnumerator<CertificateFinderResult> GetEnumerator()
-        => Deduplicate(Sources.Distinct().SelectMany(source => source.Find(Filter))).GetEnumerator();
+        => Sources.Distinct().SelectMany(source => source.Find(Filter)).GetEnumerator();
 
 
     /// <inheritdoc/>
     IEnumerator IEnumerable.GetEnumerator()
         => GetEnumerator();
-
-
-    private static IEnumerable<CertificateFinderResult> Deduplicate(IEnumerable<CertificateFinderResult> results)
-    {
-        var seen = new HashSet<(string Thumbprint, string Kind, string Location)>();
-        foreach (var result in results) {
-            if (seen.Add((result.Certificate.Thumbprint, result.Source.Kind, result.Location))) {
-                yield return result;
-            } else if (result.Source.OwnsCertificates) {
-                //A repeat the caller will never see, and its source created it, so release it here
-                result.Certificate.Dispose();
-            }
-        }
-    }
 
 
     private readonly IFileSystem _fileSystem;

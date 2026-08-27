@@ -56,16 +56,28 @@ public sealed record CertificateStore(string Name, StoreLocation Location) : Abs
     /// <param name="filter">The predicates the caller asked for; unused.</param>
     /// <returns>Every certificate in the store.</returns>
     protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-    {
         //Opened in a helper because a method containing `yield return` cannot also contain a catch clause
-        foreach (var cert in OpenCertificates()) {
-            yield return new CertificateFinderResult {
-                Source = this,
-                Location = $@"{Location}\{Name}",
-                Certificate = cert
-            };
-        }
-    }
+        => Results(OpenCertificates());
+
+
+    /// <summary>
+    /// Free: <see cref="X509Store.Certificates"/> is already a materialised collection, so reading it
+    /// backwards costs no more than reading it forwards.
+    /// </summary>
+    public override bool CanEnumerateDescending => true;
+
+
+    /// <inheritdoc/>
+    protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
+        => Results(OpenCertificates().Reverse());
+
+
+    private IEnumerable<CertificateFinderResult> Results(IEnumerable<X509Certificate2> certificates)
+        => certificates.Select(cert => new CertificateFinderResult {
+            Source = this,
+            Location = $@"{Location}\{Name}",
+            Certificate = cert
+        });
 
 
     private X509Certificate2Collection OpenCertificates()

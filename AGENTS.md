@@ -290,14 +290,25 @@ Every other LINQ operator runs after collation: correct, but not pushed down. Th
 predicate held in a `Func<CertificateFinderResult, bool>` rather than written inline, since only a lambda
 converts to an expression tree.
 
-**Collation order is unspecified, so `Last` is well-defined only in the weak sense that `First` is.**
-Sources are searched in the order added, but neither `Directory.EnumerateFiles` nor a store enumeration
-promises an order within a source. A source could short-circuit `Last` by enumerating itself in reverse
-(a SQL source as `ORDER BY ... DESC LIMIT 1`), and the framework has no hook for that on purpose: a
-reverse hook would let a source optimise toward an answer the framework does not promise. Specify an
-ordering contract first, then add the hook. Note deduplication keeps the first occurrence of a
-(thumbprint, kind, location), so reversing would keep the last instead: the same certificate at the same
-location, but a different `X509Certificate2` instance.
+**Results are not deduplicated.** Sources are (`Sources.Distinct()`, by value, so a store or directory
+added twice is read once), but a certificate two *different* sources both reach is reported by each.
+Where a certificate was found is part of the answer, and a caller who disagrees writes
+`.DistinctBy(r => (r.Certificate.Thumbprint, r.Source.Kind, r.Location))`. Do not put result
+deduplication back: it is incompatible with `Last` short-circuiting. First-wins dedup over a raw stream
+of `A B A` yields `A B`, so `Last` is `B`, while walking backwards meets the second `A` first and would
+return `A`. Establishing that the `A` is a duplicate needs the full forward pass that short-circuiting
+exists to avoid.
+
+**`Last` searches backwards.** `LastOrDefault` walks `Sources` newest-first and stops at the first source
+holding a match, asking a source that reports `CanEnumerateDescending` for its own reverse enumeration
+and otherwise reading it forwards and keeping the last match (disposing each superseded one where the
+source owns them). A source overriding `EnumerateDescending` must yield the *exact* reverse of its
+forward pass, or `finder.Last(p)` and `finder.Where(p).ToList().Last()` disagree;
+`FindDescending_YieldsTheExactReverseOfFind` guards that. Claim `CanEnumerateDescending` only when going
+backwards costs about what going forwards does: a source that would have to buffer its whole output
+should leave it false, since reading forwards and keeping the last match is cheaper than buffering.
+Within a source the order is still unspecified, so which result is "last" is as arbitrary as which is
+"first"; that makes both non-deterministic across runs, not incorrect.
 
 Do not reintroduce `IQueryable`. There is no translation target behind a store (`X509Store` exposes
 `Certificates` and nothing else, and `X509Certificate2Collection.Find` is slower than a lambda and
@@ -309,10 +320,10 @@ disposes what deduplication drops; nothing else can, since the caller never sees
 through the caller's own certificates must return false. Results that reach the caller are never
 disposed by the library.
 
-**Deduplication** is by (thumbprint, `Source.Kind`, `Location`). Sources compare by value, so the same
-directory or store added twice is read once; the key then collapses one file reached through two
-overlapping roots, while keeping the same certificate found in two different stores. Where a certificate
-lives is part of the answer, so never dedupe on thumbprint alone.
+`Location` identifies a certificate within its source: the canonical full path for a file, the location
+and name for a store, the thumbprint for a caller-supplied certificate. With `Kind` it is what a caller
+deduplicates on, and it is the only reason `Kind` exists now that the library does no deduplication of
+its own.
 
 ### Extension methods
 

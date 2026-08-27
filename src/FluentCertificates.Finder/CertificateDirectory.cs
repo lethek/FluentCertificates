@@ -60,19 +60,35 @@ public sealed record CertificateDirectory : AbstractCertificateSource
     /// <param name="filter">The predicates the caller asked for; unused.</param>
     /// <returns>Every certificate loadable from the directory.</returns>
     protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+        => Load(CertificateFiles());
+
+
+    /// <summary>
+    /// Reverses the file listing before loading anything, so a caller after the last match parses from
+    /// the end of the directory rather than through all of it. Only the paths are buffered.
+    /// </summary>
+    public override bool CanEnumerateDescending => true;
+
+
+    /// <inheritdoc/>
+    protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
+        => Load(CertificateFiles().Reverse());
+
+
+    private IEnumerable<(string Path, string Extension)> CertificateFiles()
         => FileSystem.Directory
             .EnumerateFiles(Path, "*", Recurse ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
-            .Select(path => new {
-                Path = path,
-                Extension = System.IO.Path.GetExtension(path)
-            })
-            .Where(x => SupportedFileExtensions.Contains(x.Extension))
-            .SelectMany(x => Load(x.Path, x.Extension).Select(cert => new CertificateFinderResult {
-                Source = this,
-                //Canonicalised, so the same file reached from two overlapping roots reports one location
-                Location = FileSystem.Path.GetFullPath(x.Path),
-                Certificate = cert
-            }));
+            .Select(path => (Path: path, Extension: System.IO.Path.GetExtension(path)))
+            .Where(x => SupportedFileExtensions.Contains(x.Extension));
+
+
+    private IEnumerable<CertificateFinderResult> Load(IEnumerable<(string Path, string Extension)> files)
+        => files.SelectMany(x => Load(x.Path, x.Extension).Select(cert => new CertificateFinderResult {
+            Source = this,
+            //Canonicalised, so the same file reached from two overlapping roots reports one location
+            Location = FileSystem.Path.GetFullPath(x.Path),
+            Certificate = cert
+        }));
 
 
     private IEnumerable<X509Certificate2> Load(string path, string extension)
