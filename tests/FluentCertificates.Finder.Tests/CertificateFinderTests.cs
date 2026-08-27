@@ -1,3 +1,4 @@
+using System.Collections;
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
 using System.Linq.Expressions;
@@ -340,6 +341,168 @@ public class CertificateFinderTests
 
         await Assert
             .That(() => source.FindDescending(CertificateFilter.Empty).ToList())
+            .ThrowsExactly<NotSupportedException>();
+    }
+
+
+    /// <summary>
+    /// A source inherits "cannot go backwards" and a throwing <c>EnumerateDescending</c>, so an
+    /// implementer opts in rather than having to opt out.
+    /// </summary>
+    [Test]
+    public async Task AbstractCertificateSource_DefaultsToForwardOnly()
+    {
+        using var a = CreateSelfSignedCertificate("A");
+        var source = new MinimalSource(a);
+
+        await Assert.That(source.CanEnumerateDescending).IsFalse();
+        await Assert.That(source.OwnsCertificates).IsTrue();
+        await Assert
+            .That(() => source.FindDescending(CertificateFilter.Empty).ToList())
+            .ThrowsExactly<NotSupportedException>();
+
+        //Reached through the finder it is simply read forwards instead
+        await Assert
+            .That(new CertificateFinder().AddSource(source).Last(x => true).Certificate.Thumbprint)
+            .IsEqualTo(a.Thumbprint);
+    }
+
+
+    /// <summary>
+    /// Reading a real store: the only place the store source's own output is exercised, so it covers both
+    /// the <see cref="CertificateFinderResult.Location"/> format and that descending is the exact reverse.
+    /// Skipped rather than silently passing when the store holds nothing.
+    /// </summary>
+    [Test]
+    public async Task CertificateStore_ReadsARealStore()
+    {
+        var store = new CertificateStore(StoreName.Root, StoreLocation.CurrentUser);
+        var forwards = store.Find(CertificateFilter.Empty).ToList();
+        try {
+            Skip.Unless(forwards.Count > 0, "CurrentUser\\Root holds no certificates on this machine");
+
+            await Assert.That(store.Kind).IsEqualTo("Store");
+            await Assert.That(forwards.Select(x => x.Location).Distinct()).IsEquivalentTo(["CurrentUser\\Root"]);
+            await Assert.That(forwards.All(x => ReferenceEquals(x.Source, store))).IsTrue();
+
+            await Assert.That(store.CanEnumerateDescending).IsTrue();
+            var backwards = store.FindDescending(CertificateFilter.Empty).ToList();
+            try {
+                await Assert
+                    .That(backwards.Select(x => x.Certificate.Thumbprint))
+                    .IsEquivalentTo(Enumerable.Reverse(forwards.Select(x => x.Certificate.Thumbprint).ToList()),
+                        CollectionOrdering.Matching);
+            } finally {
+                backwards.ForEach(x => x.Certificate.Dispose());
+            }
+        } finally {
+            forwards.ForEach(x => x.Certificate.Dispose());
+        }
+    }
+
+
+    /// <summary>
+    /// Reading a forward-only source for its last match materialises every earlier match too. Those are
+    /// unreachable the moment the next one supersedes them, so an owning source's copies are released.
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    public async Task Last_ForwardOnlyOwningSource_DisposesTheMatchesItPassesOver()
+    {
+        //Deliberately not disposed by the test: the point is that Last does it
+        var first = CreateSelfSignedCertificate("First");
+        var second = CreateSelfSignedCertificate("Second");
+        var source = new StubSource("Stub", "one", first, second) { Descending = false, Owns = true };
+
+        var found = new CertificateFinder().AddSource(source).Last(x => true);
+
+        await Assert.That(found.Certificate.Thumbprint).IsEqualTo(second.Thumbprint);
+        await Assert.That(() => first.Subject).ThrowsExactly<CryptographicException>();
+        await Assert.That(() => second.Subject).ThrowsNothing();
+
+        second.Dispose();
+    }
+
+
+    [Test]
+    public async Task CertificateFilter_TracksWhetherItHasPredicates()
+    {
+        await Assert.That(CertificateFilter.Empty.IsEmpty).IsTrue();
+        await Assert.That(CertificateFilter.Empty.Expressions).IsEmpty();
+
+        var one = CertificateFilter.Empty.Add(x => x.Location == "a");
+
+        await Assert.That(one.IsEmpty).IsFalse();
+        await Assert.That(one.Expressions.Count).IsEqualTo(1);
+
+        //Immutable, so adding leaves the original alone
+        await Assert.That(CertificateFilter.Empty.IsEmpty).IsTrue();
+    }
+
+
+    [Test]
+    public async Task CustomCertificateSource_ReportsItsKindAndLeavesTheCallersCertificates()
+    {
+        using var cert = CreateSelfSignedCertificate("Custom");
+        var source = new CustomCertificateSource([cert]);
+
+        await Assert.That(source.Kind).IsEqualTo("Custom");
+        await Assert.That(source.OwnsCertificates).IsFalse();
+
+        //A supplied certificate has no location of its own, so its thumbprint stands in
+        await Assert
+            .That(source.Find(CertificateFilter.Empty).Single().Location)
+            .IsEqualTo(cert.Thumbprint);
+    }
+
+
+    [Test]
+    public async Task NullArguments_AreRejected()
+    {
+        using var cert = CreateSelfSignedCertificate("Null");
+        var source = new StubSource("Stub", "one", cert);
+
+        await Assert.That(() => new CertificateFinder().Where(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => CertificateFilter.Empty.Add(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => source.Find(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => source.FindDescending(null!)).ThrowsExactly<ArgumentNullException>();
+    }
+
+
+    [Test]
+    public async Task NonGenericEnumeration_YieldsTheSameResults()
+    {
+        using var cert = CreateSelfSignedCertificate("NonGeneric");
+        IEnumerable finder = new CertificateFinder().AddCustomSource(cert);
+
+        //Taken off the interface directly: Cast<T> would notice the generic interface and short-circuit
+        var enumerator = finder.GetEnumerator();
+        var results = new List<CertificateFinderResult>();
+        while (enumerator.MoveNext()) {
+            results.Add((CertificateFinderResult)enumerator.Current!);
+        }
+
+        await Assert.That(results).HasSingleItem();
+        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+    }
+
+
+    /// <summary>
+    /// A source claiming it can go backwards but not overriding <c>EnumerateDescending</c> is an
+    /// implementer error, and the base says so rather than silently yielding the forward order.
+    /// </summary>
+    [Test]
+    public async Task Source_ClaimingDescendingWithoutImplementingIt_Throws()
+    {
+        using var cert = CreateSelfSignedCertificate("Lying");
+        var source = new LyingSource(cert);
+
+        await Assert
+            .That(() => source.FindDescending(CertificateFilter.Empty).ToList())
+            .ThrowsExactly<NotSupportedException>();
+
+        await Assert
+            .That(() => new CertificateFinder().AddSource(source).Last(x => true))
             .ThrowsExactly<NotSupportedException>();
     }
 
@@ -943,16 +1106,43 @@ public class CertificateFinderTests
     /// A source with a fixed kind and location, for exercising collation and predicate hand-off without a
     /// real store or directory behind it.
     /// </summary>
+    /// <summary>
+    /// Overrides nothing but <c>Enumerate</c>, so it exercises what a minimal third-party source inherits.
+    /// </summary>
+    private sealed record MinimalSource(X509Certificate2 Certificate) : AbstractCertificateSource
+    {
+        public override string Kind => "Minimal";
+
+        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+            => [new CertificateFinderResult { Source = this, Location = "only", Certificate = Certificate }];
+    }
+
+
+    /// <summary>Claims it can enumerate backwards without implementing it.</summary>
+    private sealed record LyingSource(X509Certificate2 Certificate) : AbstractCertificateSource
+    {
+        public override string Kind => "Lying";
+
+        public override bool CanEnumerateDescending => true;
+
+        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+            => [new CertificateFinderResult { Source = this, Location = "only", Certificate = Certificate }];
+    }
+
+
     private sealed record StubSource(string SourceKind, string At, params X509Certificate2[] Certificates)
         : AbstractCertificateSource
     {
         public override string Kind => SourceKind;
 
-        //Never disposes: the certificates belong to the test
-        public override bool OwnsCertificates => false;
+        //Defaults to leaving them alone: the certificates belong to the test unless Owns says otherwise
+        public override bool OwnsCertificates => Owns;
 
         /// <summary>Whether this stub claims it can enumerate backwards.</summary>
         public bool Descending { get; init; }
+
+        /// <summary>Whether this stub claims the certificates are its to dispose.</summary>
+        public bool Owns { get; init; }
 
         public override bool CanEnumerateDescending => Descending;
 
