@@ -1,14 +1,22 @@
-﻿using System.Security.Cryptography.X509Certificates;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 namespace FluentCertificates;
 
 /// <summary>
-/// Represents a certificate store source with a specific name and location.
-/// Provides methods to open the store and convert <see cref="StoreName"/> to string.
+/// A certificate source reading an X.509 store, identified by name and location.
 /// </summary>
+/// <remarks>
+/// A record, so two instances naming the same store compare equal and <see cref="CertificateFinder"/>
+/// reads that store once however many times it was added.
+/// <para>
+/// The store is opened read-only and existing-only, so searching one never creates it. A store that does
+/// not exist yields no results rather than throwing.
+/// </para>
+/// </remarks>
 /// <param name="Name">The name of the certificate store.</param>
 /// <param name="Location">The location of the certificate store.</param>
-public record CertificateStore(string Name, StoreLocation Location) : AbstractCertificateSource
+public sealed record CertificateStore(string Name, StoreLocation Location) : AbstractCertificateSource
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="CertificateStore"/> class from an <see cref="X509Store"/>.
@@ -22,18 +30,54 @@ public record CertificateStore(string Name, StoreLocation Location) : AbstractCe
     /// Initializes a new instance of the <see cref="CertificateStore"/> class from a <see cref="StoreName"/> and <see cref="StoreLocation"/>.
     /// </summary>
     /// <param name="name">The store name as <see cref="StoreName"/>.</param>
-    /// <param name="location">The store location.</param>    
+    /// <param name="location">The store location.</param>
     public CertificateStore(StoreName name, StoreLocation location)
         : this(GetProperStoreName(name), location) { }
 
-    
+
+    /// <inheritdoc/>
+    public override string Kind => "Store";
+
+
     /// <summary>
     /// Opens the certificate store with the specified <see cref="OpenFlags"/>.
     /// </summary>
     /// <param name="flags">The flags to use when opening the store.</param>
-    /// <returns>An <see cref="X509Store"/> instance.</returns>    
+    /// <returns>An <see cref="X509Store"/> instance.</returns>
     public X509Store Open(OpenFlags flags)
         => new(Name, Location, flags);
+
+
+    /// <summary>
+    /// Reads every certificate in the store. Nothing here can be filtered natively: the platform exposes
+    /// no way to query a store, so <see cref="X509Store.Certificates"/> materialises all of them before
+    /// any predicate could apply.
+    /// </summary>
+    /// <param name="filter">The predicates the caller asked for; unused.</param>
+    /// <returns>Every certificate in the store.</returns>
+    protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+    {
+        //Opened in a helper because a method containing `yield return` cannot also contain a catch clause
+        foreach (var cert in OpenCertificates()) {
+            yield return new CertificateFinderResult {
+                Source = this,
+                Location = $@"{Location}\{Name}",
+                Certificate = cert
+            };
+        }
+    }
+
+
+    private X509Certificate2Collection OpenCertificates()
+    {
+        try {
+            using var store = Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
+            return store.Certificates;
+        } catch (CryptographicException) {
+            //Thrown if the store doesn't exist: yield nothing rather than creating one or erroring out
+            return [];
+        }
+    }
 
 
     /// <summary>

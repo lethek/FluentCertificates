@@ -344,6 +344,11 @@ using var key = cert.GetPrivateKey();
 Certificates the library returns to you are always yours. Nothing in `CertificateFinder` or the export
 path disposes a certificate you can still reach.
 
+`CertificateFinder` does dispose certificates you can't reach: ones it loaded from a store or a file and
+then discarded, because a `Where` rejected them or because deduplication dropped them as a repeat. You
+never see those, and nothing else could release them. Certificates you supplied yourself, through
+`AddCustomSource` or a custom source reporting `OwnsCertificates => false`, are left alone either way.
+
 Two exceptions, both producing a sequence that mixes objects you own with objects the call created, with
 no way to tell them apart, so don't dispose their elements:
 
@@ -471,7 +476,24 @@ leafCert.Export().AddChain([rootCert, midCert]).AsCert().ToByteArray();
 
 `CertificateFinder` requires the [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder) package and is found under the `FluentCertificates` namespace.
 
-`CertificateFinder` configures, adds, and queries certificate sources (stores and directories). Like the other builders it is immutable, and it supports LINQ queries.
+`CertificateFinder` configures, adds, and queries certificate sources (stores, directories, and
+certificates you already hold). Like the other builders it is immutable, and it supports LINQ.
+
+Each source is responsible for finding, loading and filtering its own certificates. The finder composes
+sources and collates what they return. `Where` is where that matters: it takes an expression tree and
+hands it to every source, so a source able to answer it natively can, and one that cannot applies it
+itself. Both forms bind to it:
+
+```csharp
+finder.Where(x => x.Certificate.Subject.Contains("example.com"));
+from x in finder where x.Certificate.HasPrivateKey select x.Certificate;
+```
+
+Any other LINQ operator runs after collation. That is still correct, just not pushed down to the source.
+
+Results carry a `Source` and a `Location` saying where the certificate was found, so the same
+certificate present in two stores is reported twice, once for each. A single file reached through two
+overlapping directory roots is reported once.
 
 ### Find a specific certificate by thumbprint
 
@@ -482,8 +504,12 @@ const string thumbprint = "622A2B8374D9BBE3969B91EDBC8F5152783AFC78";
 
 var cert = new CertificateFinder()
     .AddCommonStores()
-    .FirstOrDefault(x => x.Certificate.Thumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
+    .Where(x => x.Certificate.Thumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase))
+    .FirstOrDefault();
 ```
+
+_`Where` before `FirstOrDefault`, rather than `FirstOrDefault(predicate)`: only `Where` reaches the
+sources. The predicate overload gives the same answer, but filters after collation._
 
 ### Find a valid certificate with matching subject, giving preference to included private keys
 

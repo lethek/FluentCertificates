@@ -104,7 +104,7 @@ The solution is organized into five NuGet packages. Every project under `src/` i
    - Depends on: FluentCertificates.Common
 
 4. **FluentCertificates.Finder**
-   - Certificate discovery via `CertificateFinder` (implements IQueryable)
+   - Certificate discovery via `CertificateFinder` (implements `IEnumerable<CertificateFinderResult>`)
    - Searches X509Store instances and file system directories
    - LINQ support for flexible querying
    - Location: `src/FluentCertificates.Finder/`
@@ -265,9 +265,39 @@ The main API for creating certificates. Supports:
 
 ### CertificateFinder
 
-A LINQ-queryable interface for finding certificates across X509Store instances (CurrentUser,
-LocalMachine, etc.) and file system directories. Filtering, ordering and projection all go through the
-standard LINQ operators.
+Finds certificates across X509Store instances (CurrentUser, LocalMachine, etc.), file system
+directories, and certificates the caller already holds. It is an `IEnumerable<CertificateFinderResult>`,
+so ordering and projection go through the standard LINQ operators.
+
+**Each source filters itself.** `AbstractCertificateSource` locates, materialises and filters its own
+certificates; the finder composes sources and collates results, and applies no predicates of its own.
+Override `Enumerate(CertificateFilter)` to produce candidates, applying whatever the source can do
+natively. The sealed `Find` then applies the filter in full, so returning a superset is always correct
+and a source that can push nothing down is still right. `AbstractCertificateSource` is public, so a
+custom source is the supported extension point; `AddCustomSource` wraps loose certificates in one.
+
+**`Where` is an instance method taking `Expression<Func<CertificateFinderResult, bool>>`.** Instance
+methods beat extension methods in overload resolution, so both `finder.Where(x => ...)` and
+`from x in finder where ... select x` bind to it and reach the sources. Sources receive the predicate as
+an expression tree *and* as a compiled delegate, so one able to translate it into a native query can.
+Every other LINQ operator runs after collation: correct, but not pushed down. `FirstOrDefault(pred)`,
+`Any(pred)`, `First(pred)`, `Single(pred)` and `Count(pred)` need instance overloads before they push
+down too; that is outstanding.
+
+Do not reintroduce `IQueryable`. There is no translation target behind a store (`X509Store` exposes
+`Certificates` and nothing else, and `X509Certificate2Collection.Find` is slower than a lambda and
+clones what it returns), so the interface would promise a pushdown that cannot happen.
+
+**Ownership.** `AbstractCertificateSource.OwnsCertificates` says whether a source created the
+certificates it yields. When it is true, the source disposes what its filter rejects and the finder
+disposes what deduplication drops; nothing else can, since the caller never sees them. A source passing
+through the caller's own certificates must return false. Results that reach the caller are never
+disposed by the library.
+
+**Deduplication** is by (thumbprint, `Source.Kind`, `Location`). Sources compare by value, so the same
+directory or store added twice is read once; the key then collapses one file reached through two
+overlapping roots, while keeping the same certificate found in two different stores. Where a certificate
+lives is part of the answer, so never dedupe on thumbprint alone.
 
 ### Extension methods
 

@@ -13,6 +13,27 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `AbstractCertificateSource` is the extension point for custom certificate sources: override `Enumerate(CertificateFilter)` and `CertificateFinder` will search it alongside stores and directories.
+- `CertificateFinder.Where(Expression<Func<CertificateFinderResult, bool>>)` passes the predicate to every source, so a source can filter natively instead of the finder filtering after the fact. `finder.Where(...)` and `from x in finder where ...` both bind to it.
+- `CertificateFinder.AddSource` and `AddSources`.
+- `CertificateFinderResult.Location` identifies a certificate within its source: the full file path, or the store's location and name.
+
+### Changed
+
+- **Breaking:** `CertificateFinder` implements `IEnumerable<CertificateFinderResult>` instead of `IQueryable<CertificateFinderResult>`; `ElementType`, `Expression` and `Provider` are gone. LINQ still works, and nothing about pushdown is lost: the provider evaluated everything in memory anyway.
+- **Breaking:** `CertificateFinderResult.Store`, `.Directory` and `.CustomSource` are replaced by a single `.Source`. Use `Source` directly, or cast it to `CertificateStore` / `CertificateDirectory` for their details.
+- **Breaking:** `CertificateFinder.Sources` is now `ImmutableList<AbstractCertificateSource>` rather than a list of raw sequences.
+- **Breaking:** `CertificateDirectory` gains `Recurse` and `FileSystem` and does its own file loading, replacing the internal directory enumerator.
+- **Breaking:** `CertificateStore` is sealed, does its own store reading, and replaces the internal store enumerator.
+- **Breaking:** `CertificateFinder.AddCustomSource` takes `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`, so callers no longer construct result objects. `AddCustomSources` is removed; use `AddSources` with a custom `AbstractCertificateSource`, or call `AddCustomSource` more than once.
+- Results are deduplicated by thumbprint, source kind and location, so one file reached through two overlapping directory roots is reported once. The same certificate in two different stores is still reported for each.
+
+### Fixed
+
+- `CertificateFinder` disposes the certificates it loads and then discards, whether rejected by a predicate or dropped as a duplicate. Certificates supplied by the caller are never disposed.
+
 ## [0.20.1] - 2026-08-27
 
 ### Fixed

@@ -5,8 +5,6 @@ using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
-using FluentCertificates.Internals;
-
 using TUnit.Assertions.Enums;
 
 
@@ -89,25 +87,6 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task AddStores_WithAnEnumerableOfStores_AddsAllStores()
-    {
-        var stores = new List<X509Store> {
-            new(StoreName.My, StoreLocation.CurrentUser),
-            new(StoreName.Root, StoreLocation.LocalMachine)
-        };
-
-        var finder = new CertificateFinder(MockFileSystem).AddStores(stores);
-
-        await Assert
-            .That(StoresOf(finder))
-            .IsEquivalentTo([
-                ("My", StoreLocation.CurrentUser),
-                ("Root", StoreLocation.LocalMachine)
-            ], CollectionOrdering.Matching);
-    }
-
-
-    [Test]
     public async Task AddStores_WithNameAndLocationPairs_AddsAllStores()
     {
         (string, StoreLocation)[] expected = [("My", StoreLocation.CurrentUser), ("Root", StoreLocation.LocalMachine)];
@@ -170,32 +149,6 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task AddCustomSource_WithEmptyList_AddsCustomSource()
-    {
-        var customSource = new List<CertificateFinderResult>();
-        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(customSource);
-
-        await Assert.That(finder.Sources).HasSingleItem();
-        await Assert.That(finder.Sources[0]).IsSameReferenceAs(customSource);
-    }
-
-
-    [Test]
-    public async Task AddCustomSources_EnumeratesEverySourceGiven()
-    {
-        var first = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-no-key.pem");
-        var second = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-with-key.pem");
-
-        var finder = new CertificateFinder(MockFileSystem).AddCustomSources([[first], [second]]);
-
-        await Assert.That(finder.Sources.Count).IsEqualTo(2);
-        await Assert
-            .That(finder.Select(x => x.Certificate.Thumbprint))
-            .IsEquivalentTo([first.Certificate.Thumbprint, second.Certificate.Thumbprint], CollectionOrdering.Matching);
-    }
-
-
-    [Test]
     public async Task AddCommonStores_AddsExpectedStores()
     {
         var finder = new CertificateFinder(MockFileSystem).AddCommonStores();
@@ -228,8 +181,10 @@ public class CertificateFinderTests
             .That(results.Select(r => r.Certificate.Thumbprint))
             .IsEquivalentTo([expectedNoKey.Thumbprint, expectedWithKey.Thumbprint], CollectionOrdering.Any);
 
-        //Directory is nullable and records where each result came from, so it has to be the one searched
-        await Assert.That(results.Select(r => r.Directory!.Path).Distinct()).IsEquivalentTo(["/certs"]);
+        //The result records where it came from, so the source has to be the directory searched
+        await Assert
+            .That(results.Select(r => ((CertificateDirectory)r.Source).Path).Distinct())
+            .IsEquivalentTo(["/certs"]);
     }
 
 
@@ -244,15 +199,20 @@ public class CertificateFinderTests
         //Both additions are kept, so the caller still sees what they asked for
         await Assert.That(finder.Sources.Count).IsEqualTo(2);
 
-        //...but the directory is read once, so no certificate is reported twice
+        //...but the sources compare equal, so the directory is read once
         await Assert
             .That(finder.ToList().Select(r => r.Certificate.Thumbprint))
             .IsEquivalentTo([expectedNoKey.Thumbprint, expectedWithKey.Thumbprint], CollectionOrdering.Any);
     }
 
 
+    /// <summary>
+    /// Two directory sources whose reach overlaps are both searched, but a file found by both is one
+    /// result: same thumbprint, same source kind, same canonical path. The file only one of them reaches
+    /// is unaffected.
+    /// </summary>
     [Test]
-    public async Task EnumerateCertificates_WithTheSameDirectoryAddedRecursivelyAndNot_KeepsBothSources()
+    public async Task EnumerateCertificates_OverlappingDirectoryRoots_ReportEachFileOnce()
     {
         var fs = CreateEmptyMockFileSystem();
         using var top = CreateSelfSignedCertificate("Top");
@@ -260,58 +220,34 @@ public class CertificateFinderTests
         fs.AddFile("/tree/top.cer", new MockFileData(top.RawData));
         fs.AddFile("/tree/sub/nested.cer", new MockFileData(nested.RawData));
 
-        //Same path, different recursion: two distinct sources, so the top-level file is found by both
+        //Same path, different recursion: two distinct sources, and /tree/top.cer is found by both
         var finder = new CertificateFinder(fs).AddDirectory("/tree").AddDirectory("/tree", recurse: true);
 
+        await Assert.That(finder.Sources.Count).IsEqualTo(2);
         await Assert
             .That(finder.ToList().Select(r => r.Certificate.Thumbprint))
-            .IsEquivalentTo([top.Thumbprint, top.Thumbprint, nested.Thumbprint], CollectionOrdering.Any);
+            .IsEquivalentTo([top.Thumbprint, nested.Thumbprint], CollectionOrdering.Any);
     }
 
 
     /// <summary>
-    /// Deduplication rests on the sources comparing by value, so a store named twice is one source however
-    /// it was named, and a different store or location is a different one.
+    /// The counterpart to the directory case: the same certificate in two different stores is two results,
+    /// because where a certificate lives is part of what the caller asked.
     /// </summary>
     [Test]
-    public async Task StoreSources_CompareByTheStoreTheyName()
+    public async Task EnumerateCertificates_SameCertificateInTwoStores_IsReportedTwice()
     {
-        var byName = new CertificateStoreEnumerable("My", StoreLocation.CurrentUser);
-        var byEnum = new CertificateStoreEnumerable(StoreName.My, StoreLocation.CurrentUser);
-        var elsewhere = new CertificateStoreEnumerable(StoreName.My, StoreLocation.LocalMachine);
-        var other = new CertificateStoreEnumerable(StoreName.Root, StoreLocation.CurrentUser);
+        using var cert = CreateSelfSignedCertificate("InBoth");
+        var finder = new CertificateFinder()
+            .AddSource(new StubSource("Store", "CurrentUser\\My", cert))
+            .AddSource(new StubSource("Store", "LocalMachine\\My", cert));
 
-        await Assert.That(byName).IsEqualTo(byEnum);
-        await Assert.That(byName).IsNotEqualTo(elsewhere);
-        await Assert.That(byName).IsNotEqualTo(other);
-    }
+        var results = finder.ToList();
 
-
-    /// <summary>
-    /// The same, for directories: the path and the recursion setting both count, since searching a tree is
-    /// not the same search as searching its top level.
-    /// </summary>
-    [Test]
-    public async Task DirectorySources_CompareByPathAndRecursion()
-    {
-        var fs = CreateEmptyMockFileSystem();
-        var top = new CertificateDirectoryEnumerable(fs, "/certs");
-        var same = new CertificateDirectoryEnumerable(fs, new CertificateDirectory("/certs"));
-        var deep = new CertificateDirectoryEnumerable(fs, "/certs", recurse: true);
-        var other = new CertificateDirectoryEnumerable(fs, "/elsewhere");
-
-        await Assert.That(top).IsEqualTo(same);
-        await Assert.That(top).IsNotEqualTo(deep);
-        await Assert.That(top).IsNotEqualTo(other);
-    }
-
-
-    [Test]
-    public async Task EnumerateCertificates_WithNonExistentPath_ThrowsDirectoryNotFoundException()
-    {
-        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/nonexistent");
-
-        await Assert.That(() => finder.ToList()).ThrowsExactly<DirectoryNotFoundException>();
+        await Assert.That(results.Count).IsEqualTo(2);
+        await Assert
+            .That(results.Select(r => r.Location))
+            .IsEquivalentTo(["CurrentUser\\My", "LocalMachine\\My"], CollectionOrdering.Any);
     }
 
 
@@ -326,18 +262,90 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task EnumerateCertificates_FromCustomSource_ReturnsAllResults()
+    public async Task AddCustomSource_SearchesTheSuppliedCertificates()
     {
-        var certResult1 = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-no-key.pem");
-        var certResult2 = TestTools.LoadCertificateFinderResultMock(MockFileSystem, "/certs/ecdsa-with-key.pem");
-        var customSource = new[] { certResult1, certResult2 };
+        using var first = CreateSelfSignedCertificate("First");
+        using var second = CreateSelfSignedCertificate("Second");
 
-        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(customSource);
-        var results = finder.ToList();
+        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(first, second);
 
-        await Assert.That(results.Count).IsEqualTo(2);
-        await Assert.That(results).Contains(certResult1);
-        await Assert.That(results).Contains(certResult2);
+        await Assert.That(finder.Sources).HasSingleItem();
+        await Assert
+            .That(finder.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// A custom source holds the caller's own certificates, so one the filter rejects must survive: the
+    /// finder never disposes something it did not create.
+    /// </summary>
+    [Test]
+    public async Task AddCustomSource_RejectedCertificate_IsNotDisposed()
+    {
+        using var match = CreateSelfSignedCertificate("Keep");
+        using var reject = CreateSelfSignedCertificate("Reject");
+
+        var results = new CertificateFinder(MockFileSystem)
+            .AddCustomSource(match, reject)
+            .Where(x => x.Certificate.Subject == "CN=Keep")
+            .ToList();
+
+        await Assert.That(results).HasSingleItem();
+        await Assert.That(() => reject.Subject).ThrowsNothing();
+    }
+
+
+    /// <summary>
+    /// <c>Where</c> is an instance method taking an expression tree, so it wins over
+    /// <see cref="Enumerable.Where{T}(IEnumerable{T},Func{T,bool})"/> and the predicate reaches the source
+    /// rather than being applied after collation.
+    /// </summary>
+    [Test]
+    public async Task Where_HandsThePredicateToEverySource()
+    {
+        using var cert = CreateSelfSignedCertificate("Spy");
+        var a = new StubSource("Stub", "a", cert);
+        var b = new StubSource("Stub", "b", cert);
+
+        _ = new CertificateFinder().AddSources(a, b).Where(x => x.Location == "a").ToList();
+
+        await Assert.That(a.ReceivedPredicateCounts).IsEquivalentTo([1], CollectionOrdering.Matching);
+        await Assert.That(b.ReceivedPredicateCounts).IsEquivalentTo([1], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Where_CalledTwice_CombinesBothPredicates()
+    {
+        using var cert = CreateSelfSignedCertificate("Chained");
+        var source = new StubSource("Stub", "a", cert);
+
+        var results = new CertificateFinder()
+            .AddSource(source)
+            .Where(x => x.Location == "a")
+            .Where(x => x.Certificate.Subject == "CN=Nope")
+            .ToList();
+
+        await Assert.That(source.ReceivedPredicateCounts).IsEquivalentTo([2], CollectionOrdering.Matching);
+        await Assert.That(results).IsEmpty();
+    }
+
+
+    /// <summary>
+    /// Query syntax lowers to the same instance method, so it pushes the predicate down too.
+    /// </summary>
+    [Test]
+    public async Task Where_InQuerySyntax_AlsoReachesTheSource()
+    {
+        using var cert = CreateSelfSignedCertificate("Query");
+        var source = new StubSource("Stub", "a", cert);
+        var finder = new CertificateFinder().AddSource(source);
+
+        var results = (from x in finder where x.Location == "a" select x.Certificate.Thumbprint).ToList();
+
+        await Assert.That(source.ReceivedPredicateCounts).IsEquivalentTo([1], CollectionOrdering.Matching);
+        await Assert.That(results).IsEquivalentTo([cert.Thumbprint], CollectionOrdering.Matching);
     }
 
 
@@ -348,17 +356,45 @@ public class CertificateFinderTests
         using var other1 = CreateSelfSignedCertificate("Other1");
         using var other2 = CreateSelfSignedCertificate("Other2");
 
-        var finder = new CertificateFinder(MockFileSystem)
-            .AddCustomSource([
-                new CertificateFinderResult { Certificate = other1 },
-                new CertificateFinderResult { Certificate = match },
-                new CertificateFinderResult { Certificate = other2 }
-            ]);
+        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(other1, match, other2);
 
         var results = finder.Where(r => r.Certificate.Subject.Contains("CN=Match")).ToList();
 
         await Assert.That(results.Count).IsEqualTo(1);
         await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(match.Thumbprint);
+    }
+
+
+    /// <summary>
+    /// A source that materialised a certificate and then rejected it must release it: nothing else can,
+    /// since the caller never sees it. Captured through the predicate, which is the only place every
+    /// candidate is visible from outside.
+    /// </summary>
+    [Test]
+    [NotInParallel]
+    public async Task Where_RejectedCertificatesFromAnOwningSource_AreDisposed()
+    {
+        using var keep = CreateSelfSignedCertificate("Keep");
+        using var drop = CreateSelfSignedCertificate("Drop");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/own/keep.cer", new MockFileData(keep.RawData));
+        fs.AddFile("/own/drop.cer", new MockFileData(drop.RawData));
+
+        Captured.Clear();
+        var results = new CertificateFinder(fs)
+            .AddDirectory("/own")
+            .Where(x => Capture(x.Certificate).Subject == "CN=Keep")
+            .ToList();
+
+        await Assert.That(results).HasSingleItem();
+        await Assert.That(Captured.Count).IsEqualTo(2);
+
+        //Identified by reference, not by thumbprint: reading a property off the disposed one is the assertion
+        var rejected = Captured.Single(x => !ReferenceEquals(x, results[0].Certificate));
+        await Assert.That(() => rejected.Subject).ThrowsExactly<CryptographicException>();
+
+        //...and the one that matched is still usable
+        await Assert.That(() => results[0].Certificate.Subject).ThrowsNothing();
     }
 
 
@@ -452,60 +488,70 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>
+    /// Deduplication of sources rests on them comparing by value, so a store named twice is one source
+    /// however it was named, and a different store or location is a different one.
+    /// </summary>
     [Test]
-    [Arguments(StoreName.AddressBook, "AddressBook")]
-    [Arguments(StoreName.AuthRoot, "AuthRoot")]
-    [Arguments(StoreName.CertificateAuthority, "CA")]
-    [Arguments(StoreName.Disallowed, "Disallowed")]
-    [Arguments(StoreName.My, "My")]
-    [Arguments(StoreName.Root, "Root")]
-    [Arguments(StoreName.TrustedPeople, "TrustedPeople")]
-    [Arguments(StoreName.TrustedPublisher, "TrustedPublisher")]
-    public async Task AddStore_MapsStoreNameToStoreString(StoreName name, string expected)
+    public async Task StoreSources_CompareByTheStoreTheyName()
     {
-        //CertificateAuthority maps to "CA": the enum name and the store name deliberately differ
-        var finder = new CertificateFinder(MockFileSystem).AddStore(name, StoreLocation.CurrentUser);
+        var byName = new CertificateStore("My", StoreLocation.CurrentUser);
+        var byEnum = new CertificateStore(StoreName.My, StoreLocation.CurrentUser);
+        var elsewhere = new CertificateStore(StoreName.My, StoreLocation.LocalMachine);
+        var other = new CertificateStore(StoreName.Root, StoreLocation.CurrentUser);
 
-        await Assert
-            .That(StoresOf(finder))
-            .IsEquivalentTo([(expected, StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+        await Assert.That(byName).IsEqualTo(byEnum);
+        await Assert.That(byName).IsNotEqualTo(elsewhere);
+        await Assert.That(byName).IsNotEqualTo(other);
+    }
+
+
+    /// <summary>
+    /// The same, for directories: the path and the recursion setting both count, since searching a tree is
+    /// not the same search as searching its top level.
+    /// </summary>
+    [Test]
+    public async Task DirectorySources_CompareByPathAndRecursion()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        var top = new CertificateDirectory("/certs", false, fs);
+        var same = new CertificateDirectory("/certs", false, fs);
+        var deep = new CertificateDirectory("/certs", true, fs);
+        var other = new CertificateDirectory("/elsewhere", false, fs);
+
+        await Assert.That(top).IsEqualTo(same);
+        await Assert.That(top).IsNotEqualTo(deep);
+        await Assert.That(top).IsNotEqualTo(other);
+    }
+
+
+    /// <summary>
+    /// A store and a directory are never the same source, whatever else they carry.
+    /// </summary>
+    [Test]
+    public async Task SourcesOfDifferentKinds_AreNeverEqual()
+    {
+        AbstractCertificateSource store = new CertificateStore("My", StoreLocation.CurrentUser);
+        AbstractCertificateSource dir = new CertificateDirectory("/certs", false, CreateEmptyMockFileSystem());
+
+        await Assert.That(store).IsNotEqualTo(dir);
+        await Assert.That(store.Kind).IsEqualTo("Store");
+        await Assert.That(dir.Kind).IsEqualTo("Directory");
     }
 
 
     [Test]
-    public async Task AddStore_UnsupportedStoreName_Throws()
+    public async Task EnumerateCertificates_WithNonExistentPath_ThrowsDirectoryNotFoundException()
     {
-        var ex = await Assert
-            .That(() => new CertificateFinder(MockFileSystem).AddStore((StoreName)999, StoreLocation.CurrentUser))
-            .ThrowsExactly<ArgumentException>();
+        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/nonexistent");
 
-        await Assert.That(ex!.Message).Contains("Unsupported StoreName value: 999");
-        await Assert.That(ex.ParamName).IsEqualTo("name");
-    }
-
-
-    [Test]
-    [Arguments(StoreName.AddressBook, "AddressBook")]
-    [Arguments(StoreName.AuthRoot, "AuthRoot")]
-    [Arguments(StoreName.CertificateAuthority, "CA")]
-    [Arguments(StoreName.Disallowed, "Disallowed")]
-    [Arguments(StoreName.My, "My")]
-    [Arguments(StoreName.Root, "Root")]
-    [Arguments(StoreName.TrustedPeople, "TrustedPeople")]
-    [Arguments(StoreName.TrustedPublisher, "TrustedPublisher")]
-    public async Task CertificateStore_MapsStoreNameToItsSystemName(StoreName name, string expected)
-    {
-        //CertificateAuthority is the one whose system name differs from its enum name
-        var store = new CertificateStore(name, StoreLocation.CurrentUser);
-
-        await Assert.That(store.Name).IsEqualTo(expected);
-        await Assert.That(store.Location).IsEqualTo(StoreLocation.CurrentUser);
+        await Assert.That(() => finder.ToList()).ThrowsExactly<DirectoryNotFoundException>();
     }
 
 
     /// <summary>
     /// A store that does not exist yields no results rather than throwing, and is not created by being
-    /// searched: the finder opens read-only and existing-only.
+    /// searched: the source opens read-only and existing-only.
     /// </summary>
     [Test]
     public async Task EnumerateCertificates_StoreDoesNotExist_ReturnsEmpty()
@@ -621,9 +667,9 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// Every format has to be read through the <see cref="IFileSystem"/> the finder was given. A loader
+    /// Every format has to be read through the <see cref="IFileSystem"/> the source was given. A loader
     /// taking a path goes to the real disk whatever that file system is, so on any other one it finds
-    /// nothing, and the enumerator's catch turns the resulting <see cref="FileNotFoundException"/> into a
+    /// nothing, and the loader's catch turns the resulting <see cref="FileNotFoundException"/> into a
     /// silently skipped file rather than an error. The real-directory test above cannot see that, because
     /// there the two file systems are the same one.
     /// </summary>
@@ -648,6 +694,95 @@ public class CertificateFinderTests
 
         await Assert.That(results.Count).IsEqualTo(1);
         await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+    }
+
+
+    [Test]
+    [Arguments(StoreName.AddressBook, "AddressBook")]
+    [Arguments(StoreName.AuthRoot, "AuthRoot")]
+    [Arguments(StoreName.CertificateAuthority, "CA")]
+    [Arguments(StoreName.Disallowed, "Disallowed")]
+    [Arguments(StoreName.My, "My")]
+    [Arguments(StoreName.Root, "Root")]
+    [Arguments(StoreName.TrustedPeople, "TrustedPeople")]
+    [Arguments(StoreName.TrustedPublisher, "TrustedPublisher")]
+    public async Task AddStore_MapsStoreNameToStoreString(StoreName name, string expected)
+    {
+        //CertificateAuthority maps to "CA": the enum name and the store name deliberately differ
+        var finder = new CertificateFinder(MockFileSystem).AddStore(name, StoreLocation.CurrentUser);
+
+        await Assert
+            .That(StoresOf(finder))
+            .IsEquivalentTo([(expected, StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AddStore_UnsupportedStoreName_Throws()
+    {
+        var ex = await Assert
+            .That(() => new CertificateFinder(MockFileSystem).AddStore((StoreName)999, StoreLocation.CurrentUser))
+            .ThrowsExactly<ArgumentException>();
+
+        await Assert.That(ex!.Message).Contains("Unsupported StoreName value: 999");
+        await Assert.That(ex.ParamName).IsEqualTo("name");
+    }
+
+
+    [Test]
+    [Arguments(StoreName.AddressBook, "AddressBook")]
+    [Arguments(StoreName.AuthRoot, "AuthRoot")]
+    [Arguments(StoreName.CertificateAuthority, "CA")]
+    [Arguments(StoreName.Disallowed, "Disallowed")]
+    [Arguments(StoreName.My, "My")]
+    [Arguments(StoreName.Root, "Root")]
+    [Arguments(StoreName.TrustedPeople, "TrustedPeople")]
+    [Arguments(StoreName.TrustedPublisher, "TrustedPublisher")]
+    public async Task CertificateStore_MapsStoreNameToItsSystemName(StoreName name, string expected)
+    {
+        //CertificateAuthority is the one whose system name differs from its enum name
+        var store = new CertificateStore(name, StoreLocation.CurrentUser);
+
+        await Assert.That(store.Name).IsEqualTo(expected);
+        await Assert.That(store.Location).IsEqualTo(StoreLocation.CurrentUser);
+    }
+
+
+    /// <summary>
+    /// Captures every candidate the filter sees. Used from inside an expression tree, which cannot hold a
+    /// statement body, so the capture has to be a method call.
+    /// </summary>
+    private static X509Certificate2 Capture(X509Certificate2 certificate)
+    {
+        lock (Captured) {
+            Captured.Add(certificate);
+        }
+        return certificate;
+    }
+
+
+    private static readonly List<X509Certificate2> Captured = [];
+
+
+    /// <summary>
+    /// A source with a fixed kind and location, for exercising collation and predicate hand-off without a
+    /// real store or directory behind it.
+    /// </summary>
+    private sealed record StubSource(string SourceKind, string At, X509Certificate2 Certificate)
+        : AbstractCertificateSource
+    {
+        public override string Kind => SourceKind;
+
+        //Never disposes: the certificate belongs to the test
+        public override bool OwnsCertificates => false;
+
+        public List<int> ReceivedPredicateCounts { get; } = [];
+
+        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+        {
+            ReceivedPredicateCounts.Add(filter.Expressions.Count);
+            return [new CertificateFinderResult { Source = this, Location = At, Certificate = Certificate }];
+        }
     }
 
 
@@ -690,19 +825,11 @@ public class CertificateFinderTests
 
 
     private static List<(string Name, StoreLocation Location)> StoresOf(CertificateFinder finder)
-        => [
-            .. finder.Sources
-                .Cast<CertificateStoreEnumerable>()
-                .Select(x => (x.Store.Name, x.Store.Location))
-        ];
+        => [.. finder.Sources.Cast<CertificateStore>().Select(x => (x.Name, x.Location))];
 
 
     private static List<string> DirectoryPathsOf(CertificateFinder finder)
-        => [
-            .. finder.Sources
-                .Cast<CertificateDirectoryEnumerable>()
-                .Select(x => x.Directory.Path)
-        ];
+        => [.. finder.Sources.Cast<CertificateDirectory>().Select(x => x.Path)];
 
 
     private static readonly MockFileSystem MockFileSystem = TestTools.CreateMockFileSystemWithCerts();
