@@ -4,9 +4,18 @@
 
 FluentCertificates is a .NET library for X.509 certificate creation, discovery and export, published as
 five NuGet packages from `src/`. Every project under `src/` is published; there are no internal-only
-projects. The API is pre-1.0 and breaking changes are expected between minor versions.
+projects.
 
 All code uses the root namespace `FluentCertificates` regardless of which package it is in.
+
+### Breaking changes
+
+The API is pre-1.0 and breaking changes are expected between minor versions. They are free, and that a
+change breaks compatibility carries no weight against it. Never rank one design above another on
+compatibility grounds, never soften a design to preserve an existing signature, and never present the
+break as a cost when weighing an option up. Judge a feature, fix or refactor on its other merits alone.
+
+Record the break in `CHANGELOG.md` under `### Changed`, one line, prefixed `**Breaking:**`.
 
 ## Build and test
 
