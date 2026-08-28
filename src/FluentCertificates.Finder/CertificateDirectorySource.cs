@@ -47,6 +47,18 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     public bool Recurse { get; init; }
 
 
+    /// <summary>
+    /// Which file names to read, matched the way <see cref="System.IO.Directory.EnumerateFiles(string,string)"/>
+    /// matches them. Defaults to <c>"*"</c>, every file.
+    /// </summary>
+    /// <remarks>
+    /// The one filter worth pushing down to a directory: it decides what is read and parsed, where a
+    /// predicate on the certificate can only be answered by parsing the file first. It narrows the set of
+    /// supported extensions rather than widening it, so <c>"*.txt"</c> still finds nothing.
+    /// </remarks>
+    public string SearchPattern { get; init; } = "*";
+
+
     /// <summary>The file system this directory is read through.</summary>
     public IFileSystem FileSystem { get; init; }
 
@@ -94,6 +106,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         base.PrintMembers(builder);
         builder.Append(", Path = ").Append(Path);
         builder.Append(", Recurse = ").Append(Recurse);
+        builder.Append(", SearchPattern = ").Append(SearchPattern);
         builder.Append(", FileSystem = ").Append(FileSystem);
         builder.Append(", Password = ").Append(Password is null ? "null" : "***");
         builder.Append(", OnLoadFailure = ").Append(OnLoadFailure);
@@ -137,7 +150,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     private IEnumerable<string> ListFiles()
     {
         try {
-            return FileSystem.Directory.EnumerateFiles(Path, "*", ListingOptions);
+            return FileSystem.Directory.EnumerateFiles(Path, SearchPattern, ListingOptions);
         } catch (DirectoryNotFoundException ex) {
             OnLoadFailure?.Invoke(Path, ex);
             return [];

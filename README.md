@@ -1,4 +1,4 @@
-# 📖 FluentCertificates Overview
+﻿# 📖 FluentCertificates Overview
 
 ⚠️ **Note:** while version numbers are v0.x.y, this software is under initial development and there may be breaking changes in its API between minor versions. ⚠️
 
@@ -500,6 +500,14 @@ var finder = new CertificateFinder()
 
 The same source added twice is searched once. Searching a directory's top level and searching its whole
 tree are different searches, so adding both runs both.
+
+A `searchPattern` narrows a directory by file name, and is the one filter that saves work: a file it
+excludes is never opened or parsed. Everything else you can ask about a certificate needs the file read
+first. The pattern narrows the supported extensions rather than widening them, so `*.txt` finds nothing.
+
+```csharp
+var finder = new CertificateFinder().AddDirectory("/etc/ssl/certs", searchPattern: "ca-*.pem");
+```
 
 Pass a `password` to read password-protected `.pfx` and `.p12` files. One password covers the directory,
 and a file it does not open is skipped like any other unreadable file.

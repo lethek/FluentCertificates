@@ -367,13 +367,19 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// </summary>
     /// <param name="dir">The directory path.</param>
     /// <param name="recurse">Whether to search subdirectories.</param>
+    /// <param name="searchPattern">
+    /// Which file names to read. See <see cref="CertificateDirectorySource.SearchPattern"/>.
+    /// </param>
     /// <param name="password">
     /// The password protecting the PKCS#12 files in the directory. See
     /// <see cref="CertificateDirectorySource.Password"/>.
     /// </param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directory added.</returns>
-    public CertificateFinder AddDirectory(string dir, bool recurse = false, string? password = null)
-        => AddSource(new CertificateDirectorySource(dir, recurse, _fileSystem) { Password = password });
+    public CertificateFinder AddDirectory(string dir, bool recurse = false, string searchPattern = "*", string? password = null)
+        => AddSource(new CertificateDirectorySource(dir, recurse, _fileSystem) {
+            SearchPattern = searchPattern,
+            Password = password
+        });
 
 
     /// <summary>
@@ -381,18 +387,25 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// </summary>
     /// <param name="dirs">The directory paths.</param>
     /// <param name="recurse">Whether to search subdirectories.</param>
+    /// <param name="searchPattern">
+    /// Which file names to read in every one of these directories. See
+    /// <see cref="CertificateDirectorySource.SearchPattern"/>.
+    /// </param>
     /// <param name="password">
     /// The password protecting the PKCS#12 files in every one of these directories. See
     /// <see cref="CertificateDirectorySource.Password"/>.
     /// </param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>
-    public CertificateFinder AddDirectories(IEnumerable<string> dirs, bool recurse = false, string? password = null)
-        => AddSources(dirs.Select(dir => new CertificateDirectorySource(dir, recurse, _fileSystem) { Password = password }));
+    public CertificateFinder AddDirectories(IEnumerable<string> dirs, bool recurse = false, string searchPattern = "*", string? password = null)
+        => AddSources(dirs.Select(dir => new CertificateDirectorySource(dir, recurse, _fileSystem) {
+            SearchPattern = searchPattern,
+            Password = password
+        }));
 
 
     /// <summary>
     /// Adds multiple directories as certificate sources. Subdirectories are not searched; use
-    /// <see cref="AddDirectories(IEnumerable{string},bool,string)"/> or <see cref="AddDirectory"/> for that.
+    /// <see cref="AddDirectories(IEnumerable{string},bool,string,string)"/> or <see cref="AddDirectory"/> for that.
     /// </summary>
     /// <param name="dirs">The directory paths.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>
