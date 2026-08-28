@@ -1495,6 +1495,115 @@ public class CertificateFinderTests
     }
 
 
+    [Test]
+    public async Task EnumerateCertificates_SearchPattern_ReadsOnlyTheFilesThatMatch()
+    {
+        using var root = CreateSelfSignedCertificate("Root");
+        using var server = CreateSelfSignedCertificate("Server");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/pki/ca-root.pem", new MockFileData(root.ExportCertificatePem()));
+        fs.AddFile("/pki/server.pem", new MockFileData(server.ExportCertificatePem()));
+
+        var results = new CertificateFinder(fs).AddDirectory("/pki", searchPattern: "ca-*.pem").ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([root.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// The pattern decides what is read, not what is kept: a file it excludes is never opened or parsed,
+    /// which is the whole point of filtering on the name. An unparseable file proves it, since reading one
+    /// would report through <see cref="CertificateDirectorySource.OnLoadFailure"/>.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_SearchPattern_SkipsExcludedFilesWithoutParsingThem()
+    {
+        using var cert = CreateSelfSignedCertificate("Wanted");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/pki/ca-root.pem", new MockFileData(cert.ExportCertificatePem()));
+        fs.AddFile("/pki/junk.der", new MockFileData([0x30, 0x82, 0x01, 0x02, 0xFF, 0xFF, 0xFF]));
+
+        var skipped = new List<string>();
+        var results = new CertificateFinder(fs)
+            .AddSource(new CertificateDirectorySource("/pki", false, fs) {
+                SearchPattern = "ca-*",
+                OnLoadFailure = (path, _) => skipped.Add(path)
+            })
+            .ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(skipped).IsEmpty();
+    }
+
+
+    [Test]
+    [Arguments("cert.pfx")]
+    [Arguments("cert.p12")]
+    public async Task EnumerateCertificates_PasswordProtectedPkcs12_IsReadWithTheDirectoryPassword(string fileName)
+    {
+        const string password = "correct horse battery staple";
+        using var cert = CreateSelfSignedCertificate("Protected");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/protected/{fileName}", new MockFileData(cert.Export(X509ContentType.Pkcs12, password)));
+
+        var results = new CertificateFinder(fs).AddDirectory("/protected", password: password).ToList();
+
+        await Assert.That(results.Select(r => r.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+
+        foreach (var result in results) {
+            result.Certificate.Dispose();
+        }
+    }
+
+
+    /// <summary>
+    /// A wrong or absent password must not look the same as a directory holding no certificates, which is
+    /// what the handler is for.
+    /// </summary>
+    [Test]
+    [Arguments(null)]
+    [Arguments("wrong password")]
+    public async Task EnumerateCertificates_PasswordProtectedPkcs12_WithTheWrongPassword_IsSkippedAndReported(string? password)
+    {
+        using var cert = CreateSelfSignedCertificate("Protected");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/protected/cert.pfx", new MockFileData(cert.Export(X509ContentType.Pkcs12, "the real one")));
+
+        var skipped = new List<string>();
+        var results = new CertificateFinder(fs)
+            .AddSource(new CertificateDirectorySource("/protected", false, fs) {
+                Password = password,
+                OnLoadFailure = (path, _) => skipped.Add(path)
+            })
+            .ToList();
+
+        await Assert.That(results).IsEmpty();
+        await Assert.That(skipped.Select(fs.Path.GetFileName)).IsEquivalentTo(["cert.pfx"]);
+    }
+
+
+    /// <summary>
+    /// A <see cref="CertificateFinderResult"/> carries the source it came from, so printing a result would
+    /// otherwise print the directory's password with it.
+    /// </summary>
+    [Test]
+    public async Task ToString_OfADirectorySource_RedactsThePassword()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        var source = new CertificateDirectorySource("/protected", false, fs) { Password = "hunter2" };
+
+        var printed = source.ToString();
+
+        await Assert.That(printed).DoesNotContain("hunter2");
+        await Assert.That(printed).Contains("Password = ***");
+        await Assert.That(printed).Contains("Path = /protected");
+        await Assert.That(printed).Contains("SearchPattern = *");
+
+        //A source with no password says so rather than hiding that too
+        await Assert.That((source with { Password = null }).ToString()).Contains("Password = null");
+    }
+
+
     /// <summary>
     /// A terminal answering with a bool or a count never hands the caller the certificates it matched, so
     /// nothing else can release them. <see cref="CertificateFinder.First"/> and friends are excluded: the

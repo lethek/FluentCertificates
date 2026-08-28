@@ -1,4 +1,4 @@
-# FluentCertificates Changelog
+﻿# FluentCertificates Changelog
 
 All notable changes to this project are documented in this file.
 
@@ -22,6 +22,8 @@ release rather than record it as it happened.
 - `CertificateFinder.AddSource` and `AddSources`.
 - `CertificateFinder.RemoveSource` and `RemoveSources`, the latter taking either sources or a predicate.
 - `CertificateDirectorySource.OnLoadFailure`, reporting each path the source skipped and why.
+- `CertificateDirectorySource.SearchPattern` and a `searchPattern` parameter on `CertificateFinder.AddDirectory` and `AddDirectories`, filtering by file name before a file is read.
+- `CertificateDirectorySource.Password` and a `password` parameter on `CertificateFinder.AddDirectory` and `AddDirectories`, for reading password-protected PKCS#12 files.
 - `CertificateFinderResult.Location`.
 - `AbstractCertificateSource.EnumerateDescending`, `FindDescending` and `FindLast`.
 

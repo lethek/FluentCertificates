@@ -1,6 +1,7 @@
 ﻿using System.IO.Abstractions;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 using FluentCertificates.Internals;
 
@@ -46,8 +47,32 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     public bool Recurse { get; init; }
 
 
+    /// <summary>
+    /// Which file names to read, matched the way <see cref="System.IO.Directory.EnumerateFiles(string,string)"/>
+    /// matches them. Defaults to <c>"*"</c>, every file.
+    /// </summary>
+    /// <remarks>
+    /// The one filter worth pushing down to a directory: it decides what is read and parsed, where a
+    /// predicate on the certificate can only be answered by parsing the file first. It narrows the set of
+    /// supported extensions rather than widening it, so <c>"*.txt"</c> still finds nothing.
+    /// </remarks>
+    public string SearchPattern { get; init; } = "*";
+
+
     /// <summary>The file system this directory is read through.</summary>
     public IFileSystem FileSystem { get; init; }
+
+
+    /// <summary>
+    /// The password protecting the <c>.pfx</c> and <c>.p12</c> files in this directory. One password
+    /// covers the whole directory. A file this password does not open is skipped like any other file that
+    /// cannot be read, and reported through <see cref="OnLoadFailure"/>.
+    /// </summary>
+    /// <remarks>
+    /// Redacted from <see cref="ToString"/>, since a <see cref="CertificateFinderResult"/> carries the
+    /// source it came from and would otherwise print the password with it.
+    /// </remarks>
+    public string? Password { get; init; }
 
 
     /// <summary>
@@ -68,6 +93,25 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
     /// <inheritdoc/>
     public override string Kind => "Directory";
+
+
+    /// <summary>
+    /// Prints every property, with <see cref="Password"/> redacted. Written out by hand rather than
+    /// generated, so a property added to this record has to be added here too.
+    /// </summary>
+    /// <param name="builder">Receives the printed members.</param>
+    /// <returns>Always <see langword="true"/>: this record always prints something.</returns>
+    protected override bool PrintMembers(StringBuilder builder)
+    {
+        base.PrintMembers(builder);
+        builder.Append(", Path = ").Append(Path);
+        builder.Append(", Recurse = ").Append(Recurse);
+        builder.Append(", SearchPattern = ").Append(SearchPattern);
+        builder.Append(", FileSystem = ").Append(FileSystem);
+        builder.Append(", Password = ").Append(Password is null ? "null" : "***");
+        builder.Append(", OnLoadFailure = ").Append(OnLoadFailure);
+        return true;
+    }
 
 
     /// <summary>
@@ -106,7 +150,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     private IEnumerable<string> ListFiles()
     {
         try {
-            return FileSystem.Directory.EnumerateFiles(Path, "*", ListingOptions);
+            return FileSystem.Directory.EnumerateFiles(Path, SearchPattern, ListingOptions);
         } catch (DirectoryNotFoundException ex) {
             OnLoadFailure?.Invoke(Path, ex);
             return [];
@@ -136,7 +180,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
                 case ".p12":
                     //X509CertificateLoader.LoadCertificate rejects PKCS#12, so these must go
                     //through the PKCS#12 loader rather than the default branch
-                    return CertTools.LoadPkcs12Collection(FileSystem.File.ReadAllBytes(path), null);
+                    return CertTools.LoadPkcs12Collection(FileSystem.File.ReadAllBytes(path), Password);
                 case ".pem":
                 case ".ca-bundle":
                     //Both extensions name PEM text, which holds any number of certificates
