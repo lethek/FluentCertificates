@@ -30,6 +30,7 @@ release rather than record it as it happened.
 - `CertificateFinder.AnyAsync`, `AllAsync`, `FirstAsync`, `FirstOrDefaultAsync`, `LastAsync`, `LastOrDefaultAsync`, `SingleAsync`, `SingleOrDefaultAsync` and `CountAsync`.
 - `AbstractCertificateSource.EnumerateAsync`, `EnumerateDescendingAsync`, `FindAsync`, `FindDescendingAsync` and `FindLastAsync`, all wrapping the synchronous members by default.
 - `CertificateDirectorySource` reads files asynchronously when searched through `AsAsyncEnumerable`.
+- `CertificateBatch`, the group of certificates a source hands to the finder in one go.
 
 ### Changed
 
@@ -40,6 +41,7 @@ release rather than record it as it happened.
 - **Breaking:** `CertificateFinder.AddCustomSource` is replaced by `AddCertificates`, taking `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`.
 - **Breaking:** `CertificateFinder.AddCustomSources` is removed.
 - Sources are deduplicated by value; results are not.
+- **Breaking:** `AbstractCertificateSource.Enumerate`, `EnumerateDescending`, `EnumerateAsync` and `EnumerateDescendingAsync` return `CertificateBatch`es rather than results, and `SelectResults` is removed.
 
 ### Fixed
 
@@ -47,6 +49,9 @@ release rather than record it as it happened.
 - A directory that does not exist yields no results instead of throwing `DirectoryNotFoundException` part-way through the search.
 - A directory search skips a directory or subdirectory it cannot read instead of abandoning the scan.
 - `Single`, `SingleOrDefault`, `Last` and `LastOrDefault`, and their `Async` forms, dispose the match they were holding when a search fails part-way through.
+- `Last` and `LastOrDefault` agree with enumerating the finder when the last file searched holds more than one certificate.
+- A search that stops early disposes the certificates a source had already loaded past that point, instead of abandoning them.
+- A predicate that throws part-way through a source's certificates no longer abandons the rest of them.
 - A `.pem` or `.ca-bundle` file yields every certificate it holds, not only the first.
 - A `.pfx` or `.p12` file yields every certificate it holds, not only one chosen by export order.
 

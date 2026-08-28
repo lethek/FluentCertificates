@@ -121,8 +121,8 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// it.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <returns>Every certificate loadable from the directory.</returns>
-    protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+    /// <returns>One batch per file, each holding every certificate that file yielded.</returns>
+    protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
         => Load(CertificateFiles());
 
 
@@ -132,8 +132,8 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// itself has to run to completion before the first certificate is yielded.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <returns>Every certificate loadable from the directory, last file first.</returns>
-    protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
+    /// <returns>One batch per file, last file first.</returns>
+    protected override IEnumerable<CertificateBatch> EnumerateDescending(CertificateFilter filter)
         => Load(CertificateFiles().Reverse());
 
 
@@ -144,8 +144,8 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// </summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
     /// <param name="cancellationToken">Cancels the enumeration; the file reads honour it.</param>
-    /// <returns>Every certificate loadable from the directory.</returns>
-    protected override IAsyncEnumerable<CertificateFinderResult> EnumerateAsync(
+    /// <returns>One batch per file, each holding every certificate that file yielded.</returns>
+    protected override IAsyncEnumerable<CertificateBatch> EnumerateAsync(
         CertificateFilter filter,
         CancellationToken cancellationToken)
         => LoadAsync(CertificateFiles(), cancellationToken);
@@ -156,8 +156,8 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// </summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
     /// <param name="cancellationToken">Cancels the enumeration; the file reads honour it.</param>
-    /// <returns>Every certificate loadable from the directory, last file first.</returns>
-    protected override IAsyncEnumerable<CertificateFinderResult> EnumerateDescendingAsync(
+    /// <returns>One batch per file, last file first.</returns>
+    protected override IAsyncEnumerable<CertificateBatch> EnumerateDescendingAsync(
         CertificateFilter filter,
         CancellationToken cancellationToken)
         => LoadAsync(CertificateFiles().Reverse(), cancellationToken);
@@ -185,25 +185,25 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     }
 
 
-    private IEnumerable<CertificateFinderResult> Load(IEnumerable<(string Path, string Extension)> files)
-        => files.SelectMany(x => {
-            //Canonicalised once per file: a container format yields many certificates from the one path,
-            //and the same file reached from two overlapping roots reports one location
-            var location = FileSystem.Path.GetFullPath(x.Path);
-            return SelectResults(Load(x.Path, x.Extension), _ => location);
-        });
+    //One batch per file: a container format yields several certificates from the one path, and they are
+    //all parsed together. The path is canonicalised once for the batch, so the same file reached from two
+    //overlapping roots reports one location
+    private IEnumerable<CertificateBatch> Load(IEnumerable<(string Path, string Extension)> files)
+        => files.Select(x => new CertificateBatch(
+            Load(x.Path, x.Extension),
+            FileSystem.Path.GetFullPath(x.Path)
+        ));
 
 
-    private async IAsyncEnumerable<CertificateFinderResult> LoadAsync(
+    private async IAsyncEnumerable<CertificateBatch> LoadAsync(
         IEnumerable<(string Path, string Extension)> files,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         foreach (var file in files) {
-            var location = FileSystem.Path.GetFullPath(file.Path);
-            var certificates = await LoadAsync(file.Path, file.Extension, cancellationToken).ConfigureAwait(false);
-            foreach (var result in SelectResults(certificates, _ => location)) {
-                yield return result;
-            }
+            yield return new CertificateBatch(
+                await LoadAsync(file.Path, file.Extension, cancellationToken).ConfigureAwait(false),
+                FileSystem.Path.GetFullPath(file.Path)
+            );
         }
     }
 

@@ -419,6 +419,10 @@ public class CertificateFinderTests
     /// true reverse of its forward pass, or <see cref="CertificateFinder.Last"/> silently disagrees with
     /// enumerating the finder. Asserted for the two sources that read from outside the process.
     /// </summary>
+    /// <remarks>
+    /// The last file holds two certificates, since a source reversing only the order it produces its
+    /// batches in still passes when every batch holds one.
+    /// </remarks>
     [Test]
     public async Task FindDescending_YieldsTheExactReverseOfFind()
     {
@@ -426,21 +430,63 @@ public class CertificateFinderTests
         using var one = CreateSelfSignedCertificate("One");
         using var two = CreateSelfSignedCertificate("Two");
         using var three = CreateSelfSignedCertificate("Three");
+        using var four = CreateSelfSignedCertificate("Four");
         fs.AddFile("/rev/a.cer", new MockFileData(one.RawData));
         fs.AddFile("/rev/b.cer", new MockFileData(two.RawData));
-        fs.AddFile("/rev/c.cer", new MockFileData(three.RawData));
+        fs.AddFile("/rev/c.pem", new MockFileData(three.ExportCertificatePem() + "\n" + four.ExportCertificatePem()));
 
         var directory = new CertificateDirectorySource("/rev", false, fs);
         var forwards = directory.Find(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint).ToList();
         var backwards = directory.FindDescending(CertificateFilter.Empty)!.Select(x => x.Certificate.Thumbprint).ToList();
 
-        await Assert.That(forwards.Count).IsEqualTo(3);
+        await Assert.That(forwards.Count).IsEqualTo(4);
         await Assert.That(backwards).IsEquivalentTo(Enumerable.Reverse(forwards), CollectionOrdering.Matching);
 
         var custom = new CertificateCollectionSource([one, two, three]);
         await Assert
             .That(custom.FindDescending(CertificateFilter.Empty)!.Select(x => x.Certificate.Thumbprint))
             .IsEquivalentTo([three.Thumbprint, two.Thumbprint, one.Thumbprint], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// What a source reversing only its batches and not their contents looks like from outside: the
+    /// certificate <see cref="CertificateFinder.LastOrDefault"/> answers with is the one enumerating the
+    /// finder ends on, whether or not the last file holds more than one.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task LastOrDefault_OverADirectoryEndingInABundle_AgreesWithEnumeratingForwards(bool asynchronous)
+    {
+        var fs = CreateEmptyMockFileSystem();
+        using var alone = CreateSelfSignedCertificate("Alone");
+        using var bundledOne = CreateSelfSignedCertificate("Bundled One");
+        using var bundledTwo = CreateSelfSignedCertificate("Bundled Two");
+        fs.AddFile("/last/a.pem", new MockFileData(alone.ExportCertificatePem()));
+        fs.AddFile(
+            "/last/b.pem",
+            new MockFileData(bundledOne.ExportCertificatePem() + "\n" + bundledTwo.ExportCertificatePem())
+        );
+
+        var finder = new CertificateFinder(fs).AddDirectory("/last");
+
+        var forwards = finder.ToList();
+        var expected = forwards[^1].Certificate.Thumbprint;
+        foreach (var result in forwards) {
+            result.Certificate.Dispose();
+        }
+
+        //Pinned, so the test cannot pass by the last file happening to hold one certificate
+        await Assert.That(forwards.Count).IsEqualTo(3);
+        await Assert.That(expected).IsEqualTo(bundledTwo.Thumbprint);
+
+        var found = asynchronous
+            ? await finder.LastOrDefaultAsync(x => true)
+            : finder.LastOrDefault(x => true);
+
+        await Assert.That(found!.Certificate.Thumbprint).IsEqualTo(expected);
+        found.Certificate.Dispose();
     }
 
 
@@ -1339,8 +1385,8 @@ public class CertificateFinderTests
     {
         public override string Kind => "Minimal";
 
-        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-            => SelectResults([Certificate], _ => "only");
+        protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
+            => [new CertificateBatch([Certificate], "only")];
     }
 
 
@@ -1370,25 +1416,25 @@ public class CertificateFinderTests
         /// <summary>Records which direction the source was read in, and whether it was read at all.</summary>
         public List<string> Calls { get; } = [];
 
-        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+        protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
         {
             ReceivedPredicateCounts.Add(filter.Predicates.Length);
             Calls.Add("forward");
-            return SelectResults(Certificates, _ => At);
+            return [new CertificateBatch(Certificates, At)];
         }
 
-        protected override IEnumerable<CertificateFinderResult>? EnumerateDescending(CertificateFilter filter)
+        protected override IEnumerable<CertificateBatch>? EnumerateDescending(CertificateFilter filter)
         {
             if (!Descending) {
                 return null;
             }
             ReceivedPredicateCounts.Add(filter.Predicates.Length);
             Calls.Add("descending");
-            //Enumerable.Reverse explicitly: on an array the bare call binds to the void span overload
-            return SelectResults(Enumerable.Reverse(Certificates), _ => At);
+            //One batch, and a batch is read back to front for us: there is no order of batches to reverse
+            return [new CertificateBatch(Certificates, At)];
         }
 
-        protected override IAsyncEnumerable<CertificateFinderResult> EnumerateAsync(
+        protected override IAsyncEnumerable<CertificateBatch> EnumerateAsync(
             CertificateFilter filter,
             CancellationToken cancellationToken)
         {
@@ -1397,10 +1443,10 @@ public class CertificateFinderTests
             }
             ReceivedPredicateCounts.Add(filter.Predicates.Length);
             Calls.Add("forward-async");
-            return ToAsync(SelectResults(Certificates, _ => At), cancellationToken);
+            return ToAsync([new CertificateBatch(Certificates, At)]);
         }
 
-        protected override IAsyncEnumerable<CertificateFinderResult>? EnumerateDescendingAsync(
+        protected override IAsyncEnumerable<CertificateBatch>? EnumerateDescendingAsync(
             CertificateFilter filter,
             CancellationToken cancellationToken)
         {
@@ -1409,17 +1455,17 @@ public class CertificateFinderTests
             }
             ReceivedPredicateCounts.Add(filter.Predicates.Length);
             Calls.Add("descending-async");
-            return ToAsync(SelectResults(Enumerable.Reverse(Certificates), _ => At), cancellationToken);
+            return ToAsync([new CertificateBatch(Certificates, At)]);
         }
 
+        //No CancellationToken by design: a source is cancellable without checking one itself, which is
+        //half of what AsAsyncEnumerable_WhenCancelled_Throws pins by running against this stub both ways
 #pragma warning disable CS1998 //Nothing to await: the stub's certificates are already in memory
-        private static async IAsyncEnumerable<CertificateFinderResult> ToAsync(
-            IEnumerable<CertificateFinderResult> results,
-            [EnumeratorCancellation] CancellationToken cancellationToken)
+        // ReSharper disable once AsyncMethodWithoutAwait
+        private static async IAsyncEnumerable<CertificateBatch> ToAsync(IEnumerable<CertificateBatch> batches)
         {
-            foreach (var result in results) {
-                cancellationToken.ThrowIfCancellationRequested();
-                yield return result;
+            foreach (var batch in batches) {
+                yield return batch;
             }
         }
 #pragma warning restore CS1998
@@ -1444,8 +1490,8 @@ public class CertificateFinderTests
 
         public List<X509Certificate2> Released { get; } = [];
 
-        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-            => SelectResults(Certificates, _ => "at");
+        protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
+            => [new CertificateBatch(Certificates, "at")];
 
         public override void Release(CertificateFinderResult result)
             => Released.Add(result.Certificate);
@@ -1463,14 +1509,15 @@ public class CertificateFinderTests
         /// <summary>Whether this stub treats the certificates as its own to dispose.</summary>
         public bool Owns { get; init; }
 
-        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+        protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
         {
+            //A batch each, so the certificates it never reaches are never materialised into one
             var yielded = 0;
-            foreach (var result in SelectResults(Certificates, _ => "at")) {
+            foreach (var certificate in Certificates) {
                 if (yielded++ == 1) {
                     throw new OperationCanceledException();
                 }
-                yield return result;
+                yield return new CertificateBatch([certificate], "at");
             }
         }
 
@@ -1704,20 +1751,118 @@ public class CertificateFinderTests
     [Test]
     public async Task PredicateOverloads_ReleaseTheMatchesTheyDoNotReturn()
     {
-        await AssertReleasesMatches(f => f.Any(x => true), expectedProduced: 1);
-        await AssertReleasesMatches(f => f.All(x => false), expectedProduced: 1);
-        await AssertReleasesMatches(f => f.Count(x => true), expectedProduced: 3);
-        await AssertReleasesMatches(
-            f => {
-                try {
-                    return f.Single(x => true);
-                } catch (InvalidOperationException) {
-                    return null;
-                }
-            },
-            expectedProduced: 2
-        );
+        await AssertReleasesMatches(f => f.Any(x => true));
+        await AssertReleasesMatches(f => f.All(x => false));
+        await AssertReleasesMatches(f => f.Count(x => true));
+        await AssertReleasesMatches(f => {
+            try {
+                return f.Single(x => true);
+            } catch (InvalidOperationException) {
+                return null;
+            }
+        });
     }
+
+
+    /// <summary>
+    /// A source materialises a whole batch before the first certificate in it reaches the caller, so a
+    /// caller that stops part way through leaves the rest of it loaded and unreachable. Those are released
+    /// where they are, without touching the batches the source has not produced yet.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task ACallerStoppingPartWayThroughABatch_ReleasesTheRestOfIt(bool asynchronous)
+    {
+        var certificates = new[] { "One", "Two", "Three" }.Select(CreateSelfSignedCertificate).ToArray();
+        var source = new CountingReleaseSource(certificates);
+        var finder = new CertificateFinder().AddSource(source);
+
+        var taken = asynchronous
+            ? await finder.FirstAsync(x => true)
+            : finder.First(x => true);
+
+        await Assert.That(taken.Certificate.Thumbprint).IsEqualTo(certificates[0].Thumbprint);
+
+        //The one taken is the caller's now, and the two behind it are neither returned nor abandoned
+        await Assert.That(source.Released.Select(x => x.Thumbprint))
+            .IsEquivalentTo([certificates[1].Thumbprint, certificates[2].Thumbprint]);
+
+        foreach (var certificate in certificates) {
+            certificate.Dispose();
+        }
+    }
+
+
+    /// <summary>
+    /// The other half of <see cref="ACallerStoppingPartWayThroughABatch_ReleasesTheRestOfIt"/>: a caller
+    /// that reads a batch to the end is handed every certificate in it, so none of them may be released.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task ACallerReadingAWholeBatch_HasNothingReleasedBehindIt(bool asynchronous)
+    {
+        var certificates = new[] { "One", "Two", "Three" }.Select(CreateSelfSignedCertificate).ToArray();
+        var source = new CountingReleaseSource(certificates);
+        var finder = new CertificateFinder().AddSource(source);
+
+        var found = new List<CertificateFinderResult>();
+        if (asynchronous) {
+            await foreach (var result in finder.AsAsyncEnumerable()) {
+                found.Add(result);
+            }
+        } else {
+            found.AddRange(finder);
+        }
+
+        await Assert.That(found.Count).IsEqualTo(3);
+        await Assert.That(source.Released).IsEmpty();
+
+        foreach (var certificate in certificates) {
+            certificate.Dispose();
+        }
+    }
+
+
+    /// <summary>
+    /// A predicate that throws leaves the certificate it threw on materialised and unreturned, along with
+    /// the rest of its batch. The source built them, so it releases them.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task WhenAPredicateThrowsPartWayThroughABatch_TheRestOfItIsReleased(bool asynchronous)
+    {
+        var certificates = new[] { "One", "Two", "Three" }.Select(CreateSelfSignedCertificate).ToArray();
+        var source = new CountingReleaseSource(certificates);
+        var finder = new CertificateFinder().AddSource(source).Where(x => ThrowsOnTwo(x));
+
+        await Assert
+            .That(async () => {
+                if (asynchronous) {
+                    await foreach (var _ in finder.AsAsyncEnumerable()) { }
+                } else {
+                    finder.ToList();
+                }
+            })
+            .ThrowsExactly<InvalidOperationException>();
+
+        //The first was handed over before the predicate threw, so it is the caller's to lose
+        await Assert.That(source.Released.Select(x => x.Thumbprint))
+            .IsEquivalentTo([certificates[1].Thumbprint, certificates[2].Thumbprint]);
+
+        foreach (var certificate in certificates) {
+            certificate.Dispose();
+        }
+    }
+
+
+    /// <summary>Matches anything but the certificate named "Two", which it throws on.</summary>
+    private static bool ThrowsOnTwo(CertificateFinderResult result)
+        => result.Certificate.Subject == "CN=Two"
+            ? throw new InvalidOperationException("The predicate threw")
+            : true;
 
 
     /// <summary>
@@ -1784,8 +1929,10 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// Cancellation reaches a source that never awaits anything, which is the case the wrapper exists for:
-    /// a store read is one blocking call and would otherwise run to completion regardless of the token.
+    /// Cancellation reaches a source that never awaits anything: a store read is one blocking call and
+    /// would otherwise run to completion regardless of the token. Run against a source that overrides the
+    /// asynchronous members and one that does not, since neither checks the token itself and the single
+    /// check as the results are handed out has to cover both.
     /// </summary>
     [Test]
     [Arguments(true)]
@@ -1949,9 +2096,9 @@ public class CertificateFinderTests
     [Test]
     public async Task AsyncPredicateOverloads_ReleaseTheMatchesTheyDoNotReturn()
     {
-        await AssertReleasesMatchesAsync(async f => await f.AnyAsync(x => true), expectedProduced: 1);
-        await AssertReleasesMatchesAsync(async f => await f.AllAsync(x => false), expectedProduced: 1);
-        await AssertReleasesMatchesAsync(async f => await f.CountAsync(x => true), expectedProduced: 3);
+        await AssertReleasesMatchesAsync(async f => await f.AnyAsync(x => true));
+        await AssertReleasesMatchesAsync(async f => await f.AllAsync(x => false));
+        await AssertReleasesMatchesAsync(async f => await f.CountAsync(x => true));
     }
 
 
@@ -2147,46 +2294,36 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// Runs <paramref name="use"/> against a source that owns three certificates, and asserts every
-    /// certificate the source produced was disposed rather than abandoned.
+    /// Runs <paramref name="use"/> against a source that owns three certificates, and asserts every one
+    /// of them was disposed rather than abandoned: the terminal releases the match it does not return,
+    /// and the source releases the rest of the batch the terminal stopped reading.
     /// </summary>
-    private static async Task AssertReleasesMatchesAsync(Func<CertificateFinder, Task> use, int expectedProduced)
+    private static async Task AssertReleasesMatchesAsync(Func<CertificateFinder, Task> use)
     {
         var certificates = new[] { "One", "Two", "Three" }.Select(CreateSelfSignedCertificate).ToArray();
         var source = new StubSource("Stub", "a", certificates) { Owns = true };
 
         await use(new CertificateFinder().AddSource(source));
 
-        var produced = certificates.Take(expectedProduced).ToArray();
-        foreach (var certificate in produced) {
+        foreach (var certificate in certificates) {
             await Assert.That(() => certificate.Subject).ThrowsExactly<CryptographicException>();
-        }
-
-        foreach (var certificate in certificates.Skip(expectedProduced)) {
-            certificate.Dispose();
         }
     }
 
 
     /// <summary>
-    /// Runs <paramref name="use"/> against a source that owns three certificates, and asserts every
-    /// certificate the source produced was disposed rather than abandoned.
+    /// Runs <paramref name="use"/> against a source that owns three certificates, and asserts every one
+    /// of them was disposed rather than abandoned. See <see cref="AssertReleasesMatchesAsync"/>.
     /// </summary>
-    private static async Task AssertReleasesMatches(Func<CertificateFinder, object?> use, int expectedProduced)
+    private static async Task AssertReleasesMatches(Func<CertificateFinder, object?> use)
     {
         var certificates = new[] { "One", "Two", "Three" }.Select(CreateSelfSignedCertificate).ToArray();
         var source = new StubSource("Stub", "a", certificates) { Owns = true };
 
         _ = use(new CertificateFinder().AddSource(source));
 
-        //Only the certificates actually reached are produced: the rest are never materialised
-        var produced = certificates.Take(expectedProduced).ToArray();
-        foreach (var certificate in produced) {
+        foreach (var certificate in certificates) {
             await Assert.That(() => certificate.Subject).ThrowsExactly<CryptographicException>();
-        }
-
-        foreach (var certificate in certificates.Skip(expectedProduced)) {
-            certificate.Dispose();
         }
     }
 

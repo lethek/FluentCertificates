@@ -54,28 +54,24 @@ public sealed record CertificateStoreSource(string Name, StoreLocation Location)
     /// any predicate could apply.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <returns>Every certificate in the store.</returns>
-    protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-        //Opened in a helper because a method containing `yield return` cannot also contain a catch clause
-        => Located(OpenCertificates());
+    /// <returns>One batch holding every certificate in the store.</returns>
+    protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
+        => [Located(OpenCertificates())];
 
 
     /// <summary>
-    /// Free, since <see cref="X509Store.Certificates"/> is already a materialised collection: reading it
-    /// backwards costs no more than reading it forwards.
+    /// Free, since the store is one batch and a batch is read back to front for us: there is no order of
+    /// batches to reverse.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <returns>Every certificate in the store, last first.</returns>
-    protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
-        => Located(OpenCertificates().Reverse());
+    /// <returns>One batch holding every certificate in the store.</returns>
+    protected override IEnumerable<CertificateBatch> EnumerateDescending(CertificateFilter filter)
+        => [Located(OpenCertificates())];
 
 
-    private IEnumerable<CertificateFinderResult> Located(IEnumerable<X509Certificate2> certificates)
-    {
-        //Built once rather than per certificate: every result from this source shares the one location
-        var location = $@"{Location}\{Name}";
-        return SelectResults(certificates, _ => location);
-    }
+    //Every certificate this source produces shares the one location, which is what a batch is for
+    private CertificateBatch Located(IEnumerable<X509Certificate2> certificates)
+        => new(certificates, $@"{Location}\{Name}");
 
 
     private X509Certificate2Collection OpenCertificates()

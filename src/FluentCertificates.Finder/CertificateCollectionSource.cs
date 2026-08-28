@@ -19,14 +19,14 @@ public sealed record CertificateCollectionSource(IEnumerable<X509Certificate2> C
 
 
     /// <summary>
-    /// Yields the supplied certificates. The sequence is enumerated lazily, so a generator is only run as
-    /// far as the caller reads.
+    /// Yields the supplied certificates, one to a batch. The sequence is enumerated lazily, so a generator
+    /// is only run as far as the caller reads, and a batch each is what keeps it that way.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <returns>The supplied certificates.</returns>
-    protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+    /// <returns>One batch per supplied certificate.</returns>
+    protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
         //A supplied certificate has no location of its own, so its thumbprint stands in as the id
-        => SelectResults(Certificates, cert => cert.Thumbprint);
+        => Certificates.Select(cert => new CertificateBatch([cert], cert.Thumbprint));
 
 
     /// <summary>
@@ -34,9 +34,9 @@ public sealed record CertificateCollectionSource(IEnumerable<X509Certificate2> C
     /// A lazy sequence is still run to completion to do it, unlike <see cref="Enumerate"/>.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <returns>The supplied certificates, last first.</returns>
-    protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
-        => SelectResults(Certificates.Reverse(), cert => cert.Thumbprint);
+    /// <returns>One batch per supplied certificate, last first.</returns>
+    protected override IEnumerable<CertificateBatch> EnumerateDescending(CertificateFilter filter)
+        => Certificates.Reverse().Select(cert => new CertificateBatch([cert], cert.Thumbprint));
 
 
     /// <summary>These certificates are the caller's, so a discarded one must never be disposed.</summary>
