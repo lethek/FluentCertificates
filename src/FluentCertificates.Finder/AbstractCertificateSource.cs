@@ -131,7 +131,7 @@ public abstract record AbstractCertificateSource
     /// <param name="certificates">The certificates found.</param>
     /// <param name="location">Identifies a certificate within this source. See <see cref="CertificateFinderResult.Location"/>.</param>
     /// <returns>The results.</returns>
-    protected IEnumerable<CertificateFinderResult> Results(
+    protected IEnumerable<CertificateFinderResult> SelectResults(
         IEnumerable<X509Certificate2> certificates,
         Func<X509Certificate2, string> location)
         => certificates.Select(cert => new CertificateFinderResult {

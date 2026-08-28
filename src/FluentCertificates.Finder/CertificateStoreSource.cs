@@ -74,7 +74,7 @@ public sealed record CertificateStoreSource(string Name, StoreLocation Location)
     {
         //Built once rather than per certificate: every result from this source shares the one location
         var location = $@"{Location}\{Name}";
-        return Results(certificates, _ => location);
+        return SelectResults(certificates, _ => location);
     }
 
 

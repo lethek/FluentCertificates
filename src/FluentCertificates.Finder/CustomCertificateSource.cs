@@ -26,7 +26,7 @@ public sealed record CustomCertificateSource(IEnumerable<X509Certificate2> Certi
     /// <returns>The supplied certificates.</returns>
     protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
         //A supplied certificate has no location of its own, so its thumbprint stands in as the id
-        => Results(Certificates, cert => cert.Thumbprint);
+        => SelectResults(Certificates, cert => cert.Thumbprint);
 
 
     /// <summary>
@@ -36,7 +36,7 @@ public sealed record CustomCertificateSource(IEnumerable<X509Certificate2> Certi
     /// <param name="filter">The predicates the caller asked for; unused.</param>
     /// <returns>The supplied certificates, last first.</returns>
     protected override IEnumerable<CertificateFinderResult> EnumerateDescending(CertificateFilter filter)
-        => Results(Certificates.Reverse(), cert => cert.Thumbprint);
+        => SelectResults(Certificates.Reverse(), cert => cert.Thumbprint);
 
 
     /// <summary>These certificates are the caller's, so a discarded one must never be disposed.</summary>

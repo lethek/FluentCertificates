@@ -86,7 +86,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
             //Canonicalised once per file: a container format yields many certificates from the one path,
             //and the same file reached from two overlapping roots reports one location
             var location = FileSystem.Path.GetFullPath(x.Path);
-            return Results(Load(x.Path, x.Extension), _ => location);
+            return SelectResults(Load(x.Path, x.Extension), _ => location);
         });
 
 
