@@ -75,6 +75,10 @@ public abstract record AbstractCertificateSource
     /// The default costs a state machine and nothing else, and a source with no asynchronous IO gains
     /// nothing by overriding it. Whatever is overridden here must agree with <see cref="Enumerate"/>: the
     /// two produce the same results, so a caller cannot be made to choose between them for correctness.
+    /// <para>
+    /// An override need not check <paramref name="cancellationToken"/> to be cancellable: the token is
+    /// checked once per certificate as the results are handed out, whatever produced them.
+    /// </para>
     /// </remarks>
     protected virtual IAsyncEnumerable<CertificateBatch> EnumerateAsync(
         CertificateFilter filter,
@@ -354,6 +358,16 @@ public abstract record AbstractCertificateSource
         };
 
 
+    /// <summary>
+    /// Bridges a synchronous source to the asynchronous path.
+    /// </summary>
+    /// <remarks>
+    /// Takes no <see cref="CancellationToken"/> on purpose, and neither call site passes one. This bridge
+    /// runs only for a source that does not override <see cref="EnumerateAsync"/>, whereas
+    /// <see cref="IterateAsync"/> is on every asynchronous path and checks the token per certificate there.
+    /// A check here would be a second one covering less, and no test could tell whether it was still
+    /// present. Cancellation is pinned by <c>AsAsyncEnumerable_WhenCancelled_Throws</c>.
+    /// </remarks>
 #pragma warning disable CS1998 //Bridging a synchronous source: there is nothing here to await
     private static async IAsyncEnumerable<CertificateBatch> ToAsyncEnumerable(IEnumerable<CertificateBatch> batches)
     {

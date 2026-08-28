@@ -1458,6 +1458,8 @@ public class CertificateFinderTests
             return ToAsync([new CertificateBatch(Certificates, At)]);
         }
 
+        //No CancellationToken by design: a source is cancellable without checking one itself, which is
+        //half of what AsAsyncEnumerable_WhenCancelled_Throws pins by running against this stub both ways
 #pragma warning disable CS1998 //Nothing to await: the stub's certificates are already in memory
         private static async IAsyncEnumerable<CertificateBatch> ToAsync(IEnumerable<CertificateBatch> batches)
         {
@@ -1926,8 +1928,10 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// Cancellation reaches a source that never awaits anything, which is the case the wrapper exists for:
-    /// a store read is one blocking call and would otherwise run to completion regardless of the token.
+    /// Cancellation reaches a source that never awaits anything: a store read is one blocking call and
+    /// would otherwise run to completion regardless of the token. Run against a source that overrides the
+    /// asynchronous members and one that does not, since neither checks the token itself and the single
+    /// check as the results are handed out has to cover both.
     /// </summary>
     [Test]
     [Arguments(true)]
