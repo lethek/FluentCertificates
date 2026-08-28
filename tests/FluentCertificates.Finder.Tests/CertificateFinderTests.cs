@@ -1461,6 +1461,7 @@ public class CertificateFinderTests
         //No CancellationToken by design: a source is cancellable without checking one itself, which is
         //half of what AsAsyncEnumerable_WhenCancelled_Throws pins by running against this stub both ways
 #pragma warning disable CS1998 //Nothing to await: the stub's certificates are already in memory
+        // ReSharper disable once AsyncMethodWithoutAwait
         private static async IAsyncEnumerable<CertificateBatch> ToAsync(IEnumerable<CertificateBatch> batches)
         {
             foreach (var batch in batches) {

@@ -369,6 +369,7 @@ public abstract record AbstractCertificateSource
     /// present. Cancellation is pinned by <c>AsAsyncEnumerable_WhenCancelled_Throws</c>.
     /// </remarks>
 #pragma warning disable CS1998 //Bridging a synchronous source: there is nothing here to await
+    // ReSharper disable once AsyncMethodWithoutAwait
     private static async IAsyncEnumerable<CertificateBatch> ToAsyncEnumerable(IEnumerable<CertificateBatch> batches)
     {
         foreach (var batch in batches) {
