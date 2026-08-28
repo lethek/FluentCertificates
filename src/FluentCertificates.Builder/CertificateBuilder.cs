@@ -373,7 +373,7 @@ public record CertificateBuilder
     /// <summary>
     /// Sets a custom serial number generator function for certificate creation.
     /// </summary>
-    /// <param name="generator">A delegate that returns a <see cref="T:System.Byte[]"/> representing the serial number to use for the certificate.</param>
+    /// <param name="generator">A delegate that returns a <see cref="byte"/> array representing the serial number to use for the certificate.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified serial number generator.</returns>
     public CertificateBuilder SetSerialNumberGenerator(Func<byte[]> generator)
         => this with { SerialNumberGenerator = generator };
@@ -664,12 +664,12 @@ public record CertificateBuilder
         //Setup extension for Subject Alternative Name if necessary
         if (builder.SubjectAlternativeNames != null && builder.SubjectAlternativeNames.Any()) {
             //Extension must be marked critical if the Subject is empty, as per https://tools.ietf.org/html/rfc5280#section-4.1.2.6
-            bool critical = !builder.Subject.RelativeDistinguishedNames.Any();
+            bool critical = builder.Subject.RelativeDistinguishedNames.IsEmpty;
             extensions.Add(new X509SubjectAlternativeNameExtension(builder.SubjectAlternativeNames.Encode(), critical));
         }
 
         //Collate extensions; manually specified ones in the `builder` may override matching generated ones above (e.g. Usage, DnsNames, Email, etc.)
-        return extensions.Any()
+        return extensions.Count > 0
             ? builder._extensions.Union(extensions)
             : builder._extensions;
     }

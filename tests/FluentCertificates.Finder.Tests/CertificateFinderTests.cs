@@ -672,8 +672,13 @@ public class CertificateFinderTests
         //Taken off the interface directly: Cast<T> would notice the generic interface and short-circuit
         var enumerator = finder.GetEnumerator();
         var results = new List<CertificateFinderResult>();
-        while (enumerator.MoveNext()) {
-            results.Add((CertificateFinderResult)enumerator.Current!);
+        try {
+            while (enumerator.MoveNext()) {
+                results.Add((CertificateFinderResult)enumerator.Current!);
+            }
+        } finally {
+            //IEnumerator carries no Dispose, but the iterator behind it does
+            (enumerator as IDisposable)?.Dispose();
         }
 
         await Assert.That(results).HasSingleItem();
@@ -2383,7 +2388,7 @@ public class CertificateFinderTests
 
         private sealed class CountingFile(MockFileSystem fileSystem, Action onAsyncRead) : MockFile(fileSystem)
         {
-            public override Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken)
+            public override Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken = default)
             {
                 onAsyncRead();
                 return base.ReadAllBytesAsync(path, cancellationToken);
