@@ -560,6 +560,34 @@ Two things filter after collation instead, which is still correct and only costs
 `Last` and `LastOrDefault` read sources newest-added first. Which certificate is last *within* a source
 is unspecified, because neither a directory listing nor a store enumeration promises an order.
 
+### Searching asynchronously
+
+`AsAsyncEnumerable` returns the same results in the same order, reads files asynchronously, and takes a
+`CancellationToken`, so a recursive scan over a large tree can be abandoned.
+
+```csharp
+await foreach (var result in finder.AsAsyncEnumerable(cancellationToken)) {
+    Console.WriteLine(result.Certificate.Subject);
+}
+```
+
+Every predicate-taking method above has an `Async` counterpart: `AnyAsync`, `AllAsync`, `FirstAsync`,
+`FirstOrDefaultAsync`, `LastAsync`, `LastOrDefaultAsync`, `SingleAsync`, `SingleOrDefaultAsync` and
+`CountAsync`, each taking an optional `CancellationToken`.
+
+```csharp
+var count = await finder.CountAsync(x => x.Certificate.HasPrivateKey, cancellationToken);
+```
+
+Prefer these to async LINQ over `AsAsyncEnumerable`. A terminal that matches certificates without
+returning them has to dispose them, and only these do.
+
+The finder is not itself an `IAsyncEnumerable<T>`, which is why `AsAsyncEnumerable` is a method. A type
+implementing both sequence interfaces makes every LINQ operator ambiguous on .NET 10, where
+`System.Linq.AsyncEnumerable` is part of the framework, so `finder.Select(...)` and
+`from x in finder select x` would stop compiling. EF Core's `DbSet<T>` dropped `IAsyncEnumerable<T>` in
+version 6 over the same ambiguity and offers `AsAsyncEnumerable` in its place.
+
 ### Reading a result
 
 Each result carries the `Certificate`, the `Source` that produced it, and a `Location` naming it within
@@ -628,16 +656,17 @@ thumbprint first and apply it last, as above.
 ### Advanced: write your own source
 
 Derive from `AbstractCertificateSource` and hand it to `AddSource`. Two members are required: `Kind`,
-a label for your source type, and `Enumerate`, which produces the candidates. `SelectResults` pairs each
-certificate with the source and a `Location` identifying it there.
+a label for your source type, and `Enumerate`, which produces the candidates as `CertificateBatch`es. A
+batch is one group of certificates your source loads at once, such as a file, paired with the `Location`
+identifying where they came from.
 
 ```csharp
 public sealed record EnvironmentCertificateSource(string Prefix) : AbstractCertificateSource
 {
     public override string Kind => "Environment";
 
-    protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-        => Variables().SelectMany(name => SelectResults(Load(name), _ => name));
+    protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
+        => Variables().Select(name => new CertificateBatch(Load(name), name));
 
     private IEnumerable<string> Variables()
         => Environment.GetEnvironmentVariables()
@@ -664,12 +693,18 @@ returning less never is.** The finder applies the filter in full afterwards, so 
 nothing down still gives the right answer and only costs speed. To translate a predicate into a native
 query, read `filter.Predicates`, each of which carries the expression tree and a delegate compiled once.
 
+Yielding a batch hands its certificates to the finder. The ones that match reach the caller, and every
+other one is passed to `Release`, including the ones behind a caller who stopped reading at the first
+match. Batches are pulled one at a time, so a source that yields a batch per file only ever loads as far
+as the caller reads. Keep nothing of your own between batches and your source cannot leak.
+
 Three optional members:
 
 |Member|Why|
 |---|---|
-|`Release(CertificateFinderResult)`|What happens to a result the finder discards. Disposes the certificate by default, which is right for a source that loads certificates. Override it to a no-op for a source passing through certificates someone else owns.|
-|`EnumerateDescending(CertificateFilter)`|Produces the same candidates in reverse. Return `null`, the default, if your source cannot go backwards. Implementing it lets `Last` and `LastOrDefault` stop at the first match from the end instead of reading everything.|
+|`Release(CertificateFinderResult)`|What happens to a certificate the caller never receives. Disposes it by default, which is right for a source that loads certificates. Override it to a no-op for a source passing through certificates someone else owns.|
+|`EnumerateDescending(CertificateFilter)`|Produces the same batches in reverse order. Each batch is read back to front for you, so reverse the order they come in and nothing else. Return `null`, the default, if your source cannot go backwards. Implementing it lets `Last` and `LastOrDefault` stop at the first match from the end instead of reading everything.|
+|`EnumerateAsync(CertificateFilter, CancellationToken)`|Only worth overriding if your source has real asynchronous work, such as reading files or calling a service. By default it wraps `Enumerate`, so a source implementing the synchronous members alone is already usable from `AsAsyncEnumerable` and already cancellable. `EnumerateDescendingAsync` pairs with it the same way.|
 |`Kind`|Required, but free-form. Callers group and deduplicate results on it.|
 
 Make the source a `record` rather than a `class`. The finder deduplicates sources by value, so two
