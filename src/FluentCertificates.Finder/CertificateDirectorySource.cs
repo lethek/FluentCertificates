@@ -103,9 +103,13 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
                 case ".p12":
                     //X509CertificateLoader.LoadCertificate rejects PKCS#12, so these must go
                     //through the PKCS#12 loader rather than the default branch
-                    return [CertTools.LoadPkcs12(FileSystem.File.ReadAllBytes(path), null)];
+                    return CertTools.LoadPkcs12Collection(FileSystem.File.ReadAllBytes(path), null);
                 case ".pem":
-                    return [X509Certificate2.CreateFromPem(FileSystem.File.ReadAllText(path))];
+                case ".ca-bundle":
+                    //Both extensions name PEM text, which holds any number of certificates
+                    var pem = new X509Certificate2Collection();
+                    pem.ImportFromPem(FileSystem.File.ReadAllText(path));
+                    return pem;
                 default:
                     return [CertTools.LoadCertificate(FileSystem.File.ReadAllBytes(path))];
             }

@@ -810,6 +810,8 @@ public class CertificateFinderTests
         fs.AddFile("/malformed/truncated.pem", new MockFileData(truncatedPem));
         fs.AddFile("/malformed/garbage.pem", new MockFileData("not base64 at all"));
         fs.AddFile("/malformed/empty.pem", new MockFileData(String.Empty));
+        //A malformed PEM block is simply not found, whereas a binary format has to fail while parsing
+        fs.AddFile("/malformed/garbage.der", new MockFileData([0x30, 0x82, 0x01, 0x02, 0xFF, 0xFF, 0xFF]));
         fs.AddFile("/malformed/valid.pem", new MockFileData(cert.ExportCertificatePem()));
 
         var finder = new CertificateFinder(fs).AddDirectory("/malformed");
@@ -1166,7 +1168,7 @@ public class CertificateFinderTests
         }
 
         //Defaults to leaving them alone: the certificates belong to the test unless Owns says otherwise
-        protected override void Release(CertificateFinderResult result)
+        public override void Release(CertificateFinderResult result)
         {
             if (Owns) {
                 base.Release(result);
@@ -1223,6 +1225,109 @@ public class CertificateFinderTests
 
 
     /// <summary>A real directory on disk, removed with everything in it when the test scope ends.</summary>
+    /// <summary>
+    /// A PEM file holds any number of certificates, and a `.ca-bundle` is a bundle by definition, so
+    /// reading only the first silently loses the rest.
+    /// </summary>
+    [Test]
+    [Arguments(".pem")]
+    [Arguments(".ca-bundle")]
+    public async Task EnumerateCertificates_PemHoldingSeveralCertificates_ReturnsEachOfThem(string extension)
+    {
+        using var first = CreateSelfSignedCertificate("Bundled One");
+        using var second = CreateSelfSignedCertificate("Bundled Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/bundle/chain{extension}", new MockFileData(first.ExportCertificatePem() + "\n" + second.ExportCertificatePem()));
+
+        var results = new CertificateFinder(fs).AddDirectory("/bundle").ToList();
+
+        await Assert
+            .That(results.Select(r => r.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+
+        foreach (var result in results) {
+            result.Certificate.Dispose();
+        }
+    }
+
+
+    /// <summary>
+    /// A leaf-plus-issuer PKCS#12 is the common case. Loading a single certificate from it also made the
+    /// answer depend on export order, since the loader picked whichever the file happened to lead with.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task EnumerateCertificates_Pkcs12HoldingAChain_ReturnsEachCertificate(bool issuerFirst)
+    {
+        using var issuer = CreateSelfSignedCertificate("Pkcs12 Issuer");
+        using var leaf = CreateSelfSignedCertificate("Pkcs12 Leaf");
+        X509Certificate2[] ordered = issuerFirst ? [issuer, leaf] : [leaf, issuer];
+        var pkcs12 = new X509Certificate2Collection(ordered).Export(X509ContentType.Pkcs12)!;
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/p12/chain.pfx", new MockFileData(pkcs12));
+
+        var results = new CertificateFinder(fs).AddDirectory("/p12").ToList();
+
+        await Assert
+            .That(results.Select(r => r.Certificate.Thumbprint))
+            .IsEquivalentTo([issuer.Thumbprint, leaf.Thumbprint], CollectionOrdering.Any);
+
+        foreach (var result in results) {
+            result.Certificate.Dispose();
+        }
+    }
+
+
+    /// <summary>
+    /// A terminal answering with a bool or a count never hands the caller the certificates it matched, so
+    /// nothing else can release them. <see cref="CertificateFinder.First"/> and friends are excluded: the
+    /// match they stop on becomes the caller's.
+    /// </summary>
+    [Test]
+    public async Task PredicateOverloads_ReleaseTheMatchesTheyDoNotReturn()
+    {
+        await AssertReleasesMatches(f => f.Any(x => true), expectedProduced: 1);
+        await AssertReleasesMatches(f => f.All(x => false), expectedProduced: 1);
+        await AssertReleasesMatches(f => f.Count(x => true), expectedProduced: 3);
+        await AssertReleasesMatches(
+            f => {
+                try {
+                    return f.Single(x => true);
+                } catch (InvalidOperationException) {
+                    return null;
+                }
+            },
+            expectedProduced: 2
+        );
+    }
+
+
+    /// <summary>
+    /// Runs <paramref name="use"/> against a source that owns three certificates, and asserts every
+    /// certificate the source produced was disposed rather than abandoned.
+    /// </summary>
+    private static async Task AssertReleasesMatches(Func<CertificateFinder, object?> use, int expectedProduced)
+    {
+        var certificates = new[] { "One", "Two", "Three" }.Select(CreateSelfSignedCertificate).ToArray();
+        var source = new StubSource("Stub", "a", certificates) { Owns = true };
+
+        _ = use(new CertificateFinder().AddSource(source));
+
+        //Only the certificates actually reached are produced: the rest are never materialised
+        var produced = certificates.Take(expectedProduced).ToArray();
+        foreach (var certificate in produced) {
+            await Assert.That(() => certificate.Subject).ThrowsExactly<CryptographicException>();
+        }
+
+        foreach (var certificate in certificates.Skip(expectedProduced)) {
+            certificate.Dispose();
+        }
+    }
+
+
     private sealed class TempDirectory : IDisposable
     {
         public string Path { get; } =

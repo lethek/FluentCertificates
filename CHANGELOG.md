@@ -35,7 +35,9 @@ release rather than record it as it happened.
 
 ### Fixed
 
-- `CertificateFinder` disposes the certificates a source loaded and then discarded. Certificates supplied by the caller are never disposed.
+- `CertificateFinder` disposes the certificates a source loaded and then discarded, including the matches `Any`, `All`, `Count` and `Single` never return. Certificates supplied by the caller are never disposed.
+- A `.pem` or `.ca-bundle` file yields every certificate it holds, not only the first.
+- A `.pfx` or `.p12` file yields every certificate it holds, not only one chosen by export order.
 
 ## [0.20.1] - 2026-08-27
 

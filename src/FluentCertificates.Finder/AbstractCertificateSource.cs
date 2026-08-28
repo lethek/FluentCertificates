@@ -113,15 +113,18 @@ public abstract record AbstractCertificateSource
 
 
     /// <summary>
-    /// Releases a result this source produced and then discarded, which happens when the filter rejects it
-    /// or when <see cref="FindLast"/> passes over it. Disposes the certificate by default.
+    /// Releases a result this source produced that is being discarded rather than returned to the caller.
+    /// That happens when the filter rejects it, when <see cref="FindLast"/> passes over it, and when a
+    /// terminal such as <see cref="CertificateFinder.Count"/> counts a match without returning it. Disposes
+    /// the certificate by default.
     /// </summary>
     /// <param name="result">The result being discarded. The caller can never reach it.</param>
     /// <remarks>
     /// Override to a no-op in a source that passes through certificates the caller supplied, since those
     /// are not its to release. A source backed by a cache or pool can return the certificate here instead.
+    /// Call it only for a result nothing else holds.
     /// </remarks>
-    protected virtual void Release(CertificateFinderResult result)
+    public virtual void Release(CertificateFinderResult result)
         => result.Certificate.Dispose();
 
 

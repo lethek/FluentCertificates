@@ -69,10 +69,17 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <returns><see langword="true"/> if at least one matches.</returns>
     /// <remarks>
     /// Shadows <see cref="Enumerable.Any{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
-    /// sources. See <see cref="Where"/>.
+    /// sources. See <see cref="Where"/>. The match is released rather than returned, since the answer is
+    /// only whether one exists.
     /// </remarks>
     public bool Any(Expression<Func<CertificateFinderResult, bool>> predicate)
-        => Where(predicate).Any();
+    {
+        foreach (var result in Where(predicate)) {
+            result.Source.Release(result);
+            return true;
+        }
+        return false;
+    }
 
 
     /// <summary>
@@ -174,7 +181,8 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// sources. See <see cref="Where"/>.
     /// </remarks>
     public CertificateFinderResult Single(Expression<Func<CertificateFinderResult, bool>> predicate)
-        => Where(predicate).Single();
+        => SingleOrDefault(predicate)
+            ?? throw new InvalidOperationException("Sequence contains no matching element");
 
 
     /// <summary>
@@ -185,10 +193,22 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <exception cref="InvalidOperationException">More than one matched.</exception>
     /// <remarks>
     /// Shadows <see cref="Enumerable.SingleOrDefault{T}(IEnumerable{T},Func{T,bool})"/> so the predicate
-    /// reaches the sources. See <see cref="Where"/>.
+    /// reaches the sources. See <see cref="Where"/>. A second match ends the search, and both it and the
+    /// first are released, since throwing returns neither to the caller.
     /// </remarks>
     public CertificateFinderResult? SingleOrDefault(Expression<Func<CertificateFinderResult, bool>> predicate)
-        => Where(predicate).SingleOrDefault();
+    {
+        CertificateFinderResult? found = null;
+        foreach (var result in Where(predicate)) {
+            if (found is not null) {
+                found.Source.Release(found);
+                result.Source.Release(result);
+                throw new InvalidOperationException("Sequence contains more than one matching element");
+            }
+            found = result;
+        }
+        return found;
+    }
 
 
     /// <summary>
@@ -198,10 +218,18 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <returns>The number of matching results.</returns>
     /// <remarks>
     /// Shadows <see cref="Enumerable.Count{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
-    /// sources. See <see cref="Where"/>.
+    /// sources. See <see cref="Where"/>. Every match is released as it is counted, since the answer is a
+    /// number and no certificate reaches the caller.
     /// </remarks>
     public int Count(Expression<Func<CertificateFinderResult, bool>> predicate)
-        => Where(predicate).Count();
+    {
+        var count = 0;
+        foreach (var result in Where(predicate)) {
+            result.Source.Release(result);
+            count++;
+        }
+        return count;
+    }
 
 
     /// <summary>

@@ -41,5 +41,5 @@ public sealed record CustomCertificateSource(IEnumerable<X509Certificate2> Certi
 
     /// <summary>These certificates are the caller's, so a discarded one must never be disposed.</summary>
     /// <param name="result">The result being discarded; left alone.</param>
-    protected override void Release(CertificateFinderResult result) { }
+    public override void Release(CertificateFinderResult result) { }
 }
