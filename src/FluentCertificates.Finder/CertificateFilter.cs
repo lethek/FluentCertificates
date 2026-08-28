@@ -13,13 +13,13 @@ namespace FluentCertificates;
 public sealed class CertificateFilter
 {
     /// <summary>A filter with no predicates, matching every certificate.</summary>
-    public static CertificateFilter Empty { get; } = new(ImmutableList<CertificatePredicate>.Empty);
+    public static CertificateFilter Empty { get; } = new(ImmutableList<CertificateFinderPredicate>.Empty);
 
 
     /// <summary>
     /// The predicates, in the order they were added. A source reads these to apply what it can natively.
     /// </summary>
-    public IReadOnlyList<CertificatePredicate> Predicates => _predicates;
+    public IReadOnlyList<CertificateFinderPredicate> Predicates => _predicates;
 
 
     /// <summary>Whether this filter has no predicates, and so matches everything.</summary>
@@ -33,7 +33,7 @@ public sealed class CertificateFilter
     /// <returns>A new filter.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="predicate"/> is null.</exception>
     public CertificateFilter Add(Expression<Func<CertificateFinderResult, bool>> predicate)
-        => Add(new CertificatePredicate(predicate));
+        => Add(new CertificateFinderPredicate(predicate));
 
 
     /// <summary>
@@ -42,7 +42,7 @@ public sealed class CertificateFilter
     /// <param name="predicate">The predicate to add.</param>
     /// <returns>A new filter.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="predicate"/> is null.</exception>
-    public CertificateFilter Add(CertificatePredicate predicate)
+    public CertificateFilter Add(CertificateFinderPredicate predicate)
     {
         ArgumentNullException.ThrowIfNull(predicate);
         return new CertificateFilter(_predicates.Add(predicate));
@@ -65,9 +65,9 @@ public sealed class CertificateFilter
     }
 
 
-    private CertificateFilter(ImmutableList<CertificatePredicate> predicates)
+    private CertificateFilter(ImmutableList<CertificateFinderPredicate> predicates)
         => _predicates = predicates;
 
 
-    private readonly ImmutableList<CertificatePredicate> _predicates;
+    private readonly ImmutableList<CertificateFinderPredicate> _predicates;
 }

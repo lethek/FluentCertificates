@@ -10,14 +10,14 @@ namespace FluentCertificates;
 /// A source that translates some predicates but not others applies the remainder through
 /// <see cref="Compiled"/>, rather than compiling <see cref="Expression"/> itself once per enumeration.
 /// </remarks>
-public sealed class CertificatePredicate
+public sealed class CertificateFinderPredicate
 {
     /// <summary>
     /// Creates a predicate, compiling <paramref name="expression"/> once.
     /// </summary>
     /// <param name="expression">The predicate a result must satisfy.</param>
     /// <exception cref="ArgumentNullException"><paramref name="expression"/> is null.</exception>
-    public CertificatePredicate(Expression<Func<CertificateFinderResult, bool>> expression)
+    public CertificateFinderPredicate(Expression<Func<CertificateFinderResult, bool>> expression)
     {
         ArgumentNullException.ThrowIfNull(expression);
         Expression = expression;

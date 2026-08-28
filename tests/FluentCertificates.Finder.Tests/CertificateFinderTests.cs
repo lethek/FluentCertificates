@@ -440,10 +440,10 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task CertificatePredicate_CarriesBothTheTreeAndTheCompiledForm()
+    public async Task CertificateFinderPredicate_CarriesBothTheTreeAndTheCompiledForm()
     {
         Expression<Func<CertificateFinderResult, bool>> expression = x => x.Location == "a";
-        var predicate = new CertificatePredicate(expression);
+        var predicate = new CertificateFinderPredicate(expression);
 
         await Assert.That(predicate.Expression).IsSameReferenceAs(expression);
 
@@ -460,7 +460,7 @@ public class CertificateFinderTests
     [Test]
     public async Task CertificateFilter_AcceptsAnAlreadyCompiledPredicate()
     {
-        var predicate = new CertificatePredicate(x => x.Location == "a");
+        var predicate = new CertificateFinderPredicate(x => x.Location == "a");
         var filter = CertificateFilter.Empty.Add(predicate);
 
         //Added as-is, so the delegate the caller paid to compile is the one the filter runs
@@ -498,8 +498,8 @@ public class CertificateFinderTests
 
         await Assert.That(() => new CertificateFinder().Where(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => CertificateFilter.Empty.Add((Expression<Func<CertificateFinderResult, bool>>)null!)).ThrowsExactly<ArgumentNullException>();
-        await Assert.That(() => CertificateFilter.Empty.Add((CertificatePredicate)null!)).ThrowsExactly<ArgumentNullException>();
-        await Assert.That(() => new CertificatePredicate(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => CertificateFilter.Empty.Add((CertificateFinderPredicate)null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => new CertificateFinderPredicate(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => source.Find(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => source.FindDescending(null!)).ThrowsExactly<ArgumentNullException>();
     }
