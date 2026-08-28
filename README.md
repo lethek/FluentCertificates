@@ -15,7 +15,7 @@ This project is published in several NuGet packages:
 * [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Top-level package that imports the Builder, Extensions, and Finder packages.
 * [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension methods. [Examples below](#certificatebuilder-examples)
 * [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides certificate exporting via `Export()`, plus additional extension methods. [Examples below](#exporting-certificates)
-* [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across X509Stores and directories. [Examples below](#certificatefinder-examples)
+* [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across X509Stores, directories, certificates you already hold, and sources of your own. [Examples below](#certificatefinder-examples)
 
 Documentation is incomplete. More examples can be found in the project's [unit tests](https://github.com/lethek/FluentCertificates/tree/main/tests).
 
@@ -549,6 +549,72 @@ var ca = new CertificateFinder()
 
 It reaches the key store, so it costs far more than the property read it replaces. Narrow by subject or
 thumbprint first and apply it last, as above.
+
+### Search certificates you already hold
+
+`AddCertificates` takes certificates in memory and searches them alongside any stores and directories
+added. They stay yours: the finder never disposes a certificate you supplied, whatever rejects it.
+
+```csharp
+using var a = new CertificateBuilder().SetSubject(x => x.SetCommonName("A")).Create();
+using var b = new CertificateBuilder().SetSubject(x => x.SetCommonName("B")).Create();
+
+var signer = new CertificateFinder()
+    .AddCertificates(a, b)
+    .AddCommonStores()
+    .FirstOrDefault(x => x.Certificate.CanSign());
+```
+
+### Write your own source
+
+Derive from `AbstractCertificateSource` and hand it to `AddSource`. The one required member is
+`Enumerate`, which produces candidates, and `Kind`, a label for your source type. `SelectResults` pairs
+each certificate with the source and a `Location` that identifies it within that source.
+
+```csharp
+public sealed record EnvironmentCertificateSource(string Prefix) : AbstractCertificateSource
+{
+    public override string Kind => "Environment";
+
+    protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+        => Variables().SelectMany(name => SelectResults(Load(name), _ => name));
+
+    private IEnumerable<string> Variables()
+        => Environment.GetEnvironmentVariables()
+            .Keys.Cast<string>()
+            .Where(name => name.StartsWith(Prefix, StringComparison.Ordinal))
+            .Order();
+
+    private IEnumerable<X509Certificate2> Load(string name)
+    {
+        var pem = new X509Certificate2Collection();
+        pem.ImportFromPem(Environment.GetEnvironmentVariable(name) ?? "");
+        return pem;
+    }
+}
+
+var cert = new CertificateFinder()
+    .AddSource(new EnvironmentCertificateSource("TLS_CERT_"))
+    .FirstOrDefault(x => x.Certificate.IsValidNow());
+```
+
+`Enumerate` receives the `CertificateFilter` the caller built with `Where`. Apply as much of it as your
+source can answer cheaply and ignore the rest: **returning more than matches is always correct, and
+returning less never is.** The finder applies the filter in full afterwards, so a source that pushes
+nothing down still gives the right answer and only costs speed. To translate a predicate into a native
+query, read `filter.Predicates`, each of which carries the expression tree and a delegate compiled once.
+
+Three optional members:
+
+|Member|Why|
+|---|---|
+|`Release(CertificateFinderResult)`|What happens to a result the finder discards. Disposes the certificate by default, which is right for a source that loads certificates. Override it to a no-op for a source that passes through certificates someone else owns.|
+|`EnumerateDescending(CertificateFilter)`|Produces the same candidates in reverse. Return `null`, the default, if your source cannot go backwards. Implementing it lets `Last` and `LastOrDefault` stop at the first match from the end instead of reading everything.|
+|`Kind`|Required, but free-form. Callers group and deduplicate results on it.|
+
+Make the source a `record` rather than a `class`. The finder deduplicates sources by value, so two
+records describing the same thing are read once, whereas a class is compared by reference and would be
+read twice.
 
 ---
 
