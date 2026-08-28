@@ -25,6 +25,49 @@ public abstract record AbstractCertificateSource
 
 
     /// <summary>
+    /// Produces candidate results, applying as much of <paramref name="filter"/> as this source can do
+    /// natively. Returning a superset is always correct; returning less than the matching set is not.
+    /// </summary>
+    /// <param name="filter">The predicates the caller asked for.</param>
+    /// <returns>Candidate results.</returns>
+    protected abstract IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter);
+
+
+    /// <summary>
+    /// Produces candidate results in the reverse of <see cref="Enumerate"/>'s order, or
+    /// <see langword="null"/> if this source cannot go backwards. Returning <see langword="null"/> is the
+    /// default, so a source opts in rather than out.
+    /// </summary>
+    /// <param name="filter">The predicates the caller asked for.</param>
+    /// <returns>Candidate results last first, or <see langword="null"/>.</returns>
+    /// <remarks>
+    /// What is returned must be the true reverse of what <see cref="Enumerate"/> would yield, or
+    /// <see cref="CertificateFinder.Last"/> will disagree with enumerating the finder. Implement it only
+    /// when going backwards costs about what going forwards does: a source that would have to buffer its
+    /// whole output should return <see langword="null"/> and let <see cref="FindLast"/> read it forwards,
+    /// which is cheaper than buffering.
+    /// </remarks>
+    protected virtual IEnumerable<CertificateFinderResult>? EnumerateDescending(CertificateFilter filter)
+        => null;
+
+
+    /// <summary>
+    /// Releases a result this source produced that is being discarded rather than returned to the caller.
+    /// That happens when the filter rejects it, when <see cref="FindLast"/> passes over it, and when a
+    /// terminal such as <see cref="CertificateFinder.Count"/> counts a match without returning it. Disposes
+    /// the certificate by default.
+    /// </summary>
+    /// <param name="result">The result being discarded. The caller can never reach it.</param>
+    /// <remarks>
+    /// Override to a no-op in a source that passes through certificates the caller supplied, since those
+    /// are not its to release. A source backed by a cache or pool can return the certificate here instead.
+    /// Call it only for a result nothing else holds.
+    /// </remarks>
+    public virtual void Release(CertificateFinderResult result)
+        => result.Certificate.Dispose();
+
+
+    /// <summary>
     /// Returns every certificate this source holds that matches <paramref name="filter"/>, and nothing else.
     /// </summary>
     /// <param name="filter">The predicates the results must satisfy.</param>
@@ -83,49 +126,6 @@ public abstract record AbstractCertificateSource
         }
         return last;
     }
-
-
-    /// <summary>
-    /// Produces candidate results, applying as much of <paramref name="filter"/> as this source can do
-    /// natively. Returning a superset is always correct; returning less than the matching set is not.
-    /// </summary>
-    /// <param name="filter">The predicates the caller asked for.</param>
-    /// <returns>Candidate results.</returns>
-    protected abstract IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter);
-
-
-    /// <summary>
-    /// Produces candidate results in the reverse of <see cref="Enumerate"/>'s order, or
-    /// <see langword="null"/> if this source cannot go backwards. Returning <see langword="null"/> is the
-    /// default, so a source opts in rather than out.
-    /// </summary>
-    /// <param name="filter">The predicates the caller asked for.</param>
-    /// <returns>Candidate results last first, or <see langword="null"/>.</returns>
-    /// <remarks>
-    /// What is returned must be the true reverse of what <see cref="Enumerate"/> would yield, or
-    /// <see cref="CertificateFinder.Last"/> will disagree with enumerating the finder. Implement it only
-    /// when going backwards costs about what going forwards does: a source that would have to buffer its
-    /// whole output should return <see langword="null"/> and let <see cref="FindLast"/> read it forwards,
-    /// which is cheaper than buffering.
-    /// </remarks>
-    protected virtual IEnumerable<CertificateFinderResult>? EnumerateDescending(CertificateFilter filter)
-        => null;
-
-
-    /// <summary>
-    /// Releases a result this source produced that is being discarded rather than returned to the caller.
-    /// That happens when the filter rejects it, when <see cref="FindLast"/> passes over it, and when a
-    /// terminal such as <see cref="CertificateFinder.Count"/> counts a match without returning it. Disposes
-    /// the certificate by default.
-    /// </summary>
-    /// <param name="result">The result being discarded. The caller can never reach it.</param>
-    /// <remarks>
-    /// Override to a no-op in a source that passes through certificates the caller supplied, since those
-    /// are not its to release. A source backed by a cache or pool can return the certificate here instead.
-    /// Call it only for a result nothing else holds.
-    /// </remarks>
-    public virtual void Release(CertificateFinderResult result)
-        => result.Certificate.Dispose();
 
 
     /// <summary>
