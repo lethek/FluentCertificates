@@ -477,13 +477,34 @@ leafCert.Export().AddChain([rootCert, midCert]).AsCert().ToByteArray();
 
 `CertificateFinder` requires the [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder) package and is found under the `FluentCertificates` namespace.
 
-`CertificateFinder` configures, adds, and queries certificate sources (stores, directories, and
-certificates you already hold). Like the other builders it is immutable, and it supports LINQ.
+`CertificateFinder` searches certificate stores, directories and certificates you already hold, and
+returns the ones that match. Like the other builders it is immutable, so every `Add*` and `Where` call
+returns a new finder and leaves the original alone.
 
-Each source is responsible for finding, loading and filtering its own certificates. The finder composes
-sources and collates what they return. `Where` is where that matters: it takes an expression tree and
-hands it to every source, so a source able to answer it natively can, and one that cannot applies it
-itself. Both forms bind to it:
+### Choosing where to search
+
+|Method|Searches|
+|---|---|
+|`AddCommonStores()`|`My`, `CA` and `Root` for `CurrentUser`, plus `My`, `CA`, `Root` and `WebHosting` for `LocalMachine`|
+|`AddStore(...)`, `AddStores(...)`|An `X509Store`, or a store name and `StoreLocation`|
+|`AddDirectory(path, recurse)`, `AddDirectories(...)`|`.crt`, `.cer`, `.der`, `.pem`, `.ca-bundle`, `.pfx`, `.p12`, `.p7b` and `.p7c` files|
+|`AddCertificates(...)`|Certificates you already hold in memory|
+|`AddSource(...)`, `AddSources(...)`|A source of your own, covered at the end of this section|
+
+```csharp
+var finder = new CertificateFinder()
+    .AddCommonStores()
+    .AddDirectory("/etc/ssl/certs", recurse: true)
+    .AddCertificates(alreadyLoaded);
+```
+
+The same source added twice is searched once. Searching a directory's top level and searching its whole
+tree are different searches, so adding both runs both.
+
+### Narrowing the search
+
+`Where` hands your predicate to every source, so a source able to answer it natively can, and one that
+cannot applies it itself. Both LINQ forms bind to it:
 
 ```csharp
 finder.Where(x => x.Certificate.Subject.Contains("example.com"));
@@ -491,21 +512,37 @@ from x in finder where x.Certificate.HasPrivateKey select x.Certificate;
 ```
 
 `Any`, `All`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count`
-take a predicate and push it down the same way. `All` pushes down the negation, since what a source can
-stop at is the first certificate that fails. Any other LINQ operator runs after collation, which is still
-correct, just more work.
-So does a predicate you hold in a `Func<>` variable rather than writing inline, since only a lambda
-becomes an expression tree.
+take a predicate the same way, and stop as soon as they can: `FirstOrDefault` reads no further than the
+source holding the first match.
 
-Results carry a `Source` and a `Location` saying where the certificate was found, so the same
-certificate present in two stores is reported twice, once for each, and a file that two overlapping
-directory sources both reach is reported by each of them. Results are never deduplicated, because where
-a certificate was found is part of the answer. To collapse them, add
-`.DistinctBy(r => (r.Certificate.Thumbprint, r.Source.Kind, r.Location))`.
+Two things filter after collation instead, which is still correct and only costs work:
+
+- Any other LINQ operator, `Select`, `OrderBy` and `Take` included. Once you call one, a later `Where` is
+  ordinary LINQ over the results already gathered.
+- A predicate held in a `Func<>` variable rather than written inline, since only an inline lambda becomes
+  an expression tree.
+
+`Last` and `LastOrDefault` read sources newest-added first. Which certificate is last *within* a source
+is unspecified, because neither a directory listing nor a store enumeration promises an order.
+
+### Reading a result
+
+Each result carries the `Certificate`, the `Source` that produced it, and a `Location` naming it within
+that source: a full file path, or a store's location and name.
+
+Results are never deduplicated, because where a certificate was found is part of the answer. The same
+certificate in `CurrentUser\My` and `LocalMachine\My` is two results, and a file two overlapping
+directory sources both reach is reported by each. To collapse them:
+
+```csharp
+finder.DistinctBy(r => (r.Certificate.Thumbprint, r.Source.Kind, r.Location));
+```
+
+Certificates the finder hands you are yours to dispose. Ones it loaded and then discarded it disposes
+itself, and ones you supplied through `AddCertificates` it never touches. See
+[Key ownership and disposal](#key-ownership-and-disposal).
 
 ### Find a specific certificate by thumbprint
-
-_The "common stores" include the CurrentUser and LocalMachine certificate stores, such as "My", "Root", "CA", etc. You can also add custom directories or other X509 stores to search for certificates._
 
 ```csharp
 const string thumbprint = "622A2B8374D9BBE3969B91EDBC8F5152783AFC78";
@@ -517,6 +554,8 @@ var cert = new CertificateFinder()
 
 ### Find a valid certificate with matching subject, giving preference to included private keys
 
+Both predicates go to the sources. The ordering runs afterwards, over the results that matched.
+
 ```csharp
 var subject = new X500NameBuilder()
     .SetOrganization("My Org")
@@ -525,10 +564,11 @@ var subject = new X500NameBuilder()
 
 var cert = new CertificateFinder()
     .AddCommonStores()
+    .Where(x => x.Certificate.IsValidNow())
+    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, false))
+    .OrderBy(x => !x.Certificate.HasPrivateKey) //Ensure certs with private keys are listed before those without
     .Select(x => x.Certificate)
-    .Where(x => x.IsValidNow())
-    .OrderBy(x => !x.HasPrivateKey) //Ensure certs with private keys are listed before those without
-    .FirstOrDefault(x => subject.EquivalentTo(x.SubjectName, false));
+    .FirstOrDefault();
 ```
 
 ### Find a certificate whose private key can actually sign
@@ -542,34 +582,19 @@ time:
 ```csharp
 var ca = new CertificateFinder()
     .AddCommonStores()
+    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, false))
     .Select(x => x.Certificate)
-    .Where(x => subject.EquivalentTo(x.SubjectName, false))
     .FirstOrDefault(x => x.CanSign());
 ```
 
 It reaches the key store, so it costs far more than the property read it replaces. Narrow by subject or
 thumbprint first and apply it last, as above.
 
-### Search certificates you already hold
+### Advanced: write your own source
 
-`AddCertificates` takes certificates in memory and searches them alongside any stores and directories
-added. They stay yours: the finder never disposes a certificate you supplied, whatever rejects it.
-
-```csharp
-using var a = new CertificateBuilder().SetSubject(x => x.SetCommonName("A")).Create();
-using var b = new CertificateBuilder().SetSubject(x => x.SetCommonName("B")).Create();
-
-var signer = new CertificateFinder()
-    .AddCertificates(a, b)
-    .AddCommonStores()
-    .FirstOrDefault(x => x.Certificate.CanSign());
-```
-
-### Write your own source
-
-Derive from `AbstractCertificateSource` and hand it to `AddSource`. The one required member is
-`Enumerate`, which produces candidates, and `Kind`, a label for your source type. `SelectResults` pairs
-each certificate with the source and a `Location` that identifies it within that source.
+Derive from `AbstractCertificateSource` and hand it to `AddSource`. Two members are required: `Kind`,
+a label for your source type, and `Enumerate`, which produces the candidates. `SelectResults` pairs each
+certificate with the source and a `Location` identifying it there.
 
 ```csharp
 public sealed record EnvironmentCertificateSource(string Prefix) : AbstractCertificateSource
@@ -608,13 +633,13 @@ Three optional members:
 
 |Member|Why|
 |---|---|
-|`Release(CertificateFinderResult)`|What happens to a result the finder discards. Disposes the certificate by default, which is right for a source that loads certificates. Override it to a no-op for a source that passes through certificates someone else owns.|
+|`Release(CertificateFinderResult)`|What happens to a result the finder discards. Disposes the certificate by default, which is right for a source that loads certificates. Override it to a no-op for a source passing through certificates someone else owns.|
 |`EnumerateDescending(CertificateFilter)`|Produces the same candidates in reverse. Return `null`, the default, if your source cannot go backwards. Implementing it lets `Last` and `LastOrDefault` stop at the first match from the end instead of reading everything.|
 |`Kind`|Required, but free-form. Callers group and deduplicate results on it.|
 
 Make the source a `record` rather than a `class`. The finder deduplicates sources by value, so two
-records describing the same thing are read once, whereas a class is compared by reference and would be
-read twice.
+records describing the same thing are searched once, whereas a class is compared by reference and would
+be searched twice.
 
 ---
 
