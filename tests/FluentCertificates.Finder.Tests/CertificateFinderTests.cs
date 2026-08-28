@@ -432,7 +432,7 @@ public class CertificateFinderTests
         var one = CertificateFilter.Empty.Add(x => x.Location == "a");
 
         await Assert.That(one.IsEmpty).IsFalse();
-        await Assert.That(one.Predicates.Count).IsEqualTo(1);
+        await Assert.That(one.Predicates.Length).IsEqualTo(1);
 
         //Immutable, so adding leaves the original alone
         await Assert.That(CertificateFilter.Empty.IsEmpty).IsTrue();
@@ -1149,7 +1149,7 @@ public class CertificateFinderTests
 
         protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
         {
-            ReceivedPredicateCounts.Add(filter.Predicates.Count);
+            ReceivedPredicateCounts.Add(filter.Predicates.Length);
             Calls.Add("forward");
             return SelectResults(Certificates, _ => At);
         }
@@ -1159,7 +1159,7 @@ public class CertificateFinderTests
             if (!Descending) {
                 return null;
             }
-            ReceivedPredicateCounts.Add(filter.Predicates.Count);
+            ReceivedPredicateCounts.Add(filter.Predicates.Length);
             Calls.Add("descending");
             //Enumerable.Reverse explicitly: on an array the bare call binds to the void span overload
             return SelectResults(Enumerable.Reverse(Certificates), _ => At);

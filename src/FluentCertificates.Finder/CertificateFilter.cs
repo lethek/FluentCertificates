@@ -13,13 +13,13 @@ namespace FluentCertificates;
 public sealed class CertificateFilter
 {
     /// <summary>A filter with no predicates, matching every certificate.</summary>
-    public static CertificateFilter Empty { get; } = new(ImmutableList<CertificateFinderPredicate>.Empty);
+    public static CertificateFilter Empty { get; } = new(ImmutableArray<CertificateFinderPredicate>.Empty);
 
 
     /// <summary>
     /// The predicates, in the order they were added. A source reads these to apply what it can natively.
     /// </summary>
-    public IReadOnlyList<CertificateFinderPredicate> Predicates => _predicates;
+    public ImmutableArray<CertificateFinderPredicate> Predicates => _predicates;
 
 
     /// <summary>Whether this filter has no predicates, and so matches everything.</summary>
@@ -65,9 +65,11 @@ public sealed class CertificateFilter
     }
 
 
-    private CertificateFilter(ImmutableList<CertificateFinderPredicate> predicates)
+    private CertificateFilter(ImmutableArray<CertificateFinderPredicate> predicates)
         => _predicates = predicates;
 
 
-    private readonly ImmutableList<CertificateFinderPredicate> _predicates;
+    //An array rather than a list: this is built a couple of times per query and walked once per candidate
+    //certificate, and ImmutableList's enumerator rents a node stack that a handful of predicates never repay
+    private readonly ImmutableArray<CertificateFinderPredicate> _predicates;
 }
