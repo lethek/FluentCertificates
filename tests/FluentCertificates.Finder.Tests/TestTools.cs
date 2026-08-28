@@ -9,18 +9,6 @@ namespace FluentCertificates;
 
 public static class TestTools
 {
-    internal static CertificateFinderResult LoadCertificateFinderResultMock(MockFileSystem fs, string path)
-        => new() { Certificate = LoadCertificateMock(fs, path) };
-
-
-    internal static X509Certificate2 LoadCertificateMock(MockFileSystem fs, string path)
-    {
-        var file = fs.GetFile(path);
-        var pem = Encoding.UTF8.GetString(file.Contents);
-        return X509Certificate2.CreateFromPem(pem);
-    }
-
-    
     internal static X509Certificate2 LoadCertificateResource(string fileName)
     {
         var resourceName = $"{ResourcePrefix}.{fileName}";

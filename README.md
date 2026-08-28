@@ -15,7 +15,7 @@ This project is published in several NuGet packages:
 * [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Top-level package that imports the Builder, Extensions, and Finder packages.
 * [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension methods. [Examples below](#certificatebuilder-examples)
 * [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides certificate exporting via `Export()`, plus additional extension methods. [Examples below](#exporting-certificates)
-* [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across X509Stores and directories. [Examples below](#certificatefinder-examples)
+* [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across X509Stores, directories, certificates you already hold, and sources of your own. [Examples below](#certificatefinder-examples)
 
 Documentation is incomplete. More examples can be found in the project's [unit tests](https://github.com/lethek/FluentCertificates/tree/main/tests).
 
@@ -344,6 +344,12 @@ using var key = cert.GetPrivateKey();
 Certificates the library returns to you are always yours. Nothing in `CertificateFinder` or the export
 path disposes a certificate you can still reach.
 
+`CertificateFinder` does dispose certificates you can't reach: ones it loaded from a store or a file and
+then discarded, because a `Where` rejected them or because a terminal counted them without handing them
+back. You
+never see those, and nothing else could release them. Certificates you supplied yourself, through
+`AddCertificates` or a custom source that overrides `Release` to a no-op, are left alone either way.
+
 Two exceptions, both producing a sequence that mixes objects you own with objects the call created, with
 no way to tell them apart, so don't dispose their elements:
 
@@ -471,11 +477,72 @@ leafCert.Export().AddChain([rootCert, midCert]).AsCert().ToByteArray();
 
 `CertificateFinder` requires the [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder) package and is found under the `FluentCertificates` namespace.
 
-`CertificateFinder` configures, adds, and queries certificate sources (stores and directories). Like the other builders it is immutable, and it supports LINQ queries.
+`CertificateFinder` searches certificate stores, directories and certificates you already hold, and
+returns the ones that match. Like the other builders it is immutable, so every `Add*` and `Where` call
+returns a new finder and leaves the original alone.
+
+### Choosing where to search
+
+|Method|Searches|
+|---|---|
+|`AddCommonStores()`|`My`, `CA` and `Root` for `CurrentUser`, plus `My`, `CA`, `Root` and `WebHosting` for `LocalMachine`|
+|`AddStore(...)`, `AddStores(...)`|An `X509Store`, or a store name and `StoreLocation`|
+|`AddDirectory(path, recurse)`, `AddDirectories(...)`|`.crt`, `.cer`, `.der`, `.pem`, `.ca-bundle`, `.pfx`, `.p12`, `.p7b` and `.p7c` files|
+|`AddCertificates(...)`|Certificates you already hold in memory|
+|`AddSource(...)`, `AddSources(...)`|A source of your own, covered at the end of this section|
+
+```csharp
+var finder = new CertificateFinder()
+    .AddCommonStores()
+    .AddDirectory("/etc/ssl/certs", recurse: true)
+    .AddCertificates(alreadyLoaded);
+```
+
+The same source added twice is searched once. Searching a directory's top level and searching its whole
+tree are different searches, so adding both runs both.
+
+### Narrowing the search
+
+`Where` hands your predicate to every source, so a source able to answer it natively can, and one that
+cannot applies it itself. Both LINQ forms bind to it:
+
+```csharp
+finder.Where(x => x.Certificate.Subject.Contains("example.com"));
+from x in finder where x.Certificate.HasPrivateKey select x.Certificate;
+```
+
+`Any`, `All`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count`
+take a predicate the same way, and stop as soon as they can: `FirstOrDefault` reads no further than the
+source holding the first match.
+
+Two things filter after collation instead, which is still correct and only costs work:
+
+- Any other LINQ operator, `Select`, `OrderBy` and `Take` included. Once you call one, a later `Where` is
+  ordinary LINQ over the results already gathered.
+- A predicate held in a `Func<>` variable rather than written inline, since only an inline lambda becomes
+  an expression tree.
+
+`Last` and `LastOrDefault` read sources newest-added first. Which certificate is last *within* a source
+is unspecified, because neither a directory listing nor a store enumeration promises an order.
+
+### Reading a result
+
+Each result carries the `Certificate`, the `Source` that produced it, and a `Location` naming it within
+that source: a full file path, or a store's location and name.
+
+Results are never deduplicated, because where a certificate was found is part of the answer. The same
+certificate in `CurrentUser\My` and `LocalMachine\My` is two results, and a file two overlapping
+directory sources both reach is reported by each. To collapse them:
+
+```csharp
+finder.DistinctBy(r => (r.Certificate.Thumbprint, r.Source.Kind, r.Location));
+```
+
+Certificates the finder hands you are yours to dispose. Ones it loaded and then discarded it disposes
+itself, and ones you supplied through `AddCertificates` it never touches. See
+[Key ownership and disposal](#key-ownership-and-disposal).
 
 ### Find a specific certificate by thumbprint
-
-_The "common stores" include the CurrentUser and LocalMachine certificate stores, such as "My", "Root", "CA", etc. You can also add custom directories or other X509 stores to search for certificates._
 
 ```csharp
 const string thumbprint = "622A2B8374D9BBE3969B91EDBC8F5152783AFC78";
@@ -487,6 +554,8 @@ var cert = new CertificateFinder()
 
 ### Find a valid certificate with matching subject, giving preference to included private keys
 
+Both predicates go to the sources. The ordering runs afterwards, over the results that matched.
+
 ```csharp
 var subject = new X500NameBuilder()
     .SetOrganization("My Org")
@@ -495,10 +564,11 @@ var subject = new X500NameBuilder()
 
 var cert = new CertificateFinder()
     .AddCommonStores()
+    .Where(x => x.Certificate.IsValidNow())
+    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, false))
+    .OrderBy(x => !x.Certificate.HasPrivateKey) //Ensure certs with private keys are listed before those without
     .Select(x => x.Certificate)
-    .Where(x => x.IsValidNow())
-    .OrderBy(x => !x.HasPrivateKey) //Ensure certs with private keys are listed before those without
-    .FirstOrDefault(x => subject.EquivalentTo(x.SubjectName, false));
+    .FirstOrDefault();
 ```
 
 ### Find a certificate whose private key can actually sign
@@ -512,13 +582,64 @@ time:
 ```csharp
 var ca = new CertificateFinder()
     .AddCommonStores()
+    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, false))
     .Select(x => x.Certificate)
-    .Where(x => subject.EquivalentTo(x.SubjectName, false))
     .FirstOrDefault(x => x.CanSign());
 ```
 
 It reaches the key store, so it costs far more than the property read it replaces. Narrow by subject or
 thumbprint first and apply it last, as above.
+
+### Advanced: write your own source
+
+Derive from `AbstractCertificateSource` and hand it to `AddSource`. Two members are required: `Kind`,
+a label for your source type, and `Enumerate`, which produces the candidates. `SelectResults` pairs each
+certificate with the source and a `Location` identifying it there.
+
+```csharp
+public sealed record EnvironmentCertificateSource(string Prefix) : AbstractCertificateSource
+{
+    public override string Kind => "Environment";
+
+    protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+        => Variables().SelectMany(name => SelectResults(Load(name), _ => name));
+
+    private IEnumerable<string> Variables()
+        => Environment.GetEnvironmentVariables()
+            .Keys.Cast<string>()
+            .Where(name => name.StartsWith(Prefix, StringComparison.Ordinal))
+            .Order();
+
+    private IEnumerable<X509Certificate2> Load(string name)
+    {
+        var pem = new X509Certificate2Collection();
+        pem.ImportFromPem(Environment.GetEnvironmentVariable(name) ?? "");
+        return pem;
+    }
+}
+
+var cert = new CertificateFinder()
+    .AddSource(new EnvironmentCertificateSource("TLS_CERT_"))
+    .FirstOrDefault(x => x.Certificate.IsValidNow());
+```
+
+`Enumerate` receives the `CertificateFilter` the caller built with `Where`. Apply as much of it as your
+source can answer cheaply and ignore the rest: **returning more than matches is always correct, and
+returning less never is.** The finder applies the filter in full afterwards, so a source that pushes
+nothing down still gives the right answer and only costs speed. To translate a predicate into a native
+query, read `filter.Predicates`, each of which carries the expression tree and a delegate compiled once.
+
+Three optional members:
+
+|Member|Why|
+|---|---|
+|`Release(CertificateFinderResult)`|What happens to a result the finder discards. Disposes the certificate by default, which is right for a source that loads certificates. Override it to a no-op for a source passing through certificates someone else owns.|
+|`EnumerateDescending(CertificateFilter)`|Produces the same candidates in reverse. Return `null`, the default, if your source cannot go backwards. Implementing it lets `Last` and `LastOrDefault` stop at the first match from the end instead of reading everything.|
+|`Kind`|Required, but free-form. Callers group and deduplicate results on it.|
+
+Make the source a `record` rather than a `class`. The finder deduplicates sources by value, so two
+records describing the same thing are searched once, whereas a class is compared by reference and would
+be searched twice.
 
 ---
 

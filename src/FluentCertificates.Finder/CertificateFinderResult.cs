@@ -3,30 +3,22 @@ using System.Security.Cryptography.X509Certificates;
 namespace FluentCertificates;
 
 /// <summary>
-/// Represents the result of a certificate search, including the certificate and its source.
+/// A certificate found by a <see cref="CertificateFinder"/>, together with where it was found.
 /// </summary>
-public record CertificateFinderResult {
+public record CertificateFinderResult
+{
+    /// <summary>The source the certificate was found in.</summary>
+    public required AbstractCertificateSource Source { get; init; }
+
+
     /// <summary>
-    /// Gets the certificate store from which the certificate was found, if applicable.
+    /// Identifies the certificate within its source: the full path for a file, or the location and name
+    /// for a store. Two sources whose reach overlaps report the same location for the same certificate,
+    /// so a caller who wants one result rather than two can collapse them on it.
     /// </summary>
-    public CertificateStore? Store { get; init; }
-    
-    
-    /// <summary>
-    /// Gets the directory from which the certificate was found, if applicable.
-    /// </summary>    
-    public CertificateDirectory? Directory { get; init; }
+    public required string Location { get; init; }
 
 
-    /// <summary>
-    /// Gets the custom source the certificate was found in, if it came from one added via
-    /// <see cref="CertificateFinder.AddCustomSource"/> rather than a store or directory.
-    /// </summary>
-    public AbstractCertificateSource? CustomSource { get; init; }
-
-
-    /// <summary>
-    /// Gets the found X.509 certificate.
-    /// </summary>
+    /// <summary>The certificate that was found.</summary>
     public required X509Certificate2 Certificate { get; init; }
 }
