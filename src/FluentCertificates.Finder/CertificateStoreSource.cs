@@ -60,13 +60,13 @@ public sealed record CertificateStoreSource(string Name, StoreLocation Location)
 
 
     /// <summary>
-    /// Free, since <see cref="X509Store.Certificates"/> is already a materialised collection: reading it
-    /// backwards costs no more than reading it forwards.
+    /// Free, since the store is one batch and a batch is read back to front for us: there is no order of
+    /// batches to reverse.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <returns>One batch holding every certificate in the store, last first.</returns>
+    /// <returns>One batch holding every certificate in the store.</returns>
     protected override IEnumerable<CertificateBatch> EnumerateDescending(CertificateFilter filter)
-        => [Located(OpenCertificates().Reverse())];
+        => [Located(OpenCertificates())];
 
 
     //Every certificate this source produces shares the one location, which is what a batch is for

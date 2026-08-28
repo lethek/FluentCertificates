@@ -419,6 +419,10 @@ public class CertificateFinderTests
     /// true reverse of its forward pass, or <see cref="CertificateFinder.Last"/> silently disagrees with
     /// enumerating the finder. Asserted for the two sources that read from outside the process.
     /// </summary>
+    /// <remarks>
+    /// The last file holds two certificates, since a source reversing only the order it produces its
+    /// batches in still passes when every batch holds one.
+    /// </remarks>
     [Test]
     public async Task FindDescending_YieldsTheExactReverseOfFind()
     {
@@ -426,21 +430,63 @@ public class CertificateFinderTests
         using var one = CreateSelfSignedCertificate("One");
         using var two = CreateSelfSignedCertificate("Two");
         using var three = CreateSelfSignedCertificate("Three");
+        using var four = CreateSelfSignedCertificate("Four");
         fs.AddFile("/rev/a.cer", new MockFileData(one.RawData));
         fs.AddFile("/rev/b.cer", new MockFileData(two.RawData));
-        fs.AddFile("/rev/c.cer", new MockFileData(three.RawData));
+        fs.AddFile("/rev/c.pem", new MockFileData(three.ExportCertificatePem() + "\n" + four.ExportCertificatePem()));
 
         var directory = new CertificateDirectorySource("/rev", false, fs);
         var forwards = directory.Find(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint).ToList();
         var backwards = directory.FindDescending(CertificateFilter.Empty)!.Select(x => x.Certificate.Thumbprint).ToList();
 
-        await Assert.That(forwards.Count).IsEqualTo(3);
+        await Assert.That(forwards.Count).IsEqualTo(4);
         await Assert.That(backwards).IsEquivalentTo(Enumerable.Reverse(forwards), CollectionOrdering.Matching);
 
         var custom = new CertificateCollectionSource([one, two, three]);
         await Assert
             .That(custom.FindDescending(CertificateFilter.Empty)!.Select(x => x.Certificate.Thumbprint))
             .IsEquivalentTo([three.Thumbprint, two.Thumbprint, one.Thumbprint], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// What a source reversing only its batches and not their contents looks like from outside: the
+    /// certificate <see cref="CertificateFinder.LastOrDefault"/> answers with is the one enumerating the
+    /// finder ends on, whether or not the last file holds more than one.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task LastOrDefault_OverADirectoryEndingInABundle_AgreesWithEnumeratingForwards(bool asynchronous)
+    {
+        var fs = CreateEmptyMockFileSystem();
+        using var alone = CreateSelfSignedCertificate("Alone");
+        using var bundledOne = CreateSelfSignedCertificate("Bundled One");
+        using var bundledTwo = CreateSelfSignedCertificate("Bundled Two");
+        fs.AddFile("/last/a.pem", new MockFileData(alone.ExportCertificatePem()));
+        fs.AddFile(
+            "/last/b.pem",
+            new MockFileData(bundledOne.ExportCertificatePem() + "\n" + bundledTwo.ExportCertificatePem())
+        );
+
+        var finder = new CertificateFinder(fs).AddDirectory("/last");
+
+        var forwards = finder.ToList();
+        var expected = forwards[^1].Certificate.Thumbprint;
+        foreach (var result in forwards) {
+            result.Certificate.Dispose();
+        }
+
+        //Pinned, so the test cannot pass by the last file happening to hold one certificate
+        await Assert.That(forwards.Count).IsEqualTo(3);
+        await Assert.That(expected).IsEqualTo(bundledTwo.Thumbprint);
+
+        var found = asynchronous
+            ? await finder.LastOrDefaultAsync(x => true)
+            : finder.LastOrDefault(x => true);
+
+        await Assert.That(found!.Certificate.Thumbprint).IsEqualTo(expected);
+        found.Certificate.Dispose();
     }
 
 
@@ -1384,8 +1430,8 @@ public class CertificateFinderTests
             }
             ReceivedPredicateCounts.Add(filter.Predicates.Length);
             Calls.Add("descending");
-            //Enumerable.Reverse explicitly: on an array the bare call binds to the void span overload
-            return [new CertificateBatch(Enumerable.Reverse(Certificates), At)];
+            //One batch, and a batch is read back to front for us: there is no order of batches to reverse
+            return [new CertificateBatch(Certificates, At)];
         }
 
         protected override IAsyncEnumerable<CertificateBatch> EnumerateAsync(
@@ -1409,7 +1455,7 @@ public class CertificateFinderTests
             }
             ReceivedPredicateCounts.Add(filter.Predicates.Length);
             Calls.Add("descending-async");
-            return ToAsync([new CertificateBatch(Enumerable.Reverse(Certificates), At)]);
+            return ToAsync([new CertificateBatch(Certificates, At)]);
         }
 
 #pragma warning disable CS1998 //Nothing to await: the stub's certificates are already in memory

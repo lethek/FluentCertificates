@@ -53,11 +53,11 @@ public abstract record AbstractCertificateSource
     /// <param name="filter">The predicates the caller asked for.</param>
     /// <returns>The batches last first, or <see langword="null"/>.</returns>
     /// <remarks>
-    /// What is returned must be the true reverse of what <see cref="Enumerate"/> would yield, or
-    /// <see cref="CertificateFinder.Last"/> will disagree with enumerating the finder. Implement it only
-    /// when going backwards costs about what going forwards does: a source that would have to buffer its
-    /// whole output should return <see langword="null"/> and let <see cref="FindLast"/> read it forwards,
-    /// which is cheaper than buffering.
+    /// Reverse the order the batches come in and nothing else: each one is read back to front for you, so
+    /// a source cannot disagree with itself about what its last certificate is. Implement this only when
+    /// going backwards costs about what going forwards does: a source that would have to buffer its whole
+    /// output should return <see langword="null"/> and let <see cref="FindLast"/> read it forwards, which
+    /// is cheaper than buffering.
     /// </remarks>
     protected virtual IEnumerable<CertificateBatch>? EnumerateDescending(CertificateFilter filter)
         => null;
@@ -125,7 +125,7 @@ public abstract record AbstractCertificateSource
     public IEnumerable<CertificateFinderResult> Find(CertificateFilter filter)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        return Iterate(Enumerate(filter), filter);
+        return Iterate(Enumerate(filter), filter, descending: false);
     }
 
 
@@ -141,7 +141,7 @@ public abstract record AbstractCertificateSource
     {
         ArgumentNullException.ThrowIfNull(filter);
         var candidates = EnumerateDescending(filter);
-        return candidates is null ? null : Iterate(candidates, filter);
+        return candidates is null ? null : Iterate(candidates, filter, descending: true);
     }
 
 
@@ -197,7 +197,7 @@ public abstract record AbstractCertificateSource
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        return IterateAsync(EnumerateAsync(filter, cancellationToken), filter, cancellationToken);
+        return IterateAsync(EnumerateAsync(filter, cancellationToken), filter, false, cancellationToken);
     }
 
 
@@ -214,7 +214,7 @@ public abstract record AbstractCertificateSource
     {
         ArgumentNullException.ThrowIfNull(filter);
         var candidates = EnumerateDescendingAsync(filter, cancellationToken);
-        return candidates is null ? null : IterateAsync(candidates, filter, cancellationToken);
+        return candidates is null ? null : IterateAsync(candidates, filter, true, cancellationToken);
     }
 
 
@@ -261,18 +261,21 @@ public abstract record AbstractCertificateSource
 
     /// <summary>
     /// Hands out the certificates in each batch that match the filter, and releases every other one: the
-    /// ones the filter rejects, and the ones past where the caller stopped reading.
+    /// ones the filter rejects, and the ones past where the caller stopped reading. Reads each batch back
+    /// to front when <paramref name="descending"/>, which is what makes a batch of several certificates
+    /// reverse properly rather than only the order the batches arrive in.
     /// </summary>
     private IEnumerable<CertificateFinderResult> Iterate(
         IEnumerable<CertificateBatch> batches,
-        CertificateFilter filter)
+        CertificateFilter filter,
+        bool descending)
     {
         foreach (var batch in batches) {
             var next = 0;
             var handedOver = false;
             try {
                 for (; next < batch.Certificates.Count; next++) {
-                    var result = Project(batch, next);
+                    var result = Project(batch, next, descending);
                     if (!filter.Matches(result)) {
                         //This source created it and is discarding it, so it must release it: nothing else can
                         Release(result);
@@ -283,7 +286,7 @@ public abstract record AbstractCertificateSource
                     handedOver = false;
                 }
             } finally {
-                ReleaseRemainder(batch, next, handedOver);
+                ReleaseRemainder(batch, next, handedOver, descending);
             }
         }
     }
@@ -293,6 +296,7 @@ public abstract record AbstractCertificateSource
     private async IAsyncEnumerable<CertificateFinderResult> IterateAsync(
         IAsyncEnumerable<CertificateBatch> batches,
         CertificateFilter filter,
+        bool descending,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await foreach (var batch in batches.WithCancellation(cancellationToken).ConfigureAwait(false)) {
@@ -302,7 +306,7 @@ public abstract record AbstractCertificateSource
                 for (; next < batch.Certificates.Count; next++) {
                     //Checked per certificate, so cancelling stops part way through a large batch
                     cancellationToken.ThrowIfCancellationRequested();
-                    var result = Project(batch, next);
+                    var result = Project(batch, next, descending);
                     if (!filter.Matches(result)) {
                         //This source created it and is discarding it, so it must release it: nothing else can
                         Release(result);
@@ -313,7 +317,7 @@ public abstract record AbstractCertificateSource
                     handedOver = false;
                 }
             } finally {
-                ReleaseRemainder(batch, next, handedOver);
+                ReleaseRemainder(batch, next, handedOver, descending);
             }
         }
     }
@@ -324,24 +328,29 @@ public abstract record AbstractCertificateSource
     /// the filter threw. Those certificates are already materialised and nothing else can reach them.
     /// </summary>
     /// <param name="batch">The batch being abandoned.</param>
-    /// <param name="next">The certificate the loop was on when it left.</param>
+    /// <param name="next">How far into the batch the loop had read when it left.</param>
     /// <param name="handedOver">
-    /// Whether the one at <paramref name="next"/> was handed to the caller, in which case it is theirs and
-    /// releasing starts after it.
+    /// Whether the one it stopped on was handed to the caller, in which case it is theirs and releasing
+    /// starts after it.
     /// </param>
-    private void ReleaseRemainder(CertificateBatch batch, int next, bool handedOver)
+    /// <param name="descending">Whether the batch was being read back to front.</param>
+    private void ReleaseRemainder(CertificateBatch batch, int next, bool handedOver, bool descending)
     {
         for (var i = handedOver ? next + 1 : next; i < batch.Certificates.Count; i++) {
-            Release(Project(batch, i));
+            Release(Project(batch, i, descending));
         }
     }
 
 
-    private CertificateFinderResult Project(CertificateBatch batch, int index)
+    /// <summary>
+    /// Projects the certificate <paramref name="position"/> places into the batch, counting from the end
+    /// of it when <paramref name="descending"/>.
+    /// </summary>
+    private CertificateFinderResult Project(CertificateBatch batch, int position, bool descending)
         => new() {
             Source = this,
             Location = batch.Location,
-            Certificate = batch.Certificates[index]
+            Certificate = batch.Certificates[descending ? batch.Certificates.Count - 1 - position : position]
         };
 
 

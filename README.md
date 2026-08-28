@@ -703,7 +703,7 @@ Three optional members:
 |Member|Why|
 |---|---|
 |`Release(CertificateFinderResult)`|What happens to a certificate the caller never receives. Disposes it by default, which is right for a source that loads certificates. Override it to a no-op for a source passing through certificates someone else owns.|
-|`EnumerateDescending(CertificateFilter)`|Produces the same batches in reverse. Return `null`, the default, if your source cannot go backwards. Implementing it lets `Last` and `LastOrDefault` stop at the first match from the end instead of reading everything.|
+|`EnumerateDescending(CertificateFilter)`|Produces the same batches in reverse order. Each batch is read back to front for you, so reverse the order they come in and nothing else. Return `null`, the default, if your source cannot go backwards. Implementing it lets `Last` and `LastOrDefault` stop at the first match from the end instead of reading everything.|
 |`EnumerateAsync(CertificateFilter, CancellationToken)`|Only worth overriding if your source has real asynchronous work, such as reading files or calling a service. By default it wraps `Enumerate`, so a source implementing the synchronous members alone is already usable from `AsAsyncEnumerable` and already cancellable. `EnumerateDescendingAsync` pairs with it the same way.|
 |`Kind`|Required, but free-form. Callers group and deduplicate results on it.|
 

@@ -49,6 +49,7 @@ release rather than record it as it happened.
 - A directory that does not exist yields no results instead of throwing `DirectoryNotFoundException` part-way through the search.
 - A directory search skips a directory or subdirectory it cannot read instead of abandoning the scan.
 - `Single`, `SingleOrDefault`, `Last` and `LastOrDefault`, and their `Async` forms, dispose the match they were holding when a search fails part-way through.
+- `Last` and `LastOrDefault` agree with enumerating the finder when the last file searched holds more than one certificate.
 - A search that stops early disposes the certificates a source had already loaded past that point, instead of abandoning them.
 - A predicate that throws part-way through a source's certificates no longer abandons the rest of them.
 - A `.pem` or `.ca-bundle` file yields every certificate it holds, not only the first.
