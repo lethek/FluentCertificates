@@ -1,18 +1,22 @@
 ﻿using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
 
 namespace FluentCertificates;
 
 /// <summary>
 /// Base type for the sources a <see cref="CertificateFinder"/> can search. A source locates certificates,
-/// materialises them, and honours the <see cref="CertificateFilter"/> it is given. The finder does no
-/// filtering of its own.
+/// materialises them in batches, and honours the <see cref="CertificateFilter"/> it is given. The finder
+/// does no filtering of its own.
 /// </summary>
 /// <remarks>
-/// Override <see cref="Enumerate"/> to produce candidates, applying as much of the filter natively as the
+/// Override <see cref="Enumerate"/> to produce batches, applying as much of the filter natively as the
 /// source can. <see cref="Find"/> then applies the filter in full, so a source that can push nothing down
 /// is still correct, and one that pushes everything down pays only a cheap second pass over a set that
 /// already matches. Overriding <see cref="Enumerate"/> therefore cannot break the contract.
+/// <para>
+/// A <see cref="CertificateBatch"/> is one group of certificates the source materialised at once, such as
+/// a file or a store. Yielding it hands those certificates over: whatever the caller does not take is
+/// released here, so a source holding nothing of its own between batches cannot leak.
+/// </para>
 /// <para>
 /// Every member has an asynchronous counterpart, and the asynchronous ones wrap the synchronous ones by
 /// default. A source overrides <see cref="EnumerateAsync"/> only where it has real asynchronous work,
@@ -32,21 +36,22 @@ public abstract record AbstractCertificateSource
 
 
     /// <summary>
-    /// Produces candidate results, applying as much of <paramref name="filter"/> as this source can do
-    /// natively. Returning a superset is always correct; returning less than the matching set is not.
+    /// Produces batches of candidate certificates, applying as much of <paramref name="filter"/> as this
+    /// source can do natively. Returning a superset is always correct; returning less than the matching
+    /// set is not.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for.</param>
-    /// <returns>Candidate results.</returns>
-    protected abstract IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter);
+    /// <returns>The batches, pulled one at a time and only as far as the caller reads.</returns>
+    protected abstract IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter);
 
 
     /// <summary>
-    /// Produces candidate results in the reverse of <see cref="Enumerate"/>'s order, or
+    /// Produces the same batches in the reverse of <see cref="Enumerate"/>'s order, or
     /// <see langword="null"/> if this source cannot go backwards. Returning <see langword="null"/> is the
     /// default, so a source opts in rather than out.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for.</param>
-    /// <returns>Candidate results last first, or <see langword="null"/>.</returns>
+    /// <returns>The batches last first, or <see langword="null"/>.</returns>
     /// <remarks>
     /// What is returned must be the true reverse of what <see cref="Enumerate"/> would yield, or
     /// <see cref="CertificateFinder.Last"/> will disagree with enumerating the finder. Implement it only
@@ -54,28 +59,27 @@ public abstract record AbstractCertificateSource
     /// whole output should return <see langword="null"/> and let <see cref="FindLast"/> read it forwards,
     /// which is cheaper than buffering.
     /// </remarks>
-    protected virtual IEnumerable<CertificateFinderResult>? EnumerateDescending(CertificateFilter filter)
+    protected virtual IEnumerable<CertificateBatch>? EnumerateDescending(CertificateFilter filter)
         => null;
 
 
     /// <summary>
     /// The asynchronous counterpart of <see cref="Enumerate"/>. Wraps <see cref="Enumerate"/> by default,
-    /// checking <paramref name="cancellationToken"/> between results, so a source that overrides nothing
-    /// is still cancellable.
+    /// so a source that overrides nothing is still usable and cancellable asynchronously.
     /// </summary>
     /// <param name="filter">The predicates the caller asked for.</param>
     /// <param name="cancellationToken">Cancels the enumeration.</param>
-    /// <returns>Candidate results.</returns>
+    /// <returns>The batches.</returns>
     /// <remarks>
     /// Override this only where the source has genuinely asynchronous work to do, such as reading files.
     /// The default costs a state machine and nothing else, and a source with no asynchronous IO gains
     /// nothing by overriding it. Whatever is overridden here must agree with <see cref="Enumerate"/>: the
     /// two produce the same results, so a caller cannot be made to choose between them for correctness.
     /// </remarks>
-    protected virtual IAsyncEnumerable<CertificateFinderResult> EnumerateAsync(
+    protected virtual IAsyncEnumerable<CertificateBatch> EnumerateAsync(
         CertificateFilter filter,
         CancellationToken cancellationToken)
-        => ToAsyncEnumerable(Enumerate(filter), cancellationToken);
+        => ToAsyncEnumerable(Enumerate(filter));
 
 
     /// <summary>
@@ -85,27 +89,28 @@ public abstract record AbstractCertificateSource
     /// </summary>
     /// <param name="filter">The predicates the caller asked for.</param>
     /// <param name="cancellationToken">Cancels the enumeration.</param>
-    /// <returns>Candidate results last first, or <see langword="null"/>.</returns>
-    protected virtual IAsyncEnumerable<CertificateFinderResult>? EnumerateDescendingAsync(
+    /// <returns>The batches last first, or <see langword="null"/>.</returns>
+    protected virtual IAsyncEnumerable<CertificateBatch>? EnumerateDescendingAsync(
         CertificateFilter filter,
         CancellationToken cancellationToken)
     {
         var candidates = EnumerateDescending(filter);
-        return candidates is null ? null : ToAsyncEnumerable(candidates, cancellationToken);
+        return candidates is null ? null : ToAsyncEnumerable(candidates);
     }
 
 
     /// <summary>
-    /// Releases a result this source produced that is being discarded rather than returned to the caller.
-    /// That happens when the filter rejects it, when <see cref="FindLast"/> passes over it, and when a
-    /// terminal such as <see cref="CertificateFinder.Count"/> counts a match without returning it. Disposes
-    /// the certificate by default.
+    /// Releases a certificate this source produced that is being discarded rather than returned to the
+    /// caller. That happens when the filter rejects it, when the caller stops reading before reaching it,
+    /// when <see cref="FindLast"/> passes over it, and when a terminal such as
+    /// <see cref="CertificateFinder.Count"/> counts a match without returning it. Disposes the certificate
+    /// by default.
     /// </summary>
     /// <param name="result">The result being discarded. The caller can never reach it.</param>
     /// <remarks>
     /// Override to a no-op in a source that passes through certificates the caller supplied, since those
     /// are not its to release. A source backed by a cache or pool can return the certificate here instead.
-    /// Call it only for a result nothing else holds.
+    /// Every certificate in a batch reaches either the caller or this method, exactly once.
     /// </remarks>
     public virtual void Release(CertificateFinderResult result)
         => result.Certificate.Dispose();
@@ -255,58 +260,96 @@ public abstract record AbstractCertificateSource
 
 
     /// <summary>
-    /// Projects certificates into results carrying this source and a location.
+    /// Hands out the certificates in each batch that match the filter, and releases every other one: the
+    /// ones the filter rejects, and the ones past where the caller stopped reading.
     /// </summary>
-    /// <param name="certificates">The certificates found.</param>
-    /// <param name="location">Identifies a certificate within this source. See <see cref="CertificateFinderResult.Location"/>.</param>
-    /// <returns>The results.</returns>
-    protected IEnumerable<CertificateFinderResult> SelectResults(
-        IEnumerable<X509Certificate2> certificates,
-        Func<X509Certificate2, string> location)
-        => certificates.Select(cert => new CertificateFinderResult {
-            Source = this,
-            Location = location(cert),
-            Certificate = cert
-        });
-
-
-    private IEnumerable<CertificateFinderResult> Iterate(IEnumerable<CertificateFinderResult> candidates, CertificateFilter filter)
+    private IEnumerable<CertificateFinderResult> Iterate(
+        IEnumerable<CertificateBatch> batches,
+        CertificateFilter filter)
     {
-        foreach (var result in candidates) {
-            if (filter.Matches(result)) {
-                yield return result;
-            } else {
-                //This source created it and is discarding it, so it must release it: nothing else can
-                Release(result);
+        foreach (var batch in batches) {
+            var next = 0;
+            var handedOver = false;
+            try {
+                for (; next < batch.Certificates.Count; next++) {
+                    var result = Project(batch, next);
+                    if (!filter.Matches(result)) {
+                        //This source created it and is discarding it, so it must release it: nothing else can
+                        Release(result);
+                        continue;
+                    }
+                    handedOver = true;
+                    yield return result;
+                    handedOver = false;
+                }
+            } finally {
+                ReleaseRemainder(batch, next, handedOver);
             }
         }
     }
 
 
+    /// <summary>The asynchronous counterpart of <see cref="Iterate"/>.</summary>
     private async IAsyncEnumerable<CertificateFinderResult> IterateAsync(
-        IAsyncEnumerable<CertificateFinderResult> candidates,
+        IAsyncEnumerable<CertificateBatch> batches,
         CertificateFilter filter,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await foreach (var result in candidates.WithCancellation(cancellationToken).ConfigureAwait(false)) {
-            if (filter.Matches(result)) {
-                yield return result;
-            } else {
-                //This source created it and is discarding it, so it must release it: nothing else can
-                Release(result);
+        await foreach (var batch in batches.WithCancellation(cancellationToken).ConfigureAwait(false)) {
+            var next = 0;
+            var handedOver = false;
+            try {
+                for (; next < batch.Certificates.Count; next++) {
+                    //Checked per certificate, so cancelling stops part way through a large batch
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var result = Project(batch, next);
+                    if (!filter.Matches(result)) {
+                        //This source created it and is discarding it, so it must release it: nothing else can
+                        Release(result);
+                        continue;
+                    }
+                    handedOver = true;
+                    yield return result;
+                    handedOver = false;
+                }
+            } finally {
+                ReleaseRemainder(batch, next, handedOver);
             }
         }
     }
 
 
-#pragma warning disable CS1998 //Bridging a synchronous source: there is nothing here to await
-    private static async IAsyncEnumerable<CertificateFinderResult> ToAsyncEnumerable(
-        IEnumerable<CertificateFinderResult> results,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+    /// <summary>
+    /// Releases the part of a batch the caller will never see, whether it stopped reading, cancelled, or
+    /// the filter threw. Those certificates are already materialised and nothing else can reach them.
+    /// </summary>
+    /// <param name="batch">The batch being abandoned.</param>
+    /// <param name="next">The certificate the loop was on when it left.</param>
+    /// <param name="handedOver">
+    /// Whether the one at <paramref name="next"/> was handed to the caller, in which case it is theirs and
+    /// releasing starts after it.
+    /// </param>
+    private void ReleaseRemainder(CertificateBatch batch, int next, bool handedOver)
     {
-        foreach (var result in results) {
-            cancellationToken.ThrowIfCancellationRequested();
-            yield return result;
+        for (var i = handedOver ? next + 1 : next; i < batch.Certificates.Count; i++) {
+            Release(Project(batch, i));
+        }
+    }
+
+
+    private CertificateFinderResult Project(CertificateBatch batch, int index)
+        => new() {
+            Source = this,
+            Location = batch.Location,
+            Certificate = batch.Certificates[index]
+        };
+
+
+#pragma warning disable CS1998 //Bridging a synchronous source: there is nothing here to await
+    private static async IAsyncEnumerable<CertificateBatch> ToAsyncEnumerable(IEnumerable<CertificateBatch> batches)
+    {
+        foreach (var batch in batches) {
+            yield return batch;
         }
     }
 #pragma warning restore CS1998
