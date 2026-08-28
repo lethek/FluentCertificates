@@ -2,6 +2,7 @@
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
 using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
@@ -1355,6 +1356,12 @@ public class CertificateFinderTests
         /// <summary>Whether this stub can enumerate backwards.</summary>
         public bool Descending { get; init; }
 
+        /// <summary>
+        /// Whether this stub overrides the asynchronous members. Left off, it implements the synchronous
+        /// ones alone, which is what a third-party source with nothing to await would do.
+        /// </summary>
+        public bool Async { get; init; }
+
         /// <summary>Whether this stub treats the certificates as its own to dispose.</summary>
         public bool Owns { get; init; }
 
@@ -1380,6 +1387,42 @@ public class CertificateFinderTests
             //Enumerable.Reverse explicitly: on an array the bare call binds to the void span overload
             return SelectResults(Enumerable.Reverse(Certificates), _ => At);
         }
+
+        protected override IAsyncEnumerable<CertificateFinderResult> EnumerateAsync(
+            CertificateFilter filter,
+            CancellationToken cancellationToken)
+        {
+            if (!Async) {
+                return base.EnumerateAsync(filter, cancellationToken);
+            }
+            ReceivedPredicateCounts.Add(filter.Predicates.Length);
+            Calls.Add("forward-async");
+            return ToAsync(SelectResults(Certificates, _ => At), cancellationToken);
+        }
+
+        protected override IAsyncEnumerable<CertificateFinderResult>? EnumerateDescendingAsync(
+            CertificateFilter filter,
+            CancellationToken cancellationToken)
+        {
+            if (!Async || !Descending) {
+                return base.EnumerateDescendingAsync(filter, cancellationToken);
+            }
+            ReceivedPredicateCounts.Add(filter.Predicates.Length);
+            Calls.Add("descending-async");
+            return ToAsync(SelectResults(Enumerable.Reverse(Certificates), _ => At), cancellationToken);
+        }
+
+#pragma warning disable CS1998 //Nothing to await: the stub's certificates are already in memory
+        private static async IAsyncEnumerable<CertificateFinderResult> ToAsync(
+            IEnumerable<CertificateFinderResult> results,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            foreach (var result in results) {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return result;
+            }
+        }
+#pragma warning restore CS1998
 
         //Defaults to leaving them alone: the certificates belong to the test unless Owns says otherwise
         public override void Release(CertificateFinderResult result)
@@ -1629,6 +1672,389 @@ public class CertificateFinderTests
 
 
     /// <summary>
+    /// The two ways of searching answer the same question, so they return the same results in the same
+    /// order. Mixed sources, since collation across them is where an order could diverge.
+    /// </summary>
+    [Test]
+    public async Task ToAsyncEnumerable_ReturnsWhatEnumeratingReturns_InTheSameOrder()
+    {
+        using var onDisk = CreateSelfSignedCertificate("OnDisk");
+        using var alsoOnDisk = CreateSelfSignedCertificate("AlsoOnDisk");
+        using var inMemory = CreateSelfSignedCertificate("InMemory");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/both/a.cer", new MockFileData(onDisk.RawData));
+        fs.AddFile("/both/b.cer", new MockFileData(alsoOnDisk.RawData));
+
+        var finder = new CertificateFinder(fs).AddDirectory("/both").AddCertificates(inMemory);
+
+        var synchronous = finder.Select(x => x.Certificate.Thumbprint).ToList();
+        var asynchronous = new List<string>();
+        await foreach (var result in finder.ToAsyncEnumerable()) {
+            asynchronous.Add(result.Certificate.Thumbprint);
+        }
+
+        await Assert.That(asynchronous).IsEquivalentTo(synchronous, CollectionOrdering.Matching);
+        await Assert.That(asynchronous.Count).IsEqualTo(3);
+    }
+
+
+    /// <summary>
+    /// A source that has asynchronous work of its own is reached through its asynchronous member, not
+    /// through the synchronous one wrapped in a task.
+    /// </summary>
+    [Test]
+    public async Task ToAsyncEnumerable_WithASourceThatOverridesTheAsyncMember_CallsIt()
+    {
+        using var cert = CreateSelfSignedCertificate("Async");
+        var source = new StubSource("Stub", "at", cert) { Async = true };
+
+        await foreach (var _ in new CertificateFinder().AddSource(source).ToAsyncEnumerable()) { }
+
+        await Assert.That(source.Calls).IsEquivalentTo(["forward-async"]);
+    }
+
+
+    /// <summary>
+    /// A source implementing only the synchronous members is still enumerable asynchronously: the base
+    /// wraps it. That is what keeps the extension point from breaking every source that already exists.
+    /// </summary>
+    [Test]
+    public async Task ToAsyncEnumerable_WithASynchronousOnlySource_WrapsIt()
+    {
+        using var cert = CreateSelfSignedCertificate("SyncOnly");
+        var source = new StubSource("Stub", "at", cert);
+
+        var found = new List<string>();
+        await foreach (var result in new CertificateFinder().AddSource(source).ToAsyncEnumerable()) {
+            found.Add(result.Certificate.Thumbprint);
+        }
+
+        await Assert.That(found).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(source.Calls).IsEquivalentTo(["forward"]);
+    }
+
+
+    /// <summary>
+    /// Cancellation reaches a source that never awaits anything, which is the case the wrapper exists for:
+    /// a store read is one blocking call and would otherwise run to completion regardless of the token.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task ToAsyncEnumerable_WhenCancelled_Throws(bool sourceIsAsync)
+    {
+        using var cert = CreateSelfSignedCertificate("Cancelled");
+        var source = new StubSource("Stub", "at", cert) { Async = sourceIsAsync };
+        var finder = new CertificateFinder().AddSource(source);
+
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert
+            .That(async () => {
+                await foreach (var _ in finder.ToAsyncEnumerable(cancellation.Token)) { }
+            })
+            .Throws<OperationCanceledException>();
+    }
+
+
+    /// <summary>
+    /// A directory search is cancellable between files, so a scan over a large tree can be abandoned.
+    /// </summary>
+    [Test]
+    public async Task ToAsyncEnumerable_OverADirectory_StopsWhenCancelled()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        foreach (var name in new[] { "a", "b", "c" }) {
+            using var cert = CreateSelfSignedCertificate(name);
+            fs.AddFile($"/many/{name}.cer", new MockFileData(cert.RawData));
+        }
+
+        var finder = new CertificateFinder(fs).AddDirectory("/many");
+        using var cancellation = new CancellationTokenSource();
+        var seen = 0;
+
+        await Assert
+            .That(async () => {
+                await foreach (var result in finder.ToAsyncEnumerable(cancellation.Token)) {
+                    result.Certificate.Dispose();
+                    seen++;
+                    await cancellation.CancelAsync();
+                }
+            })
+            .Throws<OperationCanceledException>();
+
+        //Stopped at the first file rather than reading the other two
+        await Assert.That(seen).IsEqualTo(1);
+    }
+
+
+    /// <summary>
+    /// Every asynchronous terminal answers what its synchronous counterpart answers. Run over one finder
+    /// so a difference can only come from the terminal itself.
+    /// </summary>
+    [Test]
+    public async Task AsyncTerminals_AgreeWithTheirSynchronousCounterparts()
+    {
+        using var one = CreateSelfSignedCertificate("One");
+        using var two = CreateSelfSignedCertificate("Two");
+        var finder = new CertificateFinder().AddCertificates(one, two);
+
+        await Assert.That(await finder.AnyAsync(x => x.Certificate.Subject == "CN=One"))
+            .IsEqualTo(finder.Any(x => x.Certificate.Subject == "CN=One"));
+        await Assert.That(await finder.AnyAsync(x => x.Certificate.Subject == "CN=Nothing"))
+            .IsEqualTo(finder.Any(x => x.Certificate.Subject == "CN=Nothing"));
+        await Assert.That(await finder.AllAsync(x => x.Certificate.HasPrivateKey))
+            .IsEqualTo(finder.All(x => x.Certificate.HasPrivateKey));
+        await Assert.That(await finder.AllAsync(x => x.Certificate.Subject == "CN=One"))
+            .IsEqualTo(finder.All(x => x.Certificate.Subject == "CN=One"));
+        await Assert.That(await finder.CountAsync(x => true)).IsEqualTo(finder.Count(x => true));
+
+        await Assert.That((await finder.FirstAsync(x => true)).Certificate.Thumbprint)
+            .IsEqualTo(finder.First(x => true).Certificate.Thumbprint);
+        await Assert.That((await finder.LastAsync(x => true)).Certificate.Thumbprint)
+            .IsEqualTo(finder.Last(x => true).Certificate.Thumbprint);
+        await Assert.That((await finder.SingleAsync(x => x.Certificate.Subject == "CN=Two")).Certificate.Thumbprint)
+            .IsEqualTo(finder.Single(x => x.Certificate.Subject == "CN=Two").Certificate.Thumbprint);
+
+        await Assert.That(await finder.FirstOrDefaultAsync(x => false)).IsNull();
+        await Assert.That(await finder.LastOrDefaultAsync(x => false)).IsNull();
+        await Assert.That(await finder.SingleOrDefaultAsync(x => false)).IsNull();
+    }
+
+
+    [Test]
+    public async Task FirstAsync_LastAsync_AndSingleAsync_ThrowWhenNothingMatches()
+    {
+        using var cert = CreateSelfSignedCertificate("Only");
+        var finder = new CertificateFinder().AddCertificates(cert);
+
+        await Assert.That(async () => await finder.FirstAsync(x => false)).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(async () => await finder.LastAsync(x => false)).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(async () => await finder.SingleAsync(x => false)).ThrowsExactly<InvalidOperationException>();
+    }
+
+
+    /// <summary>
+    /// A second match ends the search, and both it and the first are released, since throwing returns
+    /// neither to the caller.
+    /// </summary>
+    [Test]
+    public async Task SingleOrDefaultAsync_WithTwoMatches_ThrowsAndReleasesBoth()
+    {
+        var certificates = new[] { "First", "Second" }.Select(CreateSelfSignedCertificate).ToArray();
+        var source = new StubSource("Stub", "at", certificates) { Owns = true };
+        var finder = new CertificateFinder().AddSource(source);
+
+        await Assert
+            .That(async () => await finder.SingleOrDefaultAsync(x => true))
+            .ThrowsExactly<InvalidOperationException>();
+
+        foreach (var certificate in certificates) {
+            await Assert.That(() => certificate.Subject).ThrowsExactly<CryptographicException>();
+        }
+    }
+
+
+    /// <summary>
+    /// The asynchronous <see cref="CertificateFinder.All"/> hands the sources the negation, so it stops at
+    /// the first counter-example rather than reading everything.
+    /// </summary>
+    [Test]
+    public async Task AllAsync_AsksTheSourcesForACounterExample()
+    {
+        using var match = CreateSelfSignedCertificate("Match");
+        using var other = CreateSelfSignedCertificate("Other");
+        var finder = new CertificateFinder().AddCertificates(match, other);
+
+        await Assert.That(await finder.AllAsync(x => x.Certificate.Subject == "CN=Match")).IsFalse();
+        await Assert.That(await finder.AllAsync(x => x.Certificate.Subject.StartsWith("CN="))).IsTrue();
+
+        //Vacuously true over nothing, matching Enumerable.All
+        await Assert.That(await new CertificateFinder().AllAsync(x => false)).IsTrue();
+    }
+
+
+    /// <summary>
+    /// A source that can go backwards is asked to, so the last match is found without reading past it.
+    /// </summary>
+    [Test]
+    public async Task LastOrDefaultAsync_UsesBackwardsEnumerationWhereTheSourceHasIt()
+    {
+        using var a = CreateSelfSignedCertificate("A");
+        using var b = CreateSelfSignedCertificate("B");
+        var descending = new StubSource("Stub", "at", a, b) { Descending = true, Async = true };
+
+        var found = await new CertificateFinder().AddSource(descending).LastOrDefaultAsync(x => true);
+
+        await Assert.That(found!.Certificate.Thumbprint).IsEqualTo(b.Thumbprint);
+        await Assert.That(descending.Calls).IsEquivalentTo(["descending-async"]);
+    }
+
+
+    /// <summary>
+    /// The asynchronous counterpart of
+    /// <see cref="PredicateOverloads_ReleaseTheMatchesTheyDoNotReturn"/>. A terminal answering with a bool
+    /// or a count never hands the caller the certificates it matched, so nothing else can release them.
+    /// </summary>
+    [Test]
+    public async Task AsyncPredicateOverloads_ReleaseTheMatchesTheyDoNotReturn()
+    {
+        await AssertReleasesMatchesAsync(async f => await f.AnyAsync(x => true), expectedProduced: 1);
+        await AssertReleasesMatchesAsync(async f => await f.AllAsync(x => false), expectedProduced: 1);
+        await AssertReleasesMatchesAsync(async f => await f.CountAsync(x => true), expectedProduced: 3);
+    }
+
+
+    /// <summary>
+    /// A directory can go backwards asynchronously as well, so looking for the last match reads from the
+    /// end of the listing rather than parsing the whole directory.
+    /// </summary>
+    [Test]
+    public async Task LastOrDefaultAsync_OverADirectory_AgreesWithTheSynchronousLast()
+    {
+        using var first = CreateSelfSignedCertificate("First");
+        using var second = CreateSelfSignedCertificate("Second");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/rev/a.cer", new MockFileData(first.RawData));
+        fs.AddFile("/rev/b.cer", new MockFileData(second.RawData));
+
+        var finder = new CertificateFinder(fs).AddDirectory("/rev");
+
+        var asynchronous = await finder.LastOrDefaultAsync(x => true);
+        await Assert
+            .That(asynchronous!.Certificate.Thumbprint)
+            .IsEqualTo(finder.Last(x => true).Certificate.Thumbprint);
+    }
+
+
+    /// <summary>
+    /// A source that cannot go backwards is read forwards, and every match the next one supersedes is
+    /// released, since only the final one is ever returned.
+    /// </summary>
+    [Test]
+    public async Task LastOrDefaultAsync_WithASourceThatCannotGoBackwards_ReleasesTheMatchesItPassesOver()
+    {
+        var certificates = new[] { "One", "Two", "Three" }.Select(CreateSelfSignedCertificate).ToArray();
+        var source = new StubSource("Stub", "at", certificates) { Descending = false, Owns = true };
+
+        var found = await new CertificateFinder().AddSource(source).LastOrDefaultAsync(x => true);
+
+        await Assert.That(found!.Certificate.Thumbprint).IsEqualTo(certificates[2].Thumbprint);
+        await Assert.That(source.Calls).IsEquivalentTo(["forward"]);
+
+        //The two it passed over are disposed; the one it returned is still usable
+        await Assert.That(() => certificates[0].Subject).ThrowsExactly<CryptographicException>();
+        await Assert.That(() => certificates[1].Subject).ThrowsExactly<CryptographicException>();
+        await Assert.That(() => certificates[2].Subject).ThrowsNothing();
+        certificates[2].Dispose();
+    }
+
+
+    /// <summary>
+    /// A file that will not parse is skipped and reported on the asynchronous path too, rather than ending
+    /// the search.
+    /// </summary>
+    [Test]
+    public async Task ToAsyncEnumerable_SkipsAndReportsAFileThatWillNotParse()
+    {
+        using var cert = CreateSelfSignedCertificate("Good");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/mixed/good.cer", new MockFileData(cert.RawData));
+        fs.AddFile("/mixed/bad.der", new MockFileData([0x30, 0x82, 0x01, 0x02, 0xFF, 0xFF, 0xFF]));
+
+        var skipped = new List<string>();
+        var finder = new CertificateFinder(fs)
+            .AddSource(new CertificateDirectorySource("/mixed", false, fs) {
+                OnLoadFailure = (path, _) => skipped.Add(path)
+            });
+
+        var found = new List<string>();
+        await foreach (var result in finder.ToAsyncEnumerable()) {
+            found.Add(result.Certificate.Thumbprint);
+            result.Certificate.Dispose();
+        }
+
+        await Assert.That(found).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(skipped.Select(x => fs.Path.GetFileName(x)!)).IsEquivalentTo(["bad.der"]);
+    }
+
+
+    /// <summary>
+    /// The point of the asynchronous path is that the file reads are asynchronous. Enumerating the finder
+    /// normally must not reach for the asynchronous API, and enumerating it asynchronously must.
+    /// </summary>
+    [Test]
+    public async Task ToAsyncEnumerable_OverADirectory_ReadsFilesAsynchronously()
+    {
+        using var cert = CreateSelfSignedCertificate("Counted");
+        var fs = new CountingFileSystem();
+        fs.AddFile("/counted/a.cer", new MockFileData(cert.RawData));
+        fs.AddFile("/counted/b.cer", new MockFileData(cert.RawData));
+
+        var finder = new CertificateFinder(fs).AddDirectory("/counted");
+
+        foreach (var result in finder) {
+            result.Certificate.Dispose();
+        }
+        await Assert.That(fs.AsyncReads).IsEqualTo(0);
+
+        await foreach (var result in finder.ToAsyncEnumerable()) {
+            result.Certificate.Dispose();
+        }
+        await Assert.That(fs.AsyncReads).IsEqualTo(2);
+    }
+
+
+    /// <summary>
+    /// Reading the bytes and decoding them here rather than calling <c>ReadAllText</c> is what lets one
+    /// parser serve both paths, so a byte order mark still has to be handled.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_PemWithAByteOrderMark_IsRead()
+    {
+        using var cert = CreateSelfSignedCertificate("Bom");
+        var fs = CreateEmptyMockFileSystem();
+        var withBom = new byte[] { 0xEF, 0xBB, 0xBF }
+            .Concat(Encoding.UTF8.GetBytes(cert.ExportCertificatePem()))
+            .ToArray();
+        fs.AddFile("/bom/cert.pem", new MockFileData(withBom));
+
+        var finder = new CertificateFinder(fs).AddDirectory("/bom");
+
+        await Assert.That(finder.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+
+        var asynchronous = new List<string>();
+        await foreach (var result in finder.ToAsyncEnumerable()) {
+            asynchronous.Add(result.Certificate.Thumbprint);
+        }
+        await Assert.That(asynchronous).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// Runs <paramref name="use"/> against a source that owns three certificates, and asserts every
+    /// certificate the source produced was disposed rather than abandoned.
+    /// </summary>
+    private static async Task AssertReleasesMatchesAsync(Func<CertificateFinder, Task> use, int expectedProduced)
+    {
+        var certificates = new[] { "One", "Two", "Three" }.Select(CreateSelfSignedCertificate).ToArray();
+        var source = new StubSource("Stub", "a", certificates) { Owns = true };
+
+        await use(new CertificateFinder().AddSource(source));
+
+        var produced = certificates.Take(expectedProduced).ToArray();
+        foreach (var certificate in produced) {
+            await Assert.That(() => certificate.Subject).ThrowsExactly<CryptographicException>();
+        }
+
+        foreach (var certificate in certificates.Skip(expectedProduced)) {
+            certificate.Dispose();
+        }
+    }
+
+
+    /// <summary>
     /// Runs <paramref name="use"/> against a source that owns three certificates, and asserts every
     /// certificate the source produced was disposed rather than abandoned.
     /// </summary>
@@ -1684,6 +2110,34 @@ public class CertificateFinderTests
     {
         public void Dispose()
             => undo();
+    }
+
+
+    /// <summary>
+    /// A <see cref="MockFileSystem"/> that counts asynchronous file reads, so a test can tell which of the
+    /// two file-reading APIs a search actually used.
+    /// </summary>
+    private sealed class CountingFileSystem : MockFileSystem
+    {
+        public int AsyncReads;
+
+        public CountingFileSystem()
+            : base(new MockFileSystemOptions { CreateDefaultTempDir = false })
+            => _file = new CountingFile(this, () => AsyncReads++);
+
+        public override IFile File => _file;
+
+        private readonly IFile _file;
+
+
+        private sealed class CountingFile(MockFileSystem fileSystem, Action onAsyncRead) : MockFile(fileSystem)
+        {
+            public override Task<byte[]> ReadAllBytesAsync(string path, CancellationToken cancellationToken)
+            {
+                onAsyncRead();
+                return base.ReadAllBytesAsync(path, cancellationToken);
+            }
+        }
     }
 
 

@@ -1,3 +1,4 @@
+﻿using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 
 namespace FluentCertificates;
@@ -12,6 +13,12 @@ namespace FluentCertificates;
 /// source can. <see cref="Find"/> then applies the filter in full, so a source that can push nothing down
 /// is still correct, and one that pushes everything down pays only a cheap second pass over a set that
 /// already matches. Overriding <see cref="Enumerate"/> therefore cannot break the contract.
+/// <para>
+/// Every member has an asynchronous counterpart, and the asynchronous ones wrap the synchronous ones by
+/// default. A source overrides <see cref="EnumerateAsync"/> only where it has real asynchronous work,
+/// such as reading files; one with nothing to await implements <see cref="Enumerate"/> alone and is
+/// still enumerable and cancellable through <see cref="FindAsync"/>.
+/// </para>
 /// </remarks>
 public abstract record AbstractCertificateSource
 {
@@ -49,6 +56,43 @@ public abstract record AbstractCertificateSource
     /// </remarks>
     protected virtual IEnumerable<CertificateFinderResult>? EnumerateDescending(CertificateFilter filter)
         => null;
+
+
+    /// <summary>
+    /// The asynchronous counterpart of <see cref="Enumerate"/>. Wraps <see cref="Enumerate"/> by default,
+    /// checking <paramref name="cancellationToken"/> between results, so a source that overrides nothing
+    /// is still cancellable.
+    /// </summary>
+    /// <param name="filter">The predicates the caller asked for.</param>
+    /// <param name="cancellationToken">Cancels the enumeration.</param>
+    /// <returns>Candidate results.</returns>
+    /// <remarks>
+    /// Override this only where the source has genuinely asynchronous work to do, such as reading files.
+    /// The default costs a state machine and nothing else, and a source with no asynchronous IO gains
+    /// nothing by overriding it. Whatever is overridden here must agree with <see cref="Enumerate"/>: the
+    /// two produce the same results, so a caller cannot be made to choose between them for correctness.
+    /// </remarks>
+    protected virtual IAsyncEnumerable<CertificateFinderResult> EnumerateAsync(
+        CertificateFilter filter,
+        CancellationToken cancellationToken)
+        => ToAsyncEnumerable(Enumerate(filter), cancellationToken);
+
+
+    /// <summary>
+    /// The asynchronous counterpart of <see cref="EnumerateDescending"/>, or <see langword="null"/> if
+    /// this source cannot go backwards. Wraps <see cref="EnumerateDescending"/> by default, so a source
+    /// opts into backwards enumeration once rather than once per form.
+    /// </summary>
+    /// <param name="filter">The predicates the caller asked for.</param>
+    /// <param name="cancellationToken">Cancels the enumeration.</param>
+    /// <returns>Candidate results last first, or <see langword="null"/>.</returns>
+    protected virtual IAsyncEnumerable<CertificateFinderResult>? EnumerateDescendingAsync(
+        CertificateFilter filter,
+        CancellationToken cancellationToken)
+    {
+        var candidates = EnumerateDescending(filter);
+        return candidates is null ? null : ToAsyncEnumerable(candidates, cancellationToken);
+    }
 
 
     /// <summary>
@@ -129,6 +173,71 @@ public abstract record AbstractCertificateSource
 
 
     /// <summary>
+    /// The asynchronous counterpart of <see cref="Find"/>.
+    /// </summary>
+    /// <param name="filter">The predicates the results must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the enumeration.</param>
+    /// <returns>The matching results.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is null.</exception>
+    public IAsyncEnumerable<CertificateFinderResult> FindAsync(
+        CertificateFilter filter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        return IterateAsync(EnumerateAsync(filter, cancellationToken), filter, cancellationToken);
+    }
+
+
+    /// <summary>
+    /// The asynchronous counterpart of <see cref="FindDescending"/>.
+    /// </summary>
+    /// <param name="filter">The predicates the results must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the enumeration.</param>
+    /// <returns>The matching results last first, or <see langword="null"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is null.</exception>
+    public IAsyncEnumerable<CertificateFinderResult>? FindDescendingAsync(
+        CertificateFilter filter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        var candidates = EnumerateDescendingAsync(filter, cancellationToken);
+        return candidates is null ? null : IterateAsync(candidates, filter, cancellationToken);
+    }
+
+
+    /// <summary>
+    /// The asynchronous counterpart of <see cref="FindLast"/>.
+    /// </summary>
+    /// <param name="filter">The predicates the result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns>The last matching result, or <see langword="null"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="filter"/> is null.</exception>
+    public async ValueTask<CertificateFinderResult?> FindLastAsync(
+        CertificateFilter filter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var descending = FindDescendingAsync(filter, cancellationToken);
+        if (descending is not null) {
+            await foreach (var result in descending.ConfigureAwait(false)) {
+                return result;
+            }
+            return null;
+        }
+
+        CertificateFinderResult? last = null;
+        await foreach (var result in FindAsync(filter, cancellationToken).ConfigureAwait(false)) {
+            if (last is not null) {
+                Release(last);
+            }
+            last = result;
+        }
+        return last;
+    }
+
+
+    /// <summary>
     /// Projects certificates into results carrying this source and a location.
     /// </summary>
     /// <param name="certificates">The certificates found.</param>
@@ -155,4 +264,33 @@ public abstract record AbstractCertificateSource
             }
         }
     }
+
+
+    private async IAsyncEnumerable<CertificateFinderResult> IterateAsync(
+        IAsyncEnumerable<CertificateFinderResult> candidates,
+        CertificateFilter filter,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var result in candidates.WithCancellation(cancellationToken).ConfigureAwait(false)) {
+            if (filter.Matches(result)) {
+                yield return result;
+            } else {
+                //This source created it and is discarding it, so it must release it: nothing else can
+                Release(result);
+            }
+        }
+    }
+
+
+#pragma warning disable CS1998 //Bridging a synchronous source: there is nothing here to await
+    private static async IAsyncEnumerable<CertificateFinderResult> ToAsyncEnumerable(
+        IEnumerable<CertificateFinderResult> results,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var result in results) {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return result;
+        }
+    }
+#pragma warning restore CS1998
 }

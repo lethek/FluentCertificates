@@ -2,6 +2,7 @@
 using System.Collections.Immutable;
 using System.IO.Abstractions;
 using System.Linq.Expressions;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 
 namespace FluentCertificates;
@@ -28,6 +29,11 @@ namespace FluentCertificates;
 /// translate a predicate into a native query can read it. That is also why a predicate held in a
 /// <see cref="Func{T,TResult}"/> variable does not reach the sources: only a lambda written inline converts
 /// to an expression tree, so anything else binds to the extension method instead.
+/// </para>
+/// <para>
+/// <see cref="ToAsyncEnumerable"/> searches asynchronously, and every predicate-taking terminal has an
+/// <c>Async</c> counterpart taking a <see cref="CancellationToken"/>. Use those rather than async LINQ:
+/// a terminal that discards the certificates it matched has to release them, and only these do.
 /// </para>
 /// </remarks>
 public record CertificateFinder : IEnumerable<CertificateFinderResult>
@@ -96,10 +102,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     public bool All(Expression<Func<CertificateFinderResult, bool>> predicate)
     {
         ArgumentNullException.ThrowIfNull(predicate);
-        return !Any(Expression.Lambda<Func<CertificateFinderResult, bool>>(
-            Expression.Not(predicate.Body),
-            predicate.Parameters
-        ));
+        return !Any(Negate(predicate));
     }
 
 
@@ -225,6 +228,174 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     {
         var count = 0;
         foreach (var result in Where(predicate)) {
+            result.Source.Release(result);
+            count++;
+        }
+        return count;
+    }
+
+
+    /// <summary>
+    /// Whether any certificate matches <paramref name="predicate"/>. The asynchronous counterpart of
+    /// <see cref="Any"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns><see langword="true"/> if at least one matches.</returns>
+    public async ValueTask<bool> AnyAsync(
+        Expression<Func<CertificateFinderResult, bool>> predicate,
+        CancellationToken cancellationToken = default)
+    {
+        await foreach (var result in Where(predicate).ToAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
+            result.Source.Release(result);
+            return true;
+        }
+        return false;
+    }
+
+
+    /// <summary>
+    /// Whether every certificate found matches <paramref name="predicate"/>. The asynchronous counterpart
+    /// of <see cref="All"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate every result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns><see langword="true"/> if they all match, or if there are none.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="predicate"/> is null.</exception>
+    public async ValueTask<bool> AllAsync(
+        Expression<Func<CertificateFinderResult, bool>> predicate,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        return !await AnyAsync(Negate(predicate), cancellationToken).ConfigureAwait(false);
+    }
+
+
+    /// <summary>
+    /// The first certificate matching <paramref name="predicate"/>. The asynchronous counterpart of
+    /// <see cref="First"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns>The first matching result.</returns>
+    /// <exception cref="InvalidOperationException">Nothing matched.</exception>
+    public async ValueTask<CertificateFinderResult> FirstAsync(
+        Expression<Func<CertificateFinderResult, bool>> predicate,
+        CancellationToken cancellationToken = default)
+        => await FirstOrDefaultAsync(predicate, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sequence contains no matching element");
+
+
+    /// <summary>
+    /// The first certificate matching <paramref name="predicate"/>, or <see langword="null"/> if none
+    /// does. The asynchronous counterpart of <see cref="FirstOrDefault"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns>The first matching result, or <see langword="null"/>.</returns>
+    public async ValueTask<CertificateFinderResult?> FirstOrDefaultAsync(
+        Expression<Func<CertificateFinderResult, bool>> predicate,
+        CancellationToken cancellationToken = default)
+    {
+        await foreach (var result in Where(predicate).ToAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
+            return result;
+        }
+        return null;
+    }
+
+
+    /// <summary>
+    /// The last certificate matching <paramref name="predicate"/>. The asynchronous counterpart of
+    /// <see cref="Last"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns>The last matching result.</returns>
+    /// <exception cref="InvalidOperationException">Nothing matched.</exception>
+    public async ValueTask<CertificateFinderResult> LastAsync(
+        Expression<Func<CertificateFinderResult, bool>> predicate,
+        CancellationToken cancellationToken = default)
+        => await LastOrDefaultAsync(predicate, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sequence contains no matching element");
+
+
+    /// <summary>
+    /// The last certificate matching <paramref name="predicate"/>, or <see langword="null"/> if none does.
+    /// The asynchronous counterpart of <see cref="LastOrDefault"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns>The last matching result, or <see langword="null"/>.</returns>
+    public async ValueTask<CertificateFinderResult?> LastOrDefaultAsync(
+        Expression<Func<CertificateFinderResult, bool>> predicate,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = Filter.Add(predicate);
+
+        //How a source finds its own last match, and what it releases getting there, is the source's business
+        foreach (var source in Sources.Distinct().Reverse()) {
+            var found = await source.FindLastAsync(filter, cancellationToken).ConfigureAwait(false);
+            if (found is not null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+
+    /// <summary>
+    /// The only certificate matching <paramref name="predicate"/>. The asynchronous counterpart of
+    /// <see cref="Single"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns>The single matching result.</returns>
+    /// <exception cref="InvalidOperationException">Nothing matched, or more than one did.</exception>
+    public async ValueTask<CertificateFinderResult> SingleAsync(
+        Expression<Func<CertificateFinderResult, bool>> predicate,
+        CancellationToken cancellationToken = default)
+        => await SingleOrDefaultAsync(predicate, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Sequence contains no matching element");
+
+
+    /// <summary>
+    /// The only certificate matching <paramref name="predicate"/>, or <see langword="null"/> if none does.
+    /// The asynchronous counterpart of <see cref="SingleOrDefault"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns>The single matching result, or <see langword="null"/>.</returns>
+    /// <exception cref="InvalidOperationException">More than one matched.</exception>
+    public async ValueTask<CertificateFinderResult?> SingleOrDefaultAsync(
+        Expression<Func<CertificateFinderResult, bool>> predicate,
+        CancellationToken cancellationToken = default)
+    {
+        CertificateFinderResult? found = null;
+        await foreach (var result in Where(predicate).ToAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
+            if (found is not null) {
+                found.Source.Release(found);
+                result.Source.Release(result);
+                throw new InvalidOperationException("Sequence contains more than one matching element");
+            }
+            found = result;
+        }
+        return found;
+    }
+
+
+    /// <summary>
+    /// How many certificates match <paramref name="predicate"/>. The asynchronous counterpart of
+    /// <see cref="Count"/>.
+    /// </summary>
+    /// <param name="predicate">The predicate a result must satisfy.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns>The number of matching results.</returns>
+    public async ValueTask<int> CountAsync(
+        Expression<Func<CertificateFinderResult, bool>> predicate,
+        CancellationToken cancellationToken = default)
+    {
+        var count = 0;
+        await foreach (var result in Where(predicate).ToAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
             result.Source.Release(result);
             count++;
         }
@@ -440,6 +611,45 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <inheritdoc/>
     IEnumerator IEnumerable.GetEnumerator()
         => GetEnumerator();
+
+
+    /// <summary>
+    /// Enumerates every matching certificate asynchronously, source by source, in the order the sources
+    /// were added. The same results as <see cref="GetEnumerator"/>, in the same order.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the enumeration.</param>
+    /// <returns>The matching results.</returns>
+    /// <remarks>
+    /// A source reading files does so asynchronously here. One with no asynchronous work of its own, such
+    /// as a store, still yields through this and still honours <paramref name="cancellationToken"/>.
+    /// <para>
+    /// This is a method rather than <see cref="IAsyncEnumerable{T}"/> on the finder itself. A type
+    /// implementing both sequence interfaces makes every LINQ operator ambiguous on .NET 10, where
+    /// <c>System.Linq.AsyncEnumerable</c> is part of the framework, so <c>finder.Select(...)</c> and
+    /// <c>from x in finder select x</c> would stop compiling.
+    /// </para>
+    /// </remarks>
+    public async IAsyncEnumerable<CertificateFinderResult> ToAsyncEnumerable(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var source in Sources.Distinct()) {
+            await foreach (var result in source.FindAsync(Filter, cancellationToken).ConfigureAwait(false)) {
+                yield return result;
+            }
+        }
+    }
+
+
+    /// <summary>
+    /// Rewrites a predicate as its negation, so <see cref="All"/> can ask the sources for a
+    /// counter-example: they can answer "is anything not a match?" natively and stop at the first one.
+    /// </summary>
+    private static Expression<Func<CertificateFinderResult, bool>> Negate(
+        Expression<Func<CertificateFinderResult, bool>> predicate)
+        => Expression.Lambda<Func<CertificateFinderResult, bool>>(
+            Expression.Not(predicate.Body),
+            predicate.Parameters
+        );
 
 
     private readonly IFileSystem _fileSystem;

@@ -1,4 +1,5 @@
 ﻿using System.IO.Abstractions;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -136,6 +137,32 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         => Load(CertificateFiles().Reverse());
 
 
+    /// <summary>
+    /// Reads each file asynchronously, which is where a directory search spends its time. The listing
+    /// itself stays synchronous: <see cref="IFileSystem"/> offers no asynchronous form of it, and it is
+    /// one enumeration against the file system rather than a read per certificate.
+    /// </summary>
+    /// <param name="filter">The predicates the caller asked for; unused.</param>
+    /// <param name="cancellationToken">Cancels the enumeration; the file reads honour it.</param>
+    /// <returns>Every certificate loadable from the directory.</returns>
+    protected override IAsyncEnumerable<CertificateFinderResult> EnumerateAsync(
+        CertificateFilter filter,
+        CancellationToken cancellationToken)
+        => LoadAsync(CertificateFiles(), cancellationToken);
+
+
+    /// <summary>
+    /// The asynchronous counterpart of <see cref="EnumerateDescending"/>.
+    /// </summary>
+    /// <param name="filter">The predicates the caller asked for; unused.</param>
+    /// <param name="cancellationToken">Cancels the enumeration; the file reads honour it.</param>
+    /// <returns>Every certificate loadable from the directory, last file first.</returns>
+    protected override IAsyncEnumerable<CertificateFinderResult> EnumerateDescendingAsync(
+        CertificateFilter filter,
+        CancellationToken cancellationToken)
+        => LoadAsync(CertificateFiles().Reverse(), cancellationToken);
+
+
     private IEnumerable<(string Path, string Extension)> CertificateFiles()
         => ListFiles()
             .Select(path => (Path: path, Extension: FileSystem.Path.GetExtension(path)))
@@ -167,34 +194,89 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         });
 
 
+    private async IAsyncEnumerable<CertificateFinderResult> LoadAsync(
+        IEnumerable<(string Path, string Extension)> files,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var file in files) {
+            var location = FileSystem.Path.GetFullPath(file.Path);
+            var certificates = await LoadAsync(file.Path, file.Extension, cancellationToken).ConfigureAwait(false);
+            foreach (var result in SelectResults(certificates, _ => location)) {
+                yield return result;
+            }
+        }
+    }
+
+
     private IEnumerable<X509Certificate2> Load(string path, string extension)
     {
         try {
-            switch (extension.ToLowerInvariant()) {
-                case ".p7b":
-                case ".p7c":
-                    var cms = new SignedCms();
-                    cms.Decode(FileSystem.File.ReadAllBytes(path));
-                    return cms.Certificates;
-                case ".pfx":
-                case ".p12":
-                    //X509CertificateLoader.LoadCertificate rejects PKCS#12, so these must go
-                    //through the PKCS#12 loader rather than the default branch
-                    return CertTools.LoadPkcs12Collection(FileSystem.File.ReadAllBytes(path), Password);
-                case ".pem":
-                case ".ca-bundle":
-                    //Both extensions name PEM text, which holds any number of certificates
-                    var pem = new X509Certificate2Collection();
-                    pem.ImportFromPem(FileSystem.File.ReadAllText(path));
-                    return pem;
-                default:
-                    return [CertTools.LoadCertificate(FileSystem.File.ReadAllBytes(path))];
-            }
+            return Parse(extension, FileSystem.File.ReadAllBytes(path));
         } catch (Exception ex) {
             //One bad file must not hide the good ones beside it, so it is skipped and reported
             OnLoadFailure?.Invoke(path, ex);
             return [];
         }
+    }
+
+
+    private async ValueTask<IEnumerable<X509Certificate2>> LoadAsync(
+        string path,
+        string extension,
+        CancellationToken cancellationToken)
+    {
+        try {
+            return Parse(extension, await FileSystem.File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false));
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            //Cancellation is not a file that could not be read, so it propagates rather than being reported
+            OnLoadFailure?.Invoke(path, ex);
+            return [];
+        }
+    }
+
+
+    /// <summary>
+    /// Turns a file's bytes into certificates. Split from reading them so the synchronous and asynchronous
+    /// paths differ only in how they get the bytes, rather than carrying a copy of this each.
+    /// </summary>
+    /// <param name="extension">The file's extension, which decides the format.</param>
+    /// <param name="data">The file's contents.</param>
+    /// <returns>Every certificate the file holds.</returns>
+    private IEnumerable<X509Certificate2> Parse(string extension, byte[] data)
+    {
+        switch (extension.ToLowerInvariant()) {
+            case ".p7b":
+            case ".p7c":
+                var cms = new SignedCms();
+                cms.Decode(data);
+                return cms.Certificates;
+            case ".pfx":
+            case ".p12":
+                //X509CertificateLoader.LoadCertificate rejects PKCS#12, so these must go
+                //through the PKCS#12 loader rather than the default branch
+                return CertTools.LoadPkcs12Collection(data, Password);
+            case ".pem":
+            case ".ca-bundle":
+                //Both extensions name PEM text, which holds any number of certificates
+                var pem = new X509Certificate2Collection();
+                pem.ImportFromPem(DecodeText(data));
+                return pem;
+            default:
+                return [CertTools.LoadCertificate(data)];
+        }
+    }
+
+
+    /// <summary>
+    /// Decodes PEM text the way <c>File.ReadAllText</c> would: UTF-8 unless a byte order mark says
+    /// otherwise. Reading the bytes and decoding them here is what lets one parser serve both paths.
+    /// </summary>
+    /// <param name="data">The file's contents.</param>
+    /// <returns>The decoded text.</returns>
+    private static string DecodeText(byte[] data)
+    {
+        using var reader = new StreamReader(new MemoryStream(data), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
     }
 
 
