@@ -562,11 +562,11 @@ is unspecified, because neither a directory listing nor a store enumeration prom
 
 ### Searching asynchronously
 
-`ToAsyncEnumerable` returns the same results in the same order, reads files asynchronously, and takes a
+`AsAsyncEnumerable` returns the same results in the same order, reads files asynchronously, and takes a
 `CancellationToken`, so a recursive scan over a large tree can be abandoned.
 
 ```csharp
-await foreach (var result in finder.ToAsyncEnumerable(cancellationToken)) {
+await foreach (var result in finder.AsAsyncEnumerable(cancellationToken)) {
     Console.WriteLine(result.Certificate.Subject);
 }
 ```
@@ -579,13 +579,14 @@ Every predicate-taking method above has an `Async` counterpart: `AnyAsync`, `All
 var count = await finder.CountAsync(x => x.Certificate.HasPrivateKey, cancellationToken);
 ```
 
-Prefer these to async LINQ over `ToAsyncEnumerable`. A terminal that matches certificates without
+Prefer these to async LINQ over `AsAsyncEnumerable`. A terminal that matches certificates without
 returning them has to dispose them, and only these do.
 
-The finder is not itself an `IAsyncEnumerable<T>`, which is why `ToAsyncEnumerable` is a method. A type
+The finder is not itself an `IAsyncEnumerable<T>`, which is why `AsAsyncEnumerable` is a method. A type
 implementing both sequence interfaces makes every LINQ operator ambiguous on .NET 10, where
 `System.Linq.AsyncEnumerable` is part of the framework, so `finder.Select(...)` and
-`from x in finder select x` would stop compiling.
+`from x in finder select x` would stop compiling. EF Core's `DbSet<T>` dropped `IAsyncEnumerable<T>` in
+version 6 over the same ambiguity and offers `AsAsyncEnumerable` in its place.
 
 ### Reading a result
 
@@ -697,7 +698,7 @@ Three optional members:
 |---|---|
 |`Release(CertificateFinderResult)`|What happens to a result the finder discards. Disposes the certificate by default, which is right for a source that loads certificates. Override it to a no-op for a source passing through certificates someone else owns.|
 |`EnumerateDescending(CertificateFilter)`|Produces the same candidates in reverse. Return `null`, the default, if your source cannot go backwards. Implementing it lets `Last` and `LastOrDefault` stop at the first match from the end instead of reading everything.|
-|`EnumerateAsync(CertificateFilter, CancellationToken)`|Only worth overriding if your source has real asynchronous work, such as reading files or calling a service. By default it wraps `Enumerate` and checks the token between results, so a source implementing the synchronous members alone is already usable from `ToAsyncEnumerable` and already cancellable. `EnumerateDescendingAsync` pairs with it the same way.|
+|`EnumerateAsync(CertificateFilter, CancellationToken)`|Only worth overriding if your source has real asynchronous work, such as reading files or calling a service. By default it wraps `Enumerate` and checks the token between results, so a source implementing the synchronous members alone is already usable from `AsAsyncEnumerable` and already cancellable. `EnumerateDescendingAsync` pairs with it the same way.|
 |`Kind`|Required, but free-form. Callers group and deduplicate results on it.|
 
 Make the source a `record` rather than a `class`. The finder deduplicates sources by value, so two

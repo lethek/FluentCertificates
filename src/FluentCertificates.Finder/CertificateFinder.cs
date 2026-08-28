@@ -31,7 +31,7 @@ namespace FluentCertificates;
 /// to an expression tree, so anything else binds to the extension method instead.
 /// </para>
 /// <para>
-/// <see cref="ToAsyncEnumerable"/> searches asynchronously, and every predicate-taking terminal has an
+/// <see cref="AsAsyncEnumerable"/> searches asynchronously, and every predicate-taking terminal has an
 /// <c>Async</c> counterpart taking a <see cref="CancellationToken"/>. Use those rather than async LINQ:
 /// a terminal that discards the certificates it matched has to release them, and only these do.
 /// </para>
@@ -246,7 +246,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
         Expression<Func<CertificateFinderResult, bool>> predicate,
         CancellationToken cancellationToken = default)
     {
-        await foreach (var result in Where(predicate).ToAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
+        await foreach (var result in Where(predicate).AsAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
             result.Source.Release(result);
             return true;
         }
@@ -297,7 +297,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
         Expression<Func<CertificateFinderResult, bool>> predicate,
         CancellationToken cancellationToken = default)
     {
-        await foreach (var result in Where(predicate).ToAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
+        await foreach (var result in Where(predicate).AsAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
             return result;
         }
         return null;
@@ -371,7 +371,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
         CancellationToken cancellationToken = default)
     {
         CertificateFinderResult? found = null;
-        await foreach (var result in Where(predicate).ToAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
+        await foreach (var result in Where(predicate).AsAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
             if (found is not null) {
                 found.Source.Release(found);
                 result.Source.Release(result);
@@ -395,7 +395,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
         CancellationToken cancellationToken = default)
     {
         var count = 0;
-        await foreach (var result in Where(predicate).ToAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
+        await foreach (var result in Where(predicate).AsAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
             result.Source.Release(result);
             count++;
         }
@@ -626,10 +626,18 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// This is a method rather than <see cref="IAsyncEnumerable{T}"/> on the finder itself. A type
     /// implementing both sequence interfaces makes every LINQ operator ambiguous on .NET 10, where
     /// <c>System.Linq.AsyncEnumerable</c> is part of the framework, so <c>finder.Select(...)</c> and
-    /// <c>from x in finder select x</c> would stop compiling.
+    /// <c>from x in finder select x</c> would stop compiling. <c>DbSet&lt;T&gt;</c> dropped
+    /// <see cref="IAsyncEnumerable{T}"/> in EF Core 6 over the same ambiguity, and offers
+    /// <c>AsAsyncEnumerable</c> in its place.
+    /// </para>
+    /// <para>
+    /// Named <c>As</c> rather than <c>To</c> deliberately: <c>ToAsyncEnumerable</c> is an extension on
+    /// <see cref="IEnumerable{T}"/> in <c>System.Linq.AsyncEnumerable</c>, and that one wraps the
+    /// synchronous enumeration. A caller holding this finder as an <see cref="IEnumerable{T}"/> would
+    /// silently get the wrapper, with none of the asynchronous reads below.
     /// </para>
     /// </remarks>
-    public async IAsyncEnumerable<CertificateFinderResult> ToAsyncEnumerable(
+    public async IAsyncEnumerable<CertificateFinderResult> AsAsyncEnumerable(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         foreach (var source in Sources.Distinct()) {

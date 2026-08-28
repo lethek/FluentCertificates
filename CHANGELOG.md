@@ -26,10 +26,10 @@ release rather than record it as it happened.
 - `CertificateDirectorySource.Password` and a `password` parameter on `CertificateFinder.AddDirectory` and `AddDirectories`, for reading password-protected PKCS#12 files.
 - `CertificateFinderResult.Location`.
 - `AbstractCertificateSource.EnumerateDescending`, `FindDescending` and `FindLast`.
-- `CertificateFinder.ToAsyncEnumerable`, searching asynchronously with a `CancellationToken`.
+- `CertificateFinder.AsAsyncEnumerable`, searching asynchronously with a `CancellationToken`.
 - `CertificateFinder.AnyAsync`, `AllAsync`, `FirstAsync`, `FirstOrDefaultAsync`, `LastAsync`, `LastOrDefaultAsync`, `SingleAsync`, `SingleOrDefaultAsync` and `CountAsync`.
 - `AbstractCertificateSource.EnumerateAsync`, `EnumerateDescendingAsync`, `FindAsync`, `FindDescendingAsync` and `FindLastAsync`, all wrapping the synchronous members by default.
-- `CertificateDirectorySource` reads files asynchronously when searched through `ToAsyncEnumerable`.
+- `CertificateDirectorySource` reads files asynchronously when searched through `AsAsyncEnumerable`.
 
 ### Changed
 
