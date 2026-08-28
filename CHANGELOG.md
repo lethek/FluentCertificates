@@ -41,8 +41,8 @@ release rather than record it as it happened.
 
 ### Fixed
 
-- An ML-KEM certificate asserts `keyEncipherment` and nothing else for every usage, as RFC 9935 s5 requires. `CertificateUsage.Client` previously emitted an empty critical `keyUsage`, which RFC 5280 s4.2.1.3 forbids, and `CertificateUsage.SMime` added `nonRepudiation` on top.
-- `CertificateUsage.SMime` no longer asserts `nonRepudiation` for a key that cannot sign. An ECDH certificate now carries `keyAgreement` alone.
+- An ML-KEM certificate asserts `keyEncipherment` and nothing else, as per RFC 9935 s5, for every `CertificateUsage`.
+- `CertificateUsage.SMime` no longer asserts `nonRepudiation` on a key that cannot sign; an ECDH certificate carries `keyAgreement` alone.
 
 ## [0.20.0] - 2026-08-24
 
@@ -54,9 +54,9 @@ release rather than record it as it happened.
 
 ### Fixed
 
-- `CertificateFinder` reads DER-encoded certificates (`.crt`, `.cer`, `.der`, `.ca-bundle`) through the `IFileSystem` it was given, instead of going to the real disk and silently finding none of them.
-- `CertificateFinder` no longer returns a certificate once per time its store or directory was added. The sources compared by reference, so the deduplication it applies while enumerating never matched anything.
-- `IsIssuedBy(issuer, verifySignature: true)` and `IsSelfSigned(true)` verify a DSA-signed certificate instead of throwing on Windows and reporting a valid signature as false elsewhere.
+- `CertificateFinder` reads DER-encoded certificates (`.crt`, `.cer`, `.der`, `.ca-bundle`) through the `IFileSystem` it was given rather than the real disk.
+- `CertificateFinder` no longer returns a certificate once per time its store or directory was added.
+- `IsIssuedBy(issuer, verifySignature: true)` and `IsSelfSigned(true)` verify a DSA-signed certificate rather than throwing on Windows and failing elsewhere.
 
 ## [0.19.0] - 2026-08-24
 
@@ -68,15 +68,15 @@ release rather than record it as it happened.
 
 ### Changed
 
-- **Breaking:** `Oids.MacAddressPurpose` is now `Oids.MacAddress`: `1.3.6.1.1.1.1.22` is RFC 2307's `macAddress` attribute type, not an extended key usage. Removed without a deprecation cycle, having been wrong since it was introduced in 0.18.0.
-- **Breaking:** the post-quantum members of `KeyAlgorithmFamily` are `[Experimental("FLUENTCERT001")]`. Code naming one, including in a `switch` or comparison, now fails to build until it suppresses the diagnostic.
+- **Breaking:** `Oids.MacAddressPurpose` is renamed to `Oids.MacAddress`, with no deprecation cycle.
+- **Breaking:** the post-quantum members of `KeyAlgorithmFamily` are `[Experimental("FLUENTCERT001")]`.
 
 ### Fixed
 
 - `KeyAlgorithm.IsSupported` resolves Composite ML-DSA certificate signing per parameter set rather than applying one set's result to all eighteen.
 - `KeyAlgorithm.ECDsa` and `ECDiffieHellman` reject a named curve carrying no OID with an `ArgumentException` naming the parameter, rather than throwing `NullReferenceException`.
 - `KeyAlgorithm` equality no longer conflates a named curve identified by an OID value with one whose friendly name is that same string.
-- `KeyAlgorithm` equality and hashing include `Oid`, so post-quantum parameter sets within a family no longer rest on `Name` alone to tell them apart.
+- `KeyAlgorithm` equality and hashing include `Oid`.
 
 ## [0.18.0] - 2026-08-22
 
@@ -85,26 +85,26 @@ release rather than record it as it happened.
 - `net10.0` target framework for all packages.
 - ML-DSA (FIPS 204) support: `KeyAlgorithm.MLDsa44` / `MLDsa65` / `MLDsa87`, marked `[Experimental("FLUENTCERT001")]`. Requires net10.0 at runtime.
 - `CertificateKey`, a key abstraction spanning classical and post-quantum keys, returned by `X509Certificate2.GetPrivateKey()`.
-- `KeyAlgorithmFamily` enum, and `KeyAlgorithm.Default(KeyAlgorithmFamily)` for callers that hold a family rather than a full algorithm.
+- `KeyAlgorithmFamily` enum, and `KeyAlgorithm.Default(KeyAlgorithmFamily)`.
 - `KeyAlgorithm.IsSupported`, reporting whether the algorithm can be used on the current runtime and platform.
-- `SignatureAlgorithm.MLDsa44` / `MLDsa65` / `MLDsa87`, so `SignatureAlgorithm.FromOid` resolves an ML-DSA certificate instead of throwing.
+- `SignatureAlgorithm.MLDsa44` / `MLDsa65` / `MLDsa87`, resolved by `SignatureAlgorithm.FromOid`.
 - SLH-DSA (FIPS 205) support: all twelve `KeyAlgorithm.SlhDsa*` parameter sets. Unavailable on Windows, where `KeyAlgorithm.IsSupported` reports `false`.
-- Composite ML-DSA support: all eighteen `KeyAlgorithm.MLDsa*With*` parameter sets. No .NET 10 platform can yet sign a certificate with a composite key, so `IsSupported` reports `false` for all of them.
+- Composite ML-DSA support: all eighteen `KeyAlgorithm.MLDsa*With*` parameter sets. `IsSupported` reports `false` for every one of them on .NET 10.
 - `KeyAlgorithm.PostQuantumAlgorithms`, listing every post-quantum parameter set the library knows.
 - `SignatureAlgorithm.ForPostQuantum(KeyAlgorithm)`, and `FromOid` now resolves every post-quantum signature OID.
-- `SkipUnlessAlgorithmSupportedAttribute` in the test-support library, for gating a test on runtime capability rather than on OS.
-- ML-KEM (FIPS 203) key-encapsulation certificates: `KeyAlgorithm.MLKem512` / `MLKem768` / `MLKem1024`. Unavailable on Windows, which cannot attach an ML-KEM private key to a certificate; `IsSupported` reports `false` there.
+- `SkipUnlessAlgorithmSupportedAttribute` in the test-support library.
+- ML-KEM (FIPS 203) key-encapsulation certificates: `KeyAlgorithm.MLKem512` / `MLKem768` / `MLKem1024`. Unavailable on Windows, where `IsSupported` reports `false`.
 
 ### Changed
 
 - **Breaking:** `KeyAlgorithm` is now a record carrying its own key length, curve or parameter set, replacing the enum. Use `KeyAlgorithm.RSA(4096)`, `KeyAlgorithm.ECDsa(curve)` or `KeyAlgorithm.MLDsa65`. Defaults are unchanged: RSA 4096, DSA 1024, EC nistP256.
-- **Breaking:** `X509Certificate2.GetPrivateKey()` returns `CertificateKey` instead of `AsymmetricAlgorithm`, which cannot represent a post-quantum key. Reach a classical key through `CertificateKey.AsAsymmetricAlgorithm`.
-- **Breaking:** `SignatureAlgorithm.KeyAlgorithm` is replaced by `SignatureAlgorithm.Family`, and `SignatureAlgorithm.HashAlgorithm` is now nullable, since the post-quantum algorithms take no separate hash.
-- `X509Certificate2.CanSign()` now returns `true` for an ML-DSA certificate holding a usable key. It previously returned `false`, because `GetPrivateKey()` threw `NotSupportedException` and `CanSign` swallowed it.
+- **Breaking:** `X509Certificate2.GetPrivateKey()` returns `CertificateKey` instead of `AsymmetricAlgorithm`. Reach a classical key through `CertificateKey.AsAsymmetricAlgorithm`.
+- **Breaking:** `SignatureAlgorithm.KeyAlgorithm` is replaced by `SignatureAlgorithm.Family`, and `SignatureAlgorithm.HashAlgorithm` is now nullable.
+- `X509Certificate2.CanSign()` returns `true` for an ML-DSA certificate holding a usable key.
 
 ### Removed
 
-- **Breaking:** `CertificateBuilder.KeyLength` and `CertificateBuilder.ECCurve`, along with `SetKeyLength(...)` and `SetECCurve(...)`, removed without a prior deprecation release. Both are now part of `KeyAlgorithm`, which makes an invalid combination unrepresentable rather than rejected at build time.
+- **Breaking:** `CertificateBuilder.KeyLength` and `ECCurve`, with `SetKeyLength(...)` and `SetECCurve(...)`, removed without a deprecation release. Both are now part of `KeyAlgorithm`.
 
 ## [0.17.0] - 2026-08-21
 
@@ -113,16 +113,16 @@ release rather than record it as it happened.
 - `X509ChainBuilder`, a fluent chain builder started by `cert.BuildChain()`: `TrustRoot`, `AddCertificates`, `AllowInvalidTime`, `WithPolicy`, `Create()` and `Export()`.
 - `ChainResult`, the disposable result of `X509ChainBuilder.Create()`: `Verified`, `Chain`, `ChainStatus`, `EnsureVerified()` and `Export()`.
 - `CertificateExportBuilder.WithAllPrivateKeys()`, replacing `WithPrivateKeys()`.
-- `X509Certificate2.CanSign()`, reporting whether the private key is usable for signing, rather than merely associated as `HasPrivateKey` reports.
+- `X509Certificate2.CanSign()`, reporting whether the private key is usable for signing rather than merely associated.
 
 ### Changed
 
-- **Breaking:** Private keys are now opt-in. `CertificateExportBuilder.Keys` and `X509Chain.ToCollection(ExportKeys)` default to `ExportKeys.None` instead of `ExportKeys.All`, so `cert.Export().AsPkcs12()` writes a keyless PFX. Call `WithPrivateKey()` for the anchor's key or `WithAllPrivateKeys()` for every key held.
+- **Breaking:** `CertificateExportBuilder.Keys` and `X509Chain.ToCollection(ExportKeys)` default to `ExportKeys.None` instead of `ExportKeys.All`. Call `WithPrivateKey()` for the anchor's key or `WithAllPrivateKeys()` for every key held.
 - `X509Certificate2.GetPrivateKey()` throws `CryptographicException` rather than a bare `Exception` when the key cannot be resolved.
 
 ### Deprecated
 
-- `CertificateExportBuilder.WithPrivateKeys()`, renamed to `WithAllPrivateKeys()` so it cannot be misread as the singular `WithPrivateKey()`. The old name forwards to the new one.
+- `CertificateExportBuilder.WithPrivateKeys()`, renamed to `WithAllPrivateKeys()`. The old name forwards to the new one.
 
 ### Removed
 
@@ -134,27 +134,27 @@ release rather than record it as it happened.
 
 - `CertificateExportBuilder.WithoutPassword()`, clearing both password kinds.
 - `CertificateExportBuilder.Anchor`, naming the certificate that `ExportKeys.Primary` and `AsCert()` target. Set by `cert.Export()` and `chain.Export()`.
-- `CertificateExportBuilder.AddCertificates(...)`, appending certificates without declaring them a chain, so they are never reordered.
-- `AddChain` and `AddCertificates` take `params IEnumerable<X509Certificate2>`, so loose certificates, an array, a collection or a lazy sequence all work.
+- `CertificateExportBuilder.AddCertificates(...)`, appending certificates without declaring them a chain.
+- `AddChain` and `AddCertificates` take `params IEnumerable<X509Certificate2>`.
 
 ### Changed
 
-- **Breaking:** `ExportKeys.Leaf` is renamed to `ExportKeys.Primary`, since it now follows the export's anchor rather than a certificate's position in a chain.
-- **Breaking:** Export orders a chain's certificates leaf-first instead of root-first, changing the certificate order within PKCS#12 and PKCS#7 output. PEM block order is unchanged.
-- **Breaking:** Ordering is decided by which API added the certificates. `AddChain(...)` declares its argument a chain and sorts that group leaf-first, appending it as a block; `AddCertificates(...)`, `collection.Export()` and the `IEnumerable` overload are bundles and are never reordered, even when they form a chain.
+- **Breaking:** `ExportKeys.Leaf` is renamed to `ExportKeys.Primary`.
+- **Breaking:** Export orders a chain's certificates leaf-first instead of root-first in PKCS#12 and PKCS#7 output. PEM block order is unchanged.
+- **Breaking:** `AddChain(...)` sorts its argument leaf-first and appends it as a block. `AddCertificates(...)`, `collection.Export()` and the `IEnumerable` overload are never reordered.
 - **Breaking:** `X509Chain.ToEnumerable()` and `ToCollection()` now return the chain leaf first, matching `X509Chain.ChainElements`.
-- **Breaking:** `ExportKeys.Primary` and `AsCert()` now throw `InvalidOperationException` when no `Anchor` names a certificate, instead of exporting whichever came first. Only `cert.Export()` and `chain.Export()` set an anchor; an export holding exactly one certificate needs none.
-- `ExportKeys.Primary` and `AsCert()` follow the builder's `Anchor` rather than list position, so `AddChain(...)` cannot retarget them even when the certificates do form a chain.
+- **Breaking:** `ExportKeys.Primary` and `AsCert()` throw `InvalidOperationException` when no `Anchor` names a certificate and the export holds more than one. Only `cert.Export()` and `chain.Export()` set an anchor.
+- `ExportKeys.Primary` and `AsCert()` follow the builder's `Anchor` rather than list position.
 - Exporting throws `ArgumentException` when the `Anchor` is not among the certificates being exported.
 - `FilterPrivateKeys(ExportKeys.Primary)` keeps the first certificate's private key instead of the last.
 
 ### Deprecated
 
-- `CertificateExportBuilder.WithChain(...)`, renamed to `AddChain(...)` because it appends rather than configures. The old name forwards to the new one.
+- `CertificateExportBuilder.WithChain(...)`, renamed to `AddChain(...)`. The old name forwards to the new one.
 
 ### Fixed
 
-- Each `CertificateExportBuilder.WithPassword` overload now clears the other kind of password, so the last call wins.
+- Each `CertificateExportBuilder.WithPassword` overload clears the other kind of password, so the last call wins.
 - `AsCert()` now exports a chain's leaf certificate instead of its root.
 - The `ExportKeys` enum's XML summary described ECDsa instead of the enum.
 
@@ -169,7 +169,7 @@ release rather than record it as it happened.
 - `BuildChain(Action<X509ChainPolicy>)` overload on `X509Certificate2`.
 - `CertificateBuilder.SetECCurve(ECCurve)`.
 - `KeyAlgorithm.ECDiffieHellman`, for key agreement certificates. These assert `keyAgreement`
-  instead of `digitalSignature`, and must be issued by a CA since an ECDH key cannot sign.
+  instead of `digitalSignature`, and must be issued by a CA.
 
 ### Changed
 
@@ -192,12 +192,12 @@ release rather than record it as it happened.
 
 ### Fixed
 
-- Export now orders a certificate chain root-first however it was assembled. `cert.Export().WithChain(...)`
-  previously wrote PEM blocks in a jumbled order and kept the issuer's private key instead of the leaf's.
+- Export orders a certificate chain root-first however it was assembled, and keeps the leaf's private
+  key rather than the issuer's.
 - PEM export no longer copies a `SecureString` password into a managed string it cannot erase.
 - PEM export ignored a `SecureString` password and wrote the private key unencrypted.
-- An ECDH certificate could be self-signed, and an ECDH CSR created, via `SetSignatureGenerator`.
-  Neither can verify; both are now rejected.
+- An ECDH certificate can no longer be self-signed, nor an ECDH CSR created, via
+  `SetSignatureGenerator`.
 - Keys and certificates extracted internally were never disposed.
 - PEM and PKCS#12 export leaked a certificate per stripped private key.
 - `CertificateFinder` skipped PKCS#12 files (`.pfx`, `.p12`) on .NET 9 and later.
