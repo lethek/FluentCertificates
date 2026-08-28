@@ -1434,6 +1434,55 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>
+    /// A source that records what it was asked to release rather than disposing it, standing in for one
+    /// backed by a cache or a pool.
+    /// </summary>
+    private sealed record CountingReleaseSource(params X509Certificate2[] Certificates) : AbstractCertificateSource
+    {
+        public override string Kind => "Counting";
+
+        public List<X509Certificate2> Released { get; } = [];
+
+        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+            => SelectResults(Certificates, _ => "at");
+
+        public override void Release(CertificateFinderResult result)
+            => Released.Add(result.Certificate);
+    }
+
+
+    /// <summary>
+    /// A source that yields its first certificate and then gives up, standing in for a search cancelled
+    /// after it has already found something.
+    /// </summary>
+    private sealed record ThrowingSource(params X509Certificate2[] Certificates) : AbstractCertificateSource
+    {
+        public override string Kind => "Throwing";
+
+        /// <summary>Whether this stub treats the certificates as its own to dispose.</summary>
+        public bool Owns { get; init; }
+
+        protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
+        {
+            var yielded = 0;
+            foreach (var result in SelectResults(Certificates, _ => "at")) {
+                if (yielded++ == 1) {
+                    throw new OperationCanceledException();
+                }
+                yield return result;
+            }
+        }
+
+        public override void Release(CertificateFinderResult result)
+        {
+            if (Owns) {
+                base.Release(result);
+            }
+        }
+    }
+
+
     /// <summary>Every file extension the finder claims to support, with the format to write it in.</summary>
     public static IEnumerable<(string FileName, string Format)> SupportedFormats()
     {
@@ -1903,6 +1952,71 @@ public class CertificateFinderTests
         await AssertReleasesMatchesAsync(async f => await f.AnyAsync(x => true), expectedProduced: 1);
         await AssertReleasesMatchesAsync(async f => await f.AllAsync(x => false), expectedProduced: 1);
         await AssertReleasesMatchesAsync(async f => await f.CountAsync(x => true), expectedProduced: 3);
+    }
+
+
+    /// <summary>
+    /// A terminal that holds one match while it looks for the next one has to release it if the search
+    /// then fails, since it never reaches the caller. Cancelling is the ordinary way that happens, which
+    /// is why the asynchronous forms make this worth pinning.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(HoldingTerminals))]
+    public async Task ATerminalHoldingAMatch_ReleasesIt_WhenTheSearchThenFails(
+        string name,
+        Func<CertificateFinder, Task> use)
+    {
+        _ = name;
+        var certificates = new[] { "First", "Second" }.Select(CreateSelfSignedCertificate).ToArray();
+        var source = new ThrowingSource(certificates) { Owns = true };
+
+        await Assert.That(async () => await use(new CertificateFinder().AddSource(source)))
+            .Throws<OperationCanceledException>();
+
+        //The one it was holding when the source gave up is disposed rather than abandoned
+        await Assert.That(() => certificates[0].Subject).ThrowsExactly<CryptographicException>();
+        certificates[1].Dispose();
+    }
+
+
+    /// <summary>
+    /// A result is released once, never twice. A source releasing into a cache or a pool rather than
+    /// disposing cannot tell the difference between two calls and one.
+    /// </summary>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task SingleOrDefault_WithTwoMatches_ReleasesEachResultExactlyOnce(bool asynchronous)
+    {
+        var certificates = new[] { "First", "Second" }.Select(CreateSelfSignedCertificate).ToArray();
+        var source = new CountingReleaseSource(certificates);
+        var finder = new CertificateFinder().AddSource(source);
+
+        await Assert
+            .That(async () => {
+                if (asynchronous) {
+                    await finder.SingleOrDefaultAsync(x => true);
+                } else {
+                    finder.SingleOrDefault(x => true);
+                }
+            })
+            .ThrowsExactly<InvalidOperationException>();
+
+        await Assert.That(source.Released.Count).IsEqualTo(2);
+        await Assert.That(source.Released.Distinct().Count()).IsEqualTo(2);
+
+        foreach (var certificate in certificates) {
+            certificate.Dispose();
+        }
+    }
+
+
+    public static IEnumerable<(string Name, Func<CertificateFinder, Task>)> HoldingTerminals()
+    {
+        yield return ("SingleOrDefault", f => Task.Run(() => { _ = f.SingleOrDefault(x => true); }));
+        yield return ("SingleOrDefaultAsync", async f => await f.SingleOrDefaultAsync(x => true));
+        yield return ("LastOrDefault", f => Task.Run(() => { _ = f.LastOrDefault(x => true); }));
+        yield return ("LastOrDefaultAsync", async f => await f.LastOrDefaultAsync(x => true));
     }
 
 

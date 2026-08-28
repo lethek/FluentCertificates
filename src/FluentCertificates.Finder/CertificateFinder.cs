@@ -202,13 +202,24 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     public CertificateFinderResult? SingleOrDefault(Expression<Func<CertificateFinderResult, bool>> predicate)
     {
         CertificateFinderResult? found = null;
-        foreach (var result in Where(predicate)) {
+        try {
+            foreach (var result in Where(predicate)) {
+                if (found is not null) {
+                    //Cleared first, so the handler below cannot release it a second time
+                    var first = found;
+                    found = null;
+                    first.Source.Release(first);
+                    result.Source.Release(result);
+                    throw new InvalidOperationException("Sequence contains more than one matching element");
+                }
+                found = result;
+            }
+        } catch {
+            //The match being held never reaches the caller now, so this is the last chance to release it
             if (found is not null) {
                 found.Source.Release(found);
-                result.Source.Release(result);
-                throw new InvalidOperationException("Sequence contains more than one matching element");
             }
-            found = result;
+            throw;
         }
         return found;
     }
@@ -371,13 +382,25 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
         CancellationToken cancellationToken = default)
     {
         CertificateFinderResult? found = null;
-        await foreach (var result in Where(predicate).AsAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
+        try {
+            await foreach (var result in Where(predicate).AsAsyncEnumerable(cancellationToken).ConfigureAwait(false)) {
+                if (found is not null) {
+                    //Cleared first, so the handler below cannot release it a second time
+                    var first = found;
+                    found = null;
+                    first.Source.Release(first);
+                    result.Source.Release(result);
+                    throw new InvalidOperationException("Sequence contains more than one matching element");
+                }
+                found = result;
+            }
+        } catch {
+            //The match being held never reaches the caller now, so this is the last chance to release it.
+            //Cancelling is the ordinary way to get here
             if (found is not null) {
                 found.Source.Release(found);
-                result.Source.Release(result);
-                throw new InvalidOperationException("Sequence contains more than one matching element");
             }
-            found = result;
+            throw;
         }
         return found;
     }

@@ -162,11 +162,19 @@ public abstract record AbstractCertificateSource
         }
 
         CertificateFinderResult? last = null;
-        foreach (var result in Find(filter)) {
+        try {
+            foreach (var result in Find(filter)) {
+                if (last is not null) {
+                    Release(last);
+                }
+                last = result;
+            }
+        } catch {
+            //The match being held never reaches the caller now, so this is the last chance to release it
             if (last is not null) {
                 Release(last);
             }
-            last = result;
+            throw;
         }
         return last;
     }
@@ -227,11 +235,20 @@ public abstract record AbstractCertificateSource
         }
 
         CertificateFinderResult? last = null;
-        await foreach (var result in FindAsync(filter, cancellationToken).ConfigureAwait(false)) {
+        try {
+            await foreach (var result in FindAsync(filter, cancellationToken).ConfigureAwait(false)) {
+                if (last is not null) {
+                    Release(last);
+                }
+                last = result;
+            }
+        } catch {
+            //The match being held never reaches the caller now, so this is the last chance to release it.
+            //Cancelling is the ordinary way to get here
             if (last is not null) {
                 Release(last);
             }
-            last = result;
+            throw;
         }
         return last;
     }
