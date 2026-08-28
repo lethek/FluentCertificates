@@ -17,7 +17,7 @@ namespace FluentCertificates;
 /// A file that cannot be read as a certificate is skipped rather than throwing, so one bad file does not
 /// hide the good ones beside it. So is a subdirectory that cannot be opened, and a directory that is not
 /// there yields no results, matching what <see cref="CertificateStoreSource"/> does with a store that
-/// does not exist.
+/// does not exist. Set <see cref="OnLoadFailure"/> to learn what was skipped.
 /// </para>
 /// </remarks>
 public sealed record CertificateDirectorySource : AbstractCertificateSource
@@ -48,6 +48,22 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
     /// <summary>The file system this directory is read through.</summary>
     public IFileSystem FileSystem { get; init; }
+
+
+    /// <summary>
+    /// Called with the path and the exception each time this source skips something it could not read:
+    /// a file that would not parse, or the directory itself when it is not there. Nothing is reported
+    /// by default, which makes a search that skipped forty files look like one that found nothing.
+    /// </summary>
+    /// <remarks>
+    /// Diagnostics only. The search carries on regardless of what this does, but an exception thrown
+    /// here is not caught and will end the search.
+    /// <para>
+    /// Part of the record's value equality, like every other property, so two sources reading the same
+    /// directory with different handlers are two sources and that directory is read twice.
+    /// </para>
+    /// </remarks>
+    public Action<string, Exception>? OnLoadFailure { get; init; }
 
 
     /// <inheritdoc/>
@@ -91,7 +107,8 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     {
         try {
             return FileSystem.Directory.EnumerateFiles(Path, "*", ListingOptions);
-        } catch (DirectoryNotFoundException) {
+        } catch (DirectoryNotFoundException ex) {
+            OnLoadFailure?.Invoke(Path, ex);
             return [];
         }
     }
@@ -129,8 +146,9 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
                 default:
                     return [CertTools.LoadCertificate(FileSystem.File.ReadAllBytes(path))];
             }
-        } catch {
-            //Ignore any certificate files which couldn't be loaded
+        } catch (Exception ex) {
+            //One bad file must not hide the good ones beside it, so it is skipped and reported
+            OnLoadFailure?.Invoke(path, ex);
             return [];
         }
     }

@@ -503,7 +503,15 @@ tree are different searches, so adding both runs both.
 
 A source that is not there contributes nothing rather than failing the search: a store that does not
 exist, a directory that does not exist, a directory or subdirectory that cannot be read, and a file that
-cannot be parsed are all skipped.
+cannot be parsed are all skipped. To see what a directory search skipped, give the source a handler:
+
+```csharp
+var certs = new CertificateDirectorySource("/etc/ssl/certs", recurse: true) {
+    OnLoadFailure = (path, ex) => logger.LogWarning(ex, "Skipped {Path}", path)
+};
+
+var finder = new CertificateFinder().AddSource(certs);
+```
 
 `RemoveSource(...)`, `RemoveSources(...)` and `ClearSources()` narrow a finder that is already
 configured. Sources compare by value, so you remove one by describing it rather than by holding on to

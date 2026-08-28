@@ -21,6 +21,7 @@ release rather than record it as it happened.
 - `CertificateFinder.Any`, `All`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` overloads taking a predicate.
 - `CertificateFinder.AddSource` and `AddSources`.
 - `CertificateFinder.RemoveSource` and `RemoveSources`, the latter taking either sources or a predicate.
+- `CertificateDirectorySource.OnLoadFailure`, reporting each path the source skipped and why.
 - `CertificateFinderResult.Location`.
 - `AbstractCertificateSource.EnumerateDescending`, `FindDescending` and `FindLast`.
 

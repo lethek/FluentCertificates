@@ -1077,6 +1077,58 @@ public class CertificateFinderTests
 
 
     /// <summary>
+    /// Skipping a file that will not parse is the right behaviour, but a search that skipped forty of them
+    /// otherwise looks like one that found nothing. The handler is what makes the difference visible.
+    /// </summary>
+    [Test]
+    public async Task OnLoadFailure_ReportsEveryFileTheSourceSkipped()
+    {
+        using var cert = CreateSelfSignedCertificate("Good");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/reported/good.pem", new MockFileData(cert.ExportCertificatePem()));
+        fs.AddFile("/reported/bad.der", new MockFileData([0x30, 0x82, 0x01, 0x02, 0xFF, 0xFF, 0xFF]));
+        fs.AddFile("/reported/worse.p7b", new MockFileData("not a PKCS#7 blob at all"));
+
+        var skipped = new List<(string Path, Exception Exception)>();
+        var results = new CertificateFinder(fs)
+            .AddSource(new CertificateDirectorySource("/reported", false, fs) {
+                OnLoadFailure = (path, ex) => skipped.Add((path, ex))
+            })
+            .ToList();
+
+        //The good file is still returned: reporting a failure does not stop the search
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+
+        await Assert
+            .That(skipped.Select(x => fs.Path.GetFileName(x.Path)))
+            .IsEquivalentTo(["bad.der", "worse.p7b"], CollectionOrdering.Any);
+        await Assert.That(skipped.All(x => x.Exception is not null)).IsTrue();
+    }
+
+
+    /// <summary>
+    /// A directory that is not there is skipped like an unreadable file is, and is reported the same way,
+    /// so making it silent does not make it invisible.
+    /// </summary>
+    [Test]
+    public async Task OnLoadFailure_ReportsADirectoryThatIsNotThere()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        var skipped = new List<(string Path, Exception Exception)>();
+
+        var results = new CertificateFinder(fs)
+            .AddSource(new CertificateDirectorySource("/nonexistent", false, fs) {
+                OnLoadFailure = (path, ex) => skipped.Add((path, ex))
+            })
+            .ToList();
+
+        await Assert.That(results).IsEmpty();
+        await Assert.That(skipped.Select(x => x.Path)).IsEquivalentTo(["/nonexistent"]);
+        await Assert.That(skipped[0].Exception).IsTypeOf<DirectoryNotFoundException>();
+    }
+
+
+    /// <summary>
     /// A directory the process cannot open is treated like one that is not there, rather than throwing
     /// part-way through the search. <c>IgnoreInaccessible</c> covers the root of a scan as well as the
     /// subdirectories below it.
