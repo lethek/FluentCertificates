@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Security;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 
 namespace FluentCertificates;
@@ -72,6 +73,23 @@ public record CertificateExportBuilder
     {
         Certificates = [.. certs];
         Anchor = anchor;
+    }
+
+
+    /// <summary>
+    /// Prints every property, with <see cref="Password"/> redacted. Written out by hand rather than
+    /// generated, so a property added to this record has to be added here too.
+    /// </summary>
+    /// <param name="builder">Receives the printed members.</param>
+    /// <returns>Always <see langword="true"/>: this record always prints something.</returns>
+    protected virtual bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("Certificates = ").Append(Certificates);
+        builder.Append(", Anchor = ").Append(Anchor);
+        builder.Append(", Keys = ").Append(Keys);
+        builder.Append(", Password = ").Append(Password is null ? "null" : "***");
+        builder.Append(", SecurePassword = ").Append(SecurePassword);
+        return true;
     }
 
 

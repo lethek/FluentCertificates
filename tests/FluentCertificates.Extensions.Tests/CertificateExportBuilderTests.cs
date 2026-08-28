@@ -859,6 +859,44 @@ public class CertificateExportBuilderTests
     }
 
 
+    /// <summary>
+    /// A builder is passed around while an export is being configured, and <c>ToString</c> is what a
+    /// logging framework calls for an unformatted argument, so a generated one writes the password out.
+    /// </summary>
+    [Test]
+    public async Task ToString_RedactsThePassword()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Printed").Create();
+        var builder = cert.Export().WithPassword("hunter2");
+
+        var printed = builder.ToString();
+
+        await Assert.That(printed).DoesNotContain("hunter2");
+        await Assert.That(printed).Contains("Password = ***");
+        await Assert.That(printed).Contains("Keys = None");
+
+        //A builder with no password says so rather than hiding that too
+        await Assert.That(builder.WithoutPassword().ToString()).Contains("Password = null");
+    }
+
+
+    /// <summary>
+    /// <see cref="SecureString.ToString"/> returns the type name, so a secure password never reaches the
+    /// printed output in the first place.
+    /// </summary>
+    [Test]
+    public async Task ToString_WithASecurePassword_PrintsNoSecret()
+    {
+        using var cert = new CertificateBuilder().SetSubject("CN=Printed Securely").Create();
+        var builder = cert.Export().WithPassword(SecurePassword("hunter2"));
+
+        var printed = builder.ToString();
+
+        await Assert.That(printed).DoesNotContain("hunter2");
+        await Assert.That(printed).Contains("SecurePassword = System.Security.SecureString");
+    }
+
+
     private static List<string> LoadedSubjects(byte[] bytes)
     {
         var loaded = new X509Certificate2Collection();

@@ -46,6 +46,7 @@ release rather than record it as it happened.
 
 ### Fixed
 
+- `CertificateExportBuilder.ToString()` prints `Password = ***` rather than the plain-text export password.
 - The 14 `Oids` members above are cached on first access rather than eagerly during static construction, and can no longer be reassigned process-wide.
 - `CertificateFinder` disposes the certificates a source loaded and then discarded, including the matches `Any`, `All`, `Count` and `Single` never return. Certificates supplied by the caller are never disposed.
 - A directory that does not exist yields no results instead of throwing `DirectoryNotFoundException` part-way through the search.
