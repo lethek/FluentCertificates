@@ -739,33 +739,33 @@ public static class Oids
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="LocalityName"/>.</summary>
     public static Oid LocalityNameOid => s_localityNameOid ??= InitializeOid(LocalityName);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="StateOrProvinceName"/>.</summary>
-    public static Oid StateOrProvinceNameOid = s_stateOrProvinceNameOid ??= InitializeOid(StateOrProvinceName);
+    public static Oid StateOrProvinceNameOid => s_stateOrProvinceNameOid ??= InitializeOid(StateOrProvinceName);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Organization"/>.</summary>
-    public static Oid OrganizationOid = s_organizationOid ??= InitializeOid(Organization);
+    public static Oid OrganizationOid => s_organizationOid ??= InitializeOid(Organization);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="OrganizationalUnit"/>.</summary>
-    public static Oid OrganizationalUnitOid = s_organizationalUnitOid ??= InitializeOid(OrganizationalUnit);
+    public static Oid OrganizationalUnitOid => s_organizationalUnitOid ??= InitializeOid(OrganizationalUnit);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EmailAddress"/>.</summary>
-    public static Oid EmailAddressOid = s_emailAddressOid ??= InitializeOid(EmailAddress);
+    public static Oid EmailAddressOid => s_emailAddressOid ??= InitializeOid(EmailAddress);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="TelephoneNumber"/>.</summary>
-    public static Oid TelephoneNumberOid = s_telephoneNumberOid ??= InitializeOid(TelephoneNumber);
+    public static Oid TelephoneNumberOid => s_telephoneNumberOid ??= InitializeOid(TelephoneNumber);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="StreetAddress"/>.</summary>
-    public static Oid StreetAddressOid = s_streetAddressOid ??= InitializeOid(StreetAddress);
+    public static Oid StreetAddressOid => s_streetAddressOid ??= InitializeOid(StreetAddress);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PostalCode"/>.</summary>
-    public static Oid PostalCodeOid = s_postalCodeOid ??= InitializeOid(PostalCode);
+    public static Oid PostalCodeOid => s_postalCodeOid ??= InitializeOid(PostalCode);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="UserId"/>.</summary>
-    public static Oid UserIdOid = s_userIdOid ??= InitializeOid(UserId);
+    public static Oid UserIdOid => s_userIdOid ??= InitializeOid(UserId);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SerialNumber"/>.</summary>
-    public static Oid SerialNumberOid = s_serialNumberOid ??= InitializeOid(SerialNumber);
+    public static Oid SerialNumberOid => s_serialNumberOid ??= InitializeOid(SerialNumber);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="GivenName"/>.</summary>
-    public static Oid GivenNameOid = s_givenNameOid ??= InitializeOid(GivenName);
+    public static Oid GivenNameOid => s_givenNameOid ??= InitializeOid(GivenName);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Surname"/>.</summary>
-    public static Oid SurnameOid = s_surnameOid ??= InitializeOid(Surname);
+    public static Oid SurnameOid => s_surnameOid ??= InitializeOid(Surname);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Title"/>.</summary>
-    public static Oid TitleOid = s_titleOid ??= InitializeOid(Title);
+    public static Oid TitleOid => s_titleOid ??= InitializeOid(Title);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DnQualifier"/>.</summary>
-    public static Oid DnQualifierOid = s_dnQualifierOid ??= InitializeOid(DnQualifier);
+    public static Oid DnQualifierOid => s_dnQualifierOid ??= InitializeOid(DnQualifier);
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DomainComponent"/>.</summary>
-    public static Oid DomainComponentOid = s_domainComponentOid ??= InitializeOid(DomainComponent);
+    public static Oid DomainComponentOid => s_domainComponentOid ??= InitializeOid(DomainComponent);
 
     
     private static Oid InitializeOid(string oidValue)
