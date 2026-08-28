@@ -497,6 +497,7 @@ public class CertificateFinderTests
         var source = new StubSource("Stub", "one", cert);
 
         await Assert.That(() => new CertificateFinder().Where(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => new CertificateFinder().All(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => CertificateFilter.Empty.Add((Expression<Func<CertificateFinderResult, bool>>)null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => CertificateFilter.Empty.Add((CertificateFinderPredicate)null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => new CertificateFinderPredicate(null!)).ThrowsExactly<ArgumentNullException>();
@@ -671,6 +672,7 @@ public class CertificateFinderTests
         using var cert = CreateSelfSignedCertificate("Overloads");
 
         await AssertPushesDown(cert, f => f.Any(x => x.Location == "a"));
+        await AssertPushesDown(cert, f => f.All(x => x.Location == "a"));
         await AssertPushesDown(cert, f => f.First(x => x.Location == "a"));
         await AssertPushesDown(cert, f => f.FirstOrDefault(x => x.Location == "a"));
         await AssertPushesDown(cert, f => f.Last(x => x.Location == "a"));
@@ -693,6 +695,8 @@ public class CertificateFinderTests
 
         await Assert.That(finder.Any(matches)).IsTrue();
         await Assert.That(finder.Any(nothing)).IsFalse();
+        await Assert.That(finder.All(matches)).IsFalse();
+        await Assert.That(finder.All(x => x.Certificate.Subject.StartsWith("CN="))).IsTrue();
         await Assert.That(finder.Count(matches)).IsEqualTo(1);
         await Assert.That(finder.Count(nothing)).IsEqualTo(0);
         await Assert.That(finder.First(matches).Certificate.Thumbprint).IsEqualTo(match.Thumbprint);
@@ -704,6 +708,27 @@ public class CertificateFinderTests
 
         await Assert.That(() => finder.First(nothing)).ThrowsExactly<InvalidOperationException>();
         await Assert.That(() => finder.Single(x => true)).ThrowsExactly<InvalidOperationException>();
+    }
+
+
+    /// <summary>
+    /// <see cref="CertificateFinder.All"/> hands the sources the negation of the caller's predicate, since
+    /// a counter-example is what a source can look for and stop at. Answering with the predicate as written
+    /// inverts the result whenever every certificate matches.
+    /// </summary>
+    [Test]
+    public async Task All_AsksTheSourcesForACounterExample()
+    {
+        using var every = CreateSelfSignedCertificate("Every");
+        using var odd = CreateSelfSignedCertificate("Odd");
+
+        var finder = new CertificateFinder().AddCustomSource(every, odd);
+
+        await Assert.That(finder.All(x => x.Certificate.Subject.StartsWith("CN="))).IsTrue();
+        await Assert.That(finder.All(x => x.Certificate.Subject == "CN=Every")).IsFalse();
+
+        //Vacuously true over no certificates, as Enumerable.All is over an empty sequence
+        await Assert.That(new CertificateFinder().All(x => false)).IsTrue();
     }
 
 

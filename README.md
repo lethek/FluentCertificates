@@ -489,8 +489,9 @@ finder.Where(x => x.Certificate.Subject.Contains("example.com"));
 from x in finder where x.Certificate.HasPrivateKey select x.Certificate;
 ```
 
-`Any`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` take
-a predicate and push it down the same way. Any other LINQ operator runs after collation, which is still
+`Any`, `All`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count`
+take a predicate and push it down the same way. `All` pushes down the negation, since what a source can
+stop at is the first certificate that fails. Any other LINQ operator runs after collation, which is still
 correct, just more work.
 So does a predicate you hold in a `Func<>` variable rather than writing inline, since only a lambda
 becomes an expression tree.

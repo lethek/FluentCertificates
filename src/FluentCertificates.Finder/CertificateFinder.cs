@@ -18,7 +18,7 @@ namespace FluentCertificates;
 /// <see cref="Where"/> is an instance method, and an instance method beats an extension method in overload
 /// resolution, so <c>finder.Where(x =&gt; ...)</c> and <c>from x in finder where ... select x</c> reach the
 /// sources rather than <see cref="Enumerable.Where{T}(IEnumerable{T}, Func{T,bool})"/>. The
-/// predicate-taking terminals (<see cref="Any"/>, <see cref="First"/>, <see cref="FirstOrDefault"/>,
+/// predicate-taking terminals (<see cref="Any"/>, <see cref="All"/>, <see cref="First"/>, <see cref="FirstOrDefault"/>,
 /// <see cref="Last"/>, <see cref="LastOrDefault"/>, <see cref="Single"/>, <see cref="SingleOrDefault"/>
 /// and <see cref="Count"/>) shadow their counterparts the same way. Every other LINQ operator runs after
 /// collation, which is correct but does no filtering at the source.
@@ -73,6 +73,27 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// </remarks>
     public bool Any(Expression<Func<CertificateFinderResult, bool>> predicate)
         => Where(predicate).Any();
+
+
+    /// <summary>
+    /// Whether every certificate found matches <paramref name="predicate"/>. True if none were found.
+    /// </summary>
+    /// <param name="predicate">The predicate every result must satisfy.</param>
+    /// <returns><see langword="true"/> if they all match, or if there are none.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="predicate"/> is null.</exception>
+    /// <remarks>
+    /// Shadows <see cref="Enumerable.All{T}(IEnumerable{T},Func{T,bool})"/> so the predicate reaches the
+    /// sources. See <see cref="Where"/>. What the sources are given is the negation, since a source can
+    /// answer "is anything not a match?" natively and stop at the first one it finds.
+    /// </remarks>
+    public bool All(Expression<Func<CertificateFinderResult, bool>> predicate)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        return !Any(Expression.Lambda<Func<CertificateFinderResult, bool>>(
+            Expression.Not(predicate.Body),
+            predicate.Parameters
+        ));
+    }
 
 
     /// <summary>
