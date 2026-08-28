@@ -357,8 +357,8 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// </summary>
     /// <param name="certificates">The certificates to search.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the certificates added.</returns>
-    public CertificateFinder AddCustomSource(params IEnumerable<X509Certificate2> certificates)
-        => AddSource(new CustomCertificateSource(certificates));
+    public CertificateFinder AddCertificates(params IEnumerable<X509Certificate2> certificates)
+        => AddSource(new CertificateCollectionSource(certificates));
 
 
     /// <summary>

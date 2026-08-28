@@ -326,7 +326,7 @@ public class CertificateFinderTests
         await Assert.That(forwards.Count).IsEqualTo(3);
         await Assert.That(backwards).IsEquivalentTo(Enumerable.Reverse(forwards), CollectionOrdering.Matching);
 
-        var custom = new CustomCertificateSource([one, two, three]);
+        var custom = new CertificateCollectionSource([one, two, three]);
         await Assert
             .That(custom.FindDescending(CertificateFilter.Empty)!.Select(x => x.Certificate.Thumbprint))
             .IsEquivalentTo([three.Thumbprint, two.Thumbprint, one.Thumbprint], CollectionOrdering.Matching);
@@ -475,12 +475,12 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task CustomCertificateSource_ReportsItsKindAndLeavesTheCallersCertificates()
+    public async Task CertificateCollectionSource_ReportsItsKindAndLeavesTheCallersCertificates()
     {
         using var cert = CreateSelfSignedCertificate("Custom");
-        var source = new CustomCertificateSource([cert]);
+        var source = new CertificateCollectionSource([cert]);
 
-        await Assert.That(source.Kind).IsEqualTo("Custom");
+        await Assert.That(source.Kind).IsEqualTo("Collection");
         await Assert.That(source.FindDescending(CertificateFilter.Empty)).IsNotNull();
 
         //A supplied certificate has no location of its own, so its thumbprint stands in
@@ -510,7 +510,7 @@ public class CertificateFinderTests
     public async Task NonGenericEnumeration_YieldsTheSameResults()
     {
         using var cert = CreateSelfSignedCertificate("NonGeneric");
-        IEnumerable finder = new CertificateFinder().AddCustomSource(cert);
+        IEnumerable finder = new CertificateFinder().AddCertificates(cert);
 
         //Taken off the interface directly: Cast<T> would notice the generic interface and short-circuit
         var enumerator = finder.GetEnumerator();
@@ -574,12 +574,12 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task AddCustomSource_SearchesTheSuppliedCertificates()
+    public async Task AddCertificates_SearchesTheSuppliedCertificates()
     {
         using var first = CreateSelfSignedCertificate("First");
         using var second = CreateSelfSignedCertificate("Second");
 
-        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(first, second);
+        var finder = new CertificateFinder(MockFileSystem).AddCertificates(first, second);
 
         await Assert.That(finder.Sources).HasSingleItem();
         await Assert
@@ -593,13 +593,13 @@ public class CertificateFinderTests
     /// finder never disposes something it did not create.
     /// </summary>
     [Test]
-    public async Task AddCustomSource_RejectedCertificate_IsNotDisposed()
+    public async Task AddCertificates_RejectedCertificate_IsNotDisposed()
     {
         using var match = CreateSelfSignedCertificate("Keep");
         using var reject = CreateSelfSignedCertificate("Reject");
 
         var results = new CertificateFinder(MockFileSystem)
-            .AddCustomSource(match, reject)
+            .AddCertificates(match, reject)
             .Where(x => x.Certificate.Subject == "CN=Keep")
             .ToList();
 
@@ -689,7 +689,7 @@ public class CertificateFinderTests
         using var match = CreateSelfSignedCertificate("Match");
         using var other = CreateSelfSignedCertificate("Other");
 
-        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(match, other);
+        var finder = new CertificateFinder(MockFileSystem).AddCertificates(match, other);
         var matches = (Expression<Func<CertificateFinderResult, bool>>)(x => x.Certificate.Subject == "CN=Match");
         Expression<Func<CertificateFinderResult, bool>> nothing = x => x.Certificate.Subject == "CN=Absent";
 
@@ -722,7 +722,7 @@ public class CertificateFinderTests
         using var every = CreateSelfSignedCertificate("Every");
         using var odd = CreateSelfSignedCertificate("Odd");
 
-        var finder = new CertificateFinder().AddCustomSource(every, odd);
+        var finder = new CertificateFinder().AddCertificates(every, odd);
 
         await Assert.That(finder.All(x => x.Certificate.Subject.StartsWith("CN="))).IsTrue();
         await Assert.That(finder.All(x => x.Certificate.Subject == "CN=Every")).IsFalse();
@@ -739,7 +739,7 @@ public class CertificateFinderTests
         using var other1 = CreateSelfSignedCertificate("Other1");
         using var other2 = CreateSelfSignedCertificate("Other2");
 
-        var finder = new CertificateFinder(MockFileSystem).AddCustomSource(other1, match, other2);
+        var finder = new CertificateFinder(MockFileSystem).AddCertificates(other1, match, other2);
 
         var results = finder.Where(r => r.Certificate.Subject.Contains("CN=Match")).ToList();
 

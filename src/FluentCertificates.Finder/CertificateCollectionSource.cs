@@ -12,10 +12,10 @@ namespace FluentCertificates;
 /// compare: adding the same sequence twice is one source, adding an equivalent copy is two.
 /// </remarks>
 /// <param name="Certificates">The certificates this source offers.</param>
-public sealed record CustomCertificateSource(IEnumerable<X509Certificate2> Certificates) : AbstractCertificateSource
+public sealed record CertificateCollectionSource(IEnumerable<X509Certificate2> Certificates) : AbstractCertificateSource
 {
     /// <inheritdoc/>
-    public override string Kind => "Custom";
+    public override string Kind => "Collection";
 
 
     /// <summary>

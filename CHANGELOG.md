@@ -29,7 +29,7 @@ release rather than record it as it happened.
 - **Breaking:** `CertificateFinderResult.Store`, `.Directory` and `.CustomSource` are replaced by `.Source`.
 - **Breaking:** `CertificateFinder.Sources` is now `ImmutableList<AbstractCertificateSource>`.
 - **Breaking:** `CertificateStore` and `CertificateDirectory` are renamed to `CertificateStoreSource` and `CertificateDirectorySource`, both sealed and derived from `AbstractCertificateSource`. `CertificateDirectorySource` gains `Recurse` and `FileSystem`.
-- **Breaking:** `CertificateFinder.AddCustomSource` takes `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`.
+- **Breaking:** `CertificateFinder.AddCustomSource` is replaced by `AddCertificates`, taking `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`.
 - **Breaking:** `CertificateFinder.AddCustomSources` is removed.
 - Sources are deduplicated by value; results are not.
 
