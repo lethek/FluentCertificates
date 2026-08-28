@@ -15,27 +15,27 @@ release rather than record it as it happened.
 
 ### Added
 
-- `AbstractCertificateSource` is the extension point for custom certificate sources: override `Enumerate(CertificateFilter)` and `CertificateFinder` will search it alongside stores and directories.
-- `CertificateFinder.Where(Expression<Func<CertificateFinderResult, bool>>)` passes the predicate to every source, so a source can filter natively instead of the finder filtering after the fact. `finder.Where(...)` and `from x in finder where ...` both bind to it.
-- `CertificateFinder.Any`, `All`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` take a predicate and pass it to the sources, like `Where`. `All` passes down the negation, so a source can stop at the first certificate that fails.
+- `AbstractCertificateSource`, the base type for custom certificate sources.
+- `CertificateFilter` and `CertificateFinderPredicate`, holding each predicate as both an expression tree and a compiled delegate.
+- `CertificateFinder.Where(Expression<Func<CertificateFinderResult, bool>>)`, which hands the predicate to every source.
+- `CertificateFinder.Any`, `All`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` overloads taking a predicate.
 - `CertificateFinder.AddSource` and `AddSources`.
-- `CertificateFinderResult.Location` identifies a certificate within its source: the full file path, or the store's location and name.
-- `AbstractCertificateSource.EnumerateDescending`, so a source able to enumerate backwards cheaply lets `CertificateFinder.Last` stop at the first match instead of reading everything. Returning `null`, the default, means it cannot. `CertificateStoreSource`, `CertificateDirectorySource` and `CustomCertificateSource` all implement it.
-- `AbstractCertificateSource.FindLast` and `FindDescending`, and a `Release` hook a source overrides to keep a discarded certificate alive.
-- `CertificateFilter` carries the predicates a source must honour. Each is a `CertificateFinderPredicate` exposing both the expression tree, for a source that can translate it, and the delegate compiled once when it was added, for a source that applies it in memory.
+- `CertificateFinderResult.Location`.
+- `AbstractCertificateSource.EnumerateDescending`, `FindDescending` and `FindLast`.
 
 ### Changed
 
-- **Breaking:** `CertificateFinder` implements `IEnumerable<CertificateFinderResult>` instead of `IQueryable<CertificateFinderResult>`; `ElementType`, `Expression` and `Provider` are gone. LINQ still works, and nothing about pushdown is lost: the provider evaluated everything in memory anyway.
-- **Breaking:** `CertificateFinderResult.Store`, `.Directory` and `.CustomSource` are replaced by a single `.Source`. Use `Source` directly, or cast it to `CertificateStoreSource` / `CertificateDirectorySource` for their details.
-- **Breaking:** `CertificateFinder.Sources` is now `ImmutableList<AbstractCertificateSource>` rather than a list of raw sequences.
-- **Breaking:** `CertificateStore` and `CertificateDirectory` are renamed to `CertificateStoreSource` and `CertificateDirectorySource`. Both are sealed, derive from `AbstractCertificateSource`, and do their own reading and filtering, replacing the internal enumerators. `CertificateDirectorySource` gains `Recurse` and `FileSystem`.
-- **Breaking:** `CertificateFinder.AddCustomSource` takes `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`, so callers no longer construct result objects. `AddCustomSources` is removed; use `AddSources` with a custom `AbstractCertificateSource`, or call `AddCustomSource` more than once.
-- Sources are deduplicated by value, so a store or directory added twice is read once. Results are not: a certificate two different sources both reach is reported by each. Use `DistinctBy` on thumbprint, `Source.Kind` and `Location` to collapse them.
+- **Breaking:** `CertificateFinder` implements `IEnumerable<CertificateFinderResult>` instead of `IQueryable<CertificateFinderResult>`; `ElementType`, `Expression` and `Provider` are gone.
+- **Breaking:** `CertificateFinderResult.Store`, `.Directory` and `.CustomSource` are replaced by `.Source`.
+- **Breaking:** `CertificateFinder.Sources` is now `ImmutableList<AbstractCertificateSource>`.
+- **Breaking:** `CertificateStore` and `CertificateDirectory` are renamed to `CertificateStoreSource` and `CertificateDirectorySource`, both sealed and derived from `AbstractCertificateSource`. `CertificateDirectorySource` gains `Recurse` and `FileSystem`.
+- **Breaking:** `CertificateFinder.AddCustomSource` takes `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`.
+- **Breaking:** `CertificateFinder.AddCustomSources` is removed.
+- Sources are deduplicated by value; results are not.
 
 ### Fixed
 
-- `CertificateFinder` disposes the certificates a source loaded and then discarded, whether rejected by a predicate or passed over while looking for the last match. Certificates supplied by the caller are never disposed.
+- `CertificateFinder` disposes the certificates a source loaded and then discarded. Certificates supplied by the caller are never disposed.
 
 ## [0.20.1] - 2026-08-27
 
