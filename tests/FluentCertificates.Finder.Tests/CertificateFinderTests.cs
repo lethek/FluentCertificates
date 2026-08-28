@@ -1578,7 +1578,7 @@ public class CertificateFinderTests
             .ToList();
 
         await Assert.That(results).IsEmpty();
-        await Assert.That(skipped.Select(fs.Path.GetFileName)).IsEquivalentTo(["cert.pfx"]);
+        await Assert.That(skipped.Select(x => fs.Path.GetFileName(x)!)).IsEquivalentTo(["cert.pfx"]);
     }
 
 
