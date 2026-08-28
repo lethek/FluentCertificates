@@ -20,6 +20,7 @@ release rather than record it as it happened.
 - `CertificateFinder.Where(Expression<Func<CertificateFinderResult, bool>>)`, which hands the predicate to every source.
 - `CertificateFinder.Any`, `All`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` overloads taking a predicate.
 - `CertificateFinder.AddSource` and `AddSources`.
+- `CertificateFinder.RemoveSource` and `RemoveSources`, the latter taking either sources or a predicate.
 - `CertificateFinderResult.Location`.
 - `AbstractCertificateSource.EnumerateDescending`, `FindDescending` and `FindLast`.
 

@@ -259,6 +259,46 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
 
 
     /// <summary>
+    /// Removes a source. Every source equal to <paramref name="source"/> goes, since a duplicate is
+    /// searched no differently from the original.
+    /// </summary>
+    /// <param name="source">The source to remove.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> instance without that source.</returns>
+    /// <remarks>
+    /// Sources are records with value equality, so a source equal to one that was added removes it: a
+    /// directory is dropped by <c>RemoveSource(new CertificateDirectorySource(path))</c> without holding
+    /// on to the instance that was added.
+    /// </remarks>
+    public CertificateFinder RemoveSource(AbstractCertificateSource source)
+        => this with { Sources = Sources.RemoveAll(x => x == source) };
+
+
+    /// <summary>
+    /// Removes several sources. See <see cref="RemoveSource"/>.
+    /// </summary>
+    /// <param name="sources">The sources to remove.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> instance without those sources.</returns>
+    public CertificateFinder RemoveSources(params IEnumerable<AbstractCertificateSource> sources)
+    {
+        var unwanted = sources.ToHashSet();
+        return this with { Sources = Sources.RemoveAll(unwanted.Contains) };
+    }
+
+
+    /// <summary>
+    /// Removes every source matching <paramref name="match"/>.
+    /// </summary>
+    /// <param name="match">Chooses which sources to remove.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> instance without those sources.</returns>
+    /// <remarks>
+    /// Narrows a configured finder without naming each source, for example dropping every directory with
+    /// <c>RemoveSources(x =&gt; x.Kind == "Directory")</c>.
+    /// </remarks>
+    public CertificateFinder RemoveSources(Func<AbstractCertificateSource, bool> match)
+        => this with { Sources = Sources.RemoveAll(x => match(x)) };
+
+
+    /// <summary>
     /// Adds the specified <see cref="X509Store"/> instances to the current sources.
     /// </summary>
     /// <param name="stores">The stores to add.</param>

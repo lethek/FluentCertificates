@@ -49,6 +49,113 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>
+    /// Sources are records, so a source equal to one that was added removes it. The caller does not have
+    /// to have kept the instance they added.
+    /// </summary>
+    [Test]
+    public async Task RemoveSource_MatchesBySourceValue_AndLeavesTheOriginalFinderIntact()
+    {
+        var finder = new CertificateFinder(MockFileSystem)
+            .AddStore(StoreName.My, StoreLocation.CurrentUser)
+            .AddStore(StoreName.Root, StoreLocation.CurrentUser);
+
+        var narrowed = finder.RemoveSource(new CertificateStoreSource("My", StoreLocation.CurrentUser));
+
+        await Assert
+            .That(StoresOf(narrowed))
+            .IsEquivalentTo([("Root", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+
+        //Removing produces a new finder rather than editing this one
+        await Assert.That(finder.Sources.Count).IsEqualTo(2);
+    }
+
+
+    /// <summary>
+    /// A duplicate is searched no differently from the original, so one call takes both off rather than
+    /// leaving the caller to count how many times they added it.
+    /// </summary>
+    [Test]
+    public async Task RemoveSource_WithTheSameSourceAddedTwice_RemovesBoth()
+    {
+        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/certs").AddDirectory("/certs");
+
+        var narrowed = finder.RemoveSource(new CertificateDirectorySource("/certs", false, MockFileSystem));
+
+        await Assert.That(narrowed.Sources).IsEmpty();
+    }
+
+
+    [Test]
+    public async Task RemoveSource_WithASourceThatWasNeverAdded_ChangesNothing()
+    {
+        var finder = new CertificateFinder(MockFileSystem).AddStore(StoreName.My, StoreLocation.CurrentUser);
+
+        var narrowed = finder.RemoveSource(new CertificateStoreSource("Root", StoreLocation.LocalMachine));
+
+        await Assert
+            .That(StoresOf(narrowed))
+            .IsEquivalentTo([("My", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task RemoveSources_WithSeveralSources_RemovesEachOfThem()
+    {
+        var finder = new CertificateFinder(MockFileSystem)
+            .AddStore(StoreName.My, StoreLocation.CurrentUser)
+            .AddStore(StoreName.Root, StoreLocation.CurrentUser)
+            .AddStore(StoreName.CertificateAuthority, StoreLocation.CurrentUser);
+
+        var narrowed = finder.RemoveSources(
+            new CertificateStoreSource("My", StoreLocation.CurrentUser),
+            new CertificateStoreSource("CA", StoreLocation.CurrentUser)
+        );
+
+        await Assert
+            .That(StoresOf(narrowed))
+            .IsEquivalentTo([("Root", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task RemoveSources_WithAPredicate_RemovesEveryMatch()
+    {
+        var finder = new CertificateFinder(MockFileSystem)
+            .AddStore(StoreName.My, StoreLocation.CurrentUser)
+            .AddDirectory("/certs")
+            .AddDirectory("/other");
+
+        var narrowed = finder.RemoveSources(x => x.Kind == "Directory");
+
+        await Assert
+            .That(StoresOf(narrowed))
+            .IsEquivalentTo([("My", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// Removing a source stops it being searched, not merely listed.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_AfterRemovingADirectory_SkipsIt()
+    {
+        using var kept = CreateSelfSignedCertificate("Kept");
+        using var dropped = CreateSelfSignedCertificate("Dropped");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/kept/kept.cer", new MockFileData(kept.RawData));
+        fs.AddFile("/dropped/dropped.cer", new MockFileData(dropped.RawData));
+
+        var results = new CertificateFinder(fs)
+            .AddDirectory("/kept")
+            .AddDirectory("/dropped")
+            .RemoveSource(new CertificateDirectorySource("/dropped", false, fs))
+            .ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([kept.Thumbprint]);
+    }
+
+
     [Test]
     public async Task AddStore_WithValidX509Store_AddsStoreToFinder()
     {

@@ -501,6 +501,14 @@ var finder = new CertificateFinder()
 The same source added twice is searched once. Searching a directory's top level and searching its whole
 tree are different searches, so adding both runs both.
 
+`RemoveSource(...)`, `RemoveSources(...)` and `ClearSources()` narrow a finder that is already
+configured. Sources compare by value, so you remove one by describing it rather than by holding on to
+the instance you added.
+
+```csharp
+var withoutDirectories = finder.RemoveSources(x => x.Kind == "Directory");
+```
+
 ### Narrowing the search
 
 `Where` hands your predicate to every source, so a source able to answer it natively can, and one that
