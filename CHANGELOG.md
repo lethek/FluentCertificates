@@ -37,6 +37,8 @@ release rather than record it as it happened.
 ### Fixed
 
 - `CertificateFinder` disposes the certificates a source loaded and then discarded, including the matches `Any`, `All`, `Count` and `Single` never return. Certificates supplied by the caller are never disposed.
+- A directory that does not exist yields no results instead of throwing `DirectoryNotFoundException` part-way through the search.
+- A directory search skips a directory or subdirectory it cannot read instead of abandoning the scan.
 - A `.pem` or `.ca-bundle` file yields every certificate it holds, not only the first.
 - A `.pfx` or `.p12` file yields every certificate it holds, not only one chosen by export order.
 

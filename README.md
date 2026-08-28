@@ -501,6 +501,10 @@ var finder = new CertificateFinder()
 The same source added twice is searched once. Searching a directory's top level and searching its whole
 tree are different searches, so adding both runs both.
 
+A source that is not there contributes nothing rather than failing the search: a store that does not
+exist, a directory that does not exist, a directory or subdirectory that cannot be read, and a file that
+cannot be parsed are all skipped.
+
 `RemoveSource(...)`, `RemoveSources(...)` and `ClearSources()` narrow a finder that is already
 configured. Sources compare by value, so you remove one by describing it rather than by holding on to
 the instance you added.

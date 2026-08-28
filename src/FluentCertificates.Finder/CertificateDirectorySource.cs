@@ -1,4 +1,4 @@
-using System.IO.Abstractions;
+﻿using System.IO.Abstractions;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 
@@ -15,7 +15,9 @@ namespace FluentCertificates;
 /// Searching the top level and searching the tree are different searches, so they are different sources.
 /// <para>
 /// A file that cannot be read as a certificate is skipped rather than throwing, so one bad file does not
-/// hide the good ones beside it.
+/// hide the good ones beside it. So is a subdirectory that cannot be opened, and a directory that is not
+/// there yields no results, matching what <see cref="CertificateStoreSource"/> does with a store that
+/// does not exist.
 /// </para>
 /// </remarks>
 public sealed record CertificateDirectorySource : AbstractCertificateSource
@@ -75,10 +77,24 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     private IEnumerable<(string Path, string Extension)> CertificateFiles()
-        => FileSystem.Directory
-            .EnumerateFiles(Path, "*", Recurse ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+        => ListFiles()
             .Select(path => (Path: path, Extension: FileSystem.Path.GetExtension(path)))
             .Where(x => SupportedFileExtensions.Contains(x.Extension));
+
+
+    /// <summary>
+    /// Lists the directory, yielding nothing rather than throwing if it is not there. A directory that
+    /// cannot be opened needs no guard: <see cref="EnumerationOptions.IgnoreInaccessible"/> covers the
+    /// root of the scan as well as the subdirectories below it.
+    /// </summary>
+    private IEnumerable<string> ListFiles()
+    {
+        try {
+            return FileSystem.Directory.EnumerateFiles(Path, "*", ListingOptions);
+        } catch (DirectoryNotFoundException) {
+            return [];
+        }
+    }
 
 
     private IEnumerable<CertificateFinderResult> Load(IEnumerable<(string Path, string Extension)> files)
@@ -118,6 +134,20 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
             return [];
         }
     }
+
+
+    /// <summary>
+    /// Matches what the <see cref="SearchOption"/> overload of <c>EnumerateFiles</c> does, save for
+    /// <see cref="EnumerationOptions.IgnoreInaccessible"/>: that overload aborts a recursive scan at the
+    /// first subdirectory it cannot open, losing every certificate below and beside it.
+    /// </summary>
+    private EnumerationOptions ListingOptions => new() {
+        RecurseSubdirectories = Recurse,
+        IgnoreInaccessible = true,
+        //Hidden and system files are certificates like any other, and the default here would skip them
+        AttributesToSkip = 0,
+        MatchType = MatchType.Win32
+    };
 
 
     /// <summary>

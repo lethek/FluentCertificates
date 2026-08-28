@@ -1,10 +1,13 @@
-using System.Collections;
+﻿using System.Collections;
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
 using System.Linq.Expressions;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
+using System.Security.Principal;
 using System.Text;
 
 using TUnit.Assertions.Enums;
@@ -1032,12 +1035,64 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>
+    /// A directory that is not there yields no results rather than throwing, so a source that is missing
+    /// fails the same way whether it is a directory or a store. Throwing would be worse than empty here:
+    /// it happens part-way through enumeration, after earlier sources have already yielded.
+    /// </summary>
     [Test]
-    public async Task EnumerateCertificates_WithNonExistentPath_ThrowsDirectoryNotFoundException()
+    public async Task EnumerateCertificates_DirectoryDoesNotExist_ReturnsEmptyAndDoesNotHideOtherSources()
     {
-        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/nonexistent");
+        using var cert = CreateSelfSignedCertificate("Present");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/present/cert.cer", new MockFileData(cert.RawData));
 
-        await Assert.That(() => finder.ToList()).ThrowsExactly<DirectoryNotFoundException>();
+        var finder = new CertificateFinder(fs).AddDirectory("/present").AddDirectory("/nonexistent");
+
+        await Assert.That(finder.ToList().Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// A recursive scan skips a subdirectory it cannot open rather than abandoning the whole scan. The
+    /// <see cref="SearchOption"/> overload of <c>EnumerateFiles</c> does abandon it, which is why this
+    /// source asks for <c>IgnoreInaccessible</c> instead.
+    /// </summary>
+    [Test]
+    [SupportedOSPlatform("windows")]
+    public async Task EnumerateCertificates_UnreadableSubdirectory_IsSkippedAndTheRestAreReturned()
+    {
+        using var cert = CreateSelfSignedCertificate("Readable");
+        using var dir = new TempDirectory();
+        File.WriteAllText(Path.Combine(dir.Path, "readable.pem"), cert.ExportCertificatePem());
+
+        var locked = Path.Combine(dir.Path, "locked");
+        Directory.CreateDirectory(locked);
+        using var unlock = DenyDirectoryAccess(locked);
+
+        var results = new CertificateFinder().AddDirectory(dir.Path, recurse: true).ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// A directory the process cannot open is treated like one that is not there, rather than throwing
+    /// part-way through the search. <c>IgnoreInaccessible</c> covers the root of a scan as well as the
+    /// subdirectories below it.
+    /// </summary>
+    [Test]
+    [SupportedOSPlatform("windows")]
+    public async Task EnumerateCertificates_UnreadableDirectory_ReturnsEmpty()
+    {
+        using var cert = CreateSelfSignedCertificate("Unreachable");
+        using var dir = new TempDirectory();
+        File.WriteAllText(Path.Combine(dir.Path, "cert.pem"), cert.ExportCertificatePem());
+        using var unlock = DenyDirectoryAccess(dir.Path);
+
+        var finder = new CertificateFinder().AddDirectory(dir.Path);
+
+        await Assert.That(finder.ToList()).IsEmpty();
     }
 
 
@@ -1432,6 +1487,42 @@ public class CertificateFinderTests
         foreach (var certificate in certificates.Skip(expectedProduced)) {
             certificate.Dispose();
         }
+    }
+
+
+    /// <summary>
+    /// Denies the current user access to <paramref name="path"/> until the returned handle is disposed.
+    /// A deny rule beats the allow rules the directory inherits, so this works whether or not the test
+    /// process is elevated.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static IDisposable DenyDirectoryAccess(string path)
+    {
+        var info = new DirectoryInfo(path);
+        var rule = new FileSystemAccessRule(
+            WindowsIdentity.GetCurrent().User!,
+            FileSystemRights.ListDirectory | FileSystemRights.ReadData,
+            InheritanceFlags.None,
+            PropagationFlags.None,
+            AccessControlType.Deny
+        );
+
+        var security = info.GetAccessControl();
+        security.AddAccessRule(rule);
+        info.SetAccessControl(security);
+
+        return new Restore(() => {
+            var reverting = info.GetAccessControl();
+            reverting.RemoveAccessRule(rule);
+            info.SetAccessControl(reverting);
+        });
+    }
+
+
+    private sealed class Restore(Action undo) : IDisposable
+    {
+        public void Dispose()
+            => undo();
     }
 
 
