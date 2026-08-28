@@ -22,6 +22,7 @@ release rather than record it as it happened.
 - `CertificateFinder.AddSource` and `AddSources`.
 - `CertificateFinder.RemoveSource` and `RemoveSources`, the latter taking either sources or a predicate.
 - `CertificateDirectorySource.OnLoadFailure`, reporting each path the source skipped and why.
+- `CertificateDirectorySource.Password` and a `password` parameter on `CertificateFinder.AddDirectory` and `AddDirectories`, for reading password-protected PKCS#12 files.
 - `CertificateFinderResult.Location`.
 - `AbstractCertificateSource.EnumerateDescending`, `FindDescending` and `FindLast`.
 

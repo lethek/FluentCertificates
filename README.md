@@ -501,6 +501,13 @@ var finder = new CertificateFinder()
 The same source added twice is searched once. Searching a directory's top level and searching its whole
 tree are different searches, so adding both runs both.
 
+Pass a `password` to read password-protected `.pfx` and `.p12` files. One password covers the directory,
+and a file it does not open is skipped like any other unreadable file.
+
+```csharp
+var finder = new CertificateFinder().AddDirectory("/opt/deploy/certs", password: pfxPassword);
+```
+
 A source that is not there contributes nothing rather than failing the search: a store that does not
 exist, a directory that does not exist, a directory or subdirectory that cannot be read, and a file that
 cannot be parsed are all skipped. To see what a directory search skipped, give the source a handler:
