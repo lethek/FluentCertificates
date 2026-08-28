@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Immutable;
 using System.IO.Abstractions;
 using System.Linq.Expressions;
@@ -259,6 +259,46 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
 
 
     /// <summary>
+    /// Removes a source. Every source equal to <paramref name="source"/> goes, since a duplicate is
+    /// searched no differently from the original.
+    /// </summary>
+    /// <param name="source">The source to remove.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> instance without that source.</returns>
+    /// <remarks>
+    /// Sources are records with value equality, so a source equal to one that was added removes it: a
+    /// directory is dropped by <c>RemoveSource(new CertificateDirectorySource(path))</c> without holding
+    /// on to the instance that was added.
+    /// </remarks>
+    public CertificateFinder RemoveSource(AbstractCertificateSource source)
+        => this with { Sources = Sources.RemoveAll(x => x == source) };
+
+
+    /// <summary>
+    /// Removes several sources. See <see cref="RemoveSource"/>.
+    /// </summary>
+    /// <param name="sources">The sources to remove.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> instance without those sources.</returns>
+    public CertificateFinder RemoveSources(params IEnumerable<AbstractCertificateSource> sources)
+    {
+        var unwanted = sources.ToHashSet();
+        return this with { Sources = Sources.RemoveAll(unwanted.Contains) };
+    }
+
+
+    /// <summary>
+    /// Removes every source matching <paramref name="match"/>.
+    /// </summary>
+    /// <param name="match">Chooses which sources to remove.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> instance without those sources.</returns>
+    /// <remarks>
+    /// Narrows a configured finder without naming each source, for example dropping every directory with
+    /// <c>RemoveSources(x =&gt; x.Kind == "Directory")</c>.
+    /// </remarks>
+    public CertificateFinder RemoveSources(Func<AbstractCertificateSource, bool> match)
+        => this with { Sources = Sources.RemoveAll(x => match(x)) };
+
+
+    /// <summary>
     /// Adds the specified <see cref="X509Store"/> instances to the current sources.
     /// </summary>
     /// <param name="stores">The stores to add.</param>
@@ -327,9 +367,19 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// </summary>
     /// <param name="dir">The directory path.</param>
     /// <param name="recurse">Whether to search subdirectories.</param>
+    /// <param name="searchPattern">
+    /// Which file names to read. See <see cref="CertificateDirectorySource.SearchPattern"/>.
+    /// </param>
+    /// <param name="password">
+    /// The password protecting the PKCS#12 files in the directory. See
+    /// <see cref="CertificateDirectorySource.Password"/>.
+    /// </param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directory added.</returns>
-    public CertificateFinder AddDirectory(string dir, bool recurse = false)
-        => AddSource(new CertificateDirectorySource(dir, recurse, _fileSystem));
+    public CertificateFinder AddDirectory(string dir, bool recurse = false, string searchPattern = "*", string? password = null)
+        => AddSource(new CertificateDirectorySource(dir, recurse, _fileSystem) {
+            SearchPattern = searchPattern,
+            Password = password
+        });
 
 
     /// <summary>
@@ -337,14 +387,25 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// </summary>
     /// <param name="dirs">The directory paths.</param>
     /// <param name="recurse">Whether to search subdirectories.</param>
+    /// <param name="searchPattern">
+    /// Which file names to read in every one of these directories. See
+    /// <see cref="CertificateDirectorySource.SearchPattern"/>.
+    /// </param>
+    /// <param name="password">
+    /// The password protecting the PKCS#12 files in every one of these directories. See
+    /// <see cref="CertificateDirectorySource.Password"/>.
+    /// </param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>
-    public CertificateFinder AddDirectories(IEnumerable<string> dirs, bool recurse = false)
-        => AddSources(dirs.Select(dir => new CertificateDirectorySource(dir, recurse, _fileSystem)));
+    public CertificateFinder AddDirectories(IEnumerable<string> dirs, bool recurse = false, string searchPattern = "*", string? password = null)
+        => AddSources(dirs.Select(dir => new CertificateDirectorySource(dir, recurse, _fileSystem) {
+            SearchPattern = searchPattern,
+            Password = password
+        }));
 
 
     /// <summary>
     /// Adds multiple directories as certificate sources. Subdirectories are not searched; use
-    /// <see cref="AddDirectories(IEnumerable{string},bool)"/> or <see cref="AddDirectory"/> for that.
+    /// <see cref="AddDirectories(IEnumerable{string},bool,string,string)"/> or <see cref="AddDirectory"/> for that.
     /// </summary>
     /// <param name="dirs">The directory paths.</param>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the directories added.</returns>

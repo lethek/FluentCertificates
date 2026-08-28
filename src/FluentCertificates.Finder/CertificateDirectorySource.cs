@@ -1,6 +1,7 @@
-using System.IO.Abstractions;
+﻿using System.IO.Abstractions;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 using FluentCertificates.Internals;
 
@@ -15,7 +16,9 @@ namespace FluentCertificates;
 /// Searching the top level and searching the tree are different searches, so they are different sources.
 /// <para>
 /// A file that cannot be read as a certificate is skipped rather than throwing, so one bad file does not
-/// hide the good ones beside it.
+/// hide the good ones beside it. So is a subdirectory that cannot be opened, and a directory that is not
+/// there yields no results, matching what <see cref="CertificateStoreSource"/> does with a store that
+/// does not exist. Set <see cref="OnLoadFailure"/> to learn what was skipped.
 /// </para>
 /// </remarks>
 public sealed record CertificateDirectorySource : AbstractCertificateSource
@@ -44,12 +47,71 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     public bool Recurse { get; init; }
 
 
+    /// <summary>
+    /// Which file names to read, matched the way <see cref="System.IO.Directory.EnumerateFiles(string,string)"/>
+    /// matches them. Defaults to <c>"*"</c>, every file.
+    /// </summary>
+    /// <remarks>
+    /// The one filter worth pushing down to a directory: it decides what is read and parsed, where a
+    /// predicate on the certificate can only be answered by parsing the file first. It narrows the set of
+    /// supported extensions rather than widening it, so <c>"*.txt"</c> still finds nothing.
+    /// </remarks>
+    public string SearchPattern { get; init; } = "*";
+
+
     /// <summary>The file system this directory is read through.</summary>
     public IFileSystem FileSystem { get; init; }
 
 
+    /// <summary>
+    /// The password protecting the <c>.pfx</c> and <c>.p12</c> files in this directory. One password
+    /// covers the whole directory. A file this password does not open is skipped like any other file that
+    /// cannot be read, and reported through <see cref="OnLoadFailure"/>.
+    /// </summary>
+    /// <remarks>
+    /// Redacted from <see cref="ToString"/>, since a <see cref="CertificateFinderResult"/> carries the
+    /// source it came from and would otherwise print the password with it.
+    /// </remarks>
+    public string? Password { get; init; }
+
+
+    /// <summary>
+    /// Called with the path and the exception each time this source skips something it could not read:
+    /// a file that would not parse, or the directory itself when it is not there. Nothing is reported
+    /// by default, which makes a search that skipped forty files look like one that found nothing.
+    /// </summary>
+    /// <remarks>
+    /// Diagnostics only. The search carries on regardless of what this does, but an exception thrown
+    /// here is not caught and will end the search.
+    /// <para>
+    /// Part of the record's value equality, like every other property, so two sources reading the same
+    /// directory with different handlers are two sources and that directory is read twice.
+    /// </para>
+    /// </remarks>
+    public Action<string, Exception>? OnLoadFailure { get; init; }
+
+
     /// <inheritdoc/>
     public override string Kind => "Directory";
+
+
+    /// <summary>
+    /// Prints every property, with <see cref="Password"/> redacted. Written out by hand rather than
+    /// generated, so a property added to this record has to be added here too.
+    /// </summary>
+    /// <param name="builder">Receives the printed members.</param>
+    /// <returns>Always <see langword="true"/>: this record always prints something.</returns>
+    protected override bool PrintMembers(StringBuilder builder)
+    {
+        base.PrintMembers(builder);
+        builder.Append(", Path = ").Append(Path);
+        builder.Append(", Recurse = ").Append(Recurse);
+        builder.Append(", SearchPattern = ").Append(SearchPattern);
+        builder.Append(", FileSystem = ").Append(FileSystem);
+        builder.Append(", Password = ").Append(Password is null ? "null" : "***");
+        builder.Append(", OnLoadFailure = ").Append(OnLoadFailure);
+        return true;
+    }
 
 
     /// <summary>
@@ -75,10 +137,25 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     private IEnumerable<(string Path, string Extension)> CertificateFiles()
-        => FileSystem.Directory
-            .EnumerateFiles(Path, "*", Recurse ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+        => ListFiles()
             .Select(path => (Path: path, Extension: FileSystem.Path.GetExtension(path)))
             .Where(x => SupportedFileExtensions.Contains(x.Extension));
+
+
+    /// <summary>
+    /// Lists the directory, yielding nothing rather than throwing if it is not there. A directory that
+    /// cannot be opened needs no guard: <see cref="EnumerationOptions.IgnoreInaccessible"/> covers the
+    /// root of the scan as well as the subdirectories below it.
+    /// </summary>
+    private IEnumerable<string> ListFiles()
+    {
+        try {
+            return FileSystem.Directory.EnumerateFiles(Path, SearchPattern, ListingOptions);
+        } catch (DirectoryNotFoundException ex) {
+            OnLoadFailure?.Invoke(Path, ex);
+            return [];
+        }
+    }
 
 
     private IEnumerable<CertificateFinderResult> Load(IEnumerable<(string Path, string Extension)> files)
@@ -103,7 +180,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
                 case ".p12":
                     //X509CertificateLoader.LoadCertificate rejects PKCS#12, so these must go
                     //through the PKCS#12 loader rather than the default branch
-                    return CertTools.LoadPkcs12Collection(FileSystem.File.ReadAllBytes(path), null);
+                    return CertTools.LoadPkcs12Collection(FileSystem.File.ReadAllBytes(path), Password);
                 case ".pem":
                 case ".ca-bundle":
                     //Both extensions name PEM text, which holds any number of certificates
@@ -113,11 +190,26 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
                 default:
                     return [CertTools.LoadCertificate(FileSystem.File.ReadAllBytes(path))];
             }
-        } catch {
-            //Ignore any certificate files which couldn't be loaded
+        } catch (Exception ex) {
+            //One bad file must not hide the good ones beside it, so it is skipped and reported
+            OnLoadFailure?.Invoke(path, ex);
             return [];
         }
     }
+
+
+    /// <summary>
+    /// Matches what the <see cref="SearchOption"/> overload of <c>EnumerateFiles</c> does, save for
+    /// <see cref="EnumerationOptions.IgnoreInaccessible"/>: that overload aborts a recursive scan at the
+    /// first subdirectory it cannot open, losing every certificate below and beside it.
+    /// </summary>
+    private EnumerationOptions ListingOptions => new() {
+        RecurseSubdirectories = Recurse,
+        IgnoreInaccessible = true,
+        //Hidden and system files are certificates like any other, and the default here would skip them
+        AttributesToSkip = 0,
+        MatchType = MatchType.Win32
+    };
 
 
     /// <summary>

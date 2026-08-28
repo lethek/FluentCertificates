@@ -24,7 +24,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Skips any test whose [SupportedOSPlatform]/[UnsupportedOSPlatform] exclude the running OS -->
+    <AssemblyAttribute Include="FluentCertificates.SkipUnsupportedOSPlatformAttribute" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\FluentCertificates.Finder\FluentCertificates.Finder.csproj" />
+    <ProjectReference Include="..\FluentCertificates.TestSupport\FluentCertificates.TestSupport.csproj" />
   </ItemGroup>
 
   <ItemGroup>

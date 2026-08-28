@@ -1,10 +1,13 @@
-using System.Collections;
+﻿using System.Collections;
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
 using System.Linq.Expressions;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
+using System.Security.Principal;
 using System.Text;
 
 using TUnit.Assertions.Enums;
@@ -46,6 +49,113 @@ public class CertificateFinderTests
         await Assert
             .That(StoresOf(finder))
             .IsEquivalentTo([("My", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// Sources are records, so a source equal to one that was added removes it. The caller does not have
+    /// to have kept the instance they added.
+    /// </summary>
+    [Test]
+    public async Task RemoveSource_MatchesBySourceValue_AndLeavesTheOriginalFinderIntact()
+    {
+        var finder = new CertificateFinder(MockFileSystem)
+            .AddStore(StoreName.My, StoreLocation.CurrentUser)
+            .AddStore(StoreName.Root, StoreLocation.CurrentUser);
+
+        var narrowed = finder.RemoveSource(new CertificateStoreSource("My", StoreLocation.CurrentUser));
+
+        await Assert
+            .That(StoresOf(narrowed))
+            .IsEquivalentTo([("Root", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+
+        //Removing produces a new finder rather than editing this one
+        await Assert.That(finder.Sources.Count).IsEqualTo(2);
+    }
+
+
+    /// <summary>
+    /// A duplicate is searched no differently from the original, so one call takes both off rather than
+    /// leaving the caller to count how many times they added it.
+    /// </summary>
+    [Test]
+    public async Task RemoveSource_WithTheSameSourceAddedTwice_RemovesBoth()
+    {
+        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/certs").AddDirectory("/certs");
+
+        var narrowed = finder.RemoveSource(new CertificateDirectorySource("/certs", false, MockFileSystem));
+
+        await Assert.That(narrowed.Sources).IsEmpty();
+    }
+
+
+    [Test]
+    public async Task RemoveSource_WithASourceThatWasNeverAdded_ChangesNothing()
+    {
+        var finder = new CertificateFinder(MockFileSystem).AddStore(StoreName.My, StoreLocation.CurrentUser);
+
+        var narrowed = finder.RemoveSource(new CertificateStoreSource("Root", StoreLocation.LocalMachine));
+
+        await Assert
+            .That(StoresOf(narrowed))
+            .IsEquivalentTo([("My", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task RemoveSources_WithSeveralSources_RemovesEachOfThem()
+    {
+        var finder = new CertificateFinder(MockFileSystem)
+            .AddStore(StoreName.My, StoreLocation.CurrentUser)
+            .AddStore(StoreName.Root, StoreLocation.CurrentUser)
+            .AddStore(StoreName.CertificateAuthority, StoreLocation.CurrentUser);
+
+        var narrowed = finder.RemoveSources(
+            new CertificateStoreSource("My", StoreLocation.CurrentUser),
+            new CertificateStoreSource("CA", StoreLocation.CurrentUser)
+        );
+
+        await Assert
+            .That(StoresOf(narrowed))
+            .IsEquivalentTo([("Root", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task RemoveSources_WithAPredicate_RemovesEveryMatch()
+    {
+        var finder = new CertificateFinder(MockFileSystem)
+            .AddStore(StoreName.My, StoreLocation.CurrentUser)
+            .AddDirectory("/certs")
+            .AddDirectory("/other");
+
+        var narrowed = finder.RemoveSources(x => x.Kind == "Directory");
+
+        await Assert
+            .That(StoresOf(narrowed))
+            .IsEquivalentTo([("My", StoreLocation.CurrentUser)], CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>
+    /// Removing a source stops it being searched, not merely listed.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_AfterRemovingADirectory_SkipsIt()
+    {
+        using var kept = CreateSelfSignedCertificate("Kept");
+        using var dropped = CreateSelfSignedCertificate("Dropped");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/kept/kept.cer", new MockFileData(kept.RawData));
+        fs.AddFile("/dropped/dropped.cer", new MockFileData(dropped.RawData));
+
+        var results = new CertificateFinder(fs)
+            .AddDirectory("/kept")
+            .AddDirectory("/dropped")
+            .RemoveSource(new CertificateDirectorySource("/dropped", false, fs))
+            .ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([kept.Thumbprint]);
     }
 
 
@@ -925,12 +1035,116 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>
+    /// A directory that is not there yields no results rather than throwing, so a source that is missing
+    /// fails the same way whether it is a directory or a store. Throwing would be worse than empty here:
+    /// it happens part-way through enumeration, after earlier sources have already yielded.
+    /// </summary>
     [Test]
-    public async Task EnumerateCertificates_WithNonExistentPath_ThrowsDirectoryNotFoundException()
+    public async Task EnumerateCertificates_DirectoryDoesNotExist_ReturnsEmptyAndDoesNotHideOtherSources()
     {
-        var finder = new CertificateFinder(MockFileSystem).AddDirectory("/nonexistent");
+        using var cert = CreateSelfSignedCertificate("Present");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/present/cert.cer", new MockFileData(cert.RawData));
 
-        await Assert.That(() => finder.ToList()).ThrowsExactly<DirectoryNotFoundException>();
+        var finder = new CertificateFinder(fs).AddDirectory("/present").AddDirectory("/nonexistent");
+
+        await Assert.That(finder.ToList().Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// A recursive scan skips a subdirectory it cannot open rather than abandoning the whole scan. The
+    /// <see cref="SearchOption"/> overload of <c>EnumerateFiles</c> does abandon it, which is why this
+    /// source asks for <c>IgnoreInaccessible</c> instead.
+    /// </summary>
+    [Test]
+    [SupportedOSPlatform("windows")]
+    public async Task EnumerateCertificates_UnreadableSubdirectory_IsSkippedAndTheRestAreReturned()
+    {
+        using var cert = CreateSelfSignedCertificate("Readable");
+        using var dir = new TempDirectory();
+        File.WriteAllText(Path.Combine(dir.Path, "readable.pem"), cert.ExportCertificatePem());
+
+        var locked = Path.Combine(dir.Path, "locked");
+        Directory.CreateDirectory(locked);
+        using var unlock = DenyDirectoryAccess(locked);
+
+        var results = new CertificateFinder().AddDirectory(dir.Path, recurse: true).ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// Skipping a file that will not parse is the right behaviour, but a search that skipped forty of them
+    /// otherwise looks like one that found nothing. The handler is what makes the difference visible.
+    /// </summary>
+    [Test]
+    public async Task OnLoadFailure_ReportsEveryFileTheSourceSkipped()
+    {
+        using var cert = CreateSelfSignedCertificate("Good");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/reported/good.pem", new MockFileData(cert.ExportCertificatePem()));
+        fs.AddFile("/reported/bad.der", new MockFileData([0x30, 0x82, 0x01, 0x02, 0xFF, 0xFF, 0xFF]));
+        fs.AddFile("/reported/worse.p7b", new MockFileData("not a PKCS#7 blob at all"));
+
+        var skipped = new List<(string Path, Exception Exception)>();
+        var results = new CertificateFinder(fs)
+            .AddSource(new CertificateDirectorySource("/reported", false, fs) {
+                OnLoadFailure = (path, ex) => skipped.Add((path, ex))
+            })
+            .ToList();
+
+        //The good file is still returned: reporting a failure does not stop the search
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+
+        await Assert
+            .That(skipped.Select(x => fs.Path.GetFileName(x.Path)))
+            .IsEquivalentTo(["bad.der", "worse.p7b"], CollectionOrdering.Any);
+        await Assert.That(skipped.All(x => x.Exception is not null)).IsTrue();
+    }
+
+
+    /// <summary>
+    /// A directory that is not there is skipped like an unreadable file is, and is reported the same way,
+    /// so making it silent does not make it invisible.
+    /// </summary>
+    [Test]
+    public async Task OnLoadFailure_ReportsADirectoryThatIsNotThere()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        var skipped = new List<(string Path, Exception Exception)>();
+
+        var results = new CertificateFinder(fs)
+            .AddSource(new CertificateDirectorySource("/nonexistent", false, fs) {
+                OnLoadFailure = (path, ex) => skipped.Add((path, ex))
+            })
+            .ToList();
+
+        await Assert.That(results).IsEmpty();
+        await Assert.That(skipped.Select(x => x.Path)).IsEquivalentTo(["/nonexistent"]);
+        await Assert.That(skipped[0].Exception).IsTypeOf<DirectoryNotFoundException>();
+    }
+
+
+    /// <summary>
+    /// A directory the process cannot open is treated like one that is not there, rather than throwing
+    /// part-way through the search. <c>IgnoreInaccessible</c> covers the root of a scan as well as the
+    /// subdirectories below it.
+    /// </summary>
+    [Test]
+    [SupportedOSPlatform("windows")]
+    public async Task EnumerateCertificates_UnreadableDirectory_ReturnsEmpty()
+    {
+        using var cert = CreateSelfSignedCertificate("Unreachable");
+        using var dir = new TempDirectory();
+        File.WriteAllText(Path.Combine(dir.Path, "cert.pem"), cert.ExportCertificatePem());
+        using var unlock = DenyDirectoryAccess(dir.Path);
+
+        var finder = new CertificateFinder().AddDirectory(dir.Path);
+
+        await Assert.That(finder.ToList()).IsEmpty();
     }
 
 
@@ -1281,6 +1495,115 @@ public class CertificateFinderTests
     }
 
 
+    [Test]
+    public async Task EnumerateCertificates_SearchPattern_ReadsOnlyTheFilesThatMatch()
+    {
+        using var root = CreateSelfSignedCertificate("Root");
+        using var server = CreateSelfSignedCertificate("Server");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/pki/ca-root.pem", new MockFileData(root.ExportCertificatePem()));
+        fs.AddFile("/pki/server.pem", new MockFileData(server.ExportCertificatePem()));
+
+        var results = new CertificateFinder(fs).AddDirectory("/pki", searchPattern: "ca-*.pem").ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([root.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// The pattern decides what is read, not what is kept: a file it excludes is never opened or parsed,
+    /// which is the whole point of filtering on the name. An unparseable file proves it, since reading one
+    /// would report through <see cref="CertificateDirectorySource.OnLoadFailure"/>.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_SearchPattern_SkipsExcludedFilesWithoutParsingThem()
+    {
+        using var cert = CreateSelfSignedCertificate("Wanted");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/pki/ca-root.pem", new MockFileData(cert.ExportCertificatePem()));
+        fs.AddFile("/pki/junk.der", new MockFileData([0x30, 0x82, 0x01, 0x02, 0xFF, 0xFF, 0xFF]));
+
+        var skipped = new List<string>();
+        var results = new CertificateFinder(fs)
+            .AddSource(new CertificateDirectorySource("/pki", false, fs) {
+                SearchPattern = "ca-*",
+                OnLoadFailure = (path, _) => skipped.Add(path)
+            })
+            .ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(skipped).IsEmpty();
+    }
+
+
+    [Test]
+    [Arguments("cert.pfx")]
+    [Arguments("cert.p12")]
+    public async Task EnumerateCertificates_PasswordProtectedPkcs12_IsReadWithTheDirectoryPassword(string fileName)
+    {
+        const string password = "correct horse battery staple";
+        using var cert = CreateSelfSignedCertificate("Protected");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/protected/{fileName}", new MockFileData(cert.Export(X509ContentType.Pkcs12, password)));
+
+        var results = new CertificateFinder(fs).AddDirectory("/protected", password: password).ToList();
+
+        await Assert.That(results.Select(r => r.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+
+        foreach (var result in results) {
+            result.Certificate.Dispose();
+        }
+    }
+
+
+    /// <summary>
+    /// A wrong or absent password must not look the same as a directory holding no certificates, which is
+    /// what the handler is for.
+    /// </summary>
+    [Test]
+    [Arguments(null)]
+    [Arguments("wrong password")]
+    public async Task EnumerateCertificates_PasswordProtectedPkcs12_WithTheWrongPassword_IsSkippedAndReported(string? password)
+    {
+        using var cert = CreateSelfSignedCertificate("Protected");
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/protected/cert.pfx", new MockFileData(cert.Export(X509ContentType.Pkcs12, "the real one")));
+
+        var skipped = new List<string>();
+        var results = new CertificateFinder(fs)
+            .AddSource(new CertificateDirectorySource("/protected", false, fs) {
+                Password = password,
+                OnLoadFailure = (path, _) => skipped.Add(path)
+            })
+            .ToList();
+
+        await Assert.That(results).IsEmpty();
+        await Assert.That(skipped.Select(x => fs.Path.GetFileName(x)!)).IsEquivalentTo(["cert.pfx"]);
+    }
+
+
+    /// <summary>
+    /// A <see cref="CertificateFinderResult"/> carries the source it came from, so printing a result would
+    /// otherwise print the directory's password with it.
+    /// </summary>
+    [Test]
+    public async Task ToString_OfADirectorySource_RedactsThePassword()
+    {
+        var fs = CreateEmptyMockFileSystem();
+        var source = new CertificateDirectorySource("/protected", false, fs) { Password = "hunter2" };
+
+        var printed = source.ToString();
+
+        await Assert.That(printed).DoesNotContain("hunter2");
+        await Assert.That(printed).Contains("Password = ***");
+        await Assert.That(printed).Contains("Path = /protected");
+        await Assert.That(printed).Contains("SearchPattern = *");
+
+        //A source with no password says so rather than hiding that too
+        await Assert.That((source with { Password = null }).ToString()).Contains("Password = null");
+    }
+
+
     /// <summary>
     /// A terminal answering with a bool or a count never hands the caller the certificates it matched, so
     /// nothing else can release them. <see cref="CertificateFinder.First"/> and friends are excluded: the
@@ -1325,6 +1648,42 @@ public class CertificateFinderTests
         foreach (var certificate in certificates.Skip(expectedProduced)) {
             certificate.Dispose();
         }
+    }
+
+
+    /// <summary>
+    /// Denies the current user access to <paramref name="path"/> until the returned handle is disposed.
+    /// A deny rule beats the allow rules the directory inherits, so this works whether or not the test
+    /// process is elevated.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static IDisposable DenyDirectoryAccess(string path)
+    {
+        var info = new DirectoryInfo(path);
+        var rule = new FileSystemAccessRule(
+            WindowsIdentity.GetCurrent().User!,
+            FileSystemRights.ListDirectory | FileSystemRights.ReadData,
+            InheritanceFlags.None,
+            PropagationFlags.None,
+            AccessControlType.Deny
+        );
+
+        var security = info.GetAccessControl();
+        security.AddAccessRule(rule);
+        info.SetAccessControl(security);
+
+        return new Restore(() => {
+            var reverting = info.GetAccessControl();
+            reverting.RemoveAccessRule(rule);
+            info.SetAccessControl(reverting);
+        });
+    }
+
+
+    private sealed class Restore(Action undo) : IDisposable
+    {
+        public void Dispose()
+            => undo();
     }
 
 
