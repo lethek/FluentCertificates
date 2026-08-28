@@ -427,15 +427,50 @@ public class CertificateFinderTests
     public async Task CertificateFilter_TracksWhetherItHasPredicates()
     {
         await Assert.That(CertificateFilter.Empty.IsEmpty).IsTrue();
-        await Assert.That(CertificateFilter.Empty.Expressions).IsEmpty();
+        await Assert.That(CertificateFilter.Empty.Predicates).IsEmpty();
 
         var one = CertificateFilter.Empty.Add(x => x.Location == "a");
 
         await Assert.That(one.IsEmpty).IsFalse();
-        await Assert.That(one.Expressions.Count).IsEqualTo(1);
+        await Assert.That(one.Predicates.Count).IsEqualTo(1);
 
         //Immutable, so adding leaves the original alone
         await Assert.That(CertificateFilter.Empty.IsEmpty).IsTrue();
+    }
+
+
+    [Test]
+    public async Task CertificatePredicate_CarriesBothTheTreeAndTheCompiledForm()
+    {
+        Expression<Func<CertificateFinderResult, bool>> expression = x => x.Location == "a";
+        var predicate = new CertificatePredicate(expression);
+
+        await Assert.That(predicate.Expression).IsSameReferenceAs(expression);
+
+        using var cert = CreateSelfSignedCertificate("Predicate");
+        var source = new StubSource("Stub", "a", cert);
+        var matching = new CertificateFinderResult { Source = source, Location = "a", Certificate = cert };
+        var other = matching with { Location = "b" };
+
+        await Assert.That(predicate.Compiled(matching)).IsTrue();
+        await Assert.That(predicate.Compiled(other)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task CertificateFilter_AcceptsAnAlreadyCompiledPredicate()
+    {
+        var predicate = new CertificatePredicate(x => x.Location == "a");
+        var filter = CertificateFilter.Empty.Add(predicate);
+
+        //Added as-is, so the delegate the caller paid to compile is the one the filter runs
+        await Assert.That(filter.Predicates.Single()).IsSameReferenceAs(predicate);
+
+        using var cert = CreateSelfSignedCertificate("Compiled");
+        var source = new StubSource("Stub", "a", cert);
+
+        await Assert.That(filter.Matches(new CertificateFinderResult { Source = source, Location = "a", Certificate = cert })).IsTrue();
+        await Assert.That(filter.Matches(new CertificateFinderResult { Source = source, Location = "b", Certificate = cert })).IsFalse();
     }
 
 
@@ -462,7 +497,9 @@ public class CertificateFinderTests
         var source = new StubSource("Stub", "one", cert);
 
         await Assert.That(() => new CertificateFinder().Where(null!)).ThrowsExactly<ArgumentNullException>();
-        await Assert.That(() => CertificateFilter.Empty.Add(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => CertificateFilter.Empty.Add((Expression<Func<CertificateFinderResult, bool>>)null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => CertificateFilter.Empty.Add((CertificatePredicate)null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => new CertificatePredicate(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => source.Find(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => source.FindDescending(null!)).ThrowsExactly<ArgumentNullException>();
     }
@@ -1061,7 +1098,7 @@ public class CertificateFinderTests
         public override string Kind => "Minimal";
 
         protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
-            => Results([Certificate], _ => "only");
+            => SelectResults([Certificate], _ => "only");
     }
 
 
@@ -1087,9 +1124,9 @@ public class CertificateFinderTests
 
         protected override IEnumerable<CertificateFinderResult> Enumerate(CertificateFilter filter)
         {
-            ReceivedPredicateCounts.Add(filter.Expressions.Count);
+            ReceivedPredicateCounts.Add(filter.Predicates.Count);
             Calls.Add("forward");
-            return Results(Certificates, _ => At);
+            return SelectResults(Certificates, _ => At);
         }
 
         protected override IEnumerable<CertificateFinderResult>? EnumerateDescending(CertificateFilter filter)
@@ -1097,10 +1134,10 @@ public class CertificateFinderTests
             if (!Descending) {
                 return null;
             }
-            ReceivedPredicateCounts.Add(filter.Expressions.Count);
+            ReceivedPredicateCounts.Add(filter.Predicates.Count);
             Calls.Add("descending");
             //Enumerable.Reverse explicitly: on an array the bare call binds to the void span overload
-            return Results(Enumerable.Reverse(Certificates), _ => At);
+            return SelectResults(Enumerable.Reverse(Certificates), _ => At);
         }
 
         //Defaults to leaving them alone: the certificates belong to the test unless Owns says otherwise

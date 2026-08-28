@@ -22,6 +22,7 @@ release rather than record it as it happened.
 - `CertificateFinderResult.Location` identifies a certificate within its source: the full file path, or the store's location and name.
 - `AbstractCertificateSource.EnumerateDescending`, so a source able to enumerate backwards cheaply lets `CertificateFinder.Last` stop at the first match instead of reading everything. Returning `null`, the default, means it cannot. `CertificateStoreSource`, `CertificateDirectorySource` and `CustomCertificateSource` all implement it.
 - `AbstractCertificateSource.FindLast` and `FindDescending`, and a `Release` hook a source overrides to keep a discarded certificate alive.
+- `CertificateFilter` carries the predicates a source must honour. Each is a `CertificatePredicate` exposing both the expression tree, for a source that can translate it, and the delegate compiled once when it was added, for a source that applies it in memory.
 
 ### Changed
 
