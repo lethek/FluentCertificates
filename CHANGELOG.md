@@ -42,12 +42,11 @@ release rather than record it as it happened.
 - **Breaking:** `CertificateFinder.AddCustomSources` is removed.
 - Sources are deduplicated by value; results are not.
 - **Breaking:** `AbstractCertificateSource.Enumerate`, `EnumerateDescending`, `EnumerateAsync` and `EnumerateDescendingAsync` return `CertificateBatch`es rather than results, and `SelectResults` is removed.
-- **Breaking:** the 14 `Oids` members that were declared as public mutable fields are now properties, so assigning to them no longer compiles.
+- **Breaking:** 14 `Oids` members are now properties rather than public mutable fields.
 
 ### Fixed
 
-- `CertificateExportBuilder.ToString()` prints `Password = ***` rather than the plain-text export password.
-- The 14 `Oids` members above are cached on first access rather than eagerly during static construction, and can no longer be reassigned process-wide.
+- `CertificateExportBuilder.ToString()` redacts the export password.
 - `CertificateFinder` disposes the certificates a source loaded and then discarded, including the matches `Any`, `All`, `Count` and `Single` never return. Certificates supplied by the caller are never disposed.
 - A directory that does not exist yields no results instead of throwing `DirectoryNotFoundException` part-way through the search.
 - A directory search skips a directory or subdirectory it cannot read instead of abandoning the scan.
