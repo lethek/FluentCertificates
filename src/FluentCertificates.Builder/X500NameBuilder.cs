@@ -591,19 +591,14 @@ public record X500NameBuilder
         var cnt = new Dictionary<TK, int>();
         foreach (T s in list1) {
             var k = keySelector(s);
-            if (cnt.ContainsKey(k)) {
-                cnt[k]++;
-            } else {
-                cnt.Add(k, 1);
-            }
+            cnt[k] = cnt.TryGetValue(k, out var seen) ? seen + 1 : 1;
         }
         foreach (T s in list2) {
             var k = keySelector(s);
-            if (cnt.ContainsKey(k)) {
-                cnt[k]--;
-            } else {
+            if (!cnt.TryGetValue(k, out var seen)) {
                 return false;
             }
+            cnt[k] = seen - 1;
         }
         return cnt.Values.All(c => c == 0);
     }

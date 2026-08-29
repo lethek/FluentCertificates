@@ -40,8 +40,8 @@ public record CertificateSigningRequest
     }
 
 
-    /// <summary>Creates an ASN.1 DER-encoded PKCS#10 CertificationRequest value representing the state of the current <see cref="P:CertificateRequest"/> property signed using the current <see cref="P:SignatureGenerator"/>.</summary>
-    /// <exception cref="T:System.ArgumentOutOfRangeException">The <see cref="P:System.Security.Cryptography.X509Certificates.CertificateRequest.HashAlgorithm" /> property value is not supported.</exception>
+    /// <summary>Creates an ASN.1 DER-encoded PKCS#10 CertificationRequest value representing the state of the current <see cref="CertificateRequest"/> property signed using the current <see cref="SignatureGenerator"/>.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">The <see cref="System.Security.Cryptography.X509Certificates.CertificateRequest.HashAlgorithm" /> property value is not supported.</exception>
     /// <returns>A DER-encoded certificate signing request as a raw byte array.</returns>
     public ReadOnlyMemory<byte> GetRawData()
         => RawData;

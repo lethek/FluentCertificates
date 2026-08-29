@@ -49,7 +49,9 @@ produces a default version; only CI-produced packages carry real ones. Releases 
 `/release` skill (`.claude/skills/release/SKILL.md`), which stops before the push that publishes.
 
 `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Add one terse line under
-`## [Unreleased]` for anything that reaches consumers, grouped under the spec's six headings. Repo-only
+`## [Unreleased]` for anything that reaches consumers, grouped under the spec's six headings. An entry
+names what changed and nothing else: no rationale, no mechanism, no migration notes. One change gets one
+entry, so a `Fixed` line restating a `Changed` line by its consequence is the same fact twice. Repo-only
 changes (tests, CI, agent docs) get no entry.
 
 ## Mutation testing

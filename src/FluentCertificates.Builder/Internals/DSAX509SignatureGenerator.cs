@@ -24,8 +24,7 @@ internal sealed class DSAX509SignatureGenerator : X509SignatureGenerator
 
     public DSAX509SignatureGenerator(DSA key)
     {
-        if (key == null)
-            throw new ArgumentNullException(nameof(key));
+        ArgumentNullException.ThrowIfNull(key);
 
         _key = key;
     }

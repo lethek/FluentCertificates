@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 
 
@@ -60,5 +61,35 @@ public class OidsTests
         await Assert.That(valueless.ValueEquals(new Oid { FriendlyName = "no value here" })).IsFalse();
         await Assert.That(valueless.ValueEquals(new Oid(Oids.Rsa))).IsFalse();
         await Assert.That(valueless.ValueEquals(valueless)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task NoCachedOid_IsExposedAsAField()
+    {
+        //A member declared with `=` instead of `=>` becomes a public mutable static field that any
+        //consumer can reassign for the whole process, and is initialised eagerly rather than cached lazily
+        var fields = typeof(Oids)
+            .GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(x => x.FieldType == typeof(Oid))
+            .Select(x => x.Name);
+
+        await Assert.That(fields).IsEmpty();
+    }
+
+
+    [Test]
+    public async Task EveryCachedOid_IsReadOnlyAndReturnsTheOneInstance()
+    {
+        var properties = typeof(Oids)
+            .GetProperties(BindingFlags.Public | BindingFlags.Static)
+            .Where(x => x.PropertyType == typeof(Oid))
+            .ToList();
+
+        await Assert.That(properties).IsNotEmpty();
+        foreach (var property in properties) {
+            await Assert.That(property.CanWrite).IsFalse();
+            await Assert.That(property.GetValue(null)).IsSameReferenceAs(property.GetValue(null));
+        }
     }
 }
