@@ -13,6 +13,8 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-30
+
 ### Added
 
 - `CertificateFilter` and `CertificateFinderPredicate`, holding each predicate as both an expression tree and a compiled delegate.
@@ -531,7 +533,8 @@ release rather than record it as it happened.
 - Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
   including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
 
-[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.20.1...HEAD
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/lethek/FluentCertificates/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/lethek/FluentCertificates/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/lethek/FluentCertificates/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/lethek/FluentCertificates/compare/v0.18.0...v0.19.0
