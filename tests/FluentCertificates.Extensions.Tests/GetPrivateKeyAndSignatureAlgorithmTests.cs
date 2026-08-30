@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -191,6 +192,42 @@ public class GetPrivateKeyAndSignatureAlgorithmTests
         await Assert.That(algorithm.Family).IsEqualTo(KeyAlgorithmFamily.Rsa);
         await Assert.That(algorithm.HashAlgorithm).IsEqualTo(HashAlgorithmName.SHA256);
         await Assert.That(algorithm.RSASignaturePadding).IsEqualTo(RSASignaturePadding.Pkcs1);
+    }
+
+
+    [Test]
+    public async Task FromOidValue_EveryDeclaredAlgorithm_ResolvesToItsOwnInstance()
+    {
+        //An algorithm declared as a static member but left out of the lookup is invisible to every caller
+        var declared = typeof(SignatureAlgorithm)
+            .GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(x => x.FieldType == typeof(SignatureAlgorithm))
+            .Select(x => (SignatureAlgorithm)x.GetValue(null)!)
+            .ToList();
+
+        await Assert.That(declared).IsNotEmpty();
+        foreach (var algorithm in declared) {
+            //By value, not by reference: the post-quantum entries are rebuilt from KeyAlgorithm rather than
+            //taken from these fields, so the lookup answers with an equal instance rather than the same one
+            await Assert.That(SignatureAlgorithm.FromOidValue(algorithm.Oid)).IsEqualTo(algorithm);
+        }
+    }
+
+
+    [Test]
+    [Arguments("2.16.840.1.101.3.4.3.14", KeyAlgorithmFamily.Rsa)]
+    [Arguments("2.16.840.1.101.3.4.3.15", KeyAlgorithmFamily.Rsa)]
+    [Arguments("2.16.840.1.101.3.4.3.16", KeyAlgorithmFamily.Rsa)]
+    [Arguments("2.16.840.1.101.3.4.3.10", KeyAlgorithmFamily.ECDsa)]
+    [Arguments("2.16.840.1.101.3.4.3.11", KeyAlgorithmFamily.ECDsa)]
+    [Arguments("2.16.840.1.101.3.4.3.12", KeyAlgorithmFamily.ECDsa)]
+    public async Task FromOidValue_Sha3SignatureAlgorithms_Resolve(string oid, KeyAlgorithmFamily family)
+    {
+        var algorithm = SignatureAlgorithm.FromOidValue(oid);
+
+        await Assert.That(algorithm.Family).IsEqualTo(family);
+        await Assert.That(algorithm.HashAlgorithm).IsNotNull();
+        await Assert.That(algorithm.HashAlgorithm!.Value.Name).StartsWith("SHA3-");
     }
 
 

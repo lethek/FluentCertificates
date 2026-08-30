@@ -76,22 +76,49 @@ public record CertificateSigningRequest
     /// <returns>A <see cref="CertificateSigningRequest"/> over <paramref name="der"/>, with a
     /// <see langword="null"/> <see cref="SignatureGenerator"/>.</returns>
     /// <exception cref="CryptographicException">The data is not a well-formed CSR, or its signature does not verify.</exception>
-    /// <exception cref="NotSupportedException">The CSR is signed with an algorithm this library does not model.</exception>
     public static CertificateSigningRequest FromDer(ReadOnlySpan<byte> der, CertificateRequestLoadOptions options = CertificateRequestLoadOptions.Default)
     {
         var rawData = der.ToArray();
-        var algorithm = ReadSignatureAlgorithm(rawData);
+        var algorithm = TryReadSignatureAlgorithm(rawData);
 
         //The hash is not what verifies the signature: LoadSigningRequest accepts any value and records it for
         //a later Create call. Reading the real one out of the DER is what keeps the two halves consistent.
+        //A post-quantum algorithm has no hash to read, and an unrecognised one has none this library can
+        //name, so SHA-256 stands in there: .NET 8 and 9 reject a nameless hash outright.
         var request = CertificateRequest.LoadSigningRequest(
             rawData,
-            algorithm.HashAlgorithm ?? default,
+            algorithm is null ? HashAlgorithmName.SHA256 : algorithm.HashAlgorithm ?? default,
             options,
-            algorithm.RSASignaturePadding
+            algorithm?.RSASignaturePadding
         );
 
         return new CertificateSigningRequest(rawData, request);
+    }
+
+
+    /// <summary>
+    /// Reads the signature algorithm out of DER-encoded CSR data, or returns <see langword="null"/> when it
+    /// cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// This runs before the data has been validated by anything, so it is the first code to see a hostile
+    /// CSR. It must not be the code that decides whether one is acceptable: what it reads only seeds
+    /// <see cref="CertificateRequest.HashAlgorithm"/> for a later signing call, so anything it cannot make
+    /// sense of is handed to <see cref="CertificateRequest.LoadSigningRequest(byte[],HashAlgorithmName,CertificateRequestLoadOptions,RSASignaturePadding)"/>
+    /// to accept or reject. That covers malformed DER, an algorithm outside this library's OID table, and an
+    /// RSASSA-PSS AlgorithmIdentifier that leaves its RFC 4055 defaults out.
+    /// </remarks>
+    /// <param name="rawData">The DER-encoded CSR, not yet known to be well-formed.</param>
+    /// <returns>The <see cref="SignatureAlgorithm"/> the CSR is signed with, or <see langword="null"/>.</returns>
+    private static SignatureAlgorithm? TryReadSignatureAlgorithm(ReadOnlyMemory<byte> rawData)
+    {
+        try {
+            return ReadSignatureAlgorithm(rawData);
+        } catch (AsnContentException) {
+            return null;
+        } catch (NotSupportedException) {
+            return null;
+        }
     }
 
 
@@ -104,18 +131,18 @@ public record CertificateSigningRequest
     /// <param name="options">Options controlling what is loaded and what is verified.</param>
     /// <returns>A <see cref="CertificateSigningRequest"/> over the decoded CSR, with a
     /// <see langword="null"/> <see cref="SignatureGenerator"/>.</returns>
-    /// <exception cref="ArgumentException">No <c>CERTIFICATE REQUEST</c> PEM block was found.</exception>
+    /// <exception cref="ArgumentException">No <c>CERTIFICATE REQUEST</c> PEM block was found. A block whose
+    /// body is not valid base64 is not a PEM block, so it does not count as one and is passed over.</exception>
     /// <exception cref="CryptographicException">The data is not a well-formed CSR, or its signature does not verify.</exception>
-    /// <exception cref="NotSupportedException">The CSR is signed with an algorithm this library does not model.</exception>
     public static CertificateSigningRequest FromPem(ReadOnlySpan<char> pem, CertificateRequestLoadOptions options = CertificateRequestLoadOptions.Default)
     {
         var remaining = pem;
         while (PemEncoding.TryFind(remaining, out var fields)) {
             if (remaining[fields.Label].SequenceEqual(PemLabel)) {
+                //TryFind decodes the base64 to size DecodedDataLength, so into a buffer of exactly that
+                //length this cannot fail
                 var der = new byte[fields.DecodedDataLength];
-                if (!Convert.TryFromBase64Chars(remaining[fields.Base64Data], der, out _)) {
-                    throw new ArgumentException($"The {PemLabel} PEM block does not contain valid base64.", nameof(pem));
-                }
+                Convert.TryFromBase64Chars(remaining[fields.Base64Data], der, out _);
                 return FromDer(der, options);
             }
             remaining = remaining[fields.Location.End..];

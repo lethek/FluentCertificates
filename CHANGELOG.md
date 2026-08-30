@@ -33,6 +33,8 @@ release rather than record it as it happened.
 - `CertificateBatch`, the group of certificates a source hands to the finder in one go.
 - `CertificateSigningRequest.FromDer` and `FromPem`, parsing an existing PKCS#10 request.
 - `CertificateSigningRequest.RawDataMemory`.
+- `SignatureAlgorithm.SHA3_256RSA`, `SHA3_384RSA`, `SHA3_512RSA`, `SHA3_256ECDSA`, `SHA3_384ECDSA`, `SHA3_512ECDSA`, `SHA384DSA` and `SHA512DSA`.
+- `Oids.RsaPkcs1Sha224`, `Sha224`, `ECDsaWithSha224`, `DsaWithSha224`, `X448`, `Ed25519` and `Ed448`.
 
 ### Changed
 
@@ -45,12 +47,14 @@ release rather than record it as it happened.
 - Sources are deduplicated by value; results are not.
 - **Breaking:** `AbstractCertificateSource.Enumerate`, `EnumerateDescending`, `EnumerateAsync` and `EnumerateDescendingAsync` return `CertificateBatch`es rather than results, and `SelectResults` is removed.
 - **Breaking:** 14 `Oids` members are now properties rather than public mutable fields.
-- **Breaking:** `CertificateSigningRequest.GetRawData()` is replaced by the `RawDataMemory` property.
+- **Breaking:** `CertificateSigningRequest.GetRawData()` is removed.
 - **Breaking:** `CertificateSigningRequest.RawData` returns a copy and can no longer be set.
 - **Breaking:** `CertificateSigningRequest.CertificateRequest` and `SignatureGenerator` can no longer be set, and `SignatureGenerator` is nullable.
 
 ### Fixed
 
+- `CertificateSigningRequest.FromDer` and `FromPem` throw `CryptographicException` for malformed input, rather than `AsnContentException`.
+- `CertificateSigningRequest.FromDer` and `FromPem` parse a request whose signature algorithm is one this library does not model.
 - `CertificateExportBuilder.ToString()` redacts the export password.
 - `CertificateFinder` disposes the certificates a source loaded and then discarded, including the matches `Any`, `All`, `Count` and `Single` never return. Certificates supplied by the caller are never disposed.
 - A directory that does not exist yields no results instead of throwing `DirectoryNotFoundException` part-way through the search.
