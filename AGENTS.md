@@ -54,6 +54,12 @@ names what changed and nothing else: no rationale, no mechanism, no migration no
 entry, so a `Fixed` line restating a `Changed` line by its consequence is the same fact twice. Repo-only
 changes (tests, CI, agent docs) get no entry.
 
+`## [Unreleased]` records the difference between the last released version and the next one, not the history
+of how the code got there. Anything both introduced and corrected within that window is invisible to
+consumers, so amend or drop the entry it corrects rather than adding a `Fixed` line for it. Settle what
+actually changed by reading the last release tag's tree, because the commit log shows in-window churn as
+though it had reached consumers.
+
 ## Mutation testing
 
 `stryker-config.json` drives Stryker.NET. Set **`FLUENTCERT_MUTATION_TESTING=true`** for the run: it
