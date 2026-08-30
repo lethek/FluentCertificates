@@ -15,8 +15,9 @@ release rather than record it as it happened.
 
 ### Added
 
-- `AbstractCertificateSource`, the base type for custom certificate sources.
 - `CertificateFilter` and `CertificateFinderPredicate`, holding each predicate as both an expression tree and a compiled delegate.
+- `CertificateCollectionSource`, a source over a caller-supplied certificate collection.
+- `CertificateFinder.Filter`.
 - `CertificateFinder.Where(Expression<Func<CertificateFinderResult, bool>>)`, which hands the predicate to every source.
 - `CertificateFinder.Any`, `All`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault` and `Count` overloads taking a predicate.
 - `CertificateFinder.AddSource` and `AddSources`.
@@ -25,10 +26,8 @@ release rather than record it as it happened.
 - `CertificateDirectorySource.SearchPattern` and a `searchPattern` parameter on `CertificateFinder.AddDirectory` and `AddDirectories`, filtering by file name before a file is read.
 - `CertificateDirectorySource.Password` and a `password` parameter on `CertificateFinder.AddDirectory` and `AddDirectories`, for reading password-protected PKCS#12 files.
 - `CertificateFinderResult.Location`.
-- `AbstractCertificateSource.EnumerateDescending`, `FindDescending` and `FindLast`.
 - `CertificateFinder.AsAsyncEnumerable`, searching asynchronously with a `CancellationToken`.
 - `CertificateFinder.AnyAsync`, `AllAsync`, `FirstAsync`, `FirstOrDefaultAsync`, `LastAsync`, `LastOrDefaultAsync`, `SingleAsync`, `SingleOrDefaultAsync` and `CountAsync`.
-- `AbstractCertificateSource.EnumerateAsync`, `EnumerateDescendingAsync`, `FindAsync`, `FindDescendingAsync` and `FindLastAsync`, all wrapping the synchronous members by default.
 - `CertificateDirectorySource` reads files asynchronously when searched through `AsAsyncEnumerable`.
 - `CertificateBatch`, the group of certificates a source hands to the finder in one go.
 - `CertificateSigningRequest.FromDer` and `FromPem`, parsing an existing PKCS#10 request.
@@ -38,14 +37,14 @@ release rather than record it as it happened.
 
 ### Changed
 
+- **Breaking:** `AbstractCertificateSource` declares the source contract: `Kind`, `Enumerate`, `EnumerateDescending`, `Find`, `FindDescending`, `FindLast`, `Release` and their `Async` forms.
 - **Breaking:** `CertificateFinder` implements `IEnumerable<CertificateFinderResult>` instead of `IQueryable<CertificateFinderResult>`; `ElementType`, `Expression` and `Provider` are gone.
 - **Breaking:** `CertificateFinderResult.Store`, `.Directory` and `.CustomSource` are replaced by `.Source`.
-- **Breaking:** `CertificateFinder.Sources` is now `ImmutableList<AbstractCertificateSource>`.
+- **Breaking:** `CertificateFinder.Sources` is now a public `ImmutableList<AbstractCertificateSource>`.
 - **Breaking:** `CertificateStore` and `CertificateDirectory` are renamed to `CertificateStoreSource` and `CertificateDirectorySource`, both sealed and derived from `AbstractCertificateSource`. `CertificateDirectorySource` gains `Recurse` and `FileSystem`.
 - **Breaking:** `CertificateFinder.AddCustomSource` is replaced by `AddCertificates`, taking `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`.
 - **Breaking:** `CertificateFinder.AddCustomSources` is removed.
-- Sources are deduplicated by value; results are not.
-- **Breaking:** `AbstractCertificateSource.Enumerate`, `EnumerateDescending`, `EnumerateAsync` and `EnumerateDescendingAsync` return `CertificateBatch`es rather than results, and `SelectResults` is removed.
+- **Breaking:** `CertificateFinder.AddStores` takes `params IEnumerable<T>` in place of its `params T[]` and `IEnumerable<T>` overload pairs.
 - **Breaking:** 14 `Oids` members are now properties rather than public mutable fields.
 - **Breaking:** `CertificateSigningRequest.GetRawData()` is removed.
 - **Breaking:** `CertificateSigningRequest.RawData` returns a copy and can no longer be set.
@@ -53,16 +52,10 @@ release rather than record it as it happened.
 
 ### Fixed
 
-- `CertificateSigningRequest.FromDer` and `FromPem` throw `CryptographicException` for malformed input, rather than `AsnContentException`.
-- `CertificateSigningRequest.FromDer` and `FromPem` parse a request whose signature algorithm is one this library does not model.
 - `CertificateExportBuilder.ToString()` redacts the export password.
-- `CertificateFinder` disposes the certificates a source loaded and then discarded, including the matches `Any`, `All`, `Count` and `Single` never return. Certificates supplied by the caller are never disposed.
+- `CertificateFinder` disposes the certificates a source loaded and then discarded, including matches a search stopped short of returning. Certificates supplied by the caller are never disposed.
 - A directory that does not exist yields no results instead of throwing `DirectoryNotFoundException` part-way through the search.
 - A directory search skips a directory or subdirectory it cannot read instead of abandoning the scan.
-- `Single`, `SingleOrDefault`, `Last` and `LastOrDefault`, and their `Async` forms, dispose the match they were holding when a search fails part-way through.
-- `Last` and `LastOrDefault` agree with enumerating the finder when the last file searched holds more than one certificate.
-- A search that stops early disposes the certificates a source had already loaded past that point, instead of abandoning them.
-- A predicate that throws part-way through a source's certificates no longer abandons the rest of them.
 - A `.pem` or `.ca-bundle` file yields every certificate it holds, not only the first.
 - A `.pfx` or `.p12` file yields every certificate it holds, not only one chosen by export order.
 
