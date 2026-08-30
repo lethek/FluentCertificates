@@ -54,6 +54,10 @@ names what changed and nothing else: no rationale, no mechanism, no migration no
 entry, so a `Fixed` line restating a `Changed` line by its consequence is the same fact twice. Repo-only
 changes (tests, CI, agent docs) get no entry.
 
+`## [Unreleased]` is the diff since the last release, not the history behind it. A change both introduced
+and fixed in that window gets no entry: amend the entry it corrects. Read the last release tag's tree to
+settle what changed, since the commit log shows in-window churn as though it shipped.
+
 ## Mutation testing
 
 `stryker-config.json` drives Stryker.NET. Set **`FLUENTCERT_MUTATION_TESTING=true`** for the run: it

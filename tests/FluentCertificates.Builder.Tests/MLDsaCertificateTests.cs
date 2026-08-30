@@ -272,6 +272,35 @@ public class MLDsaCertificateTests
 
 
     [Test]
+    public async Task CertificateSigningRequest_FromDer_RoundTripsAnMLDsaRequest()
+    {
+        using var cert = new CertificateBuilder()
+            .SetKeyAlgorithm(KeyAlgorithm.MLDsa65)
+            .SetSubject(x => x.SetCommonName("ML-DSA Parsed CSR"))
+            .Create();
+
+        using var key = cert.GetPrivateKey();
+
+        var csr = new CertificateBuilder()
+            .SetKeyPair(key)
+            .SetSubject(x => x.SetCommonName("ML-DSA Parsed CSR"))
+            .CreateCertificateSigningRequest();
+
+        //ML-DSA absorbs the message directly, so the request names no hash for the parser to read back
+        var parsed = CertificateSigningRequest.FromDer(csr.RawData);
+
+        await Assert.That(parsed.RawData).IsEquivalentTo(csr.RawData, CollectionOrdering.Matching);
+        await Assert.That(parsed.CertificateRequest.SubjectName.Name).IsEqualTo("CN=ML-DSA Parsed CSR");
+        await Assert.That(parsed.GetSignatureAlgorithm().Oid).IsEqualTo(KeyAlgorithm.MLDsa65.Oid);
+        await Assert.That(parsed.SignatureGenerator).IsNull();
+
+        var tampered = csr.RawData;
+        tampered[^1] ^= 0xFF;
+        await Assert.That(() => CertificateSigningRequest.FromDer(tampered)).Throws<CryptographicException>();
+    }
+
+
+    [Test]
     public async Task Chain_BuildsOverASelfSignedMLDsaCertificate()
     {
         using var cert = new CertificateBuilder()

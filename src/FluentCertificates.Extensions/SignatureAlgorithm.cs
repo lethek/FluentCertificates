@@ -27,6 +27,14 @@ public sealed record SignatureAlgorithm
     [Obsolete("Obsolete")]
     public static readonly SignatureAlgorithm SHA256DSA = new(KeyAlgorithmFamily.Dsa, HashAlgorithmName.SHA256, null, Oids.DsaWithSha256);
 
+    /// <summary>SHA-384 with DSA signature algorithm.</summary>
+    [Obsolete("Obsolete")]
+    public static readonly SignatureAlgorithm SHA384DSA = new(KeyAlgorithmFamily.Dsa, HashAlgorithmName.SHA384, null, Oids.DsaWithSha384);
+
+    /// <summary>SHA-512 with DSA signature algorithm.</summary>
+    [Obsolete("Obsolete")]
+    public static readonly SignatureAlgorithm SHA512DSA = new(KeyAlgorithmFamily.Dsa, HashAlgorithmName.SHA512, null, Oids.DsaWithSha512);
+
     /// <summary>SHA-1 with ECDSA signature algorithm.</summary>
     public static readonly SignatureAlgorithm SHA1ECDSA = new(KeyAlgorithmFamily.ECDsa, HashAlgorithmName.SHA1, null, Oids.ECDsaWithSha1);
 
@@ -38,6 +46,15 @@ public sealed record SignatureAlgorithm
 
     /// <summary>SHA-512 with ECDSA signature algorithm.</summary>
     public static readonly SignatureAlgorithm SHA512ECDSA = new(KeyAlgorithmFamily.ECDsa, HashAlgorithmName.SHA512, null, Oids.ECDsaWithSha512);
+
+    /// <summary>SHA3-256 with ECDSA signature algorithm.</summary>
+    public static readonly SignatureAlgorithm SHA3_256ECDSA = new(KeyAlgorithmFamily.ECDsa, HashAlgorithmName.SHA3_256, null, Oids.ECDsaWithSha3_256);
+
+    /// <summary>SHA3-384 with ECDSA signature algorithm.</summary>
+    public static readonly SignatureAlgorithm SHA3_384ECDSA = new(KeyAlgorithmFamily.ECDsa, HashAlgorithmName.SHA3_384, null, Oids.ECDsaWithSha3_384);
+
+    /// <summary>SHA3-512 with ECDSA signature algorithm.</summary>
+    public static readonly SignatureAlgorithm SHA3_512ECDSA = new(KeyAlgorithmFamily.ECDsa, HashAlgorithmName.SHA3_512, null, Oids.ECDsaWithSha3_512);
 
     /// <summary>MD5 with RSA signature algorithm (PKCS#1 v1.5 padding).</summary>
     public static readonly SignatureAlgorithm MD5RSA = new(KeyAlgorithmFamily.Rsa, HashAlgorithmName.MD5, RSASignaturePadding.Pkcs1, Oids.RsaPkcs1Md5);
@@ -53,6 +70,15 @@ public sealed record SignatureAlgorithm
 
     /// <summary>SHA-512 with RSA signature algorithm (PKCS#1 v1.5 padding).</summary>
     public static readonly SignatureAlgorithm SHA512RSA = new(KeyAlgorithmFamily.Rsa, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1, Oids.RsaPkcs1Sha512);
+
+    /// <summary>SHA3-256 with RSA signature algorithm (PKCS#1 v1.5 padding).</summary>
+    public static readonly SignatureAlgorithm SHA3_256RSA = new(KeyAlgorithmFamily.Rsa, HashAlgorithmName.SHA3_256, RSASignaturePadding.Pkcs1, Oids.RsaPkcs1Sha3_256);
+
+    /// <summary>SHA3-384 with RSA signature algorithm (PKCS#1 v1.5 padding).</summary>
+    public static readonly SignatureAlgorithm SHA3_384RSA = new(KeyAlgorithmFamily.Rsa, HashAlgorithmName.SHA3_384, RSASignaturePadding.Pkcs1, Oids.RsaPkcs1Sha3_384);
+
+    /// <summary>SHA3-512 with RSA signature algorithm (PKCS#1 v1.5 padding).</summary>
+    public static readonly SignatureAlgorithm SHA3_512RSA = new(KeyAlgorithmFamily.Rsa, HashAlgorithmName.SHA3_512, RSASignaturePadding.Pkcs1, Oids.RsaPkcs1Sha3_512);
 
     /// <summary>ML-DSA-44 (FIPS 204). Takes no separate hash algorithm.</summary>
     [Experimental(Experiments.PostQuantumCryptography)]
@@ -183,17 +209,25 @@ public sealed record SignatureAlgorithm
     private static ImmutableDictionary<string, SignatureAlgorithm> BuildLookup()
     {
         var classical = new Dictionary<string, SignatureAlgorithm> {
-        [SHA1DSA.Oid] = SHA1DSA,
-        [SHA256DSA.Oid] = SHA256DSA,
-        [SHA1ECDSA.Oid] = SHA1ECDSA,
-        [SHA256ECDSA.Oid] = SHA256ECDSA,
-        [SHA384ECDSA.Oid] = SHA384ECDSA,
-        [SHA512ECDSA.Oid] = SHA512ECDSA,
-        [MD5RSA.Oid] = MD5RSA,
-        [SHA1RSA.Oid] = SHA1RSA,
-        [SHA256RSA.Oid] = SHA256RSA,
-        [SHA384RSA.Oid] = SHA384RSA,
-            [SHA512RSA.Oid] = SHA512RSA
+            [SHA1DSA.Oid] = SHA1DSA,
+            [SHA256DSA.Oid] = SHA256DSA,
+            [SHA384DSA.Oid] = SHA384DSA,
+            [SHA512DSA.Oid] = SHA512DSA,
+            [SHA1ECDSA.Oid] = SHA1ECDSA,
+            [SHA256ECDSA.Oid] = SHA256ECDSA,
+            [SHA384ECDSA.Oid] = SHA384ECDSA,
+            [SHA512ECDSA.Oid] = SHA512ECDSA,
+            [SHA3_256ECDSA.Oid] = SHA3_256ECDSA,
+            [SHA3_384ECDSA.Oid] = SHA3_384ECDSA,
+            [SHA3_512ECDSA.Oid] = SHA3_512ECDSA,
+            [MD5RSA.Oid] = MD5RSA,
+            [SHA1RSA.Oid] = SHA1RSA,
+            [SHA256RSA.Oid] = SHA256RSA,
+            [SHA384RSA.Oid] = SHA384RSA,
+            [SHA512RSA.Oid] = SHA512RSA,
+            [SHA3_256RSA.Oid] = SHA3_256RSA,
+            [SHA3_384RSA.Oid] = SHA3_384RSA,
+            [SHA3_512RSA.Oid] = SHA3_512RSA
         };
 
         //Every post-quantum signing parameter set resolves through its own OID. Derived from the one

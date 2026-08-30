@@ -42,6 +42,8 @@ public static class Oids
     public const string RsaPkcs1Md5 = "1.2.840.113549.1.1.4";
     /// <summary>Signature algorithm OID <c>1.2.840.113549.1.1.5</c>.</summary>
     public const string RsaPkcs1Sha1 = "1.2.840.113549.1.1.5";
+    /// <summary>Signature algorithm OID <c>1.2.840.113549.1.1.14</c>.</summary>
+    public const string RsaPkcs1Sha224 = "1.2.840.113549.1.1.14";
     /// <summary>Signature algorithm OID <c>1.2.840.113549.1.1.11</c>.</summary>
     public const string RsaPkcs1Sha256 = "1.2.840.113549.1.1.11";
     /// <summary>Signature algorithm OID <c>1.2.840.113549.1.1.12</c>.</summary>
@@ -278,6 +280,8 @@ public static class Oids
     public const string Md5 = "1.2.840.113549.2.5";
     /// <summary>Hash algorithm OID <c>1.3.14.3.2.26</c>.</summary>
     public const string Sha1 = "1.3.14.3.2.26";
+    /// <summary>Hash algorithm OID <c>2.16.840.1.101.3.4.2.4</c>.</summary>
+    public const string Sha224 = "2.16.840.1.101.3.4.2.4";
     /// <summary>Hash algorithm OID <c>2.16.840.1.101.3.4.2.1</c>.</summary>
     public const string Sha256 = "2.16.840.1.101.3.4.2.1";
     /// <summary>Hash algorithm OID <c>2.16.840.1.101.3.4.2.2</c>.</summary>
@@ -298,6 +302,8 @@ public static class Oids
     // DSA CMS uses the combined signature+digest OID
     /// <summary>Signature algorithm OID <c>1.2.840.10040.4.3</c>.</summary>
     public const string DsaWithSha1 = "1.2.840.10040.4.3";
+    /// <summary>Signature algorithm OID <c>2.16.840.1.101.3.4.3.1</c>.</summary>
+    public const string DsaWithSha224 = "2.16.840.1.101.3.4.3.1";
     /// <summary>Signature algorithm OID <c>2.16.840.1.101.3.4.3.2</c>.</summary>
     public const string DsaWithSha256 = "2.16.840.1.101.3.4.3.2";
     /// <summary>Signature algorithm OID <c>2.16.840.1.101.3.4.3.3</c>.</summary>
@@ -319,6 +325,8 @@ public static class Oids
     public const string EcPublicKey = "1.2.840.10045.2.1";
     /// <summary>Signature algorithm OID <c>1.2.840.10045.4.1</c>.</summary>
     public const string ECDsaWithSha1 = "1.2.840.10045.4.1";
+    /// <summary>Signature algorithm OID <c>1.2.840.10045.4.3.1</c>.</summary>
+    public const string ECDsaWithSha224 = "1.2.840.10045.4.3.1";
     /// <summary>Signature algorithm OID <c>1.2.840.10045.4.3.2</c>.</summary>
     public const string ECDsaWithSha256 = "1.2.840.10045.4.3.2";
     /// <summary>Signature algorithm OID <c>1.2.840.10045.4.3.3</c>.</summary>
@@ -620,6 +628,12 @@ public static class Oids
     public const string brainpoolP384r1 = "1.3.36.3.3.2.8.1.1.11";
     /// <summary>Key agreement algorithm OID <c>1.3.101.110</c> (X25519, RFC 8410).</summary>
     public const string X25519 = "1.3.101.110";
+    /// <summary>Key agreement algorithm OID <c>1.3.101.111</c> (X448, RFC 8410).</summary>
+    public const string X448 = "1.3.101.111";
+    /// <summary>Signature algorithm OID <c>1.3.101.112</c> (Ed25519, RFC 8410).</summary>
+    public const string Ed25519 = "1.3.101.112";
+    /// <summary>Signature algorithm OID <c>1.3.101.113</c> (Ed448, RFC 8410).</summary>
+    public const string Ed448 = "1.3.101.113";
 
     // LDAP
     /// <summary>LDAP attribute OID <c>0.9.2342.19200300.100.1.25</c>.</summary>
