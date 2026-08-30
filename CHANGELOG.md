@@ -31,6 +31,8 @@ release rather than record it as it happened.
 - `AbstractCertificateSource.EnumerateAsync`, `EnumerateDescendingAsync`, `FindAsync`, `FindDescendingAsync` and `FindLastAsync`, all wrapping the synchronous members by default.
 - `CertificateDirectorySource` reads files asynchronously when searched through `AsAsyncEnumerable`.
 - `CertificateBatch`, the group of certificates a source hands to the finder in one go.
+- `CertificateSigningRequest.FromDer` and `FromPem`, parsing an existing PKCS#10 request.
+- `CertificateSigningRequest.RawDataMemory`.
 
 ### Changed
 
@@ -43,6 +45,9 @@ release rather than record it as it happened.
 - Sources are deduplicated by value; results are not.
 - **Breaking:** `AbstractCertificateSource.Enumerate`, `EnumerateDescending`, `EnumerateAsync` and `EnumerateDescendingAsync` return `CertificateBatch`es rather than results, and `SelectResults` is removed.
 - **Breaking:** 14 `Oids` members are now properties rather than public mutable fields.
+- **Breaking:** `CertificateSigningRequest.GetRawData()` is replaced by the `RawDataMemory` property.
+- **Breaking:** `CertificateSigningRequest.RawData` returns a copy and can no longer be set.
+- **Breaking:** `CertificateSigningRequest.CertificateRequest` and `SignatureGenerator` can no longer be set, and `SignatureGenerator` is nullable.
 
 ### Fixed
 

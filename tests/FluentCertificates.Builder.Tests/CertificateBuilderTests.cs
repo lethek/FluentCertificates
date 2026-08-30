@@ -259,7 +259,7 @@ public class CertificateBuilderTests
             .SetKeyPair(keys)
             .CreateCertificateSigningRequest();
 
-        await Assert.That(csr.GetRawData().IsEmpty).IsFalse();
+        await Assert.That(csr.RawDataMemory.IsEmpty).IsFalse();
 
         var cr = csr.CertificateRequest;
         var algorithm = csr.GetSignatureAlgorithm();
@@ -281,7 +281,7 @@ public class CertificateBuilderTests
             .SetKeyPair(keys)
             .CreateCertificateSigningRequest();
 
-        await Assert.That(csr.GetRawData().IsEmpty).IsFalse();
+        await Assert.That(csr.RawDataMemory.IsEmpty).IsFalse();
 
         var cr = csr.CertificateRequest;
         var algorithm = csr.GetSignatureAlgorithm();
@@ -305,7 +305,7 @@ public class CertificateBuilderTests
             .SetKeyPair(keys)
             .CreateCertificateSigningRequest();
 
-        await Assert.That(csr.GetRawData().IsEmpty).IsFalse();
+        await Assert.That(csr.RawDataMemory.IsEmpty).IsFalse();
 
         var cr = csr.CertificateRequest;
         var algorithm = csr.GetSignatureAlgorithm();
@@ -1168,7 +1168,7 @@ public class CertificateBuilderTests
         await Assert.That(pem[fields.Label].ToString()).IsEqualTo("CERTIFICATE REQUEST");
 
         var decoded = Convert.FromBase64String(pem[fields.Base64Data].ToString());
-        await Assert.That(decoded).IsEquivalentTo(csr.GetRawData().ToArray(), CollectionOrdering.Matching);
+        await Assert.That(decoded).IsEquivalentTo(csr.RawData, CollectionOrdering.Matching);
     }
 
 
