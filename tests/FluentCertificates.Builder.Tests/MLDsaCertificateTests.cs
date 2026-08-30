@@ -245,7 +245,7 @@ public class MLDsaCertificateTests
         await Assert.That(pem[fields.Label].ToString()).IsEqualTo("CERTIFICATE REQUEST");
         await Assert
             .That(Convert.FromBase64String(pem[fields.Base64Data].ToString()))
-            .IsEquivalentTo(csr.GetRawData().ToArray(), CollectionOrdering.Matching);
+            .IsEquivalentTo(csr.RawData, CollectionOrdering.Matching);
 
         //The parameter set fixes both halves, so the request is signed under the same OID it certifies
         await Assert.That(csr.GetSignatureAlgorithm().Oid).IsEqualTo(KeyAlgorithm.MLDsa65.Oid);
