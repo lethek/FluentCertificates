@@ -1452,6 +1452,56 @@ public class CertificateFinderTests
 
 
     /// <summary>
+    /// The mirror of the two above: PEM text under an extension naming DER. What the platform's
+    /// certificate loader accepts here differs by target framework, so reading the file as what it
+    /// holds is also what stops the same file loading on one framework and being reported on another.
+    /// </summary>
+    [Test]
+    [Arguments("chain.crt")]
+    [Arguments("chain.cer")]
+    [Arguments("chain.der")]
+    public async Task EnumerateCertificates_PemUnderADerExtension_IsLoaded(string fileName)
+    {
+        using var first = CreateSelfSignedCertificate("Pem Under Der One");
+        using var second = CreateSelfSignedCertificate("Pem Under Der Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/misnamed/{fileName}", new MockFileData(
+            first.ExportCertificatePem() + "\n" + second.ExportCertificatePem()
+        ));
+
+        var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
+
+        await Assert
+            .That(results.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// A PKCS#7 bundle under a certificate extension, which Windows writes into <c>.cer</c>. Two
+    /// certificates, so reading only the first is caught.
+    /// </summary>
+    [Test]
+    [Arguments("bundle.cer")]
+    [Arguments("bundle.crt")]
+    public async Task EnumerateCertificates_Pkcs7UnderACertificateExtension_IsLoaded(string fileName)
+    {
+        using var first = CreateSelfSignedCertificate("Pkcs7 Under Cer One");
+        using var second = CreateSelfSignedCertificate("Pkcs7 Under Cer Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/misnamed/{fileName}", new MockFileData(BuildPkcs7(first, second)));
+
+        var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
+
+        await Assert
+            .That(results.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
     /// A <c>PKCS7</c> or <c>CMS</c> label also covers content types holding no certificates, and one of
     /// those beside the certificates must not cost the whole file.
     /// </summary>

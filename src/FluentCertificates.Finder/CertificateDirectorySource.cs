@@ -255,29 +255,38 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// <returns>Every certificate the file holds.</returns>
     private IEnumerable<X509Certificate2> Parse(FileFormat format, ReadOnlySpan<byte> data)
     {
-        switch (format) {
-            case FileFormat.Pkcs7:
-                //The extension has already declared the whole file a PKCS#7 bundle, so a block is read
-                //whatever label was written over it. Text holding no PEM block at all reaches Decode and
-                //throws, so a file that is neither encoding is reported rather than read as empty.
-                return (IsDer(data) ? null : ParsePem(DecodeText(data), everyLabel: true))
-                    ?? DecodePkcs7(data);
-            case FileFormat.Pkcs12:
-                //X509CertificateLoader.LoadCertificate rejects PKCS#12, so this needs the PKCS#12 loader
-                return CertTools.LoadPkcs12Collection(data, Password);
-            case FileFormat.Pem:
-                //PEM text holds any number of blocks, and only some of them are certificate material.
-                //A DER file under this extension is read as what it is: nothing else would report it,
-                //since yielding nothing is also what a legitimately empty PEM file does.
-                return IsDer(data)
-                    ? ReadDer(data)
-                    : ParsePem(DecodeText(data), everyLabel: false) ?? [];
-            case FileFormat.Certificate:
-                return [CertTools.LoadCertificate(data)];
-            default:
-                throw new InvalidOperationException($"Unsupported file format: {format}.");
+        //PKCS#12 is binary alone. There is no PEM form of it to look for, and its own loader is the only
+        //one that reads it, so it is settled before anything sniffs the bytes.
+        if (format == FileFormat.Pkcs12) {
+            return CertTools.LoadPkcs12Collection(data, Password);
         }
+
+        //Every other format is read by what the file holds rather than by what its name promised, since
+        //all four of those extensions are used for both encodings and for each other's payloads.
+        if (IsDer(data)) {
+            return ReadDer(data);
+        }
+
+        //A PKCS#7 extension declares the whole file a bundle, so its blocks are read whatever label a
+        //producer wrote over them. The others may hold other material beside the certificates.
+        return ParsePem(DecodeText(data), everyLabel: format == FileFormat.Pkcs7)
+            ?? NoPemBlock(format, data);
     }
+
+
+    /// <summary>
+    /// Reads text that holds no PEM block at all, which no extension this source recognises describes.
+    /// An extension naming one definite format hands the bytes to that format's reader, which throws, so
+    /// the file is reported rather than read as empty. Only <c>.pem</c> and <c>.ca-bundle</c> can
+    /// legitimately be empty.
+    /// </summary>
+    private static IEnumerable<X509Certificate2> NoPemBlock(FileFormat format, ReadOnlySpan<byte> data)
+        => format switch {
+            FileFormat.Pkcs7 => DecodePkcs7(data),
+            FileFormat.Certificate => [CertTools.LoadCertificate(data)],
+            FileFormat.Pem => [],
+            _ => throw new InvalidOperationException($"Unsupported file format: {format}.")
+        };
 
 
     /// <summary>
