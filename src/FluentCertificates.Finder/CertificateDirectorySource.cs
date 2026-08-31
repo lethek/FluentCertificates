@@ -294,10 +294,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         var remaining = text.AsSpan();
         while (PemEncoding.TryFind(remaining, out var pem)) {
             if (IsCertificateLabel(remaining[pem.Label])) {
-                //TryFind has already established that this is base64 of exactly this length, so it cannot fail
-                var der = new byte[pem.DecodedDataLength];
-                Convert.TryFromBase64Chars(remaining[pem.Base64Data], der, out _);
-
+                var der = PemTools.DecodeBlock(remaining, pem);
                 if (IsPkcs7(der)) {
                     certs.AddRange(DecodePkcs7(der));
                 } else {
@@ -319,14 +316,14 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Whether DER holds a PKCS#7 bundle rather than a lone certificate. Both are a SEQUENCE, and what
-    /// separates them is the first thing inside it: an OID naming the content type for PKCS#7's
-    /// ContentInfo, where a certificate opens with its TBSCertificate SEQUENCE.
+    /// Whether DER holds the signed-data PKCS#7 that <see cref="SignedCms"/> reads, rather than a lone
+    /// certificate. Both are a SEQUENCE, and what separates them is the first thing inside it: the OID
+    /// naming a ContentInfo's content type, where a certificate opens with its TBSCertificate SEQUENCE.
     /// </summary>
     private static bool IsPkcs7(byte[] der)
     {
         try {
-            return new AsnReader(der, AsnEncodingRules.BER).ReadSequence().PeekTag() == Asn1Tag.ObjectIdentifier;
+            return new AsnReader(der, AsnEncodingRules.BER).ReadSequence().ReadObjectIdentifier() == Oids.Pkcs7Signed;
         } catch (AsnContentException) {
             //Not readable as ASN.1 at all, so it is no more PKCS#7 than it is a certificate. Loading it
             //as the latter is what reports the file as unreadable.

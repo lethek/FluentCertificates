@@ -2,6 +2,8 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
+using FluentCertificates.Internals;
+
 namespace FluentCertificates;
 
 /// <summary>
@@ -139,11 +141,7 @@ public record CertificateSigningRequest
         var remaining = pem;
         while (PemEncoding.TryFind(remaining, out var fields)) {
             if (remaining[fields.Label].SequenceEqual(PemLabel)) {
-                //TryFind decodes the base64 to size DecodedDataLength, so into a buffer of exactly that
-                //length this cannot fail
-                var der = new byte[fields.DecodedDataLength];
-                Convert.TryFromBase64Chars(remaining[fields.Base64Data], der, out _);
-                return FromDer(der, options);
+                return FromDer(PemTools.DecodeBlock(remaining, fields), options);
             }
             remaining = remaining[fields.Location.End..];
         }

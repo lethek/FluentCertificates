@@ -282,10 +282,7 @@ public record CertificateExportBuilder
     /// Returns a <see cref="CertificateExporter"/> whose output methods write the PKCS#7 data in the
     /// chosen encoding.
     /// </summary>
-    /// <param name="encoding">
-    /// Whether to write binary DER or a base64 <c>PKCS7</c> block. Defaults to
-    /// <see cref="Pkcs7Encoding.Der"/>, which is what the structure is natively.
-    /// </param>
+    /// <param name="encoding">Whether to write binary DER or a base64 <c>PKCS7</c> block.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="encoding"/> is not a
     /// declared value.</exception>
     public CertificateExporter AsPkcs7(Pkcs7Encoding encoding = Pkcs7Encoding.Der)

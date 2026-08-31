@@ -1363,16 +1363,15 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// The extension says which payload to expect, not which one is there. All four combinations of the
-    /// two extensions and the two payloads are written in the wild, so each is read by what the blocks
-    /// decode to. <c>certutil -encode</c> is what puts a PKCS#7 payload under a <c>CERTIFICATE</c> label.
+    /// The extension says which payload to expect, not which one is there, so a PKCS#7 block is read
+    /// under any of the three labels a producer writes it with, and under either extension.
+    /// <c>certutil -encode</c> is what puts one under a <c>CERTIFICATE</c> label; the <c>.p7b</c> and
+    /// <c>PKCS7</c> pairing is <see cref="EnumerateCertificates_Pkcs7WrittenAsPem_IsLoaded"/>.
     /// </summary>
     [Test]
     [Arguments("bundle.pem", "PKCS7")]
     [Arguments("bundle.pem", "CMS")]
     [Arguments("bundle.pem", "CERTIFICATE")]
-    [Arguments("bundle.p7b", "PKCS7")]
-    [Arguments("bundle.p7b", "CMS")]
     [Arguments("bundle.p7b", "CERTIFICATE")]
     public async Task EnumerateCertificates_PemPkcs7UnderEitherExtensionAndLabel_IsLoaded(string fileName, string label)
     {
@@ -1392,18 +1391,17 @@ public class CertificateFinderTests
 
     /// <summary>
     /// The other half of the same mismatch: certificate blocks written under a PKCS#7 extension. Two of
-    /// them, so a reader stopping at the first is caught.
+    /// them, so a reader stopping at the first is caught. Under <c>.pem</c> this is
+    /// <see cref="EnumerateCertificates_PemHoldingSeveralCertificates_ReturnsEachOfThem"/>.
     /// </summary>
     [Test]
-    [Arguments("bundle.pem")]
-    [Arguments("bundle.p7b")]
-    public async Task EnumerateCertificates_CertificateBlocksUnderEitherExtension_AreLoaded(string fileName)
+    public async Task EnumerateCertificates_CertificateBlocksUnderAPkcs7Extension_AreLoaded()
     {
         using var first = CreateSelfSignedCertificate("Labelled Cert One");
         using var second = CreateSelfSignedCertificate("Labelled Cert Two");
 
         var fs = CreateEmptyMockFileSystem();
-        fs.AddFile($"/labelled/{fileName}", new MockFileData(first.ExportCertificatePem() + "\n" + second.ExportCertificatePem()));
+        fs.AddFile("/labelled/bundle.p7b", new MockFileData(first.ExportCertificatePem() + "\n" + second.ExportCertificatePem()));
 
         var results = new CertificateFinder(fs).AddDirectory("/labelled").ToList();
 
