@@ -257,18 +257,17 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     {
         switch (format) {
             case FileFormat.Pkcs7:
-                //PEM under this extension is read block by block like any other PEM file: the payload of
-                //a .p7b is not always a PKCS#7 one. A file that is neither PEM nor DER reaches Decode
-                //and throws, so it is reported rather than read as empty.
-                return ReadPemText(data) is { } pkcs7Text
-                    ? ParsePem(pkcs7Text)
-                    : DecodePkcs7(data);
+                //The extension has already declared the whole file a PKCS#7 bundle, so a block is read
+                //whatever label was written over it. Text holding no PEM block at all reaches Decode and
+                //throws, so a file that is neither encoding is reported rather than read as empty.
+                return (IsDer(data) ? null : ParsePem(DecodeText(data), everyLabel: true))
+                    ?? DecodePkcs7(data);
             case FileFormat.Pkcs12:
                 //X509CertificateLoader.LoadCertificate rejects PKCS#12, so this needs the PKCS#12 loader
                 return CertTools.LoadPkcs12Collection(data, Password);
             case FileFormat.Pem:
-                //PEM text holds any number of blocks
-                return ParsePem(DecodeText(data));
+                //PEM text holds any number of blocks, and only some of them are certificate material
+                return (IsDer(data) ? null : ParsePem(DecodeText(data), everyLabel: false)) ?? [];
             case FileFormat.Certificate:
                 return [CertTools.LoadCertificate(data)];
             default:
@@ -279,40 +278,92 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
     /// <summary>
     /// Reads every certificate PEM text holds, whether written as <c>CERTIFICATE</c> blocks or as a
-    /// PKCS#7 bundle. Text holding neither yields nothing, since an empty PEM file is legitimately empty.
+    /// PKCS#7 bundle.
     /// </summary>
+    /// <param name="text">The PEM text to read.</param>
+    /// <param name="everyLabel">
+    /// Whether to read a block whatever its label. Set for a file whose extension has already declared
+    /// what it holds; left clear for one that mixes certificates with other material.
+    /// </param>
+    /// <returns>
+    /// The certificates found, or <see langword="null"/> when the text holds no PEM block at all. An
+    /// empty collection is a real answer: an empty PEM file is legitimately empty.
+    /// </returns>
     /// <remarks>
     /// Each block is read by what it decodes to rather than by the label over it. The two are routinely
     /// at odds: <c>openssl crl2pkcs7</c> writes a <c>PKCS7</c> block that people save as <c>.pem</c>,
     /// and <c>certutil -encode</c> labels whatever it converts <c>CERTIFICATE</c>, PKCS#7 included.
-    /// The label is still consulted for which blocks to read at all, so a private key beside the
-    /// certificates is passed over rather than decoded.
     /// </remarks>
-    private static X509Certificate2Collection ParsePem(string text)
+    private static X509Certificate2Collection? ParsePem(string text, bool everyLabel)
     {
-        var certs = new X509Certificate2Collection();
         var remaining = text.AsSpan();
-        while (PemEncoding.TryFind(remaining, out var pem)) {
-            if (IsCertificateLabel(remaining[pem.Label])) {
-                var der = PemTools.DecodeBlock(remaining, pem);
-                if (IsPkcs7(der)) {
-                    certs.AddRange(DecodePkcs7(der));
-                } else {
-                    certs.Add(CertTools.LoadCertificate(der));
-                }
-            }
-            remaining = remaining[pem.Location.End..];
+        if (!PemEncoding.TryFind(remaining, out var pem)) {
+            return null;
         }
-        return certs;
+
+        var certs = new X509Certificate2Collection();
+        try {
+            do {
+                if (everyLabel || IsCertificateLabel(remaining[pem.Label])) {
+                    ReadBlock(remaining[pem.Label], PemTools.DecodeBlock(remaining, pem), certs);
+                }
+                remaining = remaining[pem.Location.End..];
+            } while (PemEncoding.TryFind(remaining, out pem));
+            return certs;
+
+        } catch {
+            //A batch that never reaches its caller has no other owner, so what was read before the bad
+            //block must be released here
+            foreach (var cert in certs) {
+                cert.Dispose();
+            }
+            throw;
+        }
     }
 
 
     /// <summary>
-    /// Whether a PEM label names certificate material this source reads. <c>PKCS7</c> is RFC 7468 s8 and
-    /// <c>CMS</c> is s9, which prefers it; producers write both.
+    /// Adds one PEM block's certificates to <paramref name="certs"/>.
     /// </summary>
+    /// <remarks>
+    /// A <c>PKCS7</c> or <c>CMS</c> block that is not signed data is passed over: those labels also
+    /// cover content types holding no certificates, and one of those beside the certificates must not
+    /// cost the whole file. Under any other label the block is a certificate or an error.
+    /// </remarks>
+    private static void ReadBlock(ReadOnlySpan<char> label, byte[] der, X509Certificate2Collection certs)
+    {
+        if (IsPkcs7(der)) {
+            certs.AddRange(DecodePkcs7(der));
+        } else if (!IsPkcs7Label(label)) {
+            certs.Add(CertTools.LoadCertificate(der));
+        }
+    }
+
+
+    /// <summary>Whether a PEM label names certificate material this source reads.</summary>
     private static bool IsCertificateLabel(ReadOnlySpan<char> label)
-        => label.SequenceEqual("CERTIFICATE") || label.SequenceEqual("PKCS7") || label.SequenceEqual("CMS");
+        => label.SequenceEqual("CERTIFICATE") || IsPkcs7Label(label);
+
+
+    /// <summary>
+    /// Whether a PEM label names a CMS ContentInfo. <c>PKCS7</c> is RFC 7468 s8 and <c>CMS</c> is s9,
+    /// which prefers it; producers write both.
+    /// </summary>
+    private static bool IsPkcs7Label(ReadOnlySpan<char> label)
+        => label.SequenceEqual("PKCS7") || label.SequenceEqual("CMS");
+
+
+    /// <summary>
+    /// Whether a file's bytes are binary rather than text. A DER file opens with a SEQUENCE tag, and its
+    /// bytes decode to characters that can spell out anything at all, a PEM block that is no part of the
+    /// encoding included, so it must never be read as text. Empty data is no more PEM than DER and takes
+    /// the same path, where the format's own reader reports it.
+    /// </summary>
+    private static bool IsDer(ReadOnlySpan<byte> data)
+    {
+        const byte derSequenceTag = 0x30;
+        return data.Length == 0 || data[0] == derSequenceTag;
+    }
 
 
     /// <summary>
@@ -338,25 +389,6 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         var cms = new SignedCms();
         cms.Decode(der);
         return cms.Certificates;
-    }
-
-
-    /// <summary>
-    /// Returns a file's PEM text, or <see langword="null"/> when it holds no PEM block.
-    /// </summary>
-    /// <remarks>
-    /// A file opening with a DER SEQUENCE tag is never read as text: its bytes decode to characters that
-    /// can spell out anything at all, a PEM block that is no part of the encoding included.
-    /// </remarks>
-    private static string? ReadPemText(ReadOnlySpan<byte> data)
-    {
-        const byte derSequenceTag = 0x30;
-        if (data.Length == 0 || data[0] == derSequenceTag) {
-            return null;
-        }
-
-        var text = DecodeText(data);
-        return PemEncoding.TryFind(text, out _) ? text : null;
     }
 
 

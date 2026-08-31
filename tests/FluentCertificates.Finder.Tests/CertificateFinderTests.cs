@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Formats.Asn1;
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
 using System.Linq.Expressions;
@@ -1408,6 +1409,86 @@ public class CertificateFinderTests
         await Assert
             .That(results.Select(x => x.Certificate.Thumbprint))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// A <c>PKCS7</c> or <c>CMS</c> label also covers content types holding no certificates, and one of
+    /// those beside the certificates must not cost the whole file.
+    /// </summary>
+    [Test]
+    [Arguments("PKCS7")]
+    [Arguments("CMS")]
+    public async Task EnumerateCertificates_PemHoldingAContentTypeWithNoCertificates_ReadsTheRest(string label)
+    {
+        using var cert = CreateSelfSignedCertificate("Beside Enveloped");
+
+        //A ContentInfo naming enveloped-data, whose content this source has no way to read
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) {
+            writer.WriteObjectIdentifier(Oids.Pkcs7Enveloped);
+        }
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/enveloped/bundle.pem", new MockFileData(
+            PemEncoding.WriteString(label, writer.Encode()) + "\n" + cert.ExportCertificatePem()
+        ));
+
+        var results = new CertificateFinder(fs).AddDirectory("/enveloped").ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// A <c>.p7b</c> extension declares the whole file a PKCS#7 bundle, so the block is read whatever
+    /// label a producer wrote over it. A <c>.pem</c> makes no such promise, and an unrecognised label
+    /// there sits beside the certificates rather than naming them.
+    /// </summary>
+    [Test]
+    [Arguments("bundle.p7b", 2)]
+    [Arguments("bundle.pem", 0)]
+    public async Task EnumerateCertificates_PemPkcs7UnderAnUnrecognisedLabel_FollowsTheExtension(string fileName, int expected)
+    {
+        using var first = CreateSelfSignedCertificate("Odd Label One");
+        using var second = CreateSelfSignedCertificate("Odd Label Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/odd/{fileName}", new MockFileData(
+            PemEncoding.WriteString("PKCS7 SIGNED DATA", BuildPkcs7(first, second))
+        ));
+
+        var results = new CertificateFinder(fs).AddDirectory("/odd").ToList();
+
+        await Assert.That(results).Count().IsEqualTo(expected);
+    }
+
+
+    /// <summary>
+    /// A malformed block costs the file, not just itself: the batch never reaches the caller, so the
+    /// certificates read before it are released rather than returned.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_PemWhoseLastBlockIsMalformed_ReportsTheFile()
+    {
+        using var first = CreateSelfSignedCertificate("Before The Bad One");
+        using var second = CreateSelfSignedCertificate("Also Before It");
+        var skipped = new List<string>();
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/malformed/bundle.pem", new MockFileData(String.Join("\n", [
+            first.ExportCertificatePem(),
+            second.ExportCertificatePem(),
+            PemEncoding.WriteString("CERTIFICATE", "not a certificate"u8.ToArray())
+        ])));
+
+        var source = new CertificateDirectorySource("/malformed", fileSystem: fs) {
+            OnLoadFailure = (path, _) => skipped.Add(fs.Path.GetFileName(path))
+        };
+        var results = new CertificateFinder().AddSource(source).ToList();
+
+        await Assert.That(results).IsEmpty();
+        await Assert.That(skipped).IsEquivalentTo(["bundle.pem"]);
     }
 
 

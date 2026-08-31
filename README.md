@@ -396,7 +396,7 @@ leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().To
 |-|-|
 |Configure|`WithPrivateKey()`, `WithAllPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`|
 |Add|`AddChain(X509Chain)`, `AddChain(...)`, `AddCertificates(...)`|
-|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7(Pkcs7Encoding)`, `AsCert()`|
+|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsPkcs7(Pkcs7Encoding)`, `AsCert()`|
 |Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
 `With*` configures the export and replaces whatever was set before; `Add*` appends certificates to it.

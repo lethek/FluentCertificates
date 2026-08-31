@@ -18,6 +18,10 @@ release rather than record it as it happened.
 - `CertificateDirectorySource` reads `.pkcs12` files.
 - `AsPkcs7(Pkcs7Encoding)` selects DER or PEM output.
 
+### Changed
+
+- **Breaking:** `AsPkcs7()` takes an optional `Pkcs7Encoding`, so callers must recompile against it.
+
 ### Fixed
 
 - `CertificateDirectorySource` reads a PEM file's certificate and PKCS#7 blocks alike, under any of the `.pem`, `.ca-bundle`, `.p7b` and `.p7c` extensions.

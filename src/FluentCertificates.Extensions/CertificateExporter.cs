@@ -24,8 +24,10 @@ internal enum ExportFormat
 /// Instances are obtained by calling a format-selection method such as
 /// <see cref="CertificateExportBuilder.AsPkcs12"/>, <see cref="CertificateExportBuilder.AsPkcs7"/>,
 /// or <see cref="CertificateExportBuilder.AsCert"/>.
-/// For PEM output, use <see cref="CertificateExportBuilder.AsPem"/> which returns a
+/// For certificate and key PEM output, use <see cref="CertificateExportBuilder.AsPem"/> which returns a
 /// <see cref="PemCertificateExporter"/> with an additional <see cref="PemCertificateExporter.ToPemString"/> method.
+/// <see cref="CertificateExportBuilder.AsPkcs7"/> also writes PEM when asked for
+/// <see cref="Pkcs7Encoding.Pem"/>, but as bytes only, since its other encoding is binary.
 /// </summary>
 public class CertificateExporter
 {
