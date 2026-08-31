@@ -1,4 +1,5 @@
 ﻿using System.Collections.Frozen;
+using System.Formats.Asn1;
 using System.IO.Abstractions;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -256,17 +257,18 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     {
         switch (format) {
             case FileFormat.Pkcs7:
-                var cms = new SignedCms();
-                cms.Decode(UnwrapPem(data));
-                return cms.Certificates;
+                //PEM under this extension is read block by block like any other PEM file: the payload of
+                //a .p7b is not always a PKCS#7 one. A file that is neither PEM nor DER reaches Decode
+                //and throws, so it is reported rather than read as empty.
+                return ReadPemText(data) is { } pkcs7Text
+                    ? ParsePem(pkcs7Text)
+                    : DecodePkcs7(data);
             case FileFormat.Pkcs12:
                 //X509CertificateLoader.LoadCertificate rejects PKCS#12, so this needs the PKCS#12 loader
                 return CertTools.LoadPkcs12Collection(data, Password);
             case FileFormat.Pem:
-                //PEM text holds any number of certificates
-                var pem = new X509Certificate2Collection();
-                pem.ImportFromPem(DecodeText(data));
-                return pem;
+                //PEM text holds any number of blocks
+                return ParsePem(DecodeText(data));
             case FileFormat.Certificate:
                 return [CertTools.LoadCertificate(data)];
             default:
@@ -276,34 +278,88 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Unwraps a PEM-encoded PKCS#7 file to the DER it holds, which is what
-    /// <see cref="SignedCms.Decode(ReadOnlySpan{byte})"/> reads. Both encodings are written under both
-    /// extensions: <c>openssl crl2pkcs7</c> writes PEM, and <c>certutil -encode</c> converts DER to it.
-    /// A file that is not PEM is returned unchanged.
+    /// Reads every certificate PEM text holds, whether written as <c>CERTIFICATE</c> blocks or as a
+    /// PKCS#7 bundle. Text holding neither yields nothing, since an empty PEM file is legitimately empty.
     /// </summary>
     /// <remarks>
-    /// The PEM label is not checked. <c>certutil -encode</c> labels whatever it converts
-    /// <c>CERTIFICATE</c>, so demanding <c>PKCS7</c> would reject the files Windows produces, and the
-    /// payload is the same DER whichever label a producer wrote.
+    /// Each block is read by what it decodes to rather than by the label over it. The two are routinely
+    /// at odds: <c>openssl crl2pkcs7</c> writes a <c>PKCS7</c> block that people save as <c>.pem</c>,
+    /// and <c>certutil -encode</c> labels whatever it converts <c>CERTIFICATE</c>, PKCS#7 included.
+    /// The label is still consulted for which blocks to read at all, so a private key beside the
+    /// certificates is passed over rather than decoded.
     /// </remarks>
-    private static ReadOnlySpan<byte> UnwrapPem(ReadOnlySpan<byte> data)
+    private static X509Certificate2Collection ParsePem(string text)
     {
-        //A DER file opens with a SEQUENCE tag. Its bytes decode to text that can spell out anything at
-        //all, a PEM block that is no part of the encoding included, so it must not be read as text
+        var certs = new X509Certificate2Collection();
+        var remaining = text.AsSpan();
+        while (PemEncoding.TryFind(remaining, out var pem)) {
+            if (IsCertificateLabel(remaining[pem.Label])) {
+                //TryFind has already established that this is base64 of exactly this length, so it cannot fail
+                var der = new byte[pem.DecodedDataLength];
+                Convert.TryFromBase64Chars(remaining[pem.Base64Data], der, out _);
+
+                if (IsPkcs7(der)) {
+                    certs.AddRange(DecodePkcs7(der));
+                } else {
+                    certs.Add(CertTools.LoadCertificate(der));
+                }
+            }
+            remaining = remaining[pem.Location.End..];
+        }
+        return certs;
+    }
+
+
+    /// <summary>
+    /// Whether a PEM label names certificate material this source reads. <c>PKCS7</c> is RFC 7468 s8 and
+    /// <c>CMS</c> is s9, which prefers it; producers write both.
+    /// </summary>
+    private static bool IsCertificateLabel(ReadOnlySpan<char> label)
+        => label.SequenceEqual("CERTIFICATE") || label.SequenceEqual("PKCS7") || label.SequenceEqual("CMS");
+
+
+    /// <summary>
+    /// Whether DER holds a PKCS#7 bundle rather than a lone certificate. Both are a SEQUENCE, and what
+    /// separates them is the first thing inside it: an OID naming the content type for PKCS#7's
+    /// ContentInfo, where a certificate opens with its TBSCertificate SEQUENCE.
+    /// </summary>
+    private static bool IsPkcs7(byte[] der)
+    {
+        try {
+            return new AsnReader(der, AsnEncodingRules.BER).ReadSequence().PeekTag() == Asn1Tag.ObjectIdentifier;
+        } catch (AsnContentException) {
+            //Not readable as ASN.1 at all, so it is no more PKCS#7 than it is a certificate. Loading it
+            //as the latter is what reports the file as unreadable.
+            return false;
+        }
+    }
+
+
+    /// <summary>Reads the certificates out of a DER-encoded PKCS#7 bundle.</summary>
+    private static X509Certificate2Collection DecodePkcs7(ReadOnlySpan<byte> der)
+    {
+        var cms = new SignedCms();
+        cms.Decode(der);
+        return cms.Certificates;
+    }
+
+
+    /// <summary>
+    /// Returns a file's PEM text, or <see langword="null"/> when it holds no PEM block.
+    /// </summary>
+    /// <remarks>
+    /// A file opening with a DER SEQUENCE tag is never read as text: its bytes decode to characters that
+    /// can spell out anything at all, a PEM block that is no part of the encoding included.
+    /// </remarks>
+    private static string? ReadPemText(ReadOnlySpan<byte> data)
+    {
         const byte derSequenceTag = 0x30;
         if (data.Length == 0 || data[0] == derSequenceTag) {
-            return data;
+            return null;
         }
 
         var text = DecodeText(data);
-        if (!PemEncoding.TryFind(text, out var pem)) {
-            return data;
-        }
-
-        //TryFind has already established that this is base64 of exactly this length, so it cannot fail
-        var der = new byte[pem.DecodedDataLength];
-        Convert.TryFromBase64Chars(text.AsSpan()[pem.Base64Data], der, out _);
-        return der;
+        return PemEncoding.TryFind(text, out _) ? text : null;
     }
 
 

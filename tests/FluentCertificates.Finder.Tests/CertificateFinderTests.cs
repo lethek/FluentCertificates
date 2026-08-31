@@ -1363,6 +1363,82 @@ public class CertificateFinderTests
 
 
     /// <summary>
+    /// The extension says which payload to expect, not which one is there. All four combinations of the
+    /// two extensions and the two payloads are written in the wild, so each is read by what the blocks
+    /// decode to. <c>certutil -encode</c> is what puts a PKCS#7 payload under a <c>CERTIFICATE</c> label.
+    /// </summary>
+    [Test]
+    [Arguments("bundle.pem", "PKCS7")]
+    [Arguments("bundle.pem", "CMS")]
+    [Arguments("bundle.pem", "CERTIFICATE")]
+    [Arguments("bundle.p7b", "PKCS7")]
+    [Arguments("bundle.p7b", "CMS")]
+    [Arguments("bundle.p7b", "CERTIFICATE")]
+    public async Task EnumerateCertificates_PemPkcs7UnderEitherExtensionAndLabel_IsLoaded(string fileName, string label)
+    {
+        using var first = CreateSelfSignedCertificate("Labelled Pkcs7 One");
+        using var second = CreateSelfSignedCertificate("Labelled Pkcs7 Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/labelled/{fileName}", new MockFileData(PemEncoding.WriteString(label, BuildPkcs7(first, second))));
+
+        var results = new CertificateFinder(fs).AddDirectory("/labelled").ToList();
+
+        await Assert
+            .That(results.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// The other half of the same mismatch: certificate blocks written under a PKCS#7 extension. Two of
+    /// them, so a reader stopping at the first is caught.
+    /// </summary>
+    [Test]
+    [Arguments("bundle.pem")]
+    [Arguments("bundle.p7b")]
+    public async Task EnumerateCertificates_CertificateBlocksUnderEitherExtension_AreLoaded(string fileName)
+    {
+        using var first = CreateSelfSignedCertificate("Labelled Cert One");
+        using var second = CreateSelfSignedCertificate("Labelled Cert Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/labelled/{fileName}", new MockFileData(first.ExportCertificatePem() + "\n" + second.ExportCertificatePem()));
+
+        var results = new CertificateFinder(fs).AddDirectory("/labelled").ToList();
+
+        await Assert
+            .That(results.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// A private key beside the certificates is passed over rather than decoded. An encrypted one is
+    /// the case worth naming: its DER opens with a SEQUENCE just as a certificate's does, so only the
+    /// label separates the two.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_PemHoldingKeysBesideCertificates_ReadsOnlyTheCertificates()
+    {
+        using var key = ECDsa.Create();
+        using var cert = CreateSelfSignedCertificate("Beside Keys");
+        var pbe = new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 1000);
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/keys/bundle.pem", new MockFileData(String.Join("\n", [
+            key.ExportPkcs8PrivateKeyPem(),
+            key.ExportEncryptedPkcs8PrivateKeyPem("password", pbe),
+            cert.ExportCertificatePem()
+        ])));
+
+        var results = new CertificateFinder(fs).AddDirectory("/keys").ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
     /// A byte order mark names the file's encoding, as it does for <c>File.ReadAllText</c>. Decoding
     /// every file as UTF-8 turns a PEM file written in anything else into text no parser recognises,
     /// and the finder reports that as a directory holding no certificates.
