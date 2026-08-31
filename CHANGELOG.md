@@ -13,6 +13,8 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-01
+
 ### Added
 
 - `CertificateDirectorySource` reads `.pkcs12` files.
@@ -542,7 +544,8 @@ release rather than record it as it happened.
 - Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
   including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
 
-[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/lethek/FluentCertificates/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/lethek/FluentCertificates/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/lethek/FluentCertificates/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/lethek/FluentCertificates/compare/v0.19.0...v0.20.0
