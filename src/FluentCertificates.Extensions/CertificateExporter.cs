@@ -25,8 +25,9 @@ internal enum ExportFormat
 /// <see cref="CertificateExportBuilder.AsPkcs12"/>, <see cref="CertificateExportBuilder.AsPkcs7"/>,
 /// or <see cref="CertificateExportBuilder.AsCert"/>.
 /// For PEM output, use <see cref="CertificateExportBuilder.AsPem"/> or
-/// <see cref="CertificateExportBuilder.AsPkcs7"/>, which return a <see cref="PemCertificateExporter"/>
-/// with an additional <see cref="PemCertificateExporter.ToPemString"/> method.
+/// <see cref="CertificateExportBuilder.AsPkcs7Pem"/>, which return a
+/// <see cref="PemCertificateExporter"/> with an additional
+/// <see cref="PemCertificateExporter.ToPemString"/> method.
 /// </summary>
 public class CertificateExporter
 {
@@ -132,8 +133,8 @@ public class CertificateExporter
 
 
     /// <summary>
-    /// Produces the PKCS#7 bundle as a <c>PKCS7</c> PEM block. See <see cref="Pkcs7Encoding.Pem"/> for
-    /// why that label rather than <c>CMS</c>.
+    /// Produces the PKCS#7 bundle as a <c>PKCS7</c> PEM block. See
+    /// <see cref="CertificateExportBuilder.AsPkcs7Pem"/> for why that label rather than <c>CMS</c>.
     /// </summary>
     internal string ExportPkcs7Pem()
         => PemEncoding.WriteString("PKCS7", ExportPkcs7());

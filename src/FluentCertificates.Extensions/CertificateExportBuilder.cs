@@ -278,21 +278,27 @@ public record CertificateExportBuilder
         => new(Certificates, Anchor, ExportFormat.Pem, Password, SecurePassword, Keys);
 
     /// <summary>
-    /// Selects PKCS#7 (P7B) as the export format. Private keys are never included in PKCS#7 output.
-    /// Returns a <see cref="PemCertificateExporter"/> whose output methods write the PKCS#7 data in the
-    /// chosen encoding. <see cref="PemCertificateExporter.ToPemString"/> supports
-    /// <see cref="Pkcs7Encoding.Pem"/> alone, and reports <see cref="Pkcs7Encoding.Der"/> as unsupported
-    /// when it is called.
+    /// Selects DER-encoded PKCS#7 (P7B) as the export format, which is what the structure is natively.
+    /// Private keys are never included in PKCS#7 output.
+    /// Returns a <see cref="CertificateExporter"/> whose output methods write the binary PKCS#7 data.
     /// </summary>
-    /// <param name="encoding">Whether to write binary DER or a base64 <c>PKCS7</c> block.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="encoding"/> is not a
-    /// declared value.</exception>
-    public PemCertificateExporter AsPkcs7(Pkcs7Encoding encoding = Pkcs7Encoding.Der)
-        => new(Certificates, Anchor, encoding switch {
-            Pkcs7Encoding.Der => ExportFormat.Pkcs7,
-            Pkcs7Encoding.Pem => ExportFormat.Pkcs7Pem,
-            _ => throw new ArgumentOutOfRangeException(nameof(encoding), encoding, "Unknown PKCS#7 encoding.")
-        }, null, null, ExportKeys.None);
+    public CertificateExporter AsPkcs7()
+        => new(Certificates, Anchor, ExportFormat.Pkcs7, null, null, ExportKeys.None);
+
+    /// <summary>
+    /// Selects PKCS#7 (P7B) wrapped in a <c>PKCS7</c> PEM block, for text-only transports. The same
+    /// bundle <see cref="AsPkcs7"/> writes, base64-encoded. Private keys are never included.
+    /// Returns a <see cref="PemCertificateExporter"/> whose
+    /// <see cref="PemCertificateExporter.ToPemString"/> produces that block as a string, and whose
+    /// output methods write its UTF-8 bytes.
+    /// </summary>
+    /// <remarks>
+    /// RFC 7468 s8 defines the <c>PKCS7</c> label and says implementations SHOULD NOT generate it where
+    /// the <c>CMS</c> label of s9 will do. Practice went the other way: OpenSSL writes <c>PKCS7</c> and
+    /// support for <c>CMS</c> is thin, so <c>PKCS7</c> is what is written here.
+    /// </remarks>
+    public PemCertificateExporter AsPkcs7Pem()
+        => new(Certificates, Anchor, ExportFormat.Pkcs7Pem, null, null, ExportKeys.None);
 
     /// <summary>
     /// Selects DER-encoded certificate (CER/CRT) as the export format.
