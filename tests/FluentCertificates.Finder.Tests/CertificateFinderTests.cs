@@ -1333,8 +1333,7 @@ public class CertificateFinderTests
         var pem = PemEncoding.WriteString("PKCS7", BuildPkcs7(first, second)).ReplaceLineEndings(newline);
 
         var fs = CreateEmptyMockFileSystem();
-        //Written as bytes rather than a string, so the line endings under test are the ones on disk
-        fs.AddFile("/pkcs7/bundle.p7b", new MockFileData(Encoding.ASCII.GetBytes(pem)));
+        fs.AddFile("/pkcs7/bundle.p7b", new MockFileData(pem));
 
         var results = new CertificateFinder(fs).AddDirectory("/pkcs7").ToList();
 
@@ -1364,6 +1363,27 @@ public class CertificateFinderTests
 
 
     /// <summary>
+    /// A byte order mark names the file's encoding, as it does for <c>File.ReadAllText</c>. Decoding
+    /// every file as UTF-8 turns a PEM file written in anything else into text no parser recognises,
+    /// and the finder reports that as a directory holding no certificates.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(TextEncodings))]
+    public async Task EnumerateCertificates_PemInAMarkedEncoding_IsLoaded(string name, Encoding encoding)
+    {
+        using var cert = CreateSelfSignedCertificate($"Encoded {name}");
+        var text = cert.ExportCertificatePem();
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/encoded/cert.pem", new MockFileData([..encoding.GetPreamble(), ..encoding.GetBytes(text)]));
+
+        var results = new CertificateFinder(fs).AddDirectory("/encoded").ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
     /// Holds the two hand-kept lists together, so every extension the source recognises is one the
     /// tests above read end to end in the format it really holds.
     /// </summary>
@@ -1371,7 +1391,7 @@ public class CertificateFinderTests
     public async Task SupportedFormats_NamesEveryRecognisedExtension()
         => await Assert
             .That(SupportedFormats().Select(x => Path.GetExtension(x.FileName)).Distinct())
-            .IsEquivalentTo(CertificateDirectorySource.SupportedFileExtensions, CollectionOrdering.Any);
+            .IsEquivalentTo(CertificateDirectorySource.FileFormats.Keys, CollectionOrdering.Any);
 
 
     [Test]
@@ -1590,6 +1610,21 @@ public class CertificateFinderTests
                 base.Release(result);
             }
         }
+    }
+
+
+    /// <summary>
+    /// The encodings a text file may be written in, each with the byte order mark that names it. UTF-8
+    /// is the one that carries no mark, and the one assumed when there is none.
+    /// </summary>
+    public static IEnumerable<(string Name, Encoding Encoding)> TextEncodings()
+    {
+        yield return ("UTF-8", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        yield return ("UTF-8 with BOM", Encoding.UTF8);
+        yield return ("UTF-16 LE", Encoding.Unicode);
+        yield return ("UTF-16 BE", Encoding.BigEndianUnicode);
+        yield return ("UTF-32 LE", Encoding.UTF32);
+        yield return ("UTF-32 BE", new UTF32Encoding(bigEndian: true, byteOrderMark: true));
     }
 
 

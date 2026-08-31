@@ -1,4 +1,5 @@
-﻿using System.IO.Abstractions;
+﻿using System.Collections.Frozen;
+using System.IO.Abstractions;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
@@ -164,10 +165,18 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         => LoadAsync(CertificateFiles().Reverse(), cancellationToken);
 
 
-    private IEnumerable<(string Path, string Extension)> CertificateFiles()
-        => ListFiles()
-            .Select(path => (Path: path, Extension: FileSystem.Path.GetExtension(path)))
-            .Where(x => SupportedFileExtensions.Contains(x.Extension));
+    /// <summary>
+    /// The files worth reading, each paired with the format its extension names. A file whose extension
+    /// names no format is not one of ours and never reaches <see cref="Parse"/>.
+    /// </summary>
+    private IEnumerable<(string Path, FileFormat Format)> CertificateFiles()
+    {
+        foreach (var path in ListFiles()) {
+            if (FileFormats.TryGetValue(FileSystem.Path.GetExtension(path), out var format)) {
+                yield return (path, format);
+            }
+        }
+    }
 
 
     /// <summary>
@@ -189,30 +198,30 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     //One batch per file: a container format yields several certificates from the one path, and they are
     //all parsed together. The path is canonicalised once for the batch, so the same file reached from two
     //overlapping roots reports one location
-    private IEnumerable<CertificateBatch> Load(IEnumerable<(string Path, string Extension)> files)
+    private IEnumerable<CertificateBatch> Load(IEnumerable<(string Path, FileFormat Format)> files)
         => files.Select(x => new CertificateBatch(
-            Load(x.Path, x.Extension),
+            Load(x.Path, x.Format),
             FileSystem.Path.GetFullPath(x.Path)
         ));
 
 
     private async IAsyncEnumerable<CertificateBatch> LoadAsync(
-        IEnumerable<(string Path, string Extension)> files,
+        IEnumerable<(string Path, FileFormat Format)> files,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         foreach (var file in files) {
             yield return new CertificateBatch(
-                await LoadAsync(file.Path, file.Extension, cancellationToken).ConfigureAwait(false),
+                await LoadAsync(file.Path, file.Format, cancellationToken).ConfigureAwait(false),
                 FileSystem.Path.GetFullPath(file.Path)
             );
         }
     }
 
 
-    private IEnumerable<X509Certificate2> Load(string path, string extension)
+    private IEnumerable<X509Certificate2> Load(string path, FileFormat format)
     {
         try {
-            return Parse(extension, FileSystem.File.ReadAllBytes(path));
+            return Parse(format, FileSystem.File.ReadAllBytes(path));
         } catch (Exception ex) {
             //One bad file must not hide the good ones beside it, so it is skipped and reported
             OnLoadFailure?.Invoke(path, ex);
@@ -223,11 +232,11 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
     private async ValueTask<IEnumerable<X509Certificate2>> LoadAsync(
         string path,
-        string extension,
+        FileFormat format,
         CancellationToken cancellationToken)
     {
         try {
-            return Parse(extension, await FileSystem.File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false));
+            return Parse(format, await FileSystem.File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false));
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             //Cancellation is not a file that could not be read, so it propagates rather than being reported
             OnLoadFailure?.Invoke(path, ex);
@@ -240,31 +249,28 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// Turns a file's bytes into certificates. Split from reading them so the synchronous and asynchronous
     /// paths differ only in how they get the bytes, rather than carrying a copy of this each.
     /// </summary>
-    /// <param name="extension">The file's extension, which decides the format.</param>
+    /// <param name="format">The format the file's extension named.</param>
     /// <param name="data">The file's contents.</param>
     /// <returns>Every certificate the file holds.</returns>
-    private IEnumerable<X509Certificate2> Parse(string extension, ReadOnlySpan<byte> data)
+    private IEnumerable<X509Certificate2> Parse(FileFormat format, ReadOnlySpan<byte> data)
     {
-        switch (extension.ToLowerInvariant()) {
-            case ".p7b":
-            case ".p7c":
+        switch (format) {
+            case FileFormat.Pkcs7:
                 var cms = new SignedCms();
                 cms.Decode(UnwrapPem(data));
                 return cms.Certificates;
-            case ".pfx":
-            case ".p12":
-            case ".pkcs12":
-                //X509CertificateLoader.LoadCertificate rejects PKCS#12, so these must go
-                //through the PKCS#12 loader rather than the default branch
+            case FileFormat.Pkcs12:
+                //X509CertificateLoader.LoadCertificate rejects PKCS#12, so this needs the PKCS#12 loader
                 return CertTools.LoadPkcs12Collection(data, Password);
-            case ".pem":
-            case ".ca-bundle":
-                //Both extensions name PEM text, which holds any number of certificates
+            case FileFormat.Pem:
+                //PEM text holds any number of certificates
                 var pem = new X509Certificate2Collection();
                 pem.ImportFromPem(DecodeText(data));
                 return pem;
-            default:
+            case FileFormat.Certificate:
                 return [CertTools.LoadCertificate(data)];
+            default:
+                throw new InvalidOperationException($"Unsupported file format: {format}.");
         }
     }
 
@@ -302,16 +308,32 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Decodes PEM text as UTF-8, dropping the byte order mark a producer may have written ahead of it.
-    /// Reading the bytes and decoding them here is what lets one parser serve both paths.
+    /// Decodes PEM text the way <c>File.ReadAllText</c> would: a byte order mark names the encoding, and
+    /// UTF-8 is assumed when there is none. Reading the bytes and decoding them here is what lets one
+    /// parser serve both paths.
     /// </summary>
     private static string DecodeText(ReadOnlySpan<byte> data)
     {
-        if (data.StartsWith(Encoding.UTF8.Preamble)) {
-            data = data.Slice(Encoding.UTF8.Preamble.Length);
+        foreach (var encoding in MarkedEncodings) {
+            if (data.StartsWith(encoding.Preamble)) {
+                return encoding.GetString(data[encoding.Preamble.Length..]);
+            }
         }
         return Encoding.UTF8.GetString(data);
     }
+
+
+    /// <summary>
+    /// The encodings a byte order mark can name, longest mark first: UTF-32 little endian opens with
+    /// the same two bytes as UTF-16 little endian, so testing it second would never match.
+    /// </summary>
+    private static readonly Encoding[] MarkedEncodings = [
+        Encoding.UTF32,
+        new UTF32Encoding(bigEndian: true, byteOrderMark: true),
+        Encoding.Unicode,
+        Encoding.BigEndianUnicode,
+        Encoding.UTF8
+    ];
 
 
     /// <summary>
@@ -329,15 +351,43 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// The set of supported certificate file extensions. Compared case-insensitively:
-    /// file systems commonly preserve whatever case the file was created with, so a
-    /// certificate named "SERVER.PFX" must be found just as "server.pfx" is.
-    /// <para>
-    /// Internal so a test can check it against the formats the tests write, which is what has every
-    /// extension here read end to end in the format it really holds.
-    /// </para>
+    /// Every file extension this source reads, each naming the format that extension holds. One table
+    /// rather than a set beside a switch, so an extension cannot be recognised without saying how to
+    /// read it. Compared case-insensitively: file systems commonly preserve whatever case the file was
+    /// created with, so a certificate named "SERVER.PFX" must be found just as "server.pfx" is.
     /// </summary>
-    internal static readonly IReadOnlySet<string> SupportedFileExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
-        ".crt", ".cer", ".der", ".pfx", ".p12", ".pkcs12", ".p7b", ".p7c", ".pem", ".ca-bundle"
-    };
+    /// <remarks>
+    /// Internal so a test can check these extensions against the formats the tests write, which is what
+    /// has every one of them read end to end in the format it really holds.
+    /// </remarks>
+    internal static readonly FrozenDictionary<string, FileFormat> FileFormats =
+        new Dictionary<string, FileFormat> {
+            [".crt"] = FileFormat.Certificate,
+            [".cer"] = FileFormat.Certificate,
+            [".der"] = FileFormat.Certificate,
+            [".pfx"] = FileFormat.Pkcs12,
+            [".p12"] = FileFormat.Pkcs12,
+            [".pkcs12"] = FileFormat.Pkcs12,
+            [".p7b"] = FileFormat.Pkcs7,
+            [".p7c"] = FileFormat.Pkcs7,
+            [".pem"] = FileFormat.Pem,
+            [".ca-bundle"] = FileFormat.Pem
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+
+    /// <summary>What a file holds, which its extension names and <see cref="Parse"/> reads.</summary>
+    internal enum FileFormat
+    {
+        /// <summary>A lone certificate, DER encoded.</summary>
+        Certificate,
+
+        /// <summary>A PKCS#12 container, which needs <see cref="Password"/> when one protects it.</summary>
+        Pkcs12,
+
+        /// <summary>A PKCS#7 bundle, in DER or PEM.</summary>
+        Pkcs7,
+
+        /// <summary>PEM text holding any number of certificates.</summary>
+        Pem
+    }
 }
