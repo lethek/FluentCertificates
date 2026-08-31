@@ -13,6 +13,14 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `CertificateDirectorySource` reads `.pkcs12` files.
+
+### Fixed
+
+- A PEM-encoded `.p7b` or `.p7c` file is read, rather than skipped as unparseable.
+
 ## [0.21.0] - 2026-08-30
 
 ### Added

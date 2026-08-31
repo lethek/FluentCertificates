@@ -1316,6 +1316,84 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>
+    /// A PKCS#7 bundle is written as PEM as well as DER: <c>openssl crl2pkcs7</c> writes PEM, and
+    /// <c>certutil -encode</c> converts a DER file to it with CRLF line endings, where a producer
+    /// anywhere else writes LF. Two certificates, so a reader stopping at the first is caught.
+    /// <c>.p7c</c> shares the branch this reads, and <see cref="SupportedFormats"/> covers both
+    /// extensions in DER.
+    /// </summary>
+    [Test]
+    [Arguments("\n")]
+    [Arguments("\r\n")]
+    public async Task EnumerateCertificates_Pkcs7WrittenAsPem_IsLoaded(string newline)
+    {
+        using var first = CreateSelfSignedCertificate("Pem Pkcs7 One");
+        using var second = CreateSelfSignedCertificate("Pem Pkcs7 Two");
+        var pem = PemEncoding.WriteString("PKCS7", BuildPkcs7(first, second)).ReplaceLineEndings(newline);
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/pkcs7/bundle.p7b", new MockFileData(pem));
+
+        var results = new CertificateFinder(fs).AddDirectory("/pkcs7").ToList();
+
+        await Assert
+            .That(results.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// A DER file's bytes decode to text that can spell out anything at all, a PEM block included, and
+    /// that block is no part of the encoding. Unwrapping what a DER bundle appears to hold loses it.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_DerPkcs7WhoseContentSpellsOutPem_IsLoaded()
+    {
+        using var cert = CreateSelfSignedCertificate("Der Not Pem");
+        var content = Encoding.ASCII.GetBytes("\n-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----\n");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/pkcs7/bundle.p7b", new MockFileData(BuildPkcs7WithContent(content, cert)));
+
+        var results = new CertificateFinder(fs).AddDirectory("/pkcs7").ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// A byte order mark names the file's encoding, as it does for <c>File.ReadAllText</c>. Decoding
+    /// every file as UTF-8 turns a PEM file written in anything else into text no parser recognises,
+    /// and the finder reports that as a directory holding no certificates.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(TextEncodings))]
+    public async Task EnumerateCertificates_PemInAMarkedEncoding_IsLoaded(string name, Encoding encoding)
+    {
+        using var cert = CreateSelfSignedCertificate($"Encoded {name}");
+        var text = cert.ExportCertificatePem();
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/encoded/cert.pem", new MockFileData([..encoding.GetPreamble(), ..encoding.GetBytes(text)]));
+
+        var results = new CertificateFinder(fs).AddDirectory("/encoded").ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// Holds the two hand-kept lists together, so every extension the source recognises is one the
+    /// tests above read end to end in the format it really holds.
+    /// </summary>
+    [Test]
+    public async Task SupportedFormats_NamesEveryRecognisedExtension()
+        => await Assert
+            .That(SupportedFormats().Select(x => Path.GetExtension(x.FileName)).Distinct())
+            .IsEquivalentTo(CertificateDirectorySource.FileFormats.Keys, CollectionOrdering.Any);
+
+
     [Test]
     [MethodDataSource(nameof(StoreNames))]
     public async Task AddStore_MapsStoreNameToStoreString(StoreName name, string expected)
@@ -1535,6 +1613,25 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>
+    /// The encodings a text file may be written in, each with the byte order mark that names it. UTF-8
+    /// is the one that carries no mark, and the one assumed when there is none.
+    /// </summary>
+    /// <remarks>
+    /// Each case is a factory rather than a value: <see cref="Encoding"/> is a mutable reference type,
+    /// so handing the same instance to every test would share it across them.
+    /// </remarks>
+    public static IEnumerable<Func<(string Name, Encoding Encoding)>> TextEncodings()
+    {
+        yield return () => ("UTF-8", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        yield return () => ("UTF-8 with BOM", new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        yield return () => ("UTF-16 LE", new UnicodeEncoding(bigEndian: false, byteOrderMark: true));
+        yield return () => ("UTF-16 BE", new UnicodeEncoding(bigEndian: true, byteOrderMark: true));
+        yield return () => ("UTF-32 LE", new UTF32Encoding(bigEndian: false, byteOrderMark: true));
+        yield return () => ("UTF-32 BE", new UTF32Encoding(bigEndian: true, byteOrderMark: true));
+    }
+
+
     /// <summary>Every file extension the finder claims to support, with the format to write it in.</summary>
     public static IEnumerable<(string FileName, string Format)> SupportedFormats()
     {
@@ -1545,6 +1642,7 @@ public class CertificateFinderTests
         yield return ("cert.der", "der");
         yield return ("cert.pfx", "pkcs12");
         yield return ("cert.p12", "pkcs12");
+        yield return ("cert.pkcs12", "pkcs12");
         yield return ("cert.p7b", "pkcs7");
         yield return ("cert.p7c", "pkcs7");
     }
@@ -1574,15 +1672,23 @@ public class CertificateFinderTests
         };
 
 
-    private static byte[] BuildPkcs7(X509Certificate2 cert)
+    /// <summary>A PKCS#7 bundle signed by <paramref name="signer"/>, carrying the others alongside it.</summary>
+    private static byte[] BuildPkcs7(X509Certificate2 signer, params X509Certificate2[] others)
+        => BuildPkcs7WithContent([0], signer, others);
+
+
+    /// <summary>The same over content the caller chose, for asserting what those bytes do not affect.</summary>
+    private static byte[] BuildPkcs7WithContent(byte[] content, X509Certificate2 signer, params X509Certificate2[] others)
     {
-        var cms = new SignedCms(new ContentInfo([0]), false);
-        cms.ComputeSignature(new CmsSigner(cert));
+        var cms = new SignedCms(new ContentInfo(content), false);
+        cms.ComputeSignature(new CmsSigner(signer));
+        foreach (var cert in others) {
+            cms.AddCertificate(cert);
+        }
         return cms.Encode();
     }
 
 
-    /// <summary>A real directory on disk, removed with everything in it when the test scope ends.</summary>
     /// <summary>
     /// A PEM file holds any number of certificates, and a `.ca-bundle` is a bundle by definition, so
     /// reading only the first silently loses the rest.
@@ -2397,6 +2503,7 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>A real directory on disk, removed with everything in it when the test scope ends.</summary>
     private sealed class TempDirectory : IDisposable
     {
         public string Path { get; } =

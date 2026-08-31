@@ -487,7 +487,7 @@ returns a new finder and leaves the original alone.
 |---|---|
 |`AddCommonStores()`|`My`, `CA` and `Root` for `CurrentUser`, plus `My`, `CA`, `Root` and `WebHosting` for `LocalMachine`|
 |`AddStore(...)`, `AddStores(...)`|An `X509Store`, or a store name and `StoreLocation`|
-|`AddDirectory(path, recurse)`, `AddDirectories(...)`|`.crt`, `.cer`, `.der`, `.pem`, `.ca-bundle`, `.pfx`, `.p12`, `.p7b` and `.p7c` files|
+|`AddDirectory(path, recurse)`, `AddDirectories(...)`|`.crt`, `.cer`, `.der`, `.pem`, `.ca-bundle`, `.pfx`, `.p12`, `.pkcs12`, `.p7b` and `.p7c` files|
 |`AddCertificates(...)`|Certificates you already hold in memory|
 |`AddSource(...)`, `AddSources(...)`|A source of your own, covered at the end of this section|
 
@@ -509,8 +509,8 @@ first. The pattern narrows the supported extensions rather than widening them, s
 var finder = new CertificateFinder().AddDirectory("/etc/ssl/certs", searchPattern: "ca-*.pem");
 ```
 
-Pass a `password` to read password-protected `.pfx` and `.p12` files. One password covers the directory,
-and a file it does not open is skipped like any other unreadable file.
+Pass a `password` to read password-protected `.pfx`, `.p12` and `.pkcs12` files. One password covers
+the directory, and a file it does not open is skipped like any other unreadable file.
 
 ```csharp
 var finder = new CertificateFinder().AddDirectory("/opt/deploy/certs", password: pfxPassword);
