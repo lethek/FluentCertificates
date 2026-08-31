@@ -13,6 +13,10 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Fixed
+
+- A base64-armoured `.p7b` or `.p7c` file is read, rather than skipped as unparseable.
+
 ## [0.21.0] - 2026-08-30
 
 ### Added
