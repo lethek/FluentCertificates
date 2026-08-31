@@ -1,6 +1,7 @@
 using System.Security;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 using FluentCertificates.Internals;
 
@@ -105,6 +106,52 @@ public class CertificateExportBuilderTests
 #pragma warning restore SYSLIB0057
         await Assert.That(coll).HasSingleItem();
         await Assert.That(coll[0].Thumbprint).IsEqualTo(cert.Thumbprint);
+    }
+
+    [Test]
+    public async Task ExportBuilder_Pkcs7Pem_WrapsTheSameDerInAPkcs7Block()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).Create();
+        using var leaf = new CertificateBuilder().SetIssuer(root).Create();
+        var certs = new[] { leaf, root };
+
+        var pem = Encoding.UTF8.GetString(certs.Export().AsPkcs7(Pkcs7Encoding.Pem).ToByteArray());
+
+        await Assert.That(PemEncoding.TryFind(pem, out var fields)).IsTrue();
+        await Assert.That(pem[fields.Label]).IsEqualTo("PKCS7");
+        await Assert
+            .That(Convert.FromBase64String(pem[fields.Base64Data]))
+            .IsEquivalentTo(certs.Export().AsPkcs7().ToByteArray(), CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task ExportBuilder_Pkcs7Pem_ToPemString_MatchesTheBytesItWrites()
+    {
+        using var cert = new CertificateBuilder().Create();
+        var exporter = cert.Export().AsPkcs7(Pkcs7Encoding.Pem);
+
+        await Assert
+            .That(exporter.ToPemString())
+            .IsEqualTo(Encoding.UTF8.GetString(exporter.ToByteArray()));
+    }
+
+    [Test]
+    public async Task ExportBuilder_Pkcs7Der_ToPemString_Throws()
+    {
+        using var cert = new CertificateBuilder().Create();
+        await Assert
+            .That(() => cert.Export().AsPkcs7().ToPemString())
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task ExportBuilder_Pkcs7_UndeclaredEncoding_Throws()
+    {
+        using var cert = new CertificateBuilder().Create();
+        await Assert
+            .That(() => cert.Export().AsPkcs7((Pkcs7Encoding)42))
+            .Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]

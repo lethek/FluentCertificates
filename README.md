@@ -384,8 +384,10 @@ cert.Export().WithPrivateKey().WithPassword("hunter2").AsPkcs12().ToFile("cert.p
 //Raw DER/CER bytes
 cert.Export().AsCert().ToByteArray();
 
-//A whole chain as PKCS#7
+//A whole chain as PKCS#7, DER by default or base64 in a PKCS7 block
 chain.Export().AsPkcs7().ToByteArray();
+chain.Export().AsPkcs7(Pkcs7Encoding.Pem).ToFile("chain.p7b");
+chain.Export().AsPkcs7(Pkcs7Encoding.Pem).ToPemString();
 
 //A leaf plus its issuers, no private keys anywhere
 leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().ToByteArray();
@@ -395,8 +397,8 @@ leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().To
 |-|-|
 |Configure|`WithPrivateKey()`, `WithAllPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`|
 |Add|`AddChain(X509Chain)`, `AddChain(...)`, `AddCertificates(...)`|
-|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsCert()`|
-|Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
+|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7(Pkcs7Encoding)`, `AsCert()`|
+|Finish|`ToPemString()` (textual formats only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
 `With*` configures the export and replaces whatever was set before; `Add*` appends certificates to it.
 Every `Add*` method deduplicates by thumbprint, so a certificate already present is skipped.
@@ -508,6 +510,17 @@ first. The pattern narrows the supported extensions rather than widening them, s
 ```csharp
 var finder = new CertificateFinder().AddDirectory("/etc/ssl/certs", searchPattern: "ca-*.pem");
 ```
+
+Every extension above except `.pfx`, `.p12` and `.pkcs12` is read by what the file actually holds
+rather than by what its name promised. PEM or DER, a single certificate or a PKCS#7 bundle: all four
+combinations are read under any of those names, because all of them turn up under each in practice.
+Private keys and anything else that is not certificate material are passed over.
+
+The name still decides one thing. A file called `.pem` or `.ca-bundle` may legitimately hold no
+certificates, so an empty one is not reported. Under the other extensions an empty result means the
+file is not what it claims, and it reaches `OnLoadFailure`.
+
+PKCS#12 is the exception to all of this, since it has no text form and needs its own loader.
 
 Pass a `password` to read password-protected `.pfx`, `.p12` and `.pkcs12` files. One password covers
 the directory, and a file it does not open is skipped like any other unreadable file.

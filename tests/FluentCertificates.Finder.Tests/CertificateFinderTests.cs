@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Formats.Asn1;
 using System.IO.Abstractions;
 using System.IO.Abstractions.TestingHelpers;
 using System.Linq.Expressions;
@@ -156,7 +157,7 @@ public class CertificateFinderTests
             .RemoveSource(new CertificateDirectorySource("/dropped", false, fs))
             .ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([kept.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([kept.Thumbprint]);
     }
 
 
@@ -291,7 +292,7 @@ public class CertificateFinderTests
 
         //Both files in the directory, identified rather than merely counted
         await Assert
-            .That(results.Select(r => r.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([expectedNoKey.Thumbprint, expectedWithKey.Thumbprint], CollectionOrdering.Any);
 
         //The result records where it came from, so the source has to be the directory searched
@@ -314,7 +315,7 @@ public class CertificateFinderTests
 
         //...but the sources compare equal, so the directory is read once
         await Assert
-            .That(finder.ToList().Select(r => r.Certificate.Thumbprint))
+            .That(ThumbprintsOf(finder.ToList()))
             .IsEquivalentTo([expectedNoKey.Thumbprint, expectedWithKey.Thumbprint], CollectionOrdering.Any);
     }
 
@@ -346,6 +347,10 @@ public class CertificateFinderTests
         await Assert
             .That(results.Where(r => r.Certificate.Thumbprint == top.Thumbprint).Select(r => r.Location).Distinct())
             .HasSingleItem();
+
+        foreach (var result in results) {
+            result.Certificate.Dispose();
+        }
     }
 
 
@@ -433,11 +438,11 @@ public class CertificateFinderTests
         using var four = CreateSelfSignedCertificate("Four");
         fs.AddFile("/rev/a.cer", new MockFileData(one.RawData));
         fs.AddFile("/rev/b.cer", new MockFileData(two.RawData));
-        fs.AddFile("/rev/c.pem", new MockFileData(three.ExportCertificatePem() + "\n" + four.ExportCertificatePem()));
+        fs.AddFile("/rev/c.pem", new MockFileData(PemBundle(three, four)));
 
         var directory = new CertificateDirectorySource("/rev", false, fs);
-        var forwards = directory.Find(CertificateFilter.Empty).Select(x => x.Certificate.Thumbprint).ToList();
-        var backwards = directory.FindDescending(CertificateFilter.Empty)!.Select(x => x.Certificate.Thumbprint).ToList();
+        var forwards = ThumbprintsOf(directory.Find(CertificateFilter.Empty));
+        var backwards = ThumbprintsOf(directory.FindDescending(CertificateFilter.Empty)!);
 
         await Assert.That(forwards.Count).IsEqualTo(4);
         await Assert.That(backwards).IsEquivalentTo(Enumerable.Reverse(forwards), CollectionOrdering.Matching);
@@ -466,7 +471,7 @@ public class CertificateFinderTests
         fs.AddFile("/last/a.pem", new MockFileData(alone.ExportCertificatePem()));
         fs.AddFile(
             "/last/b.pem",
-            new MockFileData(bundledOne.ExportCertificatePem() + "\n" + bundledTwo.ExportCertificatePem())
+            new MockFileData(PemBundle(bundledOne, bundledTwo))
         );
 
         var finder = new CertificateFinder(fs).AddDirectory("/last");
@@ -953,10 +958,8 @@ public class CertificateFinderTests
         fs.AddFile("/mixed/cert.pem", new MockFileData(cert.ExportCertificatePem()));
 
         var finder = new CertificateFinder(fs).AddDirectory("/mixed");
-        var results = finder.ToList();
 
-        await Assert.That(results.Count).IsEqualTo(1);
-        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+        await Assert.That(ThumbprintsOf(finder.ToList())).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -980,11 +983,9 @@ public class CertificateFinderTests
 
         //Unreadable certificate files are skipped rather than throwing, so a bad file
         //in a directory does not hide the good ones alongside it
-        await Assert.That(() => finder.ToList()).ThrowsNothing();
+        await Assert.That(() => ThumbprintsOf(finder.ToList())).ThrowsNothing();
 
-        var results = finder.ToList();
-        await Assert.That(results.Count).IsEqualTo(1);
-        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+        await Assert.That(ThumbprintsOf(finder.ToList())).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -999,10 +1000,8 @@ public class CertificateFinderTests
         fs.AddFile($"/case/{fileName}", new MockFileData(cert.ExportCertificatePem()));
 
         var finder = new CertificateFinder(fs).AddDirectory("/case");
-        var results = finder.ToList();
 
-        await Assert.That(results.Count).IsEqualTo(1);
-        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+        await Assert.That(ThumbprintsOf(finder.ToList())).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1101,7 +1100,7 @@ public class CertificateFinderTests
 
         var finder = new CertificateFinder(fs).AddDirectory("/present").AddDirectory("/nonexistent");
 
-        await Assert.That(finder.ToList().Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(finder.ToList())).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1124,7 +1123,7 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder().AddDirectory(dir.Path, recurse: true).ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1149,7 +1148,7 @@ public class CertificateFinderTests
             .ToList();
 
         //The good file is still returned: reporting a failure does not stop the search
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
 
         await Assert
             .That(skipped.Select(x => fs.Path.GetFileName(x.Path)))
@@ -1232,10 +1231,10 @@ public class CertificateFinderTests
         File.WriteAllText(Path.Combine(dir.Path, "top.pem"), top.ExportCertificatePem());
         File.WriteAllText(Path.Combine(sub, "nested.pem"), nested.ExportCertificatePem());
 
-        var results = new CertificateFinder().AddDirectory(dir.Path, recurse).ToList();
+        var thumbprints = ThumbprintsOf(new CertificateFinder().AddDirectory(dir.Path, recurse));
 
-        await Assert.That(results.Count).IsEqualTo(expected);
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).Contains(top.Thumbprint);
+        await Assert.That(thumbprints.Count).IsEqualTo(expected);
+        await Assert.That(thumbprints).Contains(top.Thumbprint);
     }
 
 
@@ -1254,10 +1253,9 @@ public class CertificateFinderTests
         File.WriteAllText(Path.Combine(dir.Path, "top.pem"), top.ExportCertificatePem());
         File.WriteAllText(Path.Combine(sub, "nested.pem"), nested.ExportCertificatePem());
 
-        var results = new CertificateFinder().AddDirectories(dir.Path).ToList();
-
-        await Assert.That(results.Count).IsEqualTo(1);
-        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(top.Thumbprint);
+        await Assert
+            .That(ThumbprintsOf(new CertificateFinder().AddDirectories(dir.Path)))
+            .IsEquivalentTo([top.Thumbprint]);
     }
 
 
@@ -1286,10 +1284,9 @@ public class CertificateFinderTests
         using var dir = new TempDirectory();
         File.WriteAllBytes(Path.Combine(dir.Path, fileName), CertificateFileBytes(cert, format));
 
-        var results = new CertificateFinder().AddDirectory(dir.Path).ToList();
-
-        await Assert.That(results.Count).IsEqualTo(1);
-        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+        await Assert
+            .That(ThumbprintsOf(new CertificateFinder().AddDirectory(dir.Path)))
+            .IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1309,10 +1306,9 @@ public class CertificateFinderTests
         var fs = CreateEmptyMockFileSystem();
         fs.AddFile($"/formats/{fileName}", new MockFileData(CertificateFileBytes(cert, format)));
 
-        var results = new CertificateFinder(fs).AddDirectory("/formats").ToList();
-
-        await Assert.That(results.Count).IsEqualTo(1);
-        await Assert.That(results[0].Certificate.Thumbprint).IsEqualTo(cert.Thumbprint);
+        await Assert
+            .That(ThumbprintsOf(new CertificateFinder(fs).AddDirectory("/formats")))
+            .IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1338,7 +1334,7 @@ public class CertificateFinderTests
         var results = new CertificateFinder(fs).AddDirectory("/pkcs7").ToList();
 
         await Assert
-            .That(results.Select(x => x.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
     }
 
@@ -1358,7 +1354,233 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder(fs).AddDirectory("/pkcs7").ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// The extension says which payload to expect, not which one is there, so a PKCS#7 block is read
+    /// under any label a producer writes it with, and under either extension. <c>certutil -encode</c> is
+    /// what puts one under a <c>CERTIFICATE</c> label, and the label need not be one any RFC names; the
+    /// <c>.p7b</c> and <c>PKCS7</c> pairing is <see cref="EnumerateCertificates_Pkcs7WrittenAsPem_IsLoaded"/>.
+    /// </summary>
+    [Test]
+    [Arguments("bundle.pem", "PKCS7")]
+    [Arguments("bundle.pem", "CMS")]
+    [Arguments("bundle.pem", "CERTIFICATE")]
+    [Arguments("bundle.pem", "PKCS7 SIGNED DATA")]
+    [Arguments("bundle.p7b", "CERTIFICATE")]
+    public async Task EnumerateCertificates_PemPkcs7UnderEitherExtensionAndLabel_IsLoaded(string fileName, string label)
+    {
+        using var first = CreateSelfSignedCertificate("Labelled Pkcs7 One");
+        using var second = CreateSelfSignedCertificate("Labelled Pkcs7 Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/labelled/{fileName}", new MockFileData(PemEncoding.WriteString(label, BuildPkcs7(first, second))));
+
+        var results = new CertificateFinder(fs).AddDirectory("/labelled").ToList();
+
+        await Assert
+            .That(ThumbprintsOf(results))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// The other half of the same mismatch: certificate blocks written under an extension naming some
+    /// other format. Two of them, so a reader stopping at the first is caught. Under <c>.pem</c> this is
+    /// <see cref="EnumerateCertificates_PemHoldingSeveralCertificates_ReturnsEachOfThem"/>.
+    /// </summary>
+    [Test]
+    [Arguments("bundle.p7b")]
+    [Arguments("bundle.crt")]
+    public async Task EnumerateCertificates_CertificateBlocksUnderAnotherExtension_AreLoaded(string fileName)
+    {
+        using var first = CreateSelfSignedCertificate("Labelled Cert One");
+        using var second = CreateSelfSignedCertificate("Labelled Cert Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/labelled/{fileName}", new MockFileData(PemBundle(first, second)));
+
+        var results = new CertificateFinder(fs).AddDirectory("/labelled").ToList();
+
+        await Assert
+            .That(ThumbprintsOf(results))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// A DER PKCS#7 bundle under an extension naming something else. <c>.pem</c> gets used as a generic
+    /// extension for certificate files, and Windows writes bundles into <c>.cer</c>; passing either over
+    /// would report nothing, since yielding no certificates is also what an empty PEM file does. Two
+    /// certificates, so reading only the first is caught.
+    /// </summary>
+    [Test]
+    [Arguments("chain.pem")]
+    [Arguments("chain.ca-bundle")]
+    [Arguments("chain.cer")]
+    public async Task EnumerateCertificates_DerPkcs7UnderAnotherExtension_IsLoaded(string fileName)
+    {
+        using var first = CreateSelfSignedCertificate("Der Under Pem One");
+        using var second = CreateSelfSignedCertificate("Der Under Pem Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/misnamed/{fileName}", new MockFileData(BuildPkcs7(first, second)));
+
+        var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
+
+        await Assert
+            .That(ThumbprintsOf(results))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>The other binary payload that lands under <c>.pem</c>: a lone DER certificate.</summary>
+    [Test]
+    public async Task EnumerateCertificates_DerCertificateUnderAPemExtension_IsLoaded()
+    {
+        using var cert = CreateSelfSignedCertificate("Der Certificate Under Pem");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/misnamed/cert.pem", new MockFileData(cert.RawData));
+
+        var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
+
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// A <c>PKCS7</c> or <c>CMS</c> label also covers content types holding no certificates, and one of
+    /// those beside the certificates must not cost the whole file.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_PemHoldingAContentTypeWithNoCertificates_ReadsTheRest()
+    {
+        using var cert = CreateSelfSignedCertificate("Beside Enveloped");
+
+        //A ContentInfo naming enveloped-data, whose content this source has no way to read
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) {
+            writer.WriteObjectIdentifier(Oids.Pkcs7Enveloped);
+        }
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/enveloped/bundle.pem", new MockFileData(
+            PemEncoding.WriteString("CMS", writer.Encode()) + "\n" + cert.ExportCertificatePem()
+        ));
+
+        var results = new CertificateFinder(fs).AddDirectory("/enveloped").ToList();
+
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// A malformed block costs the file, not just itself: the batch never reaches the caller, so the
+    /// certificates read before it are released rather than returned.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_PemWhoseLastBlockIsMalformed_ReportsTheFile()
+    {
+        using var first = CreateSelfSignedCertificate("Before The Bad One");
+        using var second = CreateSelfSignedCertificate("Also Before It");
+        var skipped = new List<string>();
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/malformed/bundle.pem", new MockFileData(String.Join("\n", [
+            first.ExportCertificatePem(),
+            second.ExportCertificatePem(),
+            PemEncoding.WriteString("CERTIFICATE", "not a certificate"u8.ToArray())
+        ])));
+
+        var source = new CertificateDirectorySource("/malformed", fileSystem: fs) {
+            OnLoadFailure = (path, _) => skipped.Add(fs.Path.GetFileName(path))
+        };
+        var results = new CertificateFinder().AddSource(source).ToList();
+
+        await Assert.That(results).IsEmpty();
+        await Assert.That(skipped).IsEquivalentTo(["bundle.pem"]);
+    }
+
+
+    /// <summary>
+    /// The digit <c>0</c> is byte <c>0x30</c>, the same tag a DER SEQUENCE opens with, so a bundle whose
+    /// text happens to start with one must not be taken for binary. Doing so reads only its first
+    /// certificate and loses the rest without reporting anything.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_PemTextStartingWithZero_IsLoaded()
+    {
+        using var first = CreateSelfSignedCertificate("Leading Zero One");
+        using var second = CreateSelfSignedCertificate("Leading Zero Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/zero/bundle.pem", new MockFileData(
+            "0\n" + PemBundle(first, second)
+        ));
+
+        var results = new CertificateFinder(fs).AddDirectory("/zero").ToList();
+
+        await Assert
+            .That(ThumbprintsOf(results))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// A block holding no certificates never costs the file, whichever extension names it. A private key
+    /// under <c>.p7b</c> is the case worth naming: the extension promises a bundle, so an earlier reading
+    /// took the key for part of it and discarded the certificate beside it. An encrypted key is the other:
+    /// its DER opens with a SEQUENCE just as a certificate's does, so only the label separates the two.
+    /// </summary>
+    [Test]
+    [Arguments("bundle.p7b")]
+    [Arguments("bundle.pem")]
+    public async Task EnumerateCertificates_KeysBesideACertificateUnderEitherExtension_ReadTheCertificate(string fileName)
+    {
+        using var key = ECDsa.Create();
+        using var cert = CreateSelfSignedCertificate("Beside A Key");
+        var pbe = new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 1000);
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/keyed/{fileName}", new MockFileData(String.Join("\n", [
+            key.ExportPkcs8PrivateKeyPem(),
+            key.ExportEncryptedPkcs8PrivateKeyPem("password", pbe),
+            cert.ExportCertificatePem()
+        ])));
+
+        var results = new CertificateFinder(fs).AddDirectory("/keyed").ToList();
+
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// An extension naming one definite format promised certificates, so a file holding PEM blocks but
+    /// none of them is reported rather than read as empty. Only <c>.pem</c> and <c>.ca-bundle</c> can
+    /// legitimately hold none.
+    /// </summary>
+    [Test]
+    [Arguments("only.crt", true)]
+    [Arguments("only.p7b", true)]
+    [Arguments("only.pem", false)]
+    public async Task EnumerateCertificates_PemHoldingOnlyAKey_IsReportedUnlessNamedPem(string fileName, bool reported)
+    {
+        using var key = ECDsa.Create();
+        var skipped = new List<string>();
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/keyonly/{fileName}", new MockFileData(key.ExportPkcs8PrivateKeyPem()));
+
+        var source = new CertificateDirectorySource("/keyonly", fileSystem: fs) {
+            OnLoadFailure = (path, _) => skipped.Add(fs.Path.GetFileName(path))
+        };
+        var results = new CertificateFinder().AddSource(source).ToList();
+
+        await Assert.That(results).IsEmpty();
+        await Assert.That(skipped).IsEquivalentTo(reported ? [fileName] : Array.Empty<string>());
     }
 
 
@@ -1379,7 +1601,7 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder(fs).AddDirectory("/encoded").ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1672,6 +1894,11 @@ public class CertificateFinderTests
         };
 
 
+    /// <summary>PEM text holding one <c>CERTIFICATE</c> block per certificate, in the order given.</summary>
+    private static string PemBundle(params X509Certificate2[] certificates)
+        => String.Join("\n", certificates.Select(x => x.ExportCertificatePem()));
+
+
     /// <summary>A PKCS#7 bundle signed by <paramref name="signer"/>, carrying the others alongside it.</summary>
     private static byte[] BuildPkcs7(X509Certificate2 signer, params X509Certificate2[] others)
         => BuildPkcs7WithContent([0], signer, others);
@@ -1702,17 +1929,13 @@ public class CertificateFinderTests
         using var second = CreateSelfSignedCertificate("Bundled Two");
 
         var fs = CreateEmptyMockFileSystem();
-        fs.AddFile($"/bundle/chain{extension}", new MockFileData(first.ExportCertificatePem() + "\n" + second.ExportCertificatePem()));
+        fs.AddFile($"/bundle/chain{extension}", new MockFileData(PemBundle(first, second)));
 
         var results = new CertificateFinder(fs).AddDirectory("/bundle").ToList();
 
         await Assert
-            .That(results.Select(r => r.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
-
-        foreach (var result in results) {
-            result.Certificate.Dispose();
-        }
     }
 
 
@@ -1736,12 +1959,8 @@ public class CertificateFinderTests
         var results = new CertificateFinder(fs).AddDirectory("/p12").ToList();
 
         await Assert
-            .That(results.Select(r => r.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([issuer.Thumbprint, leaf.Thumbprint], CollectionOrdering.Any);
-
-        foreach (var result in results) {
-            result.Certificate.Dispose();
-        }
     }
 
 
@@ -1756,7 +1975,7 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder(fs).AddDirectory("/pki", searchPattern: "ca-*.pem").ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([root.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([root.Thumbprint]);
     }
 
 
@@ -1781,7 +2000,7 @@ public class CertificateFinderTests
             })
             .ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
         await Assert.That(skipped).IsEmpty();
     }
 
@@ -1798,11 +2017,7 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder(fs).AddDirectory("/protected", password: password).ToList();
 
-        await Assert.That(results.Select(r => r.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
-
-        foreach (var result in results) {
-            result.Certificate.Dispose();
-        }
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1992,10 +2207,14 @@ public class CertificateFinderTests
 
         var finder = new CertificateFinder(fs).AddDirectory("/both").AddCertificates(inMemory);
 
-        var synchronous = finder.Select(x => x.Certificate.Thumbprint).ToList();
+        //Releasing per source is what lets the asynchronous pass read the same certificates again: the
+        //directory's are its own to close, where AddCertificates passes through the ones this test holds
+        var synchronous = ThumbprintsOf(finder);
+
         var asynchronous = new List<string>();
         await foreach (var result in finder.AsAsyncEnumerable()) {
             asynchronous.Add(result.Certificate.Thumbprint);
+            result.Source.Release(result);
         }
 
         await Assert.That(asynchronous).IsEquivalentTo(synchronous, CollectionOrdering.Matching);
@@ -2293,10 +2512,9 @@ public class CertificateFinderTests
 
         var finder = new CertificateFinder(fs).AddDirectory("/rev");
 
-        var asynchronous = await finder.LastOrDefaultAsync(x => true);
-        await Assert
-            .That(asynchronous!.Certificate.Thumbprint)
-            .IsEqualTo(finder.Last(x => true).Certificate.Thumbprint);
+        using var asynchronous = (await finder.LastOrDefaultAsync(x => true))!.Certificate;
+        using var synchronous = finder.Last(x => true).Certificate;
+        await Assert.That(asynchronous.Thumbprint).IsEqualTo(synchronous.Thumbprint);
     }
 
 
@@ -2394,11 +2612,12 @@ public class CertificateFinderTests
 
         var finder = new CertificateFinder(fs).AddDirectory("/bom");
 
-        await Assert.That(finder.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(finder)).IsEquivalentTo([cert.Thumbprint]);
 
         var asynchronous = new List<string>();
         await foreach (var result in finder.AsAsyncEnumerable()) {
             asynchronous.Add(result.Certificate.Thumbprint);
+            result.Certificate.Dispose();
         }
         await Assert.That(asynchronous).IsEquivalentTo([cert.Thumbprint]);
     }
@@ -2514,6 +2733,22 @@ public class CertificateFinderTests
 
         public void Dispose()
             => Directory.Delete(Path, true);
+    }
+
+
+    /// <summary>
+    /// Reads a batch's thumbprints and releases each result as it goes, so a test comparing only their
+    /// identities holds nothing afterwards. Each source decides what releasing means, so this is safe
+    /// whether the certificates were created by the search or supplied to it.
+    /// </summary>
+    private static List<string> ThumbprintsOf(IEnumerable<CertificateFinderResult> results)
+    {
+        var thumbprints = new List<string>();
+        foreach (var result in results) {
+            thumbprints.Add(result.Certificate.Thumbprint);
+            result.Source.Release(result);
+        }
+        return thumbprints;
     }
 
 
