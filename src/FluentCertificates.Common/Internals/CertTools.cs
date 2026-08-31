@@ -37,7 +37,7 @@ internal static class CertTools
 
     
     internal static X509Certificate2Collection LoadPkcs12Collection(
-        byte[] data,
+        ReadOnlySpan<byte> data,
         string? password,
         X509KeyStorageFlags keyStorageFlags = X509KeyStorageFlags.DefaultKeySet)
     {

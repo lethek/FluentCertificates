@@ -243,7 +243,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// <param name="extension">The file's extension, which decides the format.</param>
     /// <param name="data">The file's contents.</param>
     /// <returns>Every certificate the file holds.</returns>
-    private IEnumerable<X509Certificate2> Parse(string extension, byte[] data)
+    private IEnumerable<X509Certificate2> Parse(string extension, ReadOnlySpan<byte> data)
     {
         switch (extension.ToLowerInvariant()) {
             case ".p7b":
@@ -271,19 +271,16 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
     /// <summary>
     /// Unwraps a PEM-encoded PKCS#7 file to the DER it holds, which is what
-    /// <see cref="SignedCms.Decode(byte[])"/> reads. Both encodings are written under both extensions:
-    /// <c>openssl crl2pkcs7</c> writes PEM, and <c>certutil -encode</c> converts a DER file to it.
+    /// <see cref="SignedCms.Decode(ReadOnlySpan{byte})"/> reads. Both encodings are written under both
+    /// extensions: <c>openssl crl2pkcs7</c> writes PEM, and <c>certutil -encode</c> converts DER to it.
+    /// A file that is not PEM is returned unchanged.
     /// </summary>
     /// <remarks>
     /// The PEM label is not checked. <c>certutil -encode</c> labels whatever it converts
     /// <c>CERTIFICATE</c>, so demanding <c>PKCS7</c> would reject the files Windows produces, and the
     /// payload is the same DER whichever label a producer wrote.
     /// </remarks>
-    /// <param name="data">The file's contents.</param>
-    /// <returns>
-    /// The PEM block's contents, or <paramref name="data"/> unchanged when the file is not PEM.
-    /// </returns>
-    private static byte[] UnwrapPem(byte[] data)
+    private static ReadOnlySpan<byte> UnwrapPem(ReadOnlySpan<byte> data)
     {
         //A DER file opens with a SEQUENCE tag. Its bytes decode to text that can spell out anything at
         //all, a PEM block that is no part of the encoding included, so it must not be read as text
@@ -305,15 +302,15 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Decodes PEM text the way <c>File.ReadAllText</c> would: UTF-8 unless a byte order mark says
-    /// otherwise. Reading the bytes and decoding them here is what lets one parser serve both paths.
+    /// Decodes PEM text as UTF-8, dropping the byte order mark a producer may have written ahead of it.
+    /// Reading the bytes and decoding them here is what lets one parser serve both paths.
     /// </summary>
-    /// <param name="data">The file's contents.</param>
-    /// <returns>The decoded text.</returns>
-    private static string DecodeText(byte[] data)
+    private static string DecodeText(ReadOnlySpan<byte> data)
     {
-        using var reader = new StreamReader(new MemoryStream(data), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return reader.ReadToEnd();
+        if (data.StartsWith(Encoding.UTF8.Preamble)) {
+            data = data.Slice(Encoding.UTF8.Preamble.Length);
+        }
+        return Encoding.UTF8.GetString(data);
     }
 
 
@@ -336,12 +333,11 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// file systems commonly preserve whatever case the file was created with, so a
     /// certificate named "SERVER.PFX" must be found just as "server.pfx" is.
     /// <para>
-    /// An extension added here needs a branch in <see cref="Parse"/> too, or the file falls through to
-    /// the one that reads a lone certificate and is skipped as unreadable. Internal so a test can hold
-    /// the two together.
+    /// Internal so a test can check it against the formats the tests write, which is what has every
+    /// extension here read end to end in the format it really holds.
     /// </para>
     /// </summary>
-    internal static readonly HashSet<string> SupportedFileExtensions = new(StringComparer.OrdinalIgnoreCase) {
+    internal static readonly IReadOnlySet<string> SupportedFileExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
         ".crt", ".cer", ".der", ".pfx", ".p12", ".pkcs12", ".p7b", ".p7c", ".pem", ".ca-bundle"
     };
 }

@@ -1317,24 +1317,24 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// A PKCS#7 bundle is written as PEM as well as DER, under either extension: <c>openssl crl2pkcs7</c>
-    /// writes PEM, and <c>certutil -encode</c> converts a DER file to it with CRLF line endings, where a
-    /// producer anywhere else writes LF. Two certificates, so a reader stopping at the first is caught.
-    /// The DER encoding of both extensions is covered by <see cref="SupportedFormats"/>.
+    /// A PKCS#7 bundle is written as PEM as well as DER: <c>openssl crl2pkcs7</c> writes PEM, and
+    /// <c>certutil -encode</c> converts a DER file to it with CRLF line endings, where a producer
+    /// anywhere else writes LF. Two certificates, so a reader stopping at the first is caught.
+    /// <c>.p7c</c> shares the branch this reads, and <see cref="SupportedFormats"/> covers both
+    /// extensions in DER.
     /// </summary>
     [Test]
-    [Arguments(".p7b", "\n")]
-    [Arguments(".p7b", "\r\n")]
-    [Arguments(".p7c", "\n")]
-    [Arguments(".p7c", "\r\n")]
-    public async Task EnumerateCertificates_Pkcs7WrittenAsPem_IsLoaded(string extension, string newline)
+    [Arguments("\n")]
+    [Arguments("\r\n")]
+    public async Task EnumerateCertificates_Pkcs7WrittenAsPem_IsLoaded(string newline)
     {
         using var first = CreateSelfSignedCertificate("Pem Pkcs7 One");
         using var second = CreateSelfSignedCertificate("Pem Pkcs7 Two");
         var pem = PemEncoding.WriteString("PKCS7", BuildPkcs7(first, second)).ReplaceLineEndings(newline);
 
         var fs = CreateEmptyMockFileSystem();
-        fs.AddFile($"/pkcs7/bundle{extension}", new MockFileData(Encoding.ASCII.GetBytes(pem)));
+        //Written as bytes rather than a string, so the line endings under test are the ones on disk
+        fs.AddFile("/pkcs7/bundle.p7b", new MockFileData(Encoding.ASCII.GetBytes(pem)));
 
         var results = new CertificateFinder(fs).AddDirectory("/pkcs7").ToList();
 
@@ -1364,9 +1364,8 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// The extensions the source recognises and the formats these tests write are two hand-kept lists,
-    /// and a file whose extension is recognised but whose format is not falls through to the branch that
-    /// reads a lone certificate, where it is skipped as unreadable rather than reported as unsupported.
+    /// Holds the two hand-kept lists together, so every extension the source recognises is one the
+    /// tests above read end to end in the format it really holds.
     /// </summary>
     [Test]
     public async Task SupportedFormats_NamesEveryRecognisedExtension()
@@ -1634,17 +1633,17 @@ public class CertificateFinderTests
         };
 
 
-    /// <summary>A PKCS#7 bundle signed by the first certificate, carrying the rest alongside it.</summary>
-    private static byte[] BuildPkcs7(params X509Certificate2[] certs)
-        => BuildPkcs7WithContent([0], certs);
+    /// <summary>A PKCS#7 bundle signed by <paramref name="signer"/>, carrying the others alongside it.</summary>
+    private static byte[] BuildPkcs7(X509Certificate2 signer, params X509Certificate2[] others)
+        => BuildPkcs7WithContent([0], signer, others);
 
 
     /// <summary>The same over content the caller chose, for asserting what those bytes do not affect.</summary>
-    private static byte[] BuildPkcs7WithContent(byte[] content, params X509Certificate2[] certs)
+    private static byte[] BuildPkcs7WithContent(byte[] content, X509Certificate2 signer, params X509Certificate2[] others)
     {
         var cms = new SignedCms(new ContentInfo(content), false);
-        cms.ComputeSignature(new CmsSigner(certs[0]));
-        foreach (var cert in certs.Skip(1)) {
+        cms.ComputeSignature(new CmsSigner(signer));
+        foreach (var cert in others) {
             cms.AddCertificate(cert);
         }
         return cms.Encode();
