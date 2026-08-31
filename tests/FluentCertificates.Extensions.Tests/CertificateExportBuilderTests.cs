@@ -115,7 +115,7 @@ public class CertificateExportBuilderTests
         using var leaf = new CertificateBuilder().SetIssuer(root).Create();
         var certs = new[] { leaf, root };
 
-        var pem = Encoding.UTF8.GetString(certs.Export().AsPkcs7(Pkcs7Encoding.Pem).ToByteArray());
+        var pem = Encoding.UTF8.GetString(certs.Export().AsPkcs7Pem().ToByteArray());
 
         await Assert.That(PemEncoding.TryFind(pem, out var fields)).IsTrue();
         await Assert.That(pem[fields.Label]).IsEqualTo("PKCS7");
@@ -129,29 +129,11 @@ public class CertificateExportBuilderTests
     public async Task ExportBuilder_Pkcs7Pem_ToPemString_MatchesTheBytesItWrites()
     {
         using var cert = new CertificateBuilder().Create();
-        var exporter = cert.Export().AsPkcs7(Pkcs7Encoding.Pem);
+        var exporter = cert.Export().AsPkcs7Pem();
 
         await Assert
             .That(exporter.ToPemString())
             .IsEqualTo(Encoding.UTF8.GetString(exporter.ToByteArray()));
-    }
-
-    [Test]
-    public async Task ExportBuilder_Pkcs7Der_ToPemString_Throws()
-    {
-        using var cert = new CertificateBuilder().Create();
-        await Assert
-            .That(() => cert.Export().AsPkcs7().ToPemString())
-            .Throws<InvalidOperationException>();
-    }
-
-    [Test]
-    public async Task ExportBuilder_Pkcs7_UndeclaredEncoding_Throws()
-    {
-        using var cert = new CertificateBuilder().Create();
-        await Assert
-            .That(() => cert.Export().AsPkcs7((Pkcs7Encoding)42))
-            .Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]

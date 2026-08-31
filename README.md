@@ -384,10 +384,10 @@ cert.Export().WithPrivateKey().WithPassword("hunter2").AsPkcs12().ToFile("cert.p
 //Raw DER/CER bytes
 cert.Export().AsCert().ToByteArray();
 
-//A whole chain as PKCS#7, DER by default or base64 in a PKCS7 block
+//A whole chain as PKCS#7, binary DER or base64 in a PKCS7 block
 chain.Export().AsPkcs7().ToByteArray();
-chain.Export().AsPkcs7(Pkcs7Encoding.Pem).ToFile("chain.p7b");
-chain.Export().AsPkcs7(Pkcs7Encoding.Pem).ToPemString();
+chain.Export().AsPkcs7Pem().ToFile("chain.p7b");
+chain.Export().AsPkcs7Pem().ToPemString();
 
 //A leaf plus its issuers, no private keys anywhere
 leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().ToByteArray();
@@ -397,8 +397,8 @@ leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().To
 |-|-|
 |Configure|`WithPrivateKey()`, `WithAllPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`|
 |Add|`AddChain(X509Chain)`, `AddChain(...)`, `AddCertificates(...)`|
-|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7(Pkcs7Encoding)`, `AsCert()`|
-|Finish|`ToPemString()` (textual formats only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
+|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsPkcs7Pem()`, `AsCert()`|
+|Finish|`ToPemString()` (`AsPem()` and `AsPkcs7Pem()` only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
 `With*` configures the export and replaces whatever was set before; `Add*` appends certificates to it.
 Every `Add*` method deduplicates by thumbprint, so a certificate already present is skipped.

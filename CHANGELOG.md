@@ -16,10 +16,7 @@ release rather than record it as it happened.
 ### Added
 
 - `CertificateDirectorySource` reads `.pkcs12` files.
-
-### Changed
-
-- **Breaking:** `AsPkcs7()` takes an optional `Pkcs7Encoding` selecting DER or PEM output, and returns a `PemCertificateExporter`.
+- `AsPkcs7Pem()` writes a PKCS#7 bundle as a `PKCS7` PEM block.
 
 ### Fixed
 
