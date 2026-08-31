@@ -270,23 +270,37 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Unwraps a PEM-encoded PKCS#7 file to the DER it holds. Both encodings are written under both
-    /// extensions: Windows' export wizard offers "DER encoded binary" and "Base-64 encoded" and names
-    /// the result <c>.p7b</c> either way, while <see cref="SignedCms.Decode(byte[])"/> reads BER and
-    /// DER alone. The PEM label is not checked, since whatever a producer wrote there the payload is
-    /// the same DER.
+    /// Unwraps a PEM-encoded PKCS#7 file to the DER it holds, which is what
+    /// <see cref="SignedCms.Decode(byte[])"/> reads. Both encodings are written under both extensions:
+    /// <c>openssl crl2pkcs7</c> writes PEM, and <c>certutil -encode</c> converts a DER file to it.
     /// </summary>
+    /// <remarks>
+    /// The PEM label is not checked. <c>certutil -encode</c> labels whatever it converts
+    /// <c>CERTIFICATE</c>, so demanding <c>PKCS7</c> would reject the files Windows produces, and the
+    /// payload is the same DER whichever label a producer wrote.
+    /// </remarks>
     /// <param name="data">The file's contents.</param>
     /// <returns>
     /// The PEM block's contents, or <paramref name="data"/> unchanged when the file is not PEM.
     /// </returns>
     private static byte[] UnwrapPem(byte[] data)
     {
-        //DER decodes to nonsense text rather than throwing, and nonsense text holds no PEM block
+        //A DER file opens with a SEQUENCE tag. Its bytes decode to text that can spell out anything at
+        //all, a PEM block that is no part of the encoding included, so it must not be read as text
+        const byte derSequenceTag = 0x30;
+        if (data.Length == 0 || data[0] == derSequenceTag) {
+            return data;
+        }
+
         var text = DecodeText(data);
-        return PemEncoding.TryFind(text, out var pem)
-            ? Convert.FromBase64String(text[pem.Base64Data])
-            : data;
+        if (!PemEncoding.TryFind(text, out var pem)) {
+            return data;
+        }
+
+        //TryFind has already established that this is base64 of exactly this length, so it cannot fail
+        var der = new byte[pem.DecodedDataLength];
+        Convert.TryFromBase64Chars(text.AsSpan()[pem.Base64Data], der, out _);
+        return der;
     }
 
 
@@ -321,8 +335,13 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// The set of supported certificate file extensions. Compared case-insensitively:
     /// file systems commonly preserve whatever case the file was created with, so a
     /// certificate named "SERVER.PFX" must be found just as "server.pfx" is.
+    /// <para>
+    /// An extension added here needs a branch in <see cref="Parse"/> too, or the file falls through to
+    /// the one that reads a lone certificate and is skipped as unreadable. Internal so a test can hold
+    /// the two together.
+    /// </para>
     /// </summary>
-    private static readonly HashSet<string> SupportedFileExtensions = new(StringComparer.OrdinalIgnoreCase) {
+    internal static readonly HashSet<string> SupportedFileExtensions = new(StringComparer.OrdinalIgnoreCase) {
         ".crt", ".cer", ".der", ".pfx", ".p12", ".pkcs12", ".p7b", ".p7c", ".pem", ".ca-bundle"
     };
 }

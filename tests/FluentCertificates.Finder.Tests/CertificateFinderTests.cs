@@ -1317,35 +1317,62 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// A PKCS#7 bundle is written both as raw DER and as PEM, and both encodings are named the same way:
-    /// Windows' export wizard offers either and calls the result <c>.p7b</c>. It also writes CRLF line
-    /// endings, where a producer on any other platform writes LF.
+    /// A PKCS#7 bundle is written as PEM as well as DER, under either extension: <c>openssl crl2pkcs7</c>
+    /// writes PEM, and <c>certutil -encode</c> converts a DER file to it with CRLF line endings, where a
+    /// producer anywhere else writes LF. Two certificates, so a reader stopping at the first is caught.
+    /// The DER encoding of both extensions is covered by <see cref="SupportedFormats"/>.
     /// </summary>
     [Test]
-    [Arguments(".p7b", "der")]
-    [Arguments(".p7b", "pem")]
-    [Arguments(".p7b", "pem-crlf")]
-    [Arguments(".p7c", "der")]
-    [Arguments(".p7c", "pem")]
-    [Arguments(".p7c", "pem-crlf")]
-    public async Task EnumerateCertificates_Pkcs7InEitherEncoding_IsLoaded(string extension, string encoding)
+    [Arguments(".p7b", "\n")]
+    [Arguments(".p7b", "\r\n")]
+    [Arguments(".p7c", "\n")]
+    [Arguments(".p7c", "\r\n")]
+    public async Task EnumerateCertificates_Pkcs7WrittenAsPem_IsLoaded(string extension, string newline)
     {
-        using var cert = CreateSelfSignedCertificate("Pkcs7 Encoding");
-        var der = BuildPkcs7(cert);
-        var pem = PemEncoding.WriteString("PKCS7", der);
+        using var first = CreateSelfSignedCertificate("Pem Pkcs7 One");
+        using var second = CreateSelfSignedCertificate("Pem Pkcs7 Two");
+        var pem = PemEncoding.WriteString("PKCS7", BuildPkcs7(first, second)).ReplaceLineEndings(newline);
 
         var fs = CreateEmptyMockFileSystem();
-        fs.AddFile($"/pkcs7/bundle{extension}", new MockFileData(encoding switch {
-            "der" => der,
-            "pem" => Encoding.ASCII.GetBytes(pem),
-            "pem-crlf" => Encoding.ASCII.GetBytes(pem.ReplaceLineEndings("\r\n")),
-            _ => throw new ArgumentOutOfRangeException(nameof(encoding), encoding, null)
-        }));
+        fs.AddFile($"/pkcs7/bundle{extension}", new MockFileData(Encoding.ASCII.GetBytes(pem)));
+
+        var results = new CertificateFinder(fs).AddDirectory("/pkcs7").ToList();
+
+        await Assert
+            .That(results.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// A DER file's bytes decode to text that can spell out anything at all, a PEM block included, and
+    /// that block is no part of the encoding. Unwrapping what a DER bundle appears to hold loses it.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_DerPkcs7WhoseContentSpellsOutPem_IsLoaded()
+    {
+        using var cert = CreateSelfSignedCertificate("Der Not Pem");
+        var content = Encoding.ASCII.GetBytes("\n-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----\n");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/pkcs7/bundle.p7b", new MockFileData(BuildPkcs7WithContent(content, cert)));
 
         var results = new CertificateFinder(fs).AddDirectory("/pkcs7").ToList();
 
         await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
     }
+
+
+    /// <summary>
+    /// The extensions the source recognises and the formats these tests write are two hand-kept lists,
+    /// and a file whose extension is recognised but whose format is not falls through to the branch that
+    /// reads a lone certificate, where it is skipped as unreadable rather than reported as unsupported.
+    /// </summary>
+    [Test]
+    public async Task SupportedFormats_NamesEveryRecognisedExtension()
+        => await Assert
+            .That(SupportedFormats().Select(x => Path.GetExtension(x.FileName)).Distinct())
+            .IsEquivalentTo(CertificateDirectorySource.SupportedFileExtensions, CollectionOrdering.Any);
 
 
     [Test]
@@ -1607,10 +1634,19 @@ public class CertificateFinderTests
         };
 
 
-    private static byte[] BuildPkcs7(X509Certificate2 cert)
+    /// <summary>A PKCS#7 bundle signed by the first certificate, carrying the rest alongside it.</summary>
+    private static byte[] BuildPkcs7(params X509Certificate2[] certs)
+        => BuildPkcs7WithContent([0], certs);
+
+
+    /// <summary>The same over content the caller chose, for asserting what those bytes do not affect.</summary>
+    private static byte[] BuildPkcs7WithContent(byte[] content, params X509Certificate2[] certs)
     {
-        var cms = new SignedCms(new ContentInfo([0]), false);
-        cms.ComputeSignature(new CmsSigner(cert));
+        var cms = new SignedCms(new ContentInfo(content), false);
+        cms.ComputeSignature(new CmsSigner(certs[0]));
+        foreach (var cert in certs.Skip(1)) {
+            cms.AddCertificate(cert);
+        }
         return cms.Encode();
     }
 
