@@ -1385,7 +1385,7 @@ public class CertificateFinderTests
         var results = new CertificateFinder(fs).AddDirectory("/labelled").ToList();
 
         await Assert
-            .That(results.Select(x => x.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
     }
 
@@ -1407,7 +1407,7 @@ public class CertificateFinderTests
         var results = new CertificateFinder(fs).AddDirectory("/labelled").ToList();
 
         await Assert
-            .That(results.Select(x => x.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
     }
 
@@ -1431,7 +1431,7 @@ public class CertificateFinderTests
         var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
 
         await Assert
-            .That(results.Select(x => x.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
     }
 
@@ -1447,7 +1447,7 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1473,7 +1473,7 @@ public class CertificateFinderTests
         var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
 
         await Assert
-            .That(results.Select(x => x.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
     }
 
@@ -1496,7 +1496,7 @@ public class CertificateFinderTests
         var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
 
         await Assert
-            .That(results.Select(x => x.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
     }
 
@@ -1525,7 +1525,7 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder(fs).AddDirectory("/enveloped").ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1549,7 +1549,7 @@ public class CertificateFinderTests
         var results = new CertificateFinder(fs).AddDirectory("/odd").ToList();
 
         await Assert
-            .That(results.Select(x => x.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
     }
 
@@ -1601,7 +1601,7 @@ public class CertificateFinderTests
         var results = new CertificateFinder(fs).AddDirectory("/zero").ToList();
 
         await Assert
-            .That(results.Select(x => x.Certificate.Thumbprint))
+            .That(ThumbprintsOf(results))
             .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
     }
 
@@ -1626,7 +1626,7 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder(fs).AddDirectory("/keyed").ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -1678,7 +1678,7 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder(fs).AddDirectory("/keys").ToList();
 
-        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+        await Assert.That(ThumbprintsOf(results)).IsEquivalentTo([cert.Thumbprint]);
     }
 
 
@@ -2834,6 +2834,22 @@ public class CertificateFinderTests
 
         public void Dispose()
             => Directory.Delete(Path, true);
+    }
+
+
+    /// <summary>
+    /// Reads a batch's thumbprints and releases the certificates as it goes. A search hands the caller
+    /// certificates the library extracted, which are the caller's to dispose, so a test comparing only
+    /// their identities should not leave them holding any.
+    /// </summary>
+    private static List<string> ThumbprintsOf(IEnumerable<CertificateFinderResult> results)
+    {
+        var thumbprints = new List<string>();
+        foreach (var result in results) {
+            thumbprints.Add(result.Certificate.Thumbprint);
+            result.Certificate.Dispose();
+        }
+        return thumbprints;
     }
 
 
