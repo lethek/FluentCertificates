@@ -66,9 +66,9 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// The password protecting the <c>.pfx</c> and <c>.p12</c> files in this directory. One password
-    /// covers the whole directory. A file this password does not open is skipped like any other file that
-    /// cannot be read, and reported through <see cref="OnLoadFailure"/>.
+    /// The password protecting the <c>.pfx</c>, <c>.p12</c> and <c>.pkcs12</c> files in this directory.
+    /// One password covers the whole directory. A file this password does not open is skipped like any
+    /// other file that cannot be read, and reported through <see cref="OnLoadFailure"/>.
     /// </summary>
     /// <remarks>
     /// Redacted from <see cref="ToString"/>, since a <see cref="CertificateFinderResult"/> carries the
@@ -253,6 +253,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
                 return cms.Certificates;
             case ".pfx":
             case ".p12":
+            case ".pkcs12":
                 //X509CertificateLoader.LoadCertificate rejects PKCS#12, so these must go
                 //through the PKCS#12 loader rather than the default branch
                 return CertTools.LoadPkcs12Collection(data, Password);
@@ -322,6 +323,6 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// certificate named "SERVER.PFX" must be found just as "server.pfx" is.
     /// </summary>
     private static readonly HashSet<string> SupportedFileExtensions = new(StringComparer.OrdinalIgnoreCase) {
-        ".crt", ".cer", ".der", ".pfx", ".p12", ".p7b", ".p7c", ".pem", ".ca-bundle"
+        ".crt", ".cer", ".der", ".pfx", ".p12", ".pkcs12", ".p7b", ".p7c", ".pem", ".ca-bundle"
     };
 }

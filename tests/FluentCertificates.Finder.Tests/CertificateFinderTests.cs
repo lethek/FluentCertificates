@@ -1577,6 +1577,7 @@ public class CertificateFinderTests
         yield return ("cert.der", "der");
         yield return ("cert.pfx", "pkcs12");
         yield return ("cert.p12", "pkcs12");
+        yield return ("cert.pkcs12", "pkcs12");
         yield return ("cert.p7b", "pkcs7");
         yield return ("cert.p7c", "pkcs7");
     }
