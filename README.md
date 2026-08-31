@@ -384,8 +384,9 @@ cert.Export().WithPrivateKey().WithPassword("hunter2").AsPkcs12().ToFile("cert.p
 //Raw DER/CER bytes
 cert.Export().AsCert().ToByteArray();
 
-//A whole chain as PKCS#7
+//A whole chain as PKCS#7, DER by default or base64 in a PKCS7 block
 chain.Export().AsPkcs7().ToByteArray();
+chain.Export().AsPkcs7(Pkcs7Encoding.Pem).ToFile("chain.p7b");
 
 //A leaf plus its issuers, no private keys anywhere
 leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().ToByteArray();
@@ -395,7 +396,7 @@ leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().To
 |-|-|
 |Configure|`WithPrivateKey()`, `WithAllPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`|
 |Add|`AddChain(X509Chain)`, `AddChain(...)`, `AddCertificates(...)`|
-|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsCert()`|
+|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7(Pkcs7Encoding)`, `AsCert()`|
 |Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
 `With*` configures the export and replaces whatever was set before; `Add*` appends certificates to it.
@@ -508,6 +509,10 @@ first. The pattern narrows the supported extensions rather than widening them, s
 ```csharp
 var finder = new CertificateFinder().AddDirectory("/etc/ssl/certs", searchPattern: "ca-*.pem");
 ```
+
+A PEM file is read by what its blocks hold rather than by the extension over them, so certificate
+blocks and PKCS#7 blocks are both read whether the file is named `.pem`, `.ca-bundle`, `.p7b` or
+`.p7c`. Private keys beside them are passed over.
 
 Pass a `password` to read password-protected `.pfx`, `.p12` and `.pkcs12` files. One password covers
 the directory, and a file it does not open is skipped like any other unreadable file.

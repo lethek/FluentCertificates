@@ -1,6 +1,8 @@
 using System.Security;
 using System.Security.Cryptography;
+using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 using FluentCertificates.Internals;
 
@@ -105,6 +107,58 @@ public class CertificateExportBuilderTests
 #pragma warning restore SYSLIB0057
         await Assert.That(coll).HasSingleItem();
         await Assert.That(coll[0].Thumbprint).IsEqualTo(cert.Thumbprint);
+    }
+
+    [Test]
+    public async Task ExportBuilder_Pkcs7Pem_WrapsTheSameDerInAPkcs7Block()
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).Create();
+        using var leaf = new CertificateBuilder().SetIssuer(root).Create();
+        var certs = new[] { leaf, root };
+
+        var pem = Encoding.UTF8.GetString(certs.Export().AsPkcs7(Pkcs7Encoding.Pem).ToByteArray());
+
+        await Assert.That(PemEncoding.TryFind(pem, out var fields)).IsTrue();
+        await Assert.That(pem[fields.Label]).IsEqualTo("PKCS7");
+        await Assert
+            .That(Convert.FromBase64String(pem[fields.Base64Data]))
+            .IsEquivalentTo(certs.Export().AsPkcs7().ToByteArray(), CollectionOrdering.Matching);
+    }
+
+
+    /// <summary>Reads a <c>PKCS7</c> block back to the DER it wraps.</summary>
+    private static byte[] UnwrapPkcs7Pem(byte[] exported)
+    {
+        var pem = Encoding.UTF8.GetString(exported);
+        return PemEncoding.TryFind(pem, out var fields)
+            ? Convert.FromBase64String(pem[fields.Base64Data])
+            : throw new InvalidOperationException("No PEM block was written.");
+    }
+
+    [Test]
+    [Arguments(Pkcs7Encoding.Der)]
+    [Arguments(Pkcs7Encoding.Pem)]
+    public async Task ExportBuilder_Pkcs7_EitherEncoding_RoundTripsToTheSameCertificates(Pkcs7Encoding encoding)
+    {
+        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).Create();
+        using var leaf = new CertificateBuilder().SetIssuer(root).Create();
+        var certs = new[] { leaf, root };
+
+        var bytes = certs.Export().AsPkcs7(encoding).ToByteArray();
+        var cms = new SignedCms();
+        cms.Decode(encoding == Pkcs7Encoding.Der ? bytes : UnwrapPkcs7Pem(bytes));
+        await Assert
+            .That(cms.Certificates.Select(x => x.Thumbprint))
+            .IsEquivalentTo(certs.Select(x => x.Thumbprint), CollectionOrdering.Any);
+    }
+
+    [Test]
+    public async Task ExportBuilder_Pkcs7_UndeclaredEncoding_Throws()
+    {
+        using var cert = new CertificateBuilder().Create();
+        await Assert
+            .That(() => cert.Export().AsPkcs7((Pkcs7Encoding)42))
+            .Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]

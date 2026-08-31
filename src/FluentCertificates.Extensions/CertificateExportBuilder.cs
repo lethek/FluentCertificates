@@ -279,10 +279,21 @@ public record CertificateExportBuilder
 
     /// <summary>
     /// Selects PKCS#7 (P7B) as the export format. Private keys are never included in PKCS#7 output.
-    /// Returns a <see cref="CertificateExporter"/> whose output methods write the binary PKCS#7 data.
+    /// Returns a <see cref="CertificateExporter"/> whose output methods write the PKCS#7 data in the
+    /// chosen encoding.
     /// </summary>
-    public CertificateExporter AsPkcs7()
-        => new(Certificates, Anchor, ExportFormat.Pkcs7, null, null, ExportKeys.None);
+    /// <param name="encoding">
+    /// Whether to write binary DER or a base64 <c>PKCS7</c> block. Defaults to
+    /// <see cref="Pkcs7Encoding.Der"/>, which is what the structure is natively.
+    /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="encoding"/> is not a
+    /// declared value.</exception>
+    public CertificateExporter AsPkcs7(Pkcs7Encoding encoding = Pkcs7Encoding.Der)
+        => new(Certificates, Anchor, encoding switch {
+            Pkcs7Encoding.Der => ExportFormat.Pkcs7,
+            Pkcs7Encoding.Pem => ExportFormat.Pkcs7Pem,
+            _ => throw new ArgumentOutOfRangeException(nameof(encoding), encoding, "Unknown PKCS#7 encoding.")
+        }, null, null, ExportKeys.None);
 
     /// <summary>
     /// Selects DER-encoded certificate (CER/CRT) as the export format.

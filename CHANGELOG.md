@@ -16,10 +16,11 @@ release rather than record it as it happened.
 ### Added
 
 - `CertificateDirectorySource` reads `.pkcs12` files.
+- `AsPkcs7(Pkcs7Encoding)` selects DER or PEM output.
 
 ### Fixed
 
-- A PEM-encoded `.p7b` or `.p7c` file is read, rather than skipped as unparseable.
+- `CertificateDirectorySource` reads a PEM file's certificate and PKCS#7 blocks alike, under any of the `.pem`, `.ca-bundle`, `.p7b` and `.p7c` extensions.
 
 ## [0.21.0] - 2026-08-30
 

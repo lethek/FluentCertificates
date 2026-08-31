@@ -14,6 +14,7 @@ internal enum ExportFormat
     Pkcs12,
     Pem,
     Pkcs7,
+    Pkcs7Pem,
     Cert
 }
 
@@ -109,14 +110,24 @@ public class CertificateExporter
                 Encoding.UTF8.GetBytes(ExportPem()),
 
             ExportFormat.Pkcs7 =>
-                _certs.ToCollection().Export(X509ContentType.Pkcs7)
-                ?? throw new InvalidOperationException("PKCS#7 export returned null."),
+                ExportPkcs7(),
+
+            ExportFormat.Pkcs7Pem =>
+                Encoding.UTF8.GetBytes(PemEncoding.WriteString("PKCS7", ExportPkcs7())),
 
             ExportFormat.Cert =>
                 ExportCert(),
 
             _ => throw new InvalidOperationException($"Unsupported export format: {_format}.")
         };
+
+
+    /// <summary>
+    /// Produces the DER bytes of the PKCS#7 bundle, which the PEM form then wraps.
+    /// </summary>
+    private byte[] ExportPkcs7()
+        => _certs.ToCollection().Export(X509ContentType.Pkcs7)
+        ?? throw new InvalidOperationException("PKCS#7 export returned null.");
 
 
     /// <summary>
