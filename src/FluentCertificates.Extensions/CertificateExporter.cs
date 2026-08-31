@@ -92,8 +92,7 @@ public class CertificateExporter
     /// <returns>This <see cref="CertificateExporter"/> instance.</returns>
     public CertificateExporter ToStream(Stream stream)
     {
-        var bytes = ToByteArray();
-        stream.Write(bytes, 0, bytes.Length);
+        stream.Write(ToByteArray());
         return this;
     }
 
@@ -101,7 +100,7 @@ public class CertificateExporter
     /// Produces the exported certificate data as a byte array.
     /// </summary>
     /// <returns>The exported bytes in the format selected on the builder.</returns>
-    public virtual byte[] ToByteArray()
+    public byte[] ToByteArray()
         => _format switch {
             ExportFormat.Pkcs12 =>
                 ExportPkcs12(),
