@@ -396,7 +396,7 @@ leafCert.Export().AddChain([leafCert, intermediateCert, rootCert]).AsPkcs12().To
 |-|-|
 |Configure|`WithPrivateKey()`, `WithAllPrivateKeys()`, `WithoutPrivateKeys()`, `WithKeys(ExportKeys)`, `WithPassword(string?)`, `WithPassword(SecureString)`, `WithoutPassword()`|
 |Add|`AddChain(X509Chain)`, `AddChain(...)`, `AddCertificates(...)`|
-|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7()`, `AsPkcs7(Pkcs7Encoding)`, `AsCert()`|
+|Format|`AsPem()`, `AsPkcs12()`, `AsPkcs7(Pkcs7Encoding)`, `AsCert()`|
 |Finish|`ToPemString()` (PEM only), `ToByteArray()`, `ToFile(path)`, `ToStream(stream)`|
 
 `With*` configures the export and replaces whatever was set before; `Add*` appends certificates to it.
@@ -513,9 +513,13 @@ var finder = new CertificateFinder().AddDirectory("/etc/ssl/certs", searchPatter
 Every extension above except `.pfx`, `.p12` and `.pkcs12` is read by what the file actually holds
 rather than by what its name promised. PEM or DER, a single certificate or a PKCS#7 bundle: all four
 combinations are read under any of those names, because all of them turn up under each in practice.
-Private keys sitting beside the certificates in a PEM file are passed over.
+Private keys and anything else that is not certificate material are passed over.
 
-PKCS#12 is the exception, since it has no text form and needs its own loader.
+The name still decides one thing. A file called `.pem` or `.ca-bundle` may legitimately hold no
+certificates, so an empty one is not reported. Under the other extensions an empty result means the
+file is not what it claims, and it reaches `OnLoadFailure`.
+
+PKCS#12 is the exception to all of this, since it has no text form and needs its own loader.
 
 Pass a `password` to read password-protected `.pfx`, `.p12` and `.pkcs12` files. One password covers
 the directory, and a file it does not open is skipped like any other unreadable file.

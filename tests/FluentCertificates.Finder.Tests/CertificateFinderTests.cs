@@ -1530,14 +1530,13 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// A <c>.p7b</c> extension declares the whole file a PKCS#7 bundle, so the block is read whatever
-    /// label a producer wrote over it. A <c>.pem</c> makes no such promise, and an unrecognised label
-    /// there sits beside the certificates rather than naming them.
+    /// A PKCS#7 block is read under a label no RFC names, because its content says what it is. Producers
+    /// do write such labels, and the payload is the same bundle whatever was written over it.
     /// </summary>
     [Test]
-    [Arguments("bundle.p7b", 2)]
-    [Arguments("bundle.pem", 0)]
-    public async Task EnumerateCertificates_PemPkcs7UnderAnUnrecognisedLabel_FollowsTheExtension(string fileName, int expected)
+    [Arguments("bundle.p7b")]
+    [Arguments("bundle.pem")]
+    public async Task EnumerateCertificates_PemPkcs7UnderAnUnrecognisedLabel_IsLoaded(string fileName)
     {
         using var first = CreateSelfSignedCertificate("Odd Label One");
         using var second = CreateSelfSignedCertificate("Odd Label Two");
@@ -1549,7 +1548,9 @@ public class CertificateFinderTests
 
         var results = new CertificateFinder(fs).AddDirectory("/odd").ToList();
 
-        await Assert.That(results).Count().IsEqualTo(expected);
+        await Assert
+            .That(results.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
     }
 
 
@@ -1578,6 +1579,81 @@ public class CertificateFinderTests
 
         await Assert.That(results).IsEmpty();
         await Assert.That(skipped).IsEquivalentTo(["bundle.pem"]);
+    }
+
+
+    /// <summary>
+    /// The digit <c>0</c> is byte <c>0x30</c>, the same tag a DER SEQUENCE opens with, so a bundle whose
+    /// text happens to start with one must not be taken for binary. Doing so reads only its first
+    /// certificate and loses the rest without reporting anything.
+    /// </summary>
+    [Test]
+    public async Task EnumerateCertificates_PemTextStartingWithZero_IsLoaded()
+    {
+        using var first = CreateSelfSignedCertificate("Leading Zero One");
+        using var second = CreateSelfSignedCertificate("Leading Zero Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/zero/bundle.pem", new MockFileData(
+            "0\n" + first.ExportCertificatePem() + "\n" + second.ExportCertificatePem()
+        ));
+
+        var results = new CertificateFinder(fs).AddDirectory("/zero").ToList();
+
+        await Assert
+            .That(results.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>
+    /// A block holding no certificates never costs the file, whichever extension names it. A private key
+    /// under <c>.p7b</c> is the case worth naming: the extension promises a bundle, so an earlier reading
+    /// took the key for part of it and discarded the certificate beside it.
+    /// </summary>
+    [Test]
+    [Arguments("bundle.p7b")]
+    [Arguments("bundle.pem")]
+    public async Task EnumerateCertificates_KeyBesideACertificateUnderEitherExtension_ReadsTheCertificate(string fileName)
+    {
+        using var key = ECDsa.Create();
+        using var cert = CreateSelfSignedCertificate("Beside A Key");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/keyed/{fileName}", new MockFileData(
+            key.ExportPkcs8PrivateKeyPem() + "\n" + cert.ExportCertificatePem()
+        ));
+
+        var results = new CertificateFinder(fs).AddDirectory("/keyed").ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
+    /// An extension naming one definite format promised certificates, so a file holding PEM blocks but
+    /// none of them is reported rather than read as empty. Only <c>.pem</c> and <c>.ca-bundle</c> can
+    /// legitimately hold none.
+    /// </summary>
+    [Test]
+    [Arguments("only.crt", true)]
+    [Arguments("only.p7b", true)]
+    [Arguments("only.pem", false)]
+    public async Task EnumerateCertificates_PemHoldingOnlyAKey_IsReportedUnlessNamedPem(string fileName, bool reported)
+    {
+        using var key = ECDsa.Create();
+        var skipped = new List<string>();
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/keyonly/{fileName}", new MockFileData(key.ExportPkcs8PrivateKeyPem()));
+
+        var source = new CertificateDirectorySource("/keyonly", fileSystem: fs) {
+            OnLoadFailure = (path, _) => skipped.Add(fs.Path.GetFileName(path))
+        };
+        var results = new CertificateFinder().AddSource(source).ToList();
+
+        await Assert.That(results).IsEmpty();
+        await Assert.That(skipped).IsEquivalentTo(reported ? [fileName] : Array.Empty<string>());
     }
 
 

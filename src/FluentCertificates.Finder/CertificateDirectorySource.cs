@@ -255,78 +255,75 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// <returns>Every certificate the file holds.</returns>
     private IEnumerable<X509Certificate2> Parse(FileFormat format, ReadOnlySpan<byte> data)
     {
-        //PKCS#12 is binary alone. There is no PEM form of it to look for, and its own loader is the only
-        //one that reads it, so it is settled before anything sniffs the bytes.
-        if (format == FileFormat.Pkcs12) {
-            return CertTools.LoadPkcs12Collection(data, Password);
-        }
+        switch (format) {
+            case FileFormat.Pkcs12:
+                //PKCS#12 is binary alone. There is no PEM form of it to look for, and its own loader is
+                //the only one that reads it, so it is settled before anything sniffs the bytes.
+                return CertTools.LoadPkcs12Collection(data, Password);
 
-        //Every other format is read by what the file holds rather than by what its name promised, since
-        //all four of those extensions are used for both encodings and for each other's payloads.
-        if (IsDer(data)) {
-            return ReadDer(data);
-        }
+            case FileFormat.Certificate:
+            case FileFormat.Pkcs7:
+            case FileFormat.Pem:
+                //Every other format is read by what the file holds rather than by what its name
+                //promised, since all of those extensions are used for both encodings and for each
+                //other's payloads.
+                return IsDer(data) ? ReadDer(data) : ReadPem(format, data);
 
-        //A PKCS#7 extension declares the whole file a bundle, so its blocks are read whatever label a
-        //producer wrote over them. The others may hold other material beside the certificates.
-        return ParsePem(DecodeText(data), everyLabel: format == FileFormat.Pkcs7)
-            ?? NoPemBlock(format, data);
+            default:
+                throw new InvalidOperationException($"Unsupported file format: {format}.");
+        }
     }
 
 
     /// <summary>
-    /// Reads text that holds no PEM block at all, which no extension this source recognises describes.
-    /// An extension naming one definite format hands the bytes to that format's reader, which throws, so
-    /// the file is reported rather than read as empty. Only <c>.pem</c> and <c>.ca-bundle</c> can
-    /// legitimately be empty.
+    /// Reads a file's PEM text, falling back to the format its extension named when that text holds no
+    /// certificates.
     /// </summary>
-    private static IEnumerable<X509Certificate2> NoPemBlock(FileFormat format, ReadOnlySpan<byte> data)
-        => format switch {
-            FileFormat.Pkcs7 => DecodePkcs7(data),
-            FileFormat.Certificate => [CertTools.LoadCertificate(data)],
-            FileFormat.Pem => [],
-            _ => throw new InvalidOperationException($"Unsupported file format: {format}.")
-        };
+    /// <remarks>
+    /// Only <c>.pem</c> and <c>.ca-bundle</c> can legitimately hold none. Under an extension naming one
+    /// definite format an empty result means the file is not what it claims, and handing the bytes to
+    /// that format's reader is what reports it rather than reading it as empty.
+    /// </remarks>
+    private static IEnumerable<X509Certificate2> ReadPem(FileFormat format, ReadOnlySpan<byte> data)
+    {
+        var certs = ParsePem(DecodeText(data));
+        if (certs.Count > 0 || format == FileFormat.Pem) {
+            return certs;
+        }
+
+        return format == FileFormat.Pkcs7
+            ? DecodePkcs7(data)
+            : [CertTools.LoadCertificate(data)];
+    }
 
 
     /// <summary>
     /// Reads every certificate PEM text holds, whether written as <c>CERTIFICATE</c> blocks or as a
-    /// PKCS#7 bundle.
+    /// PKCS#7 bundle. Blocks holding neither are passed over, so a private key or a CRL beside the
+    /// certificates costs nothing.
     /// </summary>
-    /// <param name="text">The PEM text to read.</param>
-    /// <param name="everyLabel">
-    /// Whether to read a block whatever its label. Set for a file whose extension has already declared
-    /// what it holds; left clear for one that mixes certificates with other material.
-    /// </param>
-    /// <returns>
-    /// The certificates found, or <see langword="null"/> when the text holds no PEM block at all. An
-    /// empty collection is a real answer: an empty PEM file is legitimately empty.
-    /// </returns>
     /// <remarks>
-    /// Each block is read by what it decodes to rather than by the label over it. The two are routinely
-    /// at odds: <c>openssl crl2pkcs7</c> writes a <c>PKCS7</c> block that people save as <c>.pem</c>,
-    /// and <c>certutil -encode</c> labels whatever it converts <c>CERTIFICATE</c>, PKCS#7 included.
+    /// A block is read by what it decodes to rather than by the label over it, since the two are
+    /// routinely at odds: <c>openssl crl2pkcs7</c> writes a <c>PKCS7</c> block that people save as
+    /// <c>.pem</c>, and <c>certutil -encode</c> labels whatever it converts <c>CERTIFICATE</c>, PKCS#7
+    /// included. The label decides only the one case the content cannot: whether data that is not
+    /// PKCS#7 was meant to be a certificate, and so should be reported when it will not load.
     /// </remarks>
-    private static X509Certificate2Collection? ParsePem(string text, bool everyLabel)
+    private static X509Certificate2Collection ParsePem(string text)
     {
-        var remaining = text.AsSpan();
-        if (!PemEncoding.TryFind(remaining, out var pem)) {
-            return null;
-        }
-
         var certs = new X509Certificate2Collection();
+        var remaining = text.AsSpan();
         try {
-            do {
-                if (everyLabel || IsCertificateLabel(remaining[pem.Label])) {
-                    ReadBlock(remaining[pem.Label], PemTools.DecodeBlock(remaining, pem), certs);
-                }
+            while (PemEncoding.TryFind(remaining, out var pem)) {
+                ReadBlock(remaining[pem.Label], PemTools.DecodeBlock(remaining, pem), certs);
                 remaining = remaining[pem.Location.End..];
-            } while (PemEncoding.TryFind(remaining, out pem));
+            }
             return certs;
 
         } catch {
             //A batch that never reaches its caller has no other owner, so what was read before the bad
-            //block must be released here
+            //block must be released here. No test can observe this: an undisposed certificate is only
+            //unreachable, so a mutation run reports the loop below as a survivor.
             foreach (var cert in certs) {
                 cert.Dispose();
             }
@@ -335,19 +332,22 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     }
 
 
-    /// <summary>
-    /// Adds one PEM block's certificates to <paramref name="certs"/>.
-    /// </summary>
+    /// <summary>Adds one PEM block's certificates to <paramref name="certs"/>.</summary>
     private static void ReadBlock(ReadOnlySpan<char> label, ReadOnlySpan<byte> der, X509Certificate2Collection certs)
     {
-        //A PKCS7 or CMS label also covers content types holding no certificates. One of those beside
-        //the certificates is passed over rather than costing the whole file; under any other label the
-        //block is a certificate or an error.
-        if (IsPkcs7Label(label) && !IsPkcs7(der)) {
-            return;
+        if (IsPkcs7(der)) {
+            certs.AddRange(DecodePkcs7(der));
+        } else if (label.SequenceEqual(CertificateLabel)) {
+            certs.Add(CertTools.LoadCertificate(der));
         }
-        certs.AddRange(ReadDer(der));
+        //Anything else is not certificate material: a private key, a CRL, a CMS content type carrying
+        //no certificates. It sits beside the certificates rather than naming them, so it is passed over
+        //instead of costing the whole file.
     }
+
+
+    /// <summary>The one RFC 7468 label naming a lone certificate.</summary>
+    private const string CertificateLabel = "CERTIFICATE";
 
 
     /// <summary>
@@ -358,28 +358,24 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         => IsPkcs7(der) ? DecodePkcs7(der) : [CertTools.LoadCertificate(der)];
 
 
-    /// <summary>Whether a PEM label names certificate material this source reads.</summary>
-    private static bool IsCertificateLabel(ReadOnlySpan<char> label)
-        => label.SequenceEqual("CERTIFICATE") || IsPkcs7Label(label);
-
-
     /// <summary>
-    /// Whether a PEM label names a CMS ContentInfo. <c>PKCS7</c> is RFC 7468 s8 and <c>CMS</c> is s9,
-    /// which prefers it; producers write both.
+    /// Whether a file's bytes are binary rather than text: one complete DER value and nothing after it.
+    /// DER must never be read as text, since its bytes decode to characters that can spell out anything
+    /// at all, a PEM block that is no part of the encoding included.
     /// </summary>
-    private static bool IsPkcs7Label(ReadOnlySpan<char> label)
-        => label.SequenceEqual("PKCS7") || label.SequenceEqual("CMS");
-
-
-    /// <summary>
-    /// Whether a file's bytes are binary rather than text. A DER file opens with a SEQUENCE tag, and its
-    /// bytes decode to characters that can spell out anything at all, a PEM block that is no part of the
-    /// encoding included, so it must never be read as text.
-    /// </summary>
+    /// <remarks>
+    /// The opening tag alone will not do. A SEQUENCE opens with <c>0x30</c>, which is also the digit
+    /// <c>0</c>, so a bundle whose text happens to start with one would be taken for binary and only
+    /// its first certificate read. Requiring the value to span the whole file separates the two.
+    /// </remarks>
     private static bool IsDer(ReadOnlySpan<byte> data)
     {
-        const byte derSequenceTag = 0x30;
-        return data.Length > 0 && data[0] == derSequenceTag;
+        try {
+            AsnDecoder.ReadEncodedValue(data, AsnEncodingRules.BER, out _, out _, out var consumed);
+            return consumed == data.Length;
+        } catch (AsnContentException) {
+            return false;
+        }
     }
 
 
