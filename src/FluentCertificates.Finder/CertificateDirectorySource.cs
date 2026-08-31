@@ -249,7 +249,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
             case ".p7b":
             case ".p7c":
                 var cms = new SignedCms();
-                cms.Decode(UnwrapPemArmour(data));
+                cms.Decode(UnwrapPem(data));
                 return cms.Certificates;
             case ".pfx":
             case ".p12":
@@ -269,19 +269,19 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Strips base64 PEM armour from a PKCS#7 file. Both encodings are written under both extensions:
-    /// Windows' export wizard offers "DER encoded binary" and "Base-64 encoded" and names the result
-    /// <c>.p7b</c> either way, while <see cref="SignedCms.Decode(byte[])"/> reads BER and DER alone.
-    /// The armour's label is not checked, since whatever a producer wrote there the payload is the
-    /// same DER.
+    /// Unwraps a PEM-encoded PKCS#7 file to the DER it holds. Both encodings are written under both
+    /// extensions: Windows' export wizard offers "DER encoded binary" and "Base-64 encoded" and names
+    /// the result <c>.p7b</c> either way, while <see cref="SignedCms.Decode(byte[])"/> reads BER and
+    /// DER alone. The PEM label is not checked, since whatever a producer wrote there the payload is
+    /// the same DER.
     /// </summary>
     /// <param name="data">The file's contents.</param>
     /// <returns>
-    /// The armoured block's contents, or <paramref name="data"/> unchanged when there is no armour.
+    /// The PEM block's contents, or <paramref name="data"/> unchanged when the file is not PEM.
     /// </returns>
-    private static byte[] UnwrapPemArmour(byte[] data)
+    private static byte[] UnwrapPem(byte[] data)
     {
-        //DER decodes to nonsense text rather than throwing, and nonsense text holds no armour
+        //DER decodes to nonsense text rather than throwing, and nonsense text holds no PEM block
         var text = DecodeText(data);
         return PemEncoding.TryFind(text, out var pem)
             ? Convert.FromBase64String(text[pem.Base64Data])

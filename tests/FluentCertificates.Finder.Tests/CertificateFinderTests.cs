@@ -1317,9 +1317,9 @@ public class CertificateFinderTests
 
 
     /// <summary>
-    /// A PKCS#7 bundle is written both as raw DER and wrapped in base64 armour, and both encodings are
-    /// named the same way: Windows' export wizard offers either and calls the result <c>.p7b</c>. It also
-    /// writes CRLF line endings, where a producer on any other platform writes LF.
+    /// A PKCS#7 bundle is written both as raw DER and as PEM, and both encodings are named the same way:
+    /// Windows' export wizard offers either and calls the result <c>.p7b</c>. It also writes CRLF line
+    /// endings, where a producer on any other platform writes LF.
     /// </summary>
     [Test]
     [Arguments(".p7b", "der")]
@@ -1332,13 +1332,13 @@ public class CertificateFinderTests
     {
         using var cert = CreateSelfSignedCertificate("Pkcs7 Encoding");
         var der = BuildPkcs7(cert);
-        var armoured = PemEncoding.WriteString("PKCS7", der);
+        var pem = PemEncoding.WriteString("PKCS7", der);
 
         var fs = CreateEmptyMockFileSystem();
         fs.AddFile($"/pkcs7/bundle{extension}", new MockFileData(encoding switch {
             "der" => der,
-            "pem" => Encoding.ASCII.GetBytes(armoured),
-            "pem-crlf" => Encoding.ASCII.GetBytes(armoured.ReplaceLineEndings("\r\n")),
+            "pem" => Encoding.ASCII.GetBytes(pem),
+            "pem-crlf" => Encoding.ASCII.GetBytes(pem.ReplaceLineEndings("\r\n")),
             _ => throw new ArgumentOutOfRangeException(nameof(encoding), encoding, null)
         }));
 
