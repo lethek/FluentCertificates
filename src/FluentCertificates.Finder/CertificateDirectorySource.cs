@@ -261,13 +261,13 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
                 //the only one that reads it, so it is settled before anything sniffs the bytes.
                 return CertTools.LoadPkcs12Collection(data, Password);
 
-            case FileFormat.Certificate:
-            case FileFormat.Pkcs7:
+            case FileFormat.Certificates:
             case FileFormat.Pem:
-                //Every other format is read by what the file holds rather than by what its name
-                //promised, since all of those extensions are used for both encodings and for each
-                //other's payloads.
-                return IsDer(data) ? ReadDer(data) : ReadPem(format, data);
+                //Everything else is read by what the file holds rather than by what its name promised,
+                //since those extensions are all used for both encodings and for each other's payloads.
+                return IsDer(data)
+                    ? ReadDer(data)
+                    : ReadPem(data, mayBeEmpty: format == FileFormat.Pem);
 
             default:
                 throw new InvalidOperationException($"Unsupported file format: {format}.");
@@ -276,24 +276,22 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Reads a file's PEM text, falling back to the format its extension named when that text holds no
-    /// certificates.
+    /// Reads every certificate a file's PEM text holds.
     /// </summary>
-    /// <remarks>
-    /// Only <c>.pem</c> and <c>.ca-bundle</c> can legitimately hold none. Under an extension naming one
-    /// definite format an empty result means the file is not what it claims, and handing the bytes to
-    /// that format's reader is what reports it rather than reading it as empty.
-    /// </remarks>
-    private static IEnumerable<X509Certificate2> ReadPem(FileFormat format, ReadOnlySpan<byte> data)
+    /// <param name="data">The file's bytes, already established not to be DER.</param>
+    /// <param name="mayBeEmpty">
+    /// Whether holding no certificates is a legitimate answer, which only <c>.pem</c> and
+    /// <c>.ca-bundle</c> promise. Under an extension naming certificates outright an empty result means
+    /// the file is not what it claims, and reporting it is the only way a caller learns that.
+    /// </param>
+    private static X509Certificate2Collection ReadPem(ReadOnlySpan<byte> data, bool mayBeEmpty)
     {
         var certs = ParsePem(DecodeText(data));
-        if (certs.Count > 0 || format == FileFormat.Pem) {
-            return certs;
+        if (certs.Count == 0 && !mayBeEmpty) {
+            throw new CryptographicException(
+                "The file holds no certificate in any encoding this source reads.");
         }
-
-        return format == FileFormat.Pkcs7
-            ? DecodePkcs7(data)
-            : [CertTools.LoadCertificate(data)];
+        return certs;
     }
 
 
@@ -332,22 +330,17 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     }
 
 
-    /// <summary>Adds one PEM block's certificates to <paramref name="certs"/>.</summary>
     private static void ReadBlock(ReadOnlySpan<char> label, ReadOnlySpan<byte> der, X509Certificate2Collection certs)
     {
         if (IsPkcs7(der)) {
             certs.AddRange(DecodePkcs7(der));
-        } else if (label.SequenceEqual(CertificateLabel)) {
+        } else if (label.SequenceEqual("CERTIFICATE")) {
             certs.Add(CertTools.LoadCertificate(der));
         }
         //Anything else is not certificate material: a private key, a CRL, a CMS content type carrying
         //no certificates. It sits beside the certificates rather than naming them, so it is passed over
         //instead of costing the whole file.
     }
-
-
-    /// <summary>The one RFC 7468 label naming a lone certificate.</summary>
-    private const string CertificateLabel = "CERTIFICATE";
 
 
     /// <summary>
@@ -371,8 +364,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     private static bool IsDer(ReadOnlySpan<byte> data)
     {
         try {
-            AsnDecoder.ReadEncodedValue(data, AsnEncodingRules.BER, out _, out _, out var consumed);
-            return consumed == data.Length;
+            return new AsnValueReader(data, AsnEncodingRules.BER).PeekEncodedValue().Length == data.Length;
         } catch (AsnContentException) {
             return false;
         }
@@ -387,7 +379,11 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     private static bool IsPkcs7(ReadOnlySpan<byte> der)
     {
         try {
-            return new AsnValueReader(der, AsnEncodingRules.BER).ReadSequence().ReadObjectIdentifier() == Oids.Pkcs7Signed;
+            //A certificate opens its SEQUENCE with the TBSCertificate SEQUENCE, so reading the OID
+            //outright would answer the commonest case by throwing. Peeking keeps it off that path.
+            var content = new AsnValueReader(der, AsnEncodingRules.BER).ReadSequence();
+            return content.PeekTag() == Asn1Tag.ObjectIdentifier
+                && content.ReadObjectIdentifier() == Oids.Pkcs7Signed;
         } catch (AsnContentException) {
             //Not readable as ASN.1 at all, so it is no more PKCS#7 than it is a certificate. Loading it
             //as the latter is what reports the file as unreadable.
@@ -449,10 +445,10 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Every file extension this source reads, each naming the format that extension holds. One table
-    /// rather than a set beside a switch, so an extension cannot be recognised without saying how to
-    /// read it. Compared case-insensitively: file systems commonly preserve whatever case the file was
-    /// created with, so a certificate named "SERVER.PFX" must be found just as "server.pfx" is.
+    /// Every file extension this source reads, each naming how that extension is read. One table rather
+    /// than a set beside a switch, so an extension cannot be recognised without saying how to read it.
+    /// Compared case-insensitively: file systems commonly preserve whatever case the file was created
+    /// with, so a certificate named "SERVER.PFX" must be found just as "server.pfx" is.
     /// </summary>
     /// <remarks>
     /// Internal so a test can check these extensions against the formats the tests write, which is what
@@ -460,32 +456,41 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// </remarks>
     internal static readonly FrozenDictionary<string, FileFormat> FileFormats =
         new Dictionary<string, FileFormat> {
-            [".crt"] = FileFormat.Certificate,
-            [".cer"] = FileFormat.Certificate,
-            [".der"] = FileFormat.Certificate,
+            [".crt"] = FileFormat.Certificates,
+            [".cer"] = FileFormat.Certificates,
+            [".der"] = FileFormat.Certificates,
+            [".p7b"] = FileFormat.Certificates,
+            [".p7c"] = FileFormat.Certificates,
             [".pfx"] = FileFormat.Pkcs12,
             [".p12"] = FileFormat.Pkcs12,
             [".pkcs12"] = FileFormat.Pkcs12,
-            [".p7b"] = FileFormat.Pkcs7,
-            [".p7c"] = FileFormat.Pkcs7,
             [".pem"] = FileFormat.Pem,
             [".ca-bundle"] = FileFormat.Pem
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
 
-    /// <summary>What a file holds, which its extension names and <see cref="Parse"/> reads.</summary>
+    /// <summary>
+    /// How an extension is read, which is all an extension still decides. Which encoding and which
+    /// payload a file holds are read from the file, so <c>.crt</c> and <c>.p7b</c> land on one value.
+    /// </summary>
     internal enum FileFormat
     {
-        /// <summary>A lone certificate, DER encoded.</summary>
-        Certificate,
+        /// <summary>
+        /// An extension naming certificates outright, so a file holding none is reported rather than
+        /// read as empty.
+        /// </summary>
+        Certificates,
 
-        /// <summary>A PKCS#12 container, which needs <see cref="Password"/> when one protects it.</summary>
+        /// <summary>
+        /// A PKCS#12 container, which needs <see cref="Password"/> when one protects it. The one format
+        /// with no text form, and the one its own loader alone can read.
+        /// </summary>
         Pkcs12,
 
-        /// <summary>A PKCS#7 bundle, in DER or PEM.</summary>
-        Pkcs7,
-
-        /// <summary>PEM text holding any number of certificates.</summary>
+        /// <summary>
+        /// PEM text, which may carry other material beside the certificates or hold none at all, so an
+        /// empty result is a real answer.
+        /// </summary>
         Pem
     }
 }

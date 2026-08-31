@@ -23,7 +23,7 @@ release rather than record it as it happened.
 
 ### Fixed
 
-- `CertificateDirectorySource` reads a certificate file by its contents, so PEM and DER holding either a certificate or a PKCS#7 bundle are all read under any of the `.crt`, `.cer`, `.der`, `.pem`, `.ca-bundle`, `.p7b` and `.p7c` extensions.
+- `CertificateDirectorySource` reads a certificate file by its contents rather than its extension.
 
 ## [0.21.0] - 2026-08-30
 
