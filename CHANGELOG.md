@@ -19,7 +19,7 @@ release rather than record it as it happened.
 
 ### Changed
 
-- **Breaking:** `AsPkcs7()` takes an optional `Pkcs7Encoding` selecting DER or PEM output.
+- **Breaking:** `AsPkcs7()` takes an optional `Pkcs7Encoding` selecting DER or PEM output, and returns a `PemCertificateExporter`.
 
 ### Fixed
 

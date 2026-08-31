@@ -126,6 +126,26 @@ public class CertificateExportBuilderTests
 
 
     [Test]
+    public async Task ExportBuilder_Pkcs7Pem_ToPemString_MatchesTheBytesItWrites()
+    {
+        using var cert = new CertificateBuilder().Create();
+        var exporter = cert.Export().AsPkcs7(Pkcs7Encoding.Pem);
+
+        await Assert
+            .That(exporter.ToPemString())
+            .IsEqualTo(Encoding.UTF8.GetString(exporter.ToByteArray()));
+    }
+
+    [Test]
+    public async Task ExportBuilder_Pkcs7Der_ToPemString_Throws()
+    {
+        using var cert = new CertificateBuilder().Create();
+        await Assert
+            .That(() => cert.Export().AsPkcs7().ToPemString())
+            .Throws<InvalidOperationException>();
+    }
+
+    [Test]
     public async Task ExportBuilder_Pkcs7_UndeclaredEncoding_Throws()
     {
         using var cert = new CertificateBuilder().Create();

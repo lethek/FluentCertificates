@@ -24,10 +24,9 @@ internal enum ExportFormat
 /// Instances are obtained by calling a format-selection method such as
 /// <see cref="CertificateExportBuilder.AsPkcs12"/>, <see cref="CertificateExportBuilder.AsPkcs7"/>,
 /// or <see cref="CertificateExportBuilder.AsCert"/>.
-/// For certificate and key PEM output, use <see cref="CertificateExportBuilder.AsPem"/> which returns a
-/// <see cref="PemCertificateExporter"/> with an additional <see cref="PemCertificateExporter.ToPemString"/> method.
-/// <see cref="CertificateExportBuilder.AsPkcs7"/> also writes PEM when asked for
-/// <see cref="Pkcs7Encoding.Pem"/>, but as bytes only, since its other encoding is binary.
+/// For PEM output, use <see cref="CertificateExportBuilder.AsPem"/> or
+/// <see cref="CertificateExportBuilder.AsPkcs7"/>, which return a <see cref="PemCertificateExporter"/>
+/// with an additional <see cref="PemCertificateExporter.ToPemString"/> method.
 /// </summary>
 public class CertificateExporter
 {
@@ -115,7 +114,7 @@ public class CertificateExporter
                 ExportPkcs7(),
 
             ExportFormat.Pkcs7Pem =>
-                Encoding.UTF8.GetBytes(PemEncoding.WriteString("PKCS7", ExportPkcs7())),
+                Encoding.UTF8.GetBytes(ExportPkcs7Pem()),
 
             ExportFormat.Cert =>
                 ExportCert(),
@@ -130,6 +129,18 @@ public class CertificateExporter
     private byte[] ExportPkcs7()
         => _certs.ToCollection().Export(X509ContentType.Pkcs7)
         ?? throw new InvalidOperationException("PKCS#7 export returned null.");
+
+
+    /// <summary>
+    /// Produces the PKCS#7 bundle as a <c>PKCS7</c> PEM block. See <see cref="Pkcs7Encoding.Pem"/> for
+    /// why that label rather than <c>CMS</c>.
+    /// </summary>
+    internal string ExportPkcs7Pem()
+        => PemEncoding.WriteString("PKCS7", ExportPkcs7());
+
+
+    /// <summary>The format selected on the builder, which decides what the output methods write.</summary>
+    internal ExportFormat Format => _format;
 
 
     /// <summary>

@@ -275,17 +275,18 @@ public record CertificateExportBuilder
     /// method produces a PEM-encoded string, and whose output methods write the UTF-8 bytes of that string.
     /// </summary>
     public PemCertificateExporter AsPem()
-        => new(Certificates, Anchor, Password, SecurePassword, Keys);
+        => new(Certificates, Anchor, ExportFormat.Pem, Password, SecurePassword, Keys);
 
     /// <summary>
     /// Selects PKCS#7 (P7B) as the export format. Private keys are never included in PKCS#7 output.
-    /// Returns a <see cref="CertificateExporter"/> whose output methods write the PKCS#7 data in the
-    /// chosen encoding.
+    /// Returns a <see cref="PemCertificateExporter"/> whose output methods write the PKCS#7 data in the
+    /// chosen encoding, and whose <see cref="PemCertificateExporter.ToPemString"/> yields the text of a
+    /// <see cref="Pkcs7Encoding.Pem"/> export and throws for a <see cref="Pkcs7Encoding.Der"/> one.
     /// </summary>
     /// <param name="encoding">Whether to write binary DER or a base64 <c>PKCS7</c> block.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="encoding"/> is not a
     /// declared value.</exception>
-    public CertificateExporter AsPkcs7(Pkcs7Encoding encoding = Pkcs7Encoding.Der)
+    public PemCertificateExporter AsPkcs7(Pkcs7Encoding encoding = Pkcs7Encoding.Der)
         => new(Certificates, Anchor, encoding switch {
             Pkcs7Encoding.Der => ExportFormat.Pkcs7,
             Pkcs7Encoding.Pem => ExportFormat.Pkcs7Pem,
