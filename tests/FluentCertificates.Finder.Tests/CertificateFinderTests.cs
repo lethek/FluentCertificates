@@ -1617,14 +1617,18 @@ public class CertificateFinderTests
     /// The encodings a text file may be written in, each with the byte order mark that names it. UTF-8
     /// is the one that carries no mark, and the one assumed when there is none.
     /// </summary>
-    public static IEnumerable<(string Name, Encoding Encoding)> TextEncodings()
+    /// <remarks>
+    /// Each case is a factory rather than a value: <see cref="Encoding"/> is a mutable reference type,
+    /// so handing the same instance to every test would share it across them.
+    /// </remarks>
+    public static IEnumerable<Func<(string Name, Encoding Encoding)>> TextEncodings()
     {
-        yield return ("UTF-8", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        yield return ("UTF-8 with BOM", Encoding.UTF8);
-        yield return ("UTF-16 LE", Encoding.Unicode);
-        yield return ("UTF-16 BE", Encoding.BigEndianUnicode);
-        yield return ("UTF-32 LE", Encoding.UTF32);
-        yield return ("UTF-32 BE", new UTF32Encoding(bigEndian: true, byteOrderMark: true));
+        yield return () => ("UTF-8", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        yield return () => ("UTF-8 with BOM", new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        yield return () => ("UTF-16 LE", new UnicodeEncoding(bigEndian: false, byteOrderMark: true));
+        yield return () => ("UTF-16 BE", new UnicodeEncoding(bigEndian: true, byteOrderMark: true));
+        yield return () => ("UTF-32 LE", new UTF32Encoding(bigEndian: false, byteOrderMark: true));
+        yield return () => ("UTF-32 BE", new UTF32Encoding(bigEndian: true, byteOrderMark: true));
     }
 
 
