@@ -266,8 +266,12 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
                 //X509CertificateLoader.LoadCertificate rejects PKCS#12, so this needs the PKCS#12 loader
                 return CertTools.LoadPkcs12Collection(data, Password);
             case FileFormat.Pem:
-                //PEM text holds any number of blocks, and only some of them are certificate material
-                return (IsDer(data) ? null : ParsePem(DecodeText(data), everyLabel: false)) ?? [];
+                //PEM text holds any number of blocks, and only some of them are certificate material.
+                //A DER file under this extension is read as what it is: nothing else would report it,
+                //since yielding nothing is also what a legitimately empty PEM file does.
+                return IsDer(data)
+                    ? ReadDer(data)
+                    : ParsePem(DecodeText(data), everyLabel: false) ?? [];
             case FileFormat.Certificate:
                 return [CertTools.LoadCertificate(data)];
             default:
@@ -325,19 +329,24 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// <summary>
     /// Adds one PEM block's certificates to <paramref name="certs"/>.
     /// </summary>
-    /// <remarks>
-    /// A <c>PKCS7</c> or <c>CMS</c> block that is not signed data is passed over: those labels also
-    /// cover content types holding no certificates, and one of those beside the certificates must not
-    /// cost the whole file. Under any other label the block is a certificate or an error.
-    /// </remarks>
-    private static void ReadBlock(ReadOnlySpan<char> label, byte[] der, X509Certificate2Collection certs)
+    private static void ReadBlock(ReadOnlySpan<char> label, ReadOnlySpan<byte> der, X509Certificate2Collection certs)
     {
-        if (IsPkcs7(der)) {
-            certs.AddRange(DecodePkcs7(der));
-        } else if (!IsPkcs7Label(label)) {
-            certs.Add(CertTools.LoadCertificate(der));
+        //A PKCS7 or CMS label also covers content types holding no certificates. One of those beside
+        //the certificates is passed over rather than costing the whole file; under any other label the
+        //block is a certificate or an error.
+        if (IsPkcs7Label(label) && !IsPkcs7(der)) {
+            return;
         }
+        certs.AddRange(ReadDer(der));
     }
+
+
+    /// <summary>
+    /// Reads DER as whatever its content says it is: a PKCS#7 bundle, or a lone certificate. Data that
+    /// is neither reaches the certificate loader and throws, so it is reported rather than read as empty.
+    /// </summary>
+    private static X509Certificate2Collection ReadDer(ReadOnlySpan<byte> der)
+        => IsPkcs7(der) ? DecodePkcs7(der) : [CertTools.LoadCertificate(der)];
 
 
     /// <summary>Whether a PEM label names certificate material this source reads.</summary>
@@ -356,13 +365,12 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// <summary>
     /// Whether a file's bytes are binary rather than text. A DER file opens with a SEQUENCE tag, and its
     /// bytes decode to characters that can spell out anything at all, a PEM block that is no part of the
-    /// encoding included, so it must never be read as text. Empty data is no more PEM than DER and takes
-    /// the same path, where the format's own reader reports it.
+    /// encoding included, so it must never be read as text.
     /// </summary>
     private static bool IsDer(ReadOnlySpan<byte> data)
     {
         const byte derSequenceTag = 0x30;
-        return data.Length == 0 || data[0] == derSequenceTag;
+        return data.Length > 0 && data[0] == derSequenceTag;
     }
 
 
@@ -371,10 +379,10 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// certificate. Both are a SEQUENCE, and what separates them is the first thing inside it: the OID
     /// naming a ContentInfo's content type, where a certificate opens with its TBSCertificate SEQUENCE.
     /// </summary>
-    private static bool IsPkcs7(byte[] der)
+    private static bool IsPkcs7(ReadOnlySpan<byte> der)
     {
         try {
-            return new AsnReader(der, AsnEncodingRules.BER).ReadSequence().ReadObjectIdentifier() == Oids.Pkcs7Signed;
+            return new AsnValueReader(der, AsnEncodingRules.BER).ReadSequence().ReadObjectIdentifier() == Oids.Pkcs7Signed;
         } catch (AsnContentException) {
             //Not readable as ASN.1 at all, so it is no more PKCS#7 than it is a certificate. Loading it
             //as the latter is what reports the file as unreadable.

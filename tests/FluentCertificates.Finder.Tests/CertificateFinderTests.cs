@@ -1413,6 +1413,45 @@ public class CertificateFinderTests
 
 
     /// <summary>
+    /// <c>.pem</c> gets used as a generic extension for certificate files, so a DER one lands under it.
+    /// Passing that over would report nothing, since yielding no certificates is also what an empty PEM
+    /// file does; its content says which reader it needs, as it does for a block inside PEM text.
+    /// </summary>
+    [Test]
+    [Arguments("chain.pem")]
+    [Arguments("chain.ca-bundle")]
+    public async Task EnumerateCertificates_DerPkcs7UnderAPemExtension_IsLoaded(string fileName)
+    {
+        using var first = CreateSelfSignedCertificate("Der Under Pem One");
+        using var second = CreateSelfSignedCertificate("Der Under Pem Two");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile($"/misnamed/{fileName}", new MockFileData(BuildPkcs7(first, second)));
+
+        var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
+
+        await Assert
+            .That(results.Select(x => x.Certificate.Thumbprint))
+            .IsEquivalentTo([first.Thumbprint, second.Thumbprint], CollectionOrdering.Any);
+    }
+
+
+    /// <summary>The other binary payload that lands under <c>.pem</c>: a lone DER certificate.</summary>
+    [Test]
+    public async Task EnumerateCertificates_DerCertificateUnderAPemExtension_IsLoaded()
+    {
+        using var cert = CreateSelfSignedCertificate("Der Certificate Under Pem");
+
+        var fs = CreateEmptyMockFileSystem();
+        fs.AddFile("/misnamed/cert.pem", new MockFileData(cert.RawData));
+
+        var results = new CertificateFinder(fs).AddDirectory("/misnamed").ToList();
+
+        await Assert.That(results.Select(x => x.Certificate.Thumbprint)).IsEquivalentTo([cert.Thumbprint]);
+    }
+
+
+    /// <summary>
     /// A <c>PKCS7</c> or <c>CMS</c> label also covers content types holding no certificates, and one of
     /// those beside the certificates must not cost the whole file.
     /// </summary>

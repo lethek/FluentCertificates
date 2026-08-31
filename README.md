@@ -512,7 +512,8 @@ var finder = new CertificateFinder().AddDirectory("/etc/ssl/certs", searchPatter
 
 A PEM file is read by what its blocks hold rather than by the extension over them, so certificate
 blocks and PKCS#7 blocks are both read whether the file is named `.pem`, `.ca-bundle`, `.p7b` or
-`.p7c`. Private keys beside them are passed over.
+`.p7c`. Private keys beside them are passed over. A DER file under any of those four names is read
+as what it is, since `.pem` in particular gets used as a generic extension for certificate files.
 
 Pass a `password` to read password-protected `.pfx`, `.p12` and `.pkcs12` files. One password covers
 the directory, and a file it does not open is skipped like any other unreadable file.
