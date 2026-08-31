@@ -1651,7 +1651,6 @@ public class CertificateFinderTests
     }
 
 
-    /// <summary>A real directory on disk, removed with everything in it when the test scope ends.</summary>
     /// <summary>
     /// A PEM file holds any number of certificates, and a `.ca-bundle` is a bundle by definition, so
     /// reading only the first silently loses the rest.
@@ -2466,6 +2465,7 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>A real directory on disk, removed with everything in it when the test scope ends.</summary>
     private sealed class TempDirectory : IDisposable
     {
         public string Path { get; } =
