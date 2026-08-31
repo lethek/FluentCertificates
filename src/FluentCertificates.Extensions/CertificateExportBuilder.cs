@@ -280,8 +280,9 @@ public record CertificateExportBuilder
     /// <summary>
     /// Selects PKCS#7 (P7B) as the export format. Private keys are never included in PKCS#7 output.
     /// Returns a <see cref="PemCertificateExporter"/> whose output methods write the PKCS#7 data in the
-    /// chosen encoding, and whose <see cref="PemCertificateExporter.ToPemString"/> yields the text of a
-    /// <see cref="Pkcs7Encoding.Pem"/> export and throws for a <see cref="Pkcs7Encoding.Der"/> one.
+    /// chosen encoding. <see cref="PemCertificateExporter.ToPemString"/> supports
+    /// <see cref="Pkcs7Encoding.Pem"/> alone, and reports <see cref="Pkcs7Encoding.Der"/> as unsupported
+    /// when it is called.
     /// </summary>
     /// <param name="encoding">Whether to write binary DER or a base64 <c>PKCS7</c> block.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="encoding"/> is not a

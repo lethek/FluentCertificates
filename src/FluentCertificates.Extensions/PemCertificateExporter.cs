@@ -13,9 +13,10 @@ namespace FluentCertificates;
 /// binary output methods inherited from <see cref="CertificateExporter"/>.
 /// </summary>
 /// <remarks>
-/// <see cref="CertificateExportBuilder.AsPkcs7"/> returns this type for both of its encodings, since
-/// one method has one return type. <see cref="ToPemString"/> therefore throws when the encoding chosen
-/// was <see cref="Pkcs7Encoding.Der"/>.
+/// <see cref="Pkcs7Encoding.Der"/> is not supported for string output. The chosen format is validated
+/// when the string is rendered rather than when the export is configured, so that
+/// <see cref="CertificateExportBuilder.AsPkcs7"/> can offer <see cref="ToPemString"/> for the encoding
+/// that does produce text.
 /// </remarks>
 public sealed class PemCertificateExporter : CertificateExporter
 {
@@ -40,8 +41,8 @@ public sealed class PemCertificateExporter : CertificateExporter
     /// <see cref="CertificateExportBuilder.AsPkcs7"/> it is the one <c>PKCS7</c> block.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when the format selected is binary, which is <see cref="Pkcs7Encoding.Der"/>. There is
-    /// nothing to return, and returning the base64 alone would not be PEM.
+    /// Thrown when the format selected is binary. <see cref="Pkcs7Encoding.Der"/> is not supported for
+    /// string output; use <see cref="Pkcs7Encoding.Pem"/>, or read the bytes.
     /// </exception>
     public string ToPemString()
         => Format switch {
