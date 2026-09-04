@@ -287,7 +287,7 @@ using var customCert = new CertificateBuilder()
     .Create();
 ```
 
-### Advanced: certificates with custom name constraints and CRL distribution points
+### Advanced: certificates with name constraints, revocation and policy information
 
 ```csharp
 //Permit the CA cert to issue certificates for specific names and IP addresses
@@ -307,15 +307,25 @@ using var issuer = new CertificateBuilder()
     .Create();
 
 using var webCert = new CertificateBuilder()
-    .SetFriendlyName("Example certificate with a CRL distribution point")
+    .SetFriendlyName("Example certificate with revocation and policy information")
     .SetUsage(CertificateUsage.Server)
     .SetIssuer(issuer)
     .SetSubject(b => b.SetCommonName("*.mydomain.local"))
     .SetSubjectAlternativeNames(x => x.AddDnsName("*.mydomain.local"))
-    //Extension specifies CRL URLs
-    .AddExtension(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([$"http://crl.mydomain.local/"]))
+    //Where to check this certificate's revocation status, and where to fetch the issuer
+    .SetAuthorityInformationAccess(
+        ocspUri: "http://ocsp.mydomain.local/",
+        caIssuersUri: "http://pki.mydomain.local/issuer.cer")
+    //Where the issuer publishes its revocation lists
+    .SetCrlDistributionPoints("http://crl.mydomain.local/root.crl")
+    //The policies this certificate is issued under
+    .SetCertificatePolicies("1.3.6.1.4.1.99999.1.1")
     .Create();
 ```
+
+`SetAuthorityInformationAccess` also takes collections, for more than one OCSP responder or CA Issuers
+location. Each of the three replaces any earlier value rather than adding a second extension under the
+same OID.
 
 ---
 

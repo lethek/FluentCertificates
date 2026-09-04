@@ -360,7 +360,78 @@ public record CertificateBuilder
     public CertificateBuilder SetExtensions(IEnumerable<X509Extension> values)
         => this with { _extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
 
-    
+
+    /// <summary>
+    /// Sets the Authority Information Access extension, naming a single OCSP responder and a single
+    /// CA Issuers location.
+    /// </summary>
+    /// <param name="ocspUri">The URI of the OCSP responder, or <see langword="null"/> to omit it.</param>
+    /// <param name="caIssuersUri">The URI the issuer's certificate can be downloaded from, or <see langword="null"/> to omit it.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Authority Information Access extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when both URIs are <see langword="null"/>.</exception>
+    public CertificateBuilder SetAuthorityInformationAccess(string? ocspUri, string? caIssuersUri)
+        => SetAuthorityInformationAccess(
+            ocspUri == null ? null : [ocspUri],
+            caIssuersUri == null ? null : [caIssuersUri]);
+
+    /// <summary>
+    /// Sets the Authority Information Access extension, naming where the issuer can be reached for
+    /// revocation status and for its own certificate.
+    /// </summary>
+    /// <param name="ocspUris">The URIs of the OCSP responders, or <see langword="null"/> to omit them.</param>
+    /// <param name="caIssuersUris">The URIs the issuer's certificate can be downloaded from, or <see langword="null"/> to omit them.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Authority Information Access extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when both collections are <see langword="null"/> or empty.</exception>
+    public CertificateBuilder SetAuthorityInformationAccess(IEnumerable<string>? ocspUris, IEnumerable<string>? caIssuersUris)
+        => SetExtension(new X509AuthorityInformationAccessExtension(ocspUris, caIssuersUris));
+
+
+    /// <summary>
+    /// Sets the CRL Distribution Points extension, naming where the issuer publishes its revocation lists.
+    /// </summary>
+    /// <param name="uris">The URIs the CRL can be downloaded from. Must contain at least one URI, and each must be ASCII.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty.</exception>
+    /// <exception cref="CryptographicException">Thrown when a URI contains a character outside the 7-bit ASCII set.</exception>
+    public CertificateBuilder SetCrlDistributionPoints(params string[] uris)
+        => SetCrlDistributionPoints((IEnumerable<string>)uris);
+
+    /// <summary>
+    /// Sets the CRL Distribution Points extension, naming where the issuer publishes its revocation lists.
+    /// </summary>
+    /// <param name="uris">The URIs the CRL can be downloaded from. Must contain at least one URI, and each must be ASCII.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty.</exception>
+    /// <exception cref="CryptographicException">Thrown when a URI contains a character outside the 7-bit ASCII set.</exception>
+    public CertificateBuilder SetCrlDistributionPoints(IEnumerable<string> uris)
+        => SetExtension(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension(uris));
+
+
+    /// <summary>
+    /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
+    /// </summary>
+    /// <param name="policyIdentifiers">The OIDs of the policies to assert. Must contain at least one OID.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
+    public CertificateBuilder SetCertificatePolicies(params string[] policyIdentifiers)
+        => SetCertificatePolicies((IEnumerable<string>)policyIdentifiers);
+
+    /// <summary>
+    /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
+    /// </summary>
+    /// <param name="policyIdentifiers">The OIDs of the policies to assert. Must contain at least one OID.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
+    public CertificateBuilder SetCertificatePolicies(IEnumerable<string> policyIdentifiers)
+        => SetExtension(new X509CertificatePolicyExtension(policyIdentifiers));
+
+
+    //Unlike AddExtension, this replaces any extension already present under the same OID. ImmutableHashSet
+    //keeps the element it already holds when an equal one is added, so Add alone would discard the new value.
+    private CertificateBuilder SetExtension(X509Extension extension)
+        => this with { _extensions = _extensions.Remove(extension).Add(extension) };
+
+
     /// <summary>
     /// Sets the key storage flags for the certificate.
     /// </summary>

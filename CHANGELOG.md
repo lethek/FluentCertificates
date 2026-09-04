@@ -13,6 +13,11 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `CertificateBuilder.SetAuthorityInformationAccess`, `SetCrlDistributionPoints` and `SetCertificatePolicies`.
+- `X509CertificatePolicyExtension` encodes the Certificate Policies extension.
+
 ## [0.22.0] - 2026-09-01
 
 ### Added
