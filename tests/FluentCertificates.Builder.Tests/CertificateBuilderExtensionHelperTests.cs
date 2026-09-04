@@ -149,7 +149,7 @@ public class CertificateBuilderExtensionHelperTests
     {
         using var cert = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName(nameof(SetCertificatePolicies_Oids_CarriesEveryPolicy)))
-            .SetCertificatePolicies(PolicyOid, Oids.AnyCertPolicy)
+            .SetCertificatePolicies(new Oid(PolicyOid), new Oid(Oids.AnyCertPolicy))
             .Create();
 
         var ext = FindExtension(cert, Oids.CertPolicies);
@@ -160,10 +160,10 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
-    public async Task SetCertificatePolicies_ParamsAndEnumerable_ProduceTheSameExtension()
+    public async Task SetCertificatePolicies_OidParamsAndOidEnumerable_ProduceTheSameExtension()
     {
-        var fromParams = new CertificateBuilder().SetCertificatePolicies(PolicyOid);
-        var fromEnumerable = new CertificateBuilder().SetCertificatePolicies(new List<string> { PolicyOid });
+        var fromParams = new CertificateBuilder().SetCertificatePolicies(new Oid(PolicyOid));
+        var fromEnumerable = new CertificateBuilder().SetCertificatePolicies(new List<Oid> { new(PolicyOid) });
 
         await Assert.That(fromParams.Extensions.Single().RawData)
             .IsEquivalentTo(fromEnumerable.Extensions.Single().RawData);
@@ -171,8 +171,32 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
+    public async Task SetCertificatePolicies_OidAndEquivalentString_ProduceTheSameExtension()
+    {
+        var fromOid = new CertificateBuilder().SetCertificatePolicies(new Oid(PolicyOid));
+        var fromString = new CertificateBuilder().SetCertificatePolicies(PolicyOid);
+
+        await Assert.That(fromOid.Extensions.Single().RawData)
+            .IsEquivalentTo(fromString.Extensions.Single().RawData);
+    }
+
+
+    [Test]
+    public async Task SetCertificatePolicies_SingleStringAndEnumerable_ProduceTheSameExtension()
+    {
+        var fromSingle = new CertificateBuilder().SetCertificatePolicies(PolicyOid);
+        var fromEnumerable = new CertificateBuilder().SetCertificatePolicies(new List<string> { PolicyOid });
+
+        await Assert.That(fromSingle.Extensions.Single().RawData)
+            .IsEquivalentTo(fromEnumerable.Extensions.Single().RawData);
+    }
+
+
+    [Test]
     public async Task SetCertificatePolicies_NoOids_Throws()
     {
+        //With no params string[] overload to compete with params Oid[], a bare call resolves to the
+        //Oid overload with zero elements -- still an empty policy list, so it still throws
         await Assert.That(() => new CertificateBuilder().SetCertificatePolicies()).Throws<ArgumentException>();
     }
 

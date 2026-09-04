@@ -15,7 +15,7 @@ release rather than record it as it happened.
 
 ### Added
 
-- `CertificateBuilder.SetAuthorityInformationAccess`, `SetCrlDistributionPoints` and `SetCertificatePolicies`.
+- `CertificateBuilder.SetAuthorityInformationAccess`, `SetCrlDistributionPoints` and `SetCertificatePolicies`. `SetCertificatePolicies` accepts `Oid`s or raw OID strings.
 - `X509CertificatePolicyExtension` encodes the Certificate Policies extension.
 
 ## [0.22.0] - 2026-09-01

@@ -319,12 +319,14 @@ using var webCert = new CertificateBuilder()
     //Where the issuer publishes its revocation lists
     .SetCrlDistributionPoints("http://crl.mydomain.local/root.crl")
     //The policies this certificate is issued under
-    .SetCertificatePolicies("1.3.6.1.4.1.99999.1.1")
+    .SetCertificatePolicies(new Oid("1.3.6.1.4.1.99999.1.1"))
     .Create();
 ```
 
 `SetAuthorityInformationAccess` also takes collections, for more than one OCSP responder or CA Issuers
-location. Each of the three replaces any earlier value rather than adding a second extension under the
+location. `SetCertificatePolicies` takes `Oid`s, either as `params` or a collection; a raw OID string is
+also accepted, as a single value or a collection, for callers who would rather not construct an `Oid`.
+Each of the three helpers replaces any earlier value rather than adding a second extension under the
 same OID.
 
 ---

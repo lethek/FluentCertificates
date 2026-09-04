@@ -410,11 +410,28 @@ public record CertificateBuilder
     /// <summary>
     /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
     /// </summary>
-    /// <param name="policyIdentifiers">The OIDs of the policies to assert. Must contain at least one OID.</param>
+    /// <param name="policyIdentifiers">The policies to assert. Must contain at least one.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
-    public CertificateBuilder SetCertificatePolicies(params string[] policyIdentifiers)
-        => SetCertificatePolicies((IEnumerable<string>)policyIdentifiers);
+    public CertificateBuilder SetCertificatePolicies(params Oid[] policyIdentifiers)
+        => SetCertificatePolicies((IEnumerable<Oid>)policyIdentifiers);
+
+    /// <summary>
+    /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
+    /// </summary>
+    /// <param name="policyIdentifiers">The policies to assert. Must contain at least one.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
+    public CertificateBuilder SetCertificatePolicies(IEnumerable<Oid> policyIdentifiers)
+        => SetCertificatePolicies(policyIdentifiers.Select(x => x.Value!));
+
+    /// <summary>
+    /// Sets the Certificate Policies extension to a single policy, naming the policy under which the certificate is issued.
+    /// </summary>
+    /// <param name="policyIdentifier">The OID of the policy to assert.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
+    public CertificateBuilder SetCertificatePolicies(string policyIdentifier)
+        => SetCertificatePolicies((IEnumerable<string>)[policyIdentifier]);
 
     /// <summary>
     /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
