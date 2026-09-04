@@ -19,8 +19,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="TUnit" Version="1.65.31" />
-    <PackageReference Include="TestableIO.System.IO.Abstractions.TestingHelpers" Version="22.1.1" />
+    <PackageReference Include="TUnit" Version="1.65.68" />
+    <PackageReference Include="TestableIO.System.IO.Abstractions.TestingHelpers" Version="22.2.0" />
   </ItemGroup>
 
   <ItemGroup>

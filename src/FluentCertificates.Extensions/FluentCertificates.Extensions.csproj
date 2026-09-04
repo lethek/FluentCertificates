@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="SideData" Version="1.1.0" />
+    <PackageReference Include="SideData" Version="1.1.1" />
   </ItemGroup>
 
   <Choose>
@@ -40,7 +40,7 @@
     </When>
     <Otherwise>
       <ItemGroup>
-        <PackageReference Include="System.Collections.Immutable" Version="10.0.8" />
+        <PackageReference Include="System.Collections.Immutable" Version="10.0.11" />
       </ItemGroup>
     </Otherwise>
   </Choose>
