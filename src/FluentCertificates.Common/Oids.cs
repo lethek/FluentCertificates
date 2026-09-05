@@ -477,6 +477,21 @@ public static class Oids
     /// <summary>Certificate extension OID <c>1.2.840.113549.1.9.16.1.4</c>, defined by RFC3161.</summary>
     public const string TstInfo = "1.2.840.113549.1.9.16.1.4";
 
+    // CA/Browser Forum certificate policy identifiers, for use as a policyIdentifier value inside the
+    // CertPolicies extension (not to be confused with that extension's own OID, above).
+    /// <summary>Certificate policy OID <c>2.23.140.1.1</c>, defined by the CA/Browser Forum EV Guidelines.</summary>
+    public const string ExtendedValidationCertPolicy = "2.23.140.1.1";
+    /// <summary>Certificate policy OID <c>2.23.140.1.2.1</c>, defined by the CA/Browser Forum Baseline Requirements.</summary>
+    public const string DomainValidatedCertPolicy = "2.23.140.1.2.1";
+    /// <summary>Certificate policy OID <c>2.23.140.1.2.2</c>, defined by the CA/Browser Forum Baseline Requirements.</summary>
+    public const string OrganizationValidatedCertPolicy = "2.23.140.1.2.2";
+    /// <summary>Certificate policy OID <c>2.23.140.1.2.3</c>, defined by the CA/Browser Forum Baseline Requirements.</summary>
+    public const string IndividualValidatedCertPolicy = "2.23.140.1.2.3";
+    /// <summary>Certificate policy OID <c>2.23.140.1.3</c>, defined by the CA/Browser Forum EV Code Signing Guidelines.</summary>
+    public const string ExtendedValidationCodeSigningCertPolicy = "2.23.140.1.3";
+    /// <summary>Certificate policy OID <c>2.23.140.1.4.1</c>, defined by the CA/Browser Forum Code Signing Baseline Requirements.</summary>
+    public const string CodeSigningRequirementsCertPolicy = "2.23.140.1.4.1";
+
     /// <summary>Extended key usage OID <c>2.5.29.37.0</c>.</summary>
     public const string AnyExtendedKeyUsage = "2.5.29.37.0";
     /// <summary>Extended key usage purpose OID <c>1.3.6.1.5.5.7.3.1</c>.</summary>
