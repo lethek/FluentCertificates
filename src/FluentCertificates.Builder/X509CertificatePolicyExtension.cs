@@ -15,7 +15,7 @@ namespace FluentCertificates;
 /// The OIDs of the policies to assert. Must contain at least one OID, as required by RFC 5280 s4.2.1.4.
 /// Use <see cref="Oids.AnyCertPolicy"/> to assert the anyPolicy OID.
 /// </param>
-/// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
+/// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty, or contains the same OID more than once.</exception>
 public class X509CertificatePolicyExtension(IEnumerable<string> policyIdentifiers)
     : X509Extension(Oids.CertPolicies, EncodeExtension(policyIdentifiers), false)
 {
@@ -29,18 +29,22 @@ public class X509CertificatePolicyExtension(IEnumerable<string> policyIdentifier
         ArgumentNullException.ThrowIfNull(policyIdentifiers);
 
         var writer = new AsnWriter(AsnEncodingRules.DER);
-        var count = 0;
+
+        //RFC 5280 s4.2.1.4: a certificate policy OID MUST NOT appear more than once
+        var seen = new HashSet<string>();
 
         using (writer.PushSequence()) {
             foreach (var policyIdentifier in policyIdentifiers) {
+                if (!seen.Add(policyIdentifier)) {
+                    throw new ArgumentException($"Policy identifier '{policyIdentifier}' was supplied more than once", nameof(policyIdentifiers));
+                }
                 using (writer.PushSequence()) {
                     writer.WriteObjectIdentifier(policyIdentifier);
                 }
-                count++;
             }
         }
 
-        return count > 0
+        return seen.Count > 0
             ? writer.Encode()
             : throw new ArgumentException("At least one policy identifier must be supplied", nameof(policyIdentifiers));
     }

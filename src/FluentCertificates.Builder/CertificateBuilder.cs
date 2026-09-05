@@ -368,7 +368,8 @@ public record CertificateBuilder
     /// <param name="ocspUri">The URI of the OCSP responder, or <see langword="null"/> to omit it.</param>
     /// <param name="caIssuersUri">The URI the issuer's certificate can be downloaded from, or <see langword="null"/> to omit it.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Authority Information Access extension.</returns>
-    /// <exception cref="ArgumentException">Thrown when both URIs are <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when both URIs are omitted.</exception>
+    /// <remarks>Passing the literal <c>null</c> for both arguments is ambiguous with the collection overload; cast at least one, e.g. <c>(string?)null</c>.</remarks>
     public CertificateBuilder SetAuthorityInformationAccess(string? ocspUri, string? caIssuersUri)
         => SetAuthorityInformationAccess(
             ocspUri == null ? null : [ocspUri],
@@ -422,16 +423,19 @@ public record CertificateBuilder
     /// <param name="policyIdentifiers">The policies to assert. Must contain at least one.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
+    /// <exception cref="ArgumentException">Thrown when an <see cref="Oid"/> in <paramref name="policyIdentifiers"/> has no <see cref="Oid.Value"/>.</exception>
     public CertificateBuilder SetCertificatePolicies(IEnumerable<Oid> policyIdentifiers)
-        => SetCertificatePolicies(policyIdentifiers.Select(x => x.Value!));
+        => SetCertificatePolicies((policyIdentifiers ?? throw new ArgumentNullException(nameof(policyIdentifiers)))
+            .Select(x => x?.Value ?? throw new ArgumentException("Every Oid in policyIdentifiers must have a Value", nameof(policyIdentifiers))));
 
     /// <summary>
-    /// Sets the Certificate Policies extension to a single policy, naming the policy under which the certificate is issued.
+    /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
     /// </summary>
-    /// <param name="policyIdentifier">The OID of the policy to assert.</param>
+    /// <param name="policyIdentifier">The OID of the first (or only) policy to assert.</param>
+    /// <param name="morePolicyIdentifiers">The OIDs of any further policies to assert.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
-    public CertificateBuilder SetCertificatePolicies(string policyIdentifier)
-        => SetCertificatePolicies((IEnumerable<string>)[policyIdentifier]);
+    public CertificateBuilder SetCertificatePolicies(string policyIdentifier, params string[] morePolicyIdentifiers)
+        => SetCertificatePolicies((IEnumerable<string>)[policyIdentifier, .. morePolicyIdentifiers]);
 
     /// <summary>
     /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
@@ -443,10 +447,18 @@ public record CertificateBuilder
         => SetExtension(new X509CertificatePolicyExtension(policyIdentifiers));
 
 
-    //Unlike AddExtension, this replaces any extension already present under the same OID. ImmutableHashSet
-    //keeps the element it already holds when an equal one is added, so Add alone would discard the new value.
+    //Unlike AddExtension, this replaces any extension already present under the same OID, regardless of its
+    //concrete type. X509ExtensionOidEqualityComparer treats a same-OID extension of a different runtime type
+    //as unequal (by design -- see X509ExtensionOidEqualityComparerTests.Equals_SameOidDifferentTypes_IsFalse),
+    //so Remove(extension) alone would miss it and both would reach CertificateRequest, which throws. Filtering
+    //by Oid.Value directly finds it regardless of type.
     private CertificateBuilder SetExtension(X509Extension extension)
-        => this with { _extensions = _extensions.Remove(extension).Add(extension) };
+        => this with {
+            _extensions = _extensions
+                .Where(x => !String.Equals(x.Oid?.Value, extension.Oid?.Value))
+                .ToImmutableHashSet(X509ExtensionOidEqualityComparer)
+                .Add(extension)
+        };
 
 
     /// <summary>

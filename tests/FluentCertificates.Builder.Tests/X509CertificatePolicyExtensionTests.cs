@@ -52,6 +52,14 @@ public class X509CertificatePolicyExtensionTests
     }
 
 
+    [Test]
+    public async Task Encode_DuplicatePolicy_Throws()
+    {
+        //RFC 5280 s4.2.1.4: a certificate policy OID MUST NOT appear more than once
+        await Assert.That(() => new X509CertificatePolicyExtension([PolicyA, PolicyB, PolicyA])).Throws<ArgumentException>();
+    }
+
+
     private const string PolicyA = "1.3.6.1.4.1.99999.1.1";
     private const string PolicyB = "1.3.6.1.4.1.99999.1.2";
 
