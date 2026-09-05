@@ -27,6 +27,9 @@ jobs:
 
       - name: Run DevSkim scanner
         uses: microsoft/DevSkim-Action@v1
+        with:
+          #This library names weak hashes and curves throughout its OID and algorithm tables without using them
+          exclude-rules: DS126858,DS440100
 
       - name: Upload DevSkim scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
