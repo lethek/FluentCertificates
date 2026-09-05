@@ -20,6 +20,10 @@ release rather than record it as it happened.
 - `Oids.DomainValidatedCertPolicy`, `OrganizationValidatedCertPolicy`, `IndividualValidatedCertPolicy`, `ExtendedValidationCertPolicy`, `ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`, the CA/Browser Forum's certificate policy identifiers.
 - `Oids` has a cached `Oid` property for every OID constant, not just a subset.
 
+### Changed
+
+- Bumped `System.Security.Cryptography.Pkcs`, `System.Collections.Immutable`, `SideData` and `TestableIO.System.IO.Abstractions` to their latest versions.
+
 ### Fixed
 
 - `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.

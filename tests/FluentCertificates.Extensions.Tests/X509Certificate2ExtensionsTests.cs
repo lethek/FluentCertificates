@@ -64,7 +64,7 @@ public class X509Certificate2ExtensionsTests
     [MethodDataSource(nameof(KeyAlgorithmsAndExportKeysTestData))]
     public async Task ExportAsPem_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
     {
-        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
+        using var expected = new CertificateBuilder().SetSubject("CN=Test").SetKeyAlgorithm(alg).Create();
 
         var pem = expected.Export().WithPassword(password).WithKeys(include).AsPem().ToPemString();
 
@@ -107,7 +107,7 @@ public class X509Certificate2ExtensionsTests
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "pem");
         try {
-            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
+            using var expected = new CertificateBuilder().SetSubject("CN=Test").SetKeyAlgorithm(alg).Create();
 
             expected.Export().WithPassword(password).WithKeys(include).AsPem().ToFile(tmpFile);
             var parser = new X509CertificateParser();
