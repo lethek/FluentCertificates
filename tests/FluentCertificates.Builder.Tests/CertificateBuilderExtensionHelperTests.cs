@@ -48,7 +48,7 @@ public class CertificateBuilderExtensionHelperTests
     [Test]
     public async Task SetAuthorityInformationAccess_Collections_CarriesEveryUri()
     {
-        var ocspUris = new[] { OcspUri, "http://ocsp2.example.com/" };
+        var ocspUris = new[] { OcspUri, "http://ocsp2.example.com/" }; // DevSkim: ignore DS137138
 
         using var cert = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName(nameof(SetAuthorityInformationAccess_Collections_CarriesEveryUri)))
@@ -75,7 +75,7 @@ public class CertificateBuilderExtensionHelperTests
     {
         using var cert = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName(nameof(SetAuthorityInformationAccess_CalledTwice_KeepsOnlyTheLastCall)))
-            .SetAuthorityInformationAccess("http://discarded.example.com/", null)
+            .SetAuthorityInformationAccess("http://discarded.example.com/", null) // DevSkim: ignore DS137138
             .SetAuthorityInformationAccess(OcspUri, null)
             .Create();
 
@@ -88,7 +88,7 @@ public class CertificateBuilderExtensionHelperTests
     [Test]
     public async Task SetCrlDistributionPoints_Uris_CarriesEveryDistributionPoint()
     {
-        var uris = new[] { CrlUri, "http://crl2.example.com/other.crl" };
+        var uris = new[] { CrlUri, "http://crl2.example.com/other.crl" }; // DevSkim: ignore DS137138
 
         using var cert = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName(nameof(SetCrlDistributionPoints_Uris_CarriesEveryDistributionPoint)))
@@ -124,7 +124,7 @@ public class CertificateBuilderExtensionHelperTests
     [Test]
     public async Task SetCrlDistributionPoints_NonAsciiUri_Throws()
     {
-        await Assert.That(() => new CertificateBuilder().SetCrlDistributionPoints("http://crl.exámple.com/"))
+        await Assert.That(() => new CertificateBuilder().SetCrlDistributionPoints("http://crl.exámple.com/")) // DevSkim: ignore DS137138
             .Throws<CryptographicException>();
     }
 
@@ -134,7 +134,7 @@ public class CertificateBuilderExtensionHelperTests
     {
         using var cert = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName(nameof(SetCrlDistributionPoints_CalledTwice_KeepsOnlyTheLastCall)))
-            .SetCrlDistributionPoints("http://discarded.example.com/discarded.crl")
+            .SetCrlDistributionPoints("http://discarded.example.com/discarded.crl") // DevSkim: ignore DS137138
             .SetCrlDistributionPoints(CrlUri)
             .Create();
 
@@ -265,7 +265,7 @@ public class CertificateBuilderExtensionHelperTests
     [Test]
     public async Task SetAuthorityInformationAccess_ReplacesAnExistingExtensionOfADifferentRuntimeType()
     {
-        var rawAia = new X509Extension(Oids.AuthorityInformationAccess, new X509AuthorityInformationAccessExtension(["http://discarded.example.com/"], null).RawData, false);
+        var rawAia = new X509Extension(Oids.AuthorityInformationAccess, new X509AuthorityInformationAccessExtension(["http://discarded.example.com/"], null).RawData, false); // DevSkim: ignore DS137138
 
         using var cert = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName(nameof(SetAuthorityInformationAccess_ReplacesAnExistingExtensionOfADifferentRuntimeType)))
@@ -298,9 +298,9 @@ public class CertificateBuilderExtensionHelperTests
     }
 
 
-    private const string OcspUri = "http://ocsp.example.com/";
-    private const string CaIssuersUri = "http://pki.example.com/issuer.cer";
-    private const string CrlUri = "http://crl.example.com/root.crl";
+    private const string OcspUri = "http://ocsp.example.com/"; // DevSkim: ignore DS137138
+    private const string CaIssuersUri = "http://pki.example.com/issuer.cer"; // DevSkim: ignore DS137138
+    private const string CrlUri = "http://crl.example.com/root.crl"; // DevSkim: ignore DS137138
     private const string PolicyOid = "1.3.6.1.4.1.99999.1.1";
 
     private static readonly Asn1Tag UriTag = new(TagClass.ContextSpecific, 6);
