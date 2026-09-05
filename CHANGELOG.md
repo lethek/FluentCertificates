@@ -13,6 +13,14 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `Oids` has a cached `Oid` property for every OID constant, not just a subset.
+
+### Fixed
+
+- `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
+
 ## [0.22.0] - 2026-09-01
 
 ### Added
