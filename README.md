@@ -287,7 +287,7 @@ using var customCert = new CertificateBuilder()
     .Create();
 ```
 
-### Advanced: certificates with custom name constraints and CRL distribution points
+### Advanced: certificates with name constraints, revocation and policy information
 
 ```csharp
 //Permit the CA cert to issue certificates for specific names and IP addresses
@@ -307,15 +307,29 @@ using var issuer = new CertificateBuilder()
     .Create();
 
 using var webCert = new CertificateBuilder()
-    .SetFriendlyName("Example certificate with a CRL distribution point")
+    .SetFriendlyName("Example certificate with revocation and policy information")
     .SetUsage(CertificateUsage.Server)
     .SetIssuer(issuer)
     .SetSubject(b => b.SetCommonName("*.mydomain.local"))
     .SetSubjectAlternativeNames(x => x.AddDnsName("*.mydomain.local"))
-    //Extension specifies CRL URLs
-    .AddExtension(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([$"http://crl.mydomain.local/"]))
+    //Where to check this certificate's revocation status, and where to fetch the issuer
+    .SetAuthorityInformationAccess(
+        ocspUri: "http://ocsp.mydomain.local/",
+        caIssuersUri: "http://pki.mydomain.local/issuer.cer")
+    //Where the issuer publishes its revocation lists
+    .SetCrlDistributionPoints("http://crl.mydomain.local/root.crl")
+    //The policies this certificate is issued under
+    .SetCertificatePolicies(new Oid(Oids.DomainValidatedCertPolicy))
     .Create();
 ```
+
+`SetAuthorityInformationAccess` also takes collections, for more than one OCSP responder or CA Issuers
+location. `SetCertificatePolicies` takes `Oid`s, either as `params` or a collection; a raw OID string is
+also accepted, as a single value or a collection, for callers who would rather not construct an `Oid`.
+`Oids` has the CA/Browser Forum's other baseline-requirements and EV policy identifiers:
+`OrganizationValidatedCertPolicy`, `IndividualValidatedCertPolicy`, `ExtendedValidationCertPolicy`,
+`ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`. Each of the three
+helpers replaces any earlier value rather than adding a second extension under the same OID.
 
 ---
 

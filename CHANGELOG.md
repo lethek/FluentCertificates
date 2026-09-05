@@ -13,6 +13,17 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `CertificateBuilder.SetAuthorityInformationAccess`, `SetCrlDistributionPoints` and `SetCertificatePolicies`. `SetCertificatePolicies` accepts `Oid`s or raw OID strings.
+- `X509CertificatePolicyExtension` encodes the Certificate Policies extension.
+- `Oids.DomainValidatedCertPolicy`, `OrganizationValidatedCertPolicy`, `IndividualValidatedCertPolicy`, `ExtendedValidationCertPolicy`, `ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`, the CA/Browser Forum's certificate policy identifiers.
+- `Oids` has a cached `Oid` property for every OID constant, not just a subset.
+
+### Fixed
+
+- `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
+
 ## [0.22.0] - 2026-09-01
 
 ### Added

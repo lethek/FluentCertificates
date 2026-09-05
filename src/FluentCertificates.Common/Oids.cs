@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Threading;
 
 namespace FluentCertificates;
 
@@ -477,6 +478,21 @@ public static class Oids
     /// <summary>Certificate extension OID <c>1.2.840.113549.1.9.16.1.4</c>, defined by RFC3161.</summary>
     public const string TstInfo = "1.2.840.113549.1.9.16.1.4";
 
+    // CA/Browser Forum certificate policy identifiers, for use as a policyIdentifier value inside the
+    // CertPolicies extension (not to be confused with that extension's own OID, above).
+    /// <summary>Certificate policy OID <c>2.23.140.1.1</c>, defined by the CA/Browser Forum EV Guidelines.</summary>
+    public const string ExtendedValidationCertPolicy = "2.23.140.1.1";
+    /// <summary>Certificate policy OID <c>2.23.140.1.2.1</c>, defined by the CA/Browser Forum Baseline Requirements.</summary>
+    public const string DomainValidatedCertPolicy = "2.23.140.1.2.1";
+    /// <summary>Certificate policy OID <c>2.23.140.1.2.2</c>, defined by the CA/Browser Forum Baseline Requirements.</summary>
+    public const string OrganizationValidatedCertPolicy = "2.23.140.1.2.2";
+    /// <summary>Certificate policy OID <c>2.23.140.1.2.3</c>, defined by the CA/Browser Forum Baseline Requirements.</summary>
+    public const string IndividualValidatedCertPolicy = "2.23.140.1.2.3";
+    /// <summary>Certificate policy OID <c>2.23.140.1.3</c>, defined by the CA/Browser Forum EV Code Signing Guidelines.</summary>
+    public const string ExtendedValidationCodeSigningCertPolicy = "2.23.140.1.3";
+    /// <summary>Certificate policy OID <c>2.23.140.1.4.1</c>, defined by the CA/Browser Forum Code Signing Baseline Requirements.</summary>
+    public const string CodeSigningRequirementsCertPolicy = "2.23.140.1.4.1";
+
     /// <summary>Extended key usage OID <c>2.5.29.37.0</c>.</summary>
     public const string AnyExtendedKeyUsage = "2.5.29.37.0";
     /// <summary>Extended key usage purpose OID <c>1.3.6.1.5.5.7.3.1</c>.</summary>
@@ -648,138 +664,903 @@ public static class Oids
 
 
 
-    private static volatile Oid? s_rsaOid;
-    private static volatile Oid? s_ecPublicKeyOid;
-    private static volatile Oid? s_tripleDesCbcOid;
-    private static volatile Oid? s_aes256CbcOid;
-    private static volatile Oid? s_secp256R1Oid;
-    private static volatile Oid? s_secp384R1Oid;
-    private static volatile Oid? s_secp521R1Oid;
-    private static volatile Oid? s_sha256Oid;
-    private static volatile Oid? s_pkcs7DataOid;
-    private static volatile Oid? s_contentTypeOid;
-    private static volatile Oid? s_documentDescriptionOid;
-    private static volatile Oid? s_documentNameOid;
-    private static volatile Oid? s_localKeyIdOid;
-    private static volatile Oid? s_messageDigestOid;
-    private static volatile Oid? s_signingTimeOid;
-    private static volatile Oid? s_pkcs9ExtensionRequestOid;
-    private static volatile Oid? s_basicConstraints2Oid;
-    private static volatile Oid? s_enhancedKeyUsageOid;
-    private static volatile Oid? s_keyUsageOid;
-    private static volatile Oid? s_subjectAltNameOid;
-    private static volatile Oid? s_subjectKeyIdentifierOid;
-    private static volatile Oid? s_authorityKeyIdentifierOid;
-    private static volatile Oid? s_authorityInformationAccessOid;
-    private static volatile Oid? s_crlNumberOid;
-    private static volatile Oid? s_crlDistributionPointOid;
-    private static volatile Oid? s_commonNameOid;
-    private static volatile Oid? s_countryOrRegionOid;
-    private static volatile Oid? s_localityNameOid;
-    private static volatile Oid? s_stateOrProvinceNameOid;
-    private static volatile Oid? s_organizationOid;
-    private static volatile Oid? s_organizationalUnitOid;
-    private static volatile Oid? s_emailAddressOid;
-    private static volatile Oid? s_telephoneNumberOid;
-    private static volatile Oid? s_streetAddressOid;
-    private static volatile Oid? s_postalCodeOid;
-    private static volatile Oid? s_userIdOid;
-    private static volatile Oid? s_serialNumberOid;
-    private static volatile Oid? s_givenNameOid;
-    private static volatile Oid? s_surnameOid;
-    private static volatile Oid? s_titleOid;
-    private static volatile Oid? s_dnQualifierOid;
-    private static volatile Oid? s_domainComponentOid;
+    private static Oid? s_rc2CbcOid;
+    private static Oid? s_rc4Oid;
+    private static Oid? s_tripleDesCbcOid;
+    private static Oid? s_desCbcOid;
+    private static Oid? s_aes128CbcOid;
+    private static Oid? s_aes192CbcOid;
+    private static Oid? s_aes256CbcOid;
+
+    private static Oid? s_dsaOid;
+    private static Oid? s_rsaOid;
+    private static Oid? s_rsaOaepOid;
+    private static Oid? s_rsaPssOid;
+    private static Oid? s_rsaPkcs1Md5Oid;
+    private static Oid? s_rsaPkcs1Sha1Oid;
+    private static Oid? s_rsaPkcs1Sha224Oid;
+    private static Oid? s_rsaPkcs1Sha256Oid;
+    private static Oid? s_rsaPkcs1Sha384Oid;
+    private static Oid? s_rsaPkcs1Sha512Oid;
+    private static Oid? s_rsaPkcs1Sha3_256Oid;
+    private static Oid? s_rsaPkcs1Sha3_384Oid;
+    private static Oid? s_rsaPkcs1Sha3_512Oid;
+    private static Oid? s_esdhOid;
+    private static Oid? s_ecDiffieHellmanOid;
+    private static Oid? s_diffieHellmanOid;
+    private static Oid? s_diffieHellmanPkcs3Oid;
+
+    private static Oid? s_mLDsa44Oid;
+    private static Oid? s_mLDsa65Oid;
+    private static Oid? s_mLDsa87Oid;
+
+    private static Oid? s_slhDsaSha2_128sOid;
+    private static Oid? s_slhDsaSha2_128fOid;
+    private static Oid? s_slhDsaSha2_192sOid;
+    private static Oid? s_slhDsaSha2_192fOid;
+    private static Oid? s_slhDsaSha2_256sOid;
+    private static Oid? s_slhDsaSha2_256fOid;
+    private static Oid? s_slhDsaShake128sOid;
+    private static Oid? s_slhDsaShake128fOid;
+    private static Oid? s_slhDsaShake192sOid;
+    private static Oid? s_slhDsaShake192fOid;
+    private static Oid? s_slhDsaShake256sOid;
+    private static Oid? s_slhDsaShake256fOid;
+
+    private static Oid? s_mLDsa44PreHashSha512Oid;
+    private static Oid? s_mLDsa65PreHashSha512Oid;
+    private static Oid? s_mLDsa87PreHashSha512Oid;
+    private static Oid? s_slhDsaSha2_128sPreHashSha256Oid;
+    private static Oid? s_slhDsaSha2_128fPreHashSha256Oid;
+    private static Oid? s_slhDsaSha2_192sPreHashSha512Oid;
+    private static Oid? s_slhDsaSha2_192fPreHashSha512Oid;
+    private static Oid? s_slhDsaSha2_256sPreHashSha512Oid;
+    private static Oid? s_slhDsaSha2_256fPreHashSha512Oid;
+    private static Oid? s_slhDsaShake128sPreHashShake128Oid;
+    private static Oid? s_slhDsaShake128fPreHashShake128Oid;
+    private static Oid? s_slhDsaShake192sPreHashShake256Oid;
+    private static Oid? s_slhDsaShake192fPreHashShake256Oid;
+    private static Oid? s_slhDsaShake256sPreHashShake256Oid;
+    private static Oid? s_slhDsaShake256fPreHashShake256Oid;
+
+    private static Oid? s_mLDsa44WithRSA2048PssOid;
+    private static Oid? s_mLDsa44WithRSA2048Pkcs15Oid;
+    private static Oid? s_mLDsa44WithEd25519Oid;
+    private static Oid? s_mLDsa44WithECDsaP256Oid;
+    private static Oid? s_mLDsa65WithRSA3072PssOid;
+    private static Oid? s_mLDsa65WithRSA3072Pkcs15Oid;
+    private static Oid? s_mLDsa65WithRSA4096PssOid;
+    private static Oid? s_mLDsa65WithRSA4096Pkcs15Oid;
+    private static Oid? s_mLDsa65WithECDsaP256Oid;
+    private static Oid? s_mLDsa65WithECDsaP384Oid;
+    private static Oid? s_mLDsa65WithECDsaBrainpoolP256r1Oid;
+    private static Oid? s_mLDsa65WithEd25519Oid;
+    private static Oid? s_mLDsa87WithECDsaP384Oid;
+    private static Oid? s_mLDsa87WithECDsaBrainpoolP384r1Oid;
+    private static Oid? s_mLDsa87WithEd448Oid;
+    private static Oid? s_mLDsa87WithRSA3072PssOid;
+    private static Oid? s_mLDsa87WithRSA4096PssOid;
+    private static Oid? s_mLDsa87WithECDsaP521Oid;
+
+    private static Oid? s_mLKem512Oid;
+    private static Oid? s_mLKem768Oid;
+    private static Oid? s_mLKem1024Oid;
+
+    private static Oid? s_mLKem768WithRsaOaep2048Sha3_256Oid;
+    private static Oid? s_mLKem768WithRsaOaep3072Sha3_256Oid;
+    private static Oid? s_mLKem768WithRsaOaep4096Sha3_256Oid;
+    private static Oid? s_mLKem768WithX25519Sha3_256Oid;
+    private static Oid? s_mLKem768WithECDiffieHellmanP256Sha3_256Oid;
+    private static Oid? s_mLKem768WithECDiffieHellmanP384Sha3_256Oid;
+    private static Oid? s_mLKem768WithECDiffieHellmanBrainpoolP256r1Sha3_256Oid;
+    private static Oid? s_mLKem1024WithRsaOaep3072Sha3_256Oid;
+    private static Oid? s_mLKem1024WithECDiffieHellmanP384Sha3_256Oid;
+    private static Oid? s_mLKem1024WithECDiffieHellmanBrainpoolP384r1Sha3_256Oid;
+    private static Oid? s_mLKem1024WithX448Sha3_256Oid;
+    private static Oid? s_mLKem1024WithECDiffieHellmanP521Sha3_256Oid;
+
+    private static Oid? s_signingTimeOid;
+    private static Oid? s_contentTypeOid;
+    private static Oid? s_documentDescriptionOid;
+    private static Oid? s_messageDigestOid;
+    private static Oid? s_counterSignerOid;
+    private static Oid? s_signingCertificateOid;
+    private static Oid? s_signingCertificateV2Oid;
+    private static Oid? s_documentNameOid;
+    private static Oid? s_friendlyNameOid;
+    private static Oid? s_localKeyIdOid;
+    private static Oid? s_enrollCertTypeExtensionOid;
+    private static Oid? s_userPrincipalNameOid;
+    private static Oid? s_certificateTemplateOid;
+    private static Oid? s_applicationCertPoliciesOid;
+    private static Oid? s_authorityInformationAccessOid;
+    private static Oid? s_ocspEndpointOid;
+    private static Oid? s_certificateAuthorityIssuersOid;
+    private static Oid? s_pkcs9ExtensionRequestOid;
+
+    private static Oid? s_cmsRc2WrapOid;
+    private static Oid? s_cms3DesWrapOid;
+
+    private static Oid? s_pkcs7DataOid;
+    private static Oid? s_pkcs7SignedOid;
+    private static Oid? s_pkcs7EnvelopedOid;
+    private static Oid? s_pkcs7SignedEnvelopedOid;
+    private static Oid? s_pkcs7HashedOid;
+    private static Oid? s_pkcs7EncryptedOid;
+
+    private static Oid? s_md5Oid;
+    private static Oid? s_sha1Oid;
+    private static Oid? s_sha224Oid;
+    private static Oid? s_sha256Oid;
+    private static Oid? s_sha384Oid;
+    private static Oid? s_sha512Oid;
+    private static Oid? s_sha3_256Oid;
+    private static Oid? s_sha3_384Oid;
+    private static Oid? s_sha3_512Oid;
+    private static Oid? s_shake128Oid;
+    private static Oid? s_shake256Oid;
+
+    private static Oid? s_dsaWithSha1Oid;
+    private static Oid? s_dsaWithSha224Oid;
+    private static Oid? s_dsaWithSha256Oid;
+    private static Oid? s_dsaWithSha384Oid;
+    private static Oid? s_dsaWithSha512Oid;
+
+    private static Oid? s_ecPrimeFieldOid;
+    private static Oid? s_ecChar2FieldOid;
+    private static Oid? s_ecChar2TrinomialBasisOid;
+    private static Oid? s_ecChar2PentanomialBasisOid;
+    private static Oid? s_ecPublicKeyOid;
+    private static Oid? s_eCDsaWithSha1Oid;
+    private static Oid? s_eCDsaWithSha224Oid;
+    private static Oid? s_eCDsaWithSha256Oid;
+    private static Oid? s_eCDsaWithSha384Oid;
+    private static Oid? s_eCDsaWithSha512Oid;
+    private static Oid? s_eCDsaWithSha3_256Oid;
+    private static Oid? s_eCDsaWithSha3_384Oid;
+    private static Oid? s_eCDsaWithSha3_512Oid;
+
+    private static Oid? s_mgf1Oid;
+    private static Oid? s_pSpecifiedOid;
+
+    private static Oid? s_noSignatureOid;
+
+    private static Oid? s_commonNameOid;
+    private static Oid? s_countryOrRegionNameOid;
+    private static Oid? s_localityNameOid;
+    private static Oid? s_stateOrProvinceNameOid;
+    private static Oid? s_organizationOid;
+    private static Oid? s_organizationalUnitOid;
+    private static Oid? s_emailAddressOid;
+    private static Oid? s_telephoneNumberOid;
+    private static Oid? s_streetAddressOid;
+    private static Oid? s_postalCodeOid;
+    private static Oid? s_serialNumberOid;
+    private static Oid? s_surnameOid;
+    private static Oid? s_givenNameOid;
+    private static Oid? s_titleOid;
+    private static Oid? s_dnQualifierOid;
+    private static Oid? s_knowledgeInformationOid;
+    private static Oid? s_descriptionOid;
+    private static Oid? s_businessCategoryOid;
+    private static Oid? s_postOfficeBoxOid;
+    private static Oid? s_physicalDeliveryOfficeNameOid;
+    private static Oid? s_x121AddressOid;
+    private static Oid? s_internationalISDNNumberOid;
+    private static Oid? s_destinationIndicatorOid;
+    private static Oid? s_nameOid;
+    private static Oid? s_initialsOid;
+    private static Oid? s_generationQualifierOid;
+    private static Oid? s_houseIdentifierOid;
+    private static Oid? s_dmdNameOid;
+    private static Oid? s_pseudonymOid;
+    private static Oid? s_uiiInUrnOid;
+    private static Oid? s_contentUrlOid;
+    private static Oid? s_uriOid;
+    private static Oid? s_urnOid;
+    private static Oid? s_urlOid;
+    private static Oid? s_urnCOid;
+    private static Oid? s_epcInUrnOid;
+    private static Oid? s_ldapUrlOid;
+    private static Oid? s_organizationIdentifierOid;
+    private static Oid? s_countryOrRegionName3COid;
+    private static Oid? s_countryOrRegionName3NOid;
+    private static Oid? s_dnsNameOid;
+    private static Oid? s_intEmailOid;
+    private static Oid? s_jabberIdOid;
+
+    private static Oid? s_basicConstraintsOid;
+    private static Oid? s_subjectKeyIdentifierOid;
+    private static Oid? s_keyUsageOid;
+    private static Oid? s_subjectAltNameOid;
+    private static Oid? s_issuerAltNameOid;
+    private static Oid? s_basicConstraints2Oid;
+    private static Oid? s_crlNumberOid;
+    private static Oid? s_crlReasonsOid;
+    private static Oid? s_nameConstraintsOid;
+    private static Oid? s_crlDistributionPointsOid;
+    private static Oid? s_certPoliciesOid;
+    private static Oid? s_anyCertPolicyOid;
+    private static Oid? s_certPolicyMappingsOid;
+    private static Oid? s_authorityKeyIdentifierOid;
+    private static Oid? s_certPolicyConstraintsOid;
+    private static Oid? s_enhancedKeyUsageOid;
+    private static Oid? s_inhibitAnyPolicyExtensionOid;
+
+    private static Oid? s_tstInfoOid;
+
+    private static Oid? s_extendedValidationCertPolicyOid;
+    private static Oid? s_domainValidatedCertPolicyOid;
+    private static Oid? s_organizationValidatedCertPolicyOid;
+    private static Oid? s_individualValidatedCertPolicyOid;
+    private static Oid? s_extendedValidationCodeSigningCertPolicyOid;
+    private static Oid? s_codeSigningRequirementsCertPolicyOid;
+
+    private static Oid? s_anyExtendedKeyUsageOid;
+    private static Oid? s_serverAuthPurposeOid;
+    private static Oid? s_clientAuthPurposeOid;
+    private static Oid? s_codeSigningPurposeOid;
+    private static Oid? s_emailProtectionPurposeOid;
+    private static Oid? s_ipsecEndSystemPurposeOid;
+    private static Oid? s_ipsecTunnelPurposeOid;
+    private static Oid? s_ipsecUserPurposeOid;
+    private static Oid? s_timeStampingPurposeOid;
+    private static Oid? s_ocspSigningPurposeOid;
+    private static Oid? s_dvcsPurposeOid;
+    private static Oid? s_sbgpCertAaServerAuthPurposeOid;
+    private static Oid? s_scvpResponderPurposeOid;
+    private static Oid? s_eapOverPppPurposeOid;
+    private static Oid? s_eapOverLanPurposeOid;
+    private static Oid? s_scvpServerPurposeOid;
+    private static Oid? s_scvpClientPurposeOid;
+    private static Oid? s_ipsecIkePurposeOid;
+    private static Oid? s_capwapAcPurposeOid;
+    private static Oid? s_capwapWtpPurposeOid;
+    private static Oid? s_sipDomainPurposeOid;
+    private static Oid? s_secureShellClientPurposeOid;
+    private static Oid? s_secureShellServerPurposeOid;
+    private static Oid? s_sendRouterPurposeOid;
+    private static Oid? s_sendProxiedRouterPurposeOid;
+    private static Oid? s_sendOwnerPurposeOid;
+    private static Oid? s_sendProxiedOwnerPurposeOid;
+    private static Oid? s_cmcCaPurposeOid;
+    private static Oid? s_cmcRaPurposeOid;
+    private static Oid? s_cmcArchivePurposeOid;
+    private static Oid? s_bgpSecRouterPurposeOid;
+
+    private static Oid? s_smartCardLogonPurposeOid;
+    private static Oid? s_lifetimeSigningPurposeOid;
+
+    private static Oid? s_pkcs12PbeWithShaAnd3Key3DesOid;
+    private static Oid? s_pkcs12PbeWithShaAnd2Key3DesOid;
+    private static Oid? s_pkcs12PbeWithShaAnd128BitRC2Oid;
+    private static Oid? s_pkcs12PbeWithShaAnd40BitRC2Oid;
+    private static Oid? s_pkcs12KeyBagOid;
+    private static Oid? s_pkcs12ShroudedKeyBagOid;
+    private static Oid? s_pkcs12CertBagOid;
+    private static Oid? s_pkcs12CrlBagOid;
+    private static Oid? s_pkcs12SecretBagOid;
+    private static Oid? s_pkcs12SafeContentsBagOid;
+    private static Oid? s_pkcs12X509CertBagTypeOid;
+    private static Oid? s_msPkcs12KeyProviderNameOid;
+    private static Oid? s_msPkcs12MachineKeySetOid;
+    private static Oid? s_pkcs12SdsiCertBagTypeOid;
+
+    private static Oid? s_pbeWithMD5AndDESCBCOid;
+    private static Oid? s_pbeWithMD5AndRC2CBCOid;
+    private static Oid? s_pbeWithSha1AndDESCBCOid;
+    private static Oid? s_pbeWithSha1AndRC2CBCOid;
+    private static Oid? s_pbkdf2Oid;
+    private static Oid? s_passwordBasedEncryptionScheme2Oid;
+
+    private static Oid? s_hmacWithSha1Oid;
+    private static Oid? s_hmacWithSha256Oid;
+    private static Oid? s_hmacWithSha384Oid;
+    private static Oid? s_hmacWithSha512Oid;
+
+    private static Oid? s_secp256r1Oid;
+    private static Oid? s_secp384r1Oid;
+    private static Oid? s_secp521r1Oid;
+    private static Oid? s_brainpoolP256r1Oid;
+    private static Oid? s_brainpoolP384r1Oid;
+    private static Oid? s_x25519Oid;
+    private static Oid? s_x448Oid;
+    private static Oid? s_ed25519Oid;
+    private static Oid? s_ed448Oid;
+
+    private static Oid? s_domainComponentOid;
+    private static Oid? s_userIdOid;
+    private static Oid? s_macAddressOid;
 
 
-
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Rsa"/>.</summary>
-    public static Oid RsaOid => s_rsaOid ??= InitializeOid(Rsa);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EcPublicKey"/>.</summary>
-    public static Oid EcPublicKeyOid => s_ecPublicKeyOid ??= InitializeOid(EcPublicKey);
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Rc2Cbc"/>.</summary>
+    public static Oid Rc2CbcOid => LazyInitializer.EnsureInitialized(ref s_rc2CbcOid, () => InitializeOid(Rc2Cbc));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Rc4"/>.</summary>
+    public static Oid Rc4Oid => LazyInitializer.EnsureInitialized(ref s_rc4Oid, () => InitializeOid(Rc4));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="TripleDesCbc"/>.</summary>
-    public static Oid TripleDesCbcOid => s_tripleDesCbcOid ??= InitializeOid(TripleDesCbc);
+    public static Oid TripleDesCbcOid => LazyInitializer.EnsureInitialized(ref s_tripleDesCbcOid, () => InitializeOid(TripleDesCbc));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DesCbc"/>.</summary>
+    public static Oid DesCbcOid => LazyInitializer.EnsureInitialized(ref s_desCbcOid, () => InitializeOid(DesCbc));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Aes128Cbc"/>.</summary>
+    public static Oid Aes128CbcOid => LazyInitializer.EnsureInitialized(ref s_aes128CbcOid, () => InitializeOid(Aes128Cbc));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Aes192Cbc"/>.</summary>
+    public static Oid Aes192CbcOid => LazyInitializer.EnsureInitialized(ref s_aes192CbcOid, () => InitializeOid(Aes192Cbc));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Aes256Cbc"/>.</summary>
-    public static Oid Aes256CbcOid => s_aes256CbcOid ??= InitializeOid(Aes256Cbc);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="secp256r1"/>.</summary>
-    public static Oid secp256r1Oid => s_secp256R1Oid ??= new Oid(secp256r1, nameof(ECCurve.NamedCurves.nistP256));
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="secp384r1"/>.</summary>
-    public static Oid secp384r1Oid => s_secp384R1Oid ??= new Oid(secp384r1, nameof(ECCurve.NamedCurves.nistP384));
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="secp521r1"/>.</summary>
-    public static Oid secp521r1Oid => s_secp521R1Oid ??= new Oid(secp521r1, nameof(ECCurve.NamedCurves.nistP521));
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Sha256"/>.</summary>
-    public static Oid Sha256Oid => s_sha256Oid ??= InitializeOid(Sha256);
+    public static Oid Aes256CbcOid => LazyInitializer.EnsureInitialized(ref s_aes256CbcOid, () => InitializeOid(Aes256Cbc));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Dsa"/>.</summary>
+    public static Oid DsaOid => LazyInitializer.EnsureInitialized(ref s_dsaOid, () => InitializeOid(Dsa));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Rsa"/>.</summary>
+    public static Oid RsaOid => LazyInitializer.EnsureInitialized(ref s_rsaOid, () => InitializeOid(Rsa));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaOaep"/>.</summary>
+    public static Oid RsaOaepOid => LazyInitializer.EnsureInitialized(ref s_rsaOaepOid, () => InitializeOid(RsaOaep));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPss"/>.</summary>
+    public static Oid RsaPssOid => LazyInitializer.EnsureInitialized(ref s_rsaPssOid, () => InitializeOid(RsaPss));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPkcs1Md5"/>.</summary>
+    public static Oid RsaPkcs1Md5Oid => LazyInitializer.EnsureInitialized(ref s_rsaPkcs1Md5Oid, () => InitializeOid(RsaPkcs1Md5));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPkcs1Sha1"/>.</summary>
+    public static Oid RsaPkcs1Sha1Oid => LazyInitializer.EnsureInitialized(ref s_rsaPkcs1Sha1Oid, () => InitializeOid(RsaPkcs1Sha1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPkcs1Sha224"/>.</summary>
+    public static Oid RsaPkcs1Sha224Oid => LazyInitializer.EnsureInitialized(ref s_rsaPkcs1Sha224Oid, () => InitializeOid(RsaPkcs1Sha224));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPkcs1Sha256"/>.</summary>
+    public static Oid RsaPkcs1Sha256Oid => LazyInitializer.EnsureInitialized(ref s_rsaPkcs1Sha256Oid, () => InitializeOid(RsaPkcs1Sha256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPkcs1Sha384"/>.</summary>
+    public static Oid RsaPkcs1Sha384Oid => LazyInitializer.EnsureInitialized(ref s_rsaPkcs1Sha384Oid, () => InitializeOid(RsaPkcs1Sha384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPkcs1Sha512"/>.</summary>
+    public static Oid RsaPkcs1Sha512Oid => LazyInitializer.EnsureInitialized(ref s_rsaPkcs1Sha512Oid, () => InitializeOid(RsaPkcs1Sha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPkcs1Sha3_256"/>.</summary>
+    public static Oid RsaPkcs1Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_rsaPkcs1Sha3_256Oid, () => InitializeOid(RsaPkcs1Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPkcs1Sha3_384"/>.</summary>
+    public static Oid RsaPkcs1Sha3_384Oid => LazyInitializer.EnsureInitialized(ref s_rsaPkcs1Sha3_384Oid, () => InitializeOid(RsaPkcs1Sha3_384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="RsaPkcs1Sha3_512"/>.</summary>
+    public static Oid RsaPkcs1Sha3_512Oid => LazyInitializer.EnsureInitialized(ref s_rsaPkcs1Sha3_512Oid, () => InitializeOid(RsaPkcs1Sha3_512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Esdh"/>.</summary>
+    public static Oid EsdhOid => LazyInitializer.EnsureInitialized(ref s_esdhOid, () => InitializeOid(Esdh));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EcDiffieHellman"/>.</summary>
+    public static Oid EcDiffieHellmanOid => LazyInitializer.EnsureInitialized(ref s_ecDiffieHellmanOid, () => InitializeOid(EcDiffieHellman));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DiffieHellman"/>.</summary>
+    public static Oid DiffieHellmanOid => LazyInitializer.EnsureInitialized(ref s_diffieHellmanOid, () => InitializeOid(DiffieHellman));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DiffieHellmanPkcs3"/>.</summary>
+    public static Oid DiffieHellmanPkcs3Oid => LazyInitializer.EnsureInitialized(ref s_diffieHellmanPkcs3Oid, () => InitializeOid(DiffieHellmanPkcs3));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa44"/>.</summary>
+    public static Oid MLDsa44Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa44Oid, () => InitializeOid(MLDsa44));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65"/>.</summary>
+    public static Oid MLDsa65Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa65Oid, () => InitializeOid(MLDsa65));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa87"/>.</summary>
+    public static Oid MLDsa87Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa87Oid, () => InitializeOid(MLDsa87));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_128s"/>.</summary>
+    public static Oid SlhDsaSha2_128sOid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_128sOid, () => InitializeOid(SlhDsaSha2_128s));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_128f"/>.</summary>
+    public static Oid SlhDsaSha2_128fOid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_128fOid, () => InitializeOid(SlhDsaSha2_128f));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_192s"/>.</summary>
+    public static Oid SlhDsaSha2_192sOid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_192sOid, () => InitializeOid(SlhDsaSha2_192s));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_192f"/>.</summary>
+    public static Oid SlhDsaSha2_192fOid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_192fOid, () => InitializeOid(SlhDsaSha2_192f));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_256s"/>.</summary>
+    public static Oid SlhDsaSha2_256sOid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_256sOid, () => InitializeOid(SlhDsaSha2_256s));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_256f"/>.</summary>
+    public static Oid SlhDsaSha2_256fOid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_256fOid, () => InitializeOid(SlhDsaSha2_256f));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake128s"/>.</summary>
+    public static Oid SlhDsaShake128sOid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake128sOid, () => InitializeOid(SlhDsaShake128s));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake128f"/>.</summary>
+    public static Oid SlhDsaShake128fOid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake128fOid, () => InitializeOid(SlhDsaShake128f));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake192s"/>.</summary>
+    public static Oid SlhDsaShake192sOid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake192sOid, () => InitializeOid(SlhDsaShake192s));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake192f"/>.</summary>
+    public static Oid SlhDsaShake192fOid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake192fOid, () => InitializeOid(SlhDsaShake192f));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake256s"/>.</summary>
+    public static Oid SlhDsaShake256sOid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake256sOid, () => InitializeOid(SlhDsaShake256s));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake256f"/>.</summary>
+    public static Oid SlhDsaShake256fOid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake256fOid, () => InitializeOid(SlhDsaShake256f));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa44PreHashSha512"/>.</summary>
+    public static Oid MLDsa44PreHashSha512Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa44PreHashSha512Oid, () => InitializeOid(MLDsa44PreHashSha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65PreHashSha512"/>.</summary>
+    public static Oid MLDsa65PreHashSha512Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa65PreHashSha512Oid, () => InitializeOid(MLDsa65PreHashSha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa87PreHashSha512"/>.</summary>
+    public static Oid MLDsa87PreHashSha512Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa87PreHashSha512Oid, () => InitializeOid(MLDsa87PreHashSha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_128sPreHashSha256"/>.</summary>
+    public static Oid SlhDsaSha2_128sPreHashSha256Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_128sPreHashSha256Oid, () => InitializeOid(SlhDsaSha2_128sPreHashSha256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_128fPreHashSha256"/>.</summary>
+    public static Oid SlhDsaSha2_128fPreHashSha256Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_128fPreHashSha256Oid, () => InitializeOid(SlhDsaSha2_128fPreHashSha256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_192sPreHashSha512"/>.</summary>
+    public static Oid SlhDsaSha2_192sPreHashSha512Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_192sPreHashSha512Oid, () => InitializeOid(SlhDsaSha2_192sPreHashSha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_192fPreHashSha512"/>.</summary>
+    public static Oid SlhDsaSha2_192fPreHashSha512Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_192fPreHashSha512Oid, () => InitializeOid(SlhDsaSha2_192fPreHashSha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_256sPreHashSha512"/>.</summary>
+    public static Oid SlhDsaSha2_256sPreHashSha512Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_256sPreHashSha512Oid, () => InitializeOid(SlhDsaSha2_256sPreHashSha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaSha2_256fPreHashSha512"/>.</summary>
+    public static Oid SlhDsaSha2_256fPreHashSha512Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaSha2_256fPreHashSha512Oid, () => InitializeOid(SlhDsaSha2_256fPreHashSha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake128sPreHashShake128"/>.</summary>
+    public static Oid SlhDsaShake128sPreHashShake128Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake128sPreHashShake128Oid, () => InitializeOid(SlhDsaShake128sPreHashShake128));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake128fPreHashShake128"/>.</summary>
+    public static Oid SlhDsaShake128fPreHashShake128Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake128fPreHashShake128Oid, () => InitializeOid(SlhDsaShake128fPreHashShake128));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake192sPreHashShake256"/>.</summary>
+    public static Oid SlhDsaShake192sPreHashShake256Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake192sPreHashShake256Oid, () => InitializeOid(SlhDsaShake192sPreHashShake256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake192fPreHashShake256"/>.</summary>
+    public static Oid SlhDsaShake192fPreHashShake256Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake192fPreHashShake256Oid, () => InitializeOid(SlhDsaShake192fPreHashShake256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake256sPreHashShake256"/>.</summary>
+    public static Oid SlhDsaShake256sPreHashShake256Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake256sPreHashShake256Oid, () => InitializeOid(SlhDsaShake256sPreHashShake256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SlhDsaShake256fPreHashShake256"/>.</summary>
+    public static Oid SlhDsaShake256fPreHashShake256Oid => LazyInitializer.EnsureInitialized(ref s_slhDsaShake256fPreHashShake256Oid, () => InitializeOid(SlhDsaShake256fPreHashShake256));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa44WithRSA2048Pss"/>.</summary>
+    public static Oid MLDsa44WithRSA2048PssOid => LazyInitializer.EnsureInitialized(ref s_mLDsa44WithRSA2048PssOid, () => InitializeOid(MLDsa44WithRSA2048Pss));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa44WithRSA2048Pkcs15"/>.</summary>
+    public static Oid MLDsa44WithRSA2048Pkcs15Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa44WithRSA2048Pkcs15Oid, () => InitializeOid(MLDsa44WithRSA2048Pkcs15));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa44WithEd25519"/>.</summary>
+    public static Oid MLDsa44WithEd25519Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa44WithEd25519Oid, () => InitializeOid(MLDsa44WithEd25519));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa44WithECDsaP256"/>.</summary>
+    public static Oid MLDsa44WithECDsaP256Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa44WithECDsaP256Oid, () => InitializeOid(MLDsa44WithECDsaP256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65WithRSA3072Pss"/>.</summary>
+    public static Oid MLDsa65WithRSA3072PssOid => LazyInitializer.EnsureInitialized(ref s_mLDsa65WithRSA3072PssOid, () => InitializeOid(MLDsa65WithRSA3072Pss));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65WithRSA3072Pkcs15"/>.</summary>
+    public static Oid MLDsa65WithRSA3072Pkcs15Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa65WithRSA3072Pkcs15Oid, () => InitializeOid(MLDsa65WithRSA3072Pkcs15));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65WithRSA4096Pss"/>.</summary>
+    public static Oid MLDsa65WithRSA4096PssOid => LazyInitializer.EnsureInitialized(ref s_mLDsa65WithRSA4096PssOid, () => InitializeOid(MLDsa65WithRSA4096Pss));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65WithRSA4096Pkcs15"/>.</summary>
+    public static Oid MLDsa65WithRSA4096Pkcs15Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa65WithRSA4096Pkcs15Oid, () => InitializeOid(MLDsa65WithRSA4096Pkcs15));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65WithECDsaP256"/>.</summary>
+    public static Oid MLDsa65WithECDsaP256Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa65WithECDsaP256Oid, () => InitializeOid(MLDsa65WithECDsaP256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65WithECDsaP384"/>.</summary>
+    public static Oid MLDsa65WithECDsaP384Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa65WithECDsaP384Oid, () => InitializeOid(MLDsa65WithECDsaP384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65WithECDsaBrainpoolP256r1"/>.</summary>
+    public static Oid MLDsa65WithECDsaBrainpoolP256r1Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa65WithECDsaBrainpoolP256r1Oid, () => InitializeOid(MLDsa65WithECDsaBrainpoolP256r1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa65WithEd25519"/>.</summary>
+    public static Oid MLDsa65WithEd25519Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa65WithEd25519Oid, () => InitializeOid(MLDsa65WithEd25519));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa87WithECDsaP384"/>.</summary>
+    public static Oid MLDsa87WithECDsaP384Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa87WithECDsaP384Oid, () => InitializeOid(MLDsa87WithECDsaP384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa87WithECDsaBrainpoolP384r1"/>.</summary>
+    public static Oid MLDsa87WithECDsaBrainpoolP384r1Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa87WithECDsaBrainpoolP384r1Oid, () => InitializeOid(MLDsa87WithECDsaBrainpoolP384r1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa87WithEd448"/>.</summary>
+    public static Oid MLDsa87WithEd448Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa87WithEd448Oid, () => InitializeOid(MLDsa87WithEd448));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa87WithRSA3072Pss"/>.</summary>
+    public static Oid MLDsa87WithRSA3072PssOid => LazyInitializer.EnsureInitialized(ref s_mLDsa87WithRSA3072PssOid, () => InitializeOid(MLDsa87WithRSA3072Pss));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa87WithRSA4096Pss"/>.</summary>
+    public static Oid MLDsa87WithRSA4096PssOid => LazyInitializer.EnsureInitialized(ref s_mLDsa87WithRSA4096PssOid, () => InitializeOid(MLDsa87WithRSA4096Pss));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLDsa87WithECDsaP521"/>.</summary>
+    public static Oid MLDsa87WithECDsaP521Oid => LazyInitializer.EnsureInitialized(ref s_mLDsa87WithECDsaP521Oid, () => InitializeOid(MLDsa87WithECDsaP521));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem512"/>.</summary>
+    public static Oid MLKem512Oid => LazyInitializer.EnsureInitialized(ref s_mLKem512Oid, () => InitializeOid(MLKem512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem768"/>.</summary>
+    public static Oid MLKem768Oid => LazyInitializer.EnsureInitialized(ref s_mLKem768Oid, () => InitializeOid(MLKem768));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem1024"/>.</summary>
+    public static Oid MLKem1024Oid => LazyInitializer.EnsureInitialized(ref s_mLKem1024Oid, () => InitializeOid(MLKem1024));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem768WithRsaOaep2048Sha3_256"/>.</summary>
+    public static Oid MLKem768WithRsaOaep2048Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem768WithRsaOaep2048Sha3_256Oid, () => InitializeOid(MLKem768WithRsaOaep2048Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem768WithRsaOaep3072Sha3_256"/>.</summary>
+    public static Oid MLKem768WithRsaOaep3072Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem768WithRsaOaep3072Sha3_256Oid, () => InitializeOid(MLKem768WithRsaOaep3072Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem768WithRsaOaep4096Sha3_256"/>.</summary>
+    public static Oid MLKem768WithRsaOaep4096Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem768WithRsaOaep4096Sha3_256Oid, () => InitializeOid(MLKem768WithRsaOaep4096Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem768WithX25519Sha3_256"/>.</summary>
+    public static Oid MLKem768WithX25519Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem768WithX25519Sha3_256Oid, () => InitializeOid(MLKem768WithX25519Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem768WithECDiffieHellmanP256Sha3_256"/>.</summary>
+    public static Oid MLKem768WithECDiffieHellmanP256Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem768WithECDiffieHellmanP256Sha3_256Oid, () => InitializeOid(MLKem768WithECDiffieHellmanP256Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem768WithECDiffieHellmanP384Sha3_256"/>.</summary>
+    public static Oid MLKem768WithECDiffieHellmanP384Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem768WithECDiffieHellmanP384Sha3_256Oid, () => InitializeOid(MLKem768WithECDiffieHellmanP384Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem768WithECDiffieHellmanBrainpoolP256r1Sha3_256"/>.</summary>
+    public static Oid MLKem768WithECDiffieHellmanBrainpoolP256r1Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem768WithECDiffieHellmanBrainpoolP256r1Sha3_256Oid, () => InitializeOid(MLKem768WithECDiffieHellmanBrainpoolP256r1Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem1024WithRsaOaep3072Sha3_256"/>.</summary>
+    public static Oid MLKem1024WithRsaOaep3072Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem1024WithRsaOaep3072Sha3_256Oid, () => InitializeOid(MLKem1024WithRsaOaep3072Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem1024WithECDiffieHellmanP384Sha3_256"/>.</summary>
+    public static Oid MLKem1024WithECDiffieHellmanP384Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem1024WithECDiffieHellmanP384Sha3_256Oid, () => InitializeOid(MLKem1024WithECDiffieHellmanP384Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem1024WithECDiffieHellmanBrainpoolP384r1Sha3_256"/>.</summary>
+    public static Oid MLKem1024WithECDiffieHellmanBrainpoolP384r1Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem1024WithECDiffieHellmanBrainpoolP384r1Sha3_256Oid, () => InitializeOid(MLKem1024WithECDiffieHellmanBrainpoolP384r1Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem1024WithX448Sha3_256"/>.</summary>
+    public static Oid MLKem1024WithX448Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem1024WithX448Sha3_256Oid, () => InitializeOid(MLKem1024WithX448Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MLKem1024WithECDiffieHellmanP521Sha3_256"/>.</summary>
+    public static Oid MLKem1024WithECDiffieHellmanP521Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_mLKem1024WithECDiffieHellmanP521Sha3_256Oid, () => InitializeOid(MLKem1024WithECDiffieHellmanP521Sha3_256));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SigningTime"/>.</summary>
+    public static Oid SigningTimeOid => LazyInitializer.EnsureInitialized(ref s_signingTimeOid, () => InitializeOid(SigningTime));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ContentType"/>.</summary>
+    public static Oid ContentTypeOid => LazyInitializer.EnsureInitialized(ref s_contentTypeOid, () => InitializeOid(ContentType));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DocumentDescription"/>.</summary>
+    public static Oid DocumentDescriptionOid => LazyInitializer.EnsureInitialized(ref s_documentDescriptionOid, () => InitializeOid(DocumentDescription));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MessageDigest"/>.</summary>
+    public static Oid MessageDigestOid => LazyInitializer.EnsureInitialized(ref s_messageDigestOid, () => InitializeOid(MessageDigest));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CounterSigner"/>.</summary>
+    public static Oid CounterSignerOid => LazyInitializer.EnsureInitialized(ref s_counterSignerOid, () => InitializeOid(CounterSigner));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SigningCertificate"/>.</summary>
+    public static Oid SigningCertificateOid => LazyInitializer.EnsureInitialized(ref s_signingCertificateOid, () => InitializeOid(SigningCertificate));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SigningCertificateV2"/>.</summary>
+    public static Oid SigningCertificateV2Oid => LazyInitializer.EnsureInitialized(ref s_signingCertificateV2Oid, () => InitializeOid(SigningCertificateV2));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DocumentName"/>.</summary>
+    public static Oid DocumentNameOid => LazyInitializer.EnsureInitialized(ref s_documentNameOid, () => InitializeOid(DocumentName));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="FriendlyName"/>.</summary>
+    public static Oid FriendlyNameOid => LazyInitializer.EnsureInitialized(ref s_friendlyNameOid, () => InitializeOid(FriendlyName));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="LocalKeyId"/>.</summary>
+    public static Oid LocalKeyIdOid => LazyInitializer.EnsureInitialized(ref s_localKeyIdOid, () => InitializeOid(LocalKeyId));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EnrollCertTypeExtension"/>.</summary>
+    public static Oid EnrollCertTypeExtensionOid => LazyInitializer.EnsureInitialized(ref s_enrollCertTypeExtensionOid, () => InitializeOid(EnrollCertTypeExtension));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="UserPrincipalName"/>.</summary>
+    public static Oid UserPrincipalNameOid => LazyInitializer.EnsureInitialized(ref s_userPrincipalNameOid, () => InitializeOid(UserPrincipalName));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CertificateTemplate"/>.</summary>
+    public static Oid CertificateTemplateOid => LazyInitializer.EnsureInitialized(ref s_certificateTemplateOid, () => InitializeOid(CertificateTemplate));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ApplicationCertPolicies"/>.</summary>
+    public static Oid ApplicationCertPoliciesOid => LazyInitializer.EnsureInitialized(ref s_applicationCertPoliciesOid, () => InitializeOid(ApplicationCertPolicies));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="AuthorityInformationAccess"/>.</summary>
+    public static Oid AuthorityInformationAccessOid => LazyInitializer.EnsureInitialized(ref s_authorityInformationAccessOid, () => InitializeOid(AuthorityInformationAccess));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="OcspEndpoint"/>.</summary>
+    public static Oid OcspEndpointOid => LazyInitializer.EnsureInitialized(ref s_ocspEndpointOid, () => InitializeOid(OcspEndpoint));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CertificateAuthorityIssuers"/>.</summary>
+    public static Oid CertificateAuthorityIssuersOid => LazyInitializer.EnsureInitialized(ref s_certificateAuthorityIssuersOid, () => InitializeOid(CertificateAuthorityIssuers));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs9ExtensionRequest"/>.</summary>
+    public static Oid Pkcs9ExtensionRequestOid => LazyInitializer.EnsureInitialized(ref s_pkcs9ExtensionRequestOid, () => InitializeOid(Pkcs9ExtensionRequest));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CmsRc2Wrap"/>.</summary>
+    public static Oid CmsRc2WrapOid => LazyInitializer.EnsureInitialized(ref s_cmsRc2WrapOid, () => InitializeOid(CmsRc2Wrap));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Cms3DesWrap"/>.</summary>
+    public static Oid Cms3DesWrapOid => LazyInitializer.EnsureInitialized(ref s_cms3DesWrapOid, () => InitializeOid(Cms3DesWrap));
 
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs7Data"/>.</summary>
-    public static Oid Pkcs7DataOid => s_pkcs7DataOid ??= InitializeOid(Pkcs7Data);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ContentType"/>.</summary>
-    public static Oid ContentTypeOid => s_contentTypeOid ??= InitializeOid(ContentType);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DocumentDescription"/>.</summary>
-    public static Oid DocumentDescriptionOid => s_documentDescriptionOid ??= InitializeOid(DocumentDescription);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DocumentName"/>.</summary>
-    public static Oid DocumentNameOid => s_documentNameOid ??= InitializeOid(DocumentName);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="LocalKeyId"/>.</summary>
-    public static Oid LocalKeyIdOid => s_localKeyIdOid ??= InitializeOid(LocalKeyId);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MessageDigest"/>.</summary>
-    public static Oid MessageDigestOid => s_messageDigestOid ??= InitializeOid(MessageDigest);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SigningTime"/>.</summary>
-    public static Oid SigningTimeOid => s_signingTimeOid ??= InitializeOid(SigningTime);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs9ExtensionRequest"/>.</summary>
-    public static Oid Pkcs9ExtensionRequestOid => s_pkcs9ExtensionRequestOid ??= InitializeOid(Pkcs9ExtensionRequest);
+    public static Oid Pkcs7DataOid => LazyInitializer.EnsureInitialized(ref s_pkcs7DataOid, () => InitializeOid(Pkcs7Data));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs7Signed"/>.</summary>
+    public static Oid Pkcs7SignedOid => LazyInitializer.EnsureInitialized(ref s_pkcs7SignedOid, () => InitializeOid(Pkcs7Signed));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs7Enveloped"/>.</summary>
+    public static Oid Pkcs7EnvelopedOid => LazyInitializer.EnsureInitialized(ref s_pkcs7EnvelopedOid, () => InitializeOid(Pkcs7Enveloped));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs7SignedEnveloped"/>.</summary>
+    public static Oid Pkcs7SignedEnvelopedOid => LazyInitializer.EnsureInitialized(ref s_pkcs7SignedEnvelopedOid, () => InitializeOid(Pkcs7SignedEnveloped));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs7Hashed"/>.</summary>
+    public static Oid Pkcs7HashedOid => LazyInitializer.EnsureInitialized(ref s_pkcs7HashedOid, () => InitializeOid(Pkcs7Hashed));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs7Encrypted"/>.</summary>
+    public static Oid Pkcs7EncryptedOid => LazyInitializer.EnsureInitialized(ref s_pkcs7EncryptedOid, () => InitializeOid(Pkcs7Encrypted));
 
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="BasicConstraints2"/>.</summary>
-    public static Oid BasicConstraints2Oid => s_basicConstraints2Oid ??= InitializeOid(BasicConstraints2);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EnhancedKeyUsage"/>.</summary>
-    public static Oid EnhancedKeyUsageOid => s_enhancedKeyUsageOid ??= InitializeOid(EnhancedKeyUsage);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="KeyUsage"/>.</summary>
-    public static Oid KeyUsageOid => s_keyUsageOid ??= InitializeOid(KeyUsage);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="AuthorityKeyIdentifier"/>.</summary>
-    public static Oid AuthorityKeyIdentifierOid => s_authorityKeyIdentifierOid ??= InitializeOid(AuthorityKeyIdentifier);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SubjectKeyIdentifier"/>.</summary>
-    public static Oid SubjectKeyIdentifierOid => s_subjectKeyIdentifierOid ??= InitializeOid(SubjectKeyIdentifier);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SubjectAltName"/>.</summary>
-    public static Oid SubjectAltNameOid => s_subjectAltNameOid ??= InitializeOid(SubjectAltName);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="AuthorityInformationAccess"/>.</summary>
-    public static Oid AuthorityInformationAccessOid => s_authorityInformationAccessOid ??= InitializeOid(AuthorityInformationAccess);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CrlNumber"/>.</summary>
-    public static Oid CrlNumberOid => s_crlNumberOid ??= InitializeOid(CrlNumber);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CrlDistributionPoints"/>.</summary>
-    public static Oid CrlDistributionPointsOid => s_crlDistributionPointOid ??= InitializeOid(CrlDistributionPoints);
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Md5"/>.</summary>
+    public static Oid Md5Oid => LazyInitializer.EnsureInitialized(ref s_md5Oid, () => InitializeOid(Md5));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Sha1"/>.</summary>
+    public static Oid Sha1Oid => LazyInitializer.EnsureInitialized(ref s_sha1Oid, () => InitializeOid(Sha1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Sha224"/>.</summary>
+    public static Oid Sha224Oid => LazyInitializer.EnsureInitialized(ref s_sha224Oid, () => InitializeOid(Sha224));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Sha256"/>.</summary>
+    public static Oid Sha256Oid => LazyInitializer.EnsureInitialized(ref s_sha256Oid, () => InitializeOid(Sha256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Sha384"/>.</summary>
+    public static Oid Sha384Oid => LazyInitializer.EnsureInitialized(ref s_sha384Oid, () => InitializeOid(Sha384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Sha512"/>.</summary>
+    public static Oid Sha512Oid => LazyInitializer.EnsureInitialized(ref s_sha512Oid, () => InitializeOid(Sha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Sha3_256"/>.</summary>
+    public static Oid Sha3_256Oid => LazyInitializer.EnsureInitialized(ref s_sha3_256Oid, () => InitializeOid(Sha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Sha3_384"/>.</summary>
+    public static Oid Sha3_384Oid => LazyInitializer.EnsureInitialized(ref s_sha3_384Oid, () => InitializeOid(Sha3_384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Sha3_512"/>.</summary>
+    public static Oid Sha3_512Oid => LazyInitializer.EnsureInitialized(ref s_sha3_512Oid, () => InitializeOid(Sha3_512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Shake128"/>.</summary>
+    public static Oid Shake128Oid => LazyInitializer.EnsureInitialized(ref s_shake128Oid, () => InitializeOid(Shake128));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Shake256"/>.</summary>
+    public static Oid Shake256Oid => LazyInitializer.EnsureInitialized(ref s_shake256Oid, () => InitializeOid(Shake256));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DsaWithSha1"/>.</summary>
+    public static Oid DsaWithSha1Oid => LazyInitializer.EnsureInitialized(ref s_dsaWithSha1Oid, () => InitializeOid(DsaWithSha1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DsaWithSha224"/>.</summary>
+    public static Oid DsaWithSha224Oid => LazyInitializer.EnsureInitialized(ref s_dsaWithSha224Oid, () => InitializeOid(DsaWithSha224));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DsaWithSha256"/>.</summary>
+    public static Oid DsaWithSha256Oid => LazyInitializer.EnsureInitialized(ref s_dsaWithSha256Oid, () => InitializeOid(DsaWithSha256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DsaWithSha384"/>.</summary>
+    public static Oid DsaWithSha384Oid => LazyInitializer.EnsureInitialized(ref s_dsaWithSha384Oid, () => InitializeOid(DsaWithSha384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DsaWithSha512"/>.</summary>
+    public static Oid DsaWithSha512Oid => LazyInitializer.EnsureInitialized(ref s_dsaWithSha512Oid, () => InitializeOid(DsaWithSha512));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EcPrimeField"/>.</summary>
+    public static Oid EcPrimeFieldOid => LazyInitializer.EnsureInitialized(ref s_ecPrimeFieldOid, () => InitializeOid(EcPrimeField));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EcChar2Field"/>.</summary>
+    public static Oid EcChar2FieldOid => LazyInitializer.EnsureInitialized(ref s_ecChar2FieldOid, () => InitializeOid(EcChar2Field));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EcChar2TrinomialBasis"/>.</summary>
+    public static Oid EcChar2TrinomialBasisOid => LazyInitializer.EnsureInitialized(ref s_ecChar2TrinomialBasisOid, () => InitializeOid(EcChar2TrinomialBasis));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EcChar2PentanomialBasis"/>.</summary>
+    public static Oid EcChar2PentanomialBasisOid => LazyInitializer.EnsureInitialized(ref s_ecChar2PentanomialBasisOid, () => InitializeOid(EcChar2PentanomialBasis));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EcPublicKey"/>.</summary>
+    public static Oid EcPublicKeyOid => LazyInitializer.EnsureInitialized(ref s_ecPublicKeyOid, () => InitializeOid(EcPublicKey));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ECDsaWithSha1"/>.</summary>
+    public static Oid ECDsaWithSha1Oid => LazyInitializer.EnsureInitialized(ref s_eCDsaWithSha1Oid, () => InitializeOid(ECDsaWithSha1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ECDsaWithSha224"/>.</summary>
+    public static Oid ECDsaWithSha224Oid => LazyInitializer.EnsureInitialized(ref s_eCDsaWithSha224Oid, () => InitializeOid(ECDsaWithSha224));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ECDsaWithSha256"/>.</summary>
+    public static Oid ECDsaWithSha256Oid => LazyInitializer.EnsureInitialized(ref s_eCDsaWithSha256Oid, () => InitializeOid(ECDsaWithSha256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ECDsaWithSha384"/>.</summary>
+    public static Oid ECDsaWithSha384Oid => LazyInitializer.EnsureInitialized(ref s_eCDsaWithSha384Oid, () => InitializeOid(ECDsaWithSha384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ECDsaWithSha512"/>.</summary>
+    public static Oid ECDsaWithSha512Oid => LazyInitializer.EnsureInitialized(ref s_eCDsaWithSha512Oid, () => InitializeOid(ECDsaWithSha512));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ECDsaWithSha3_256"/>.</summary>
+    public static Oid ECDsaWithSha3_256Oid => LazyInitializer.EnsureInitialized(ref s_eCDsaWithSha3_256Oid, () => InitializeOid(ECDsaWithSha3_256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ECDsaWithSha3_384"/>.</summary>
+    public static Oid ECDsaWithSha3_384Oid => LazyInitializer.EnsureInitialized(ref s_eCDsaWithSha3_384Oid, () => InitializeOid(ECDsaWithSha3_384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ECDsaWithSha3_512"/>.</summary>
+    public static Oid ECDsaWithSha3_512Oid => LazyInitializer.EnsureInitialized(ref s_eCDsaWithSha3_512Oid, () => InitializeOid(ECDsaWithSha3_512));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Mgf1"/>.</summary>
+    public static Oid Mgf1Oid => LazyInitializer.EnsureInitialized(ref s_mgf1Oid, () => InitializeOid(Mgf1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PSpecified"/>.</summary>
+    public static Oid PSpecifiedOid => LazyInitializer.EnsureInitialized(ref s_pSpecifiedOid, () => InitializeOid(PSpecified));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="NoSignature"/>.</summary>
+    public static Oid NoSignatureOid => LazyInitializer.EnsureInitialized(ref s_noSignatureOid, () => InitializeOid(NoSignature));
 
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CommonName"/>.</summary>
-    public static Oid CommonNameOid => s_commonNameOid ??= InitializeOid(CommonName);
+    public static Oid CommonNameOid => LazyInitializer.EnsureInitialized(ref s_commonNameOid, () => InitializeOid(CommonName));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CountryOrRegionName"/>.</summary>
-    public static Oid CountryOrRegionNameOid => s_countryOrRegionOid ??= InitializeOid(CountryOrRegionName);
+    public static Oid CountryOrRegionNameOid => LazyInitializer.EnsureInitialized(ref s_countryOrRegionNameOid, () => InitializeOid(CountryOrRegionName));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="LocalityName"/>.</summary>
-    public static Oid LocalityNameOid => s_localityNameOid ??= InitializeOid(LocalityName);
+    public static Oid LocalityNameOid => LazyInitializer.EnsureInitialized(ref s_localityNameOid, () => InitializeOid(LocalityName));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="StateOrProvinceName"/>.</summary>
-    public static Oid StateOrProvinceNameOid => s_stateOrProvinceNameOid ??= InitializeOid(StateOrProvinceName);
+    public static Oid StateOrProvinceNameOid => LazyInitializer.EnsureInitialized(ref s_stateOrProvinceNameOid, () => InitializeOid(StateOrProvinceName));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Organization"/>.</summary>
-    public static Oid OrganizationOid => s_organizationOid ??= InitializeOid(Organization);
+    public static Oid OrganizationOid => LazyInitializer.EnsureInitialized(ref s_organizationOid, () => InitializeOid(Organization));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="OrganizationalUnit"/>.</summary>
-    public static Oid OrganizationalUnitOid => s_organizationalUnitOid ??= InitializeOid(OrganizationalUnit);
+    public static Oid OrganizationalUnitOid => LazyInitializer.EnsureInitialized(ref s_organizationalUnitOid, () => InitializeOid(OrganizationalUnit));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EmailAddress"/>.</summary>
-    public static Oid EmailAddressOid => s_emailAddressOid ??= InitializeOid(EmailAddress);
+    public static Oid EmailAddressOid => LazyInitializer.EnsureInitialized(ref s_emailAddressOid, () => InitializeOid(EmailAddress));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="TelephoneNumber"/>.</summary>
-    public static Oid TelephoneNumberOid => s_telephoneNumberOid ??= InitializeOid(TelephoneNumber);
+    public static Oid TelephoneNumberOid => LazyInitializer.EnsureInitialized(ref s_telephoneNumberOid, () => InitializeOid(TelephoneNumber));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="StreetAddress"/>.</summary>
-    public static Oid StreetAddressOid => s_streetAddressOid ??= InitializeOid(StreetAddress);
+    public static Oid StreetAddressOid => LazyInitializer.EnsureInitialized(ref s_streetAddressOid, () => InitializeOid(StreetAddress));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PostalCode"/>.</summary>
-    public static Oid PostalCodeOid => s_postalCodeOid ??= InitializeOid(PostalCode);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="UserId"/>.</summary>
-    public static Oid UserIdOid => s_userIdOid ??= InitializeOid(UserId);
+    public static Oid PostalCodeOid => LazyInitializer.EnsureInitialized(ref s_postalCodeOid, () => InitializeOid(PostalCode));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SerialNumber"/>.</summary>
-    public static Oid SerialNumberOid => s_serialNumberOid ??= InitializeOid(SerialNumber);
-    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="GivenName"/>.</summary>
-    public static Oid GivenNameOid => s_givenNameOid ??= InitializeOid(GivenName);
+    public static Oid SerialNumberOid => LazyInitializer.EnsureInitialized(ref s_serialNumberOid, () => InitializeOid(SerialNumber));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Surname"/>.</summary>
-    public static Oid SurnameOid => s_surnameOid ??= InitializeOid(Surname);
+    public static Oid SurnameOid => LazyInitializer.EnsureInitialized(ref s_surnameOid, () => InitializeOid(Surname));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="GivenName"/>.</summary>
+    public static Oid GivenNameOid => LazyInitializer.EnsureInitialized(ref s_givenNameOid, () => InitializeOid(GivenName));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Title"/>.</summary>
-    public static Oid TitleOid => s_titleOid ??= InitializeOid(Title);
+    public static Oid TitleOid => LazyInitializer.EnsureInitialized(ref s_titleOid, () => InitializeOid(Title));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DnQualifier"/>.</summary>
-    public static Oid DnQualifierOid => s_dnQualifierOid ??= InitializeOid(DnQualifier);
+    public static Oid DnQualifierOid => LazyInitializer.EnsureInitialized(ref s_dnQualifierOid, () => InitializeOid(DnQualifier));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="KnowledgeInformation"/>.</summary>
+    public static Oid KnowledgeInformationOid => LazyInitializer.EnsureInitialized(ref s_knowledgeInformationOid, () => InitializeOid(KnowledgeInformation));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Description"/>.</summary>
+    public static Oid DescriptionOid => LazyInitializer.EnsureInitialized(ref s_descriptionOid, () => InitializeOid(Description));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="BusinessCategory"/>.</summary>
+    public static Oid BusinessCategoryOid => LazyInitializer.EnsureInitialized(ref s_businessCategoryOid, () => InitializeOid(BusinessCategory));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PostOfficeBox"/>.</summary>
+    public static Oid PostOfficeBoxOid => LazyInitializer.EnsureInitialized(ref s_postOfficeBoxOid, () => InitializeOid(PostOfficeBox));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PhysicalDeliveryOfficeName"/>.</summary>
+    public static Oid PhysicalDeliveryOfficeNameOid => LazyInitializer.EnsureInitialized(ref s_physicalDeliveryOfficeNameOid, () => InitializeOid(PhysicalDeliveryOfficeName));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="X121Address"/>.</summary>
+    public static Oid X121AddressOid => LazyInitializer.EnsureInitialized(ref s_x121AddressOid, () => InitializeOid(X121Address));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="InternationalISDNNumber"/>.</summary>
+    public static Oid InternationalISDNNumberOid => LazyInitializer.EnsureInitialized(ref s_internationalISDNNumberOid, () => InitializeOid(InternationalISDNNumber));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DestinationIndicator"/>.</summary>
+    public static Oid DestinationIndicatorOid => LazyInitializer.EnsureInitialized(ref s_destinationIndicatorOid, () => InitializeOid(DestinationIndicator));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Name"/>.</summary>
+    public static Oid NameOid => LazyInitializer.EnsureInitialized(ref s_nameOid, () => InitializeOid(Name));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Initials"/>.</summary>
+    public static Oid InitialsOid => LazyInitializer.EnsureInitialized(ref s_initialsOid, () => InitializeOid(Initials));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="GenerationQualifier"/>.</summary>
+    public static Oid GenerationQualifierOid => LazyInitializer.EnsureInitialized(ref s_generationQualifierOid, () => InitializeOid(GenerationQualifier));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="HouseIdentifier"/>.</summary>
+    public static Oid HouseIdentifierOid => LazyInitializer.EnsureInitialized(ref s_houseIdentifierOid, () => InitializeOid(HouseIdentifier));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DmdName"/>.</summary>
+    public static Oid DmdNameOid => LazyInitializer.EnsureInitialized(ref s_dmdNameOid, () => InitializeOid(DmdName));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pseudonym"/>.</summary>
+    public static Oid PseudonymOid => LazyInitializer.EnsureInitialized(ref s_pseudonymOid, () => InitializeOid(Pseudonym));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="UiiInUrn"/>.</summary>
+    public static Oid UiiInUrnOid => LazyInitializer.EnsureInitialized(ref s_uiiInUrnOid, () => InitializeOid(UiiInUrn));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ContentUrl"/>.</summary>
+    public static Oid ContentUrlOid => LazyInitializer.EnsureInitialized(ref s_contentUrlOid, () => InitializeOid(ContentUrl));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Uri"/>.</summary>
+    public static Oid UriOid => LazyInitializer.EnsureInitialized(ref s_uriOid, () => InitializeOid(Uri));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Urn"/>.</summary>
+    public static Oid UrnOid => LazyInitializer.EnsureInitialized(ref s_urnOid, () => InitializeOid(Urn));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Url"/>.</summary>
+    public static Oid UrlOid => LazyInitializer.EnsureInitialized(ref s_urlOid, () => InitializeOid(Url));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="UrnC"/>.</summary>
+    public static Oid UrnCOid => LazyInitializer.EnsureInitialized(ref s_urnCOid, () => InitializeOid(UrnC));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EpcInUrn"/>.</summary>
+    public static Oid EpcInUrnOid => LazyInitializer.EnsureInitialized(ref s_epcInUrnOid, () => InitializeOid(EpcInUrn));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="LdapUrl"/>.</summary>
+    public static Oid LdapUrlOid => LazyInitializer.EnsureInitialized(ref s_ldapUrlOid, () => InitializeOid(LdapUrl));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="OrganizationIdentifier"/>.</summary>
+    public static Oid OrganizationIdentifierOid => LazyInitializer.EnsureInitialized(ref s_organizationIdentifierOid, () => InitializeOid(OrganizationIdentifier));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CountryOrRegionName3C"/>.</summary>
+    public static Oid CountryOrRegionName3COid => LazyInitializer.EnsureInitialized(ref s_countryOrRegionName3COid, () => InitializeOid(CountryOrRegionName3C));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CountryOrRegionName3N"/>.</summary>
+    public static Oid CountryOrRegionName3NOid => LazyInitializer.EnsureInitialized(ref s_countryOrRegionName3NOid, () => InitializeOid(CountryOrRegionName3N));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DnsName"/>.</summary>
+    public static Oid DnsNameOid => LazyInitializer.EnsureInitialized(ref s_dnsNameOid, () => InitializeOid(DnsName));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="IntEmail"/>.</summary>
+    public static Oid IntEmailOid => LazyInitializer.EnsureInitialized(ref s_intEmailOid, () => InitializeOid(IntEmail));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="JabberId"/>.</summary>
+    public static Oid JabberIdOid => LazyInitializer.EnsureInitialized(ref s_jabberIdOid, () => InitializeOid(JabberId));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="BasicConstraints"/>.</summary>
+    public static Oid BasicConstraintsOid => LazyInitializer.EnsureInitialized(ref s_basicConstraintsOid, () => InitializeOid(BasicConstraints));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SubjectKeyIdentifier"/>.</summary>
+    public static Oid SubjectKeyIdentifierOid => LazyInitializer.EnsureInitialized(ref s_subjectKeyIdentifierOid, () => InitializeOid(SubjectKeyIdentifier));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="KeyUsage"/>.</summary>
+    public static Oid KeyUsageOid => LazyInitializer.EnsureInitialized(ref s_keyUsageOid, () => InitializeOid(KeyUsage));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SubjectAltName"/>.</summary>
+    public static Oid SubjectAltNameOid => LazyInitializer.EnsureInitialized(ref s_subjectAltNameOid, () => InitializeOid(SubjectAltName));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="IssuerAltName"/>.</summary>
+    public static Oid IssuerAltNameOid => LazyInitializer.EnsureInitialized(ref s_issuerAltNameOid, () => InitializeOid(IssuerAltName));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="BasicConstraints2"/>.</summary>
+    public static Oid BasicConstraints2Oid => LazyInitializer.EnsureInitialized(ref s_basicConstraints2Oid, () => InitializeOid(BasicConstraints2));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CrlNumber"/>.</summary>
+    public static Oid CrlNumberOid => LazyInitializer.EnsureInitialized(ref s_crlNumberOid, () => InitializeOid(CrlNumber));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CrlReasons"/>.</summary>
+    public static Oid CrlReasonsOid => LazyInitializer.EnsureInitialized(ref s_crlReasonsOid, () => InitializeOid(CrlReasons));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="NameConstraints"/>.</summary>
+    public static Oid NameConstraintsOid => LazyInitializer.EnsureInitialized(ref s_nameConstraintsOid, () => InitializeOid(NameConstraints));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CrlDistributionPoints"/>.</summary>
+    public static Oid CrlDistributionPointsOid => LazyInitializer.EnsureInitialized(ref s_crlDistributionPointsOid, () => InitializeOid(CrlDistributionPoints));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CertPolicies"/>.</summary>
+    public static Oid CertPoliciesOid => LazyInitializer.EnsureInitialized(ref s_certPoliciesOid, () => InitializeOid(CertPolicies));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="AnyCertPolicy"/>.</summary>
+    public static Oid AnyCertPolicyOid => LazyInitializer.EnsureInitialized(ref s_anyCertPolicyOid, () => InitializeOid(AnyCertPolicy));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CertPolicyMappings"/>.</summary>
+    public static Oid CertPolicyMappingsOid => LazyInitializer.EnsureInitialized(ref s_certPolicyMappingsOid, () => InitializeOid(CertPolicyMappings));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="AuthorityKeyIdentifier"/>.</summary>
+    public static Oid AuthorityKeyIdentifierOid => LazyInitializer.EnsureInitialized(ref s_authorityKeyIdentifierOid, () => InitializeOid(AuthorityKeyIdentifier));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CertPolicyConstraints"/>.</summary>
+    public static Oid CertPolicyConstraintsOid => LazyInitializer.EnsureInitialized(ref s_certPolicyConstraintsOid, () => InitializeOid(CertPolicyConstraints));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EnhancedKeyUsage"/>.</summary>
+    public static Oid EnhancedKeyUsageOid => LazyInitializer.EnsureInitialized(ref s_enhancedKeyUsageOid, () => InitializeOid(EnhancedKeyUsage));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="InhibitAnyPolicyExtension"/>.</summary>
+    public static Oid InhibitAnyPolicyExtensionOid => LazyInitializer.EnsureInitialized(ref s_inhibitAnyPolicyExtensionOid, () => InitializeOid(InhibitAnyPolicyExtension));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="TstInfo"/>.</summary>
+    public static Oid TstInfoOid => LazyInitializer.EnsureInitialized(ref s_tstInfoOid, () => InitializeOid(TstInfo));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ExtendedValidationCertPolicy"/>.</summary>
+    public static Oid ExtendedValidationCertPolicyOid => LazyInitializer.EnsureInitialized(ref s_extendedValidationCertPolicyOid, () => InitializeOid(ExtendedValidationCertPolicy));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DomainValidatedCertPolicy"/>.</summary>
+    public static Oid DomainValidatedCertPolicyOid => LazyInitializer.EnsureInitialized(ref s_domainValidatedCertPolicyOid, () => InitializeOid(DomainValidatedCertPolicy));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="OrganizationValidatedCertPolicy"/>.</summary>
+    public static Oid OrganizationValidatedCertPolicyOid => LazyInitializer.EnsureInitialized(ref s_organizationValidatedCertPolicyOid, () => InitializeOid(OrganizationValidatedCertPolicy));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="IndividualValidatedCertPolicy"/>.</summary>
+    public static Oid IndividualValidatedCertPolicyOid => LazyInitializer.EnsureInitialized(ref s_individualValidatedCertPolicyOid, () => InitializeOid(IndividualValidatedCertPolicy));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ExtendedValidationCodeSigningCertPolicy"/>.</summary>
+    public static Oid ExtendedValidationCodeSigningCertPolicyOid => LazyInitializer.EnsureInitialized(ref s_extendedValidationCodeSigningCertPolicyOid, () => InitializeOid(ExtendedValidationCodeSigningCertPolicy));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CodeSigningRequirementsCertPolicy"/>.</summary>
+    public static Oid CodeSigningRequirementsCertPolicyOid => LazyInitializer.EnsureInitialized(ref s_codeSigningRequirementsCertPolicyOid, () => InitializeOid(CodeSigningRequirementsCertPolicy));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="AnyExtendedKeyUsage"/>.</summary>
+    public static Oid AnyExtendedKeyUsageOid => LazyInitializer.EnsureInitialized(ref s_anyExtendedKeyUsageOid, () => InitializeOid(AnyExtendedKeyUsage));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ServerAuthPurpose"/>.</summary>
+    public static Oid ServerAuthPurposeOid => LazyInitializer.EnsureInitialized(ref s_serverAuthPurposeOid, () => InitializeOid(ServerAuthPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ClientAuthPurpose"/>.</summary>
+    public static Oid ClientAuthPurposeOid => LazyInitializer.EnsureInitialized(ref s_clientAuthPurposeOid, () => InitializeOid(ClientAuthPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CodeSigningPurpose"/>.</summary>
+    public static Oid CodeSigningPurposeOid => LazyInitializer.EnsureInitialized(ref s_codeSigningPurposeOid, () => InitializeOid(CodeSigningPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EmailProtectionPurpose"/>.</summary>
+    public static Oid EmailProtectionPurposeOid => LazyInitializer.EnsureInitialized(ref s_emailProtectionPurposeOid, () => InitializeOid(EmailProtectionPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="IpsecEndSystemPurpose"/>.</summary>
+    public static Oid IpsecEndSystemPurposeOid => LazyInitializer.EnsureInitialized(ref s_ipsecEndSystemPurposeOid, () => InitializeOid(IpsecEndSystemPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="IpsecTunnelPurpose"/>.</summary>
+    public static Oid IpsecTunnelPurposeOid => LazyInitializer.EnsureInitialized(ref s_ipsecTunnelPurposeOid, () => InitializeOid(IpsecTunnelPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="IpsecUserPurpose"/>.</summary>
+    public static Oid IpsecUserPurposeOid => LazyInitializer.EnsureInitialized(ref s_ipsecUserPurposeOid, () => InitializeOid(IpsecUserPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="TimeStampingPurpose"/>.</summary>
+    public static Oid TimeStampingPurposeOid => LazyInitializer.EnsureInitialized(ref s_timeStampingPurposeOid, () => InitializeOid(TimeStampingPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="OcspSigningPurpose"/>.</summary>
+    public static Oid OcspSigningPurposeOid => LazyInitializer.EnsureInitialized(ref s_ocspSigningPurposeOid, () => InitializeOid(OcspSigningPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DvcsPurpose"/>.</summary>
+    public static Oid DvcsPurposeOid => LazyInitializer.EnsureInitialized(ref s_dvcsPurposeOid, () => InitializeOid(DvcsPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SbgpCertAaServerAuthPurpose"/>.</summary>
+    public static Oid SbgpCertAaServerAuthPurposeOid => LazyInitializer.EnsureInitialized(ref s_sbgpCertAaServerAuthPurposeOid, () => InitializeOid(SbgpCertAaServerAuthPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ScvpResponderPurpose"/>.</summary>
+    public static Oid ScvpResponderPurposeOid => LazyInitializer.EnsureInitialized(ref s_scvpResponderPurposeOid, () => InitializeOid(ScvpResponderPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EapOverPppPurpose"/>.</summary>
+    public static Oid EapOverPppPurposeOid => LazyInitializer.EnsureInitialized(ref s_eapOverPppPurposeOid, () => InitializeOid(EapOverPppPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EapOverLanPurpose"/>.</summary>
+    public static Oid EapOverLanPurposeOid => LazyInitializer.EnsureInitialized(ref s_eapOverLanPurposeOid, () => InitializeOid(EapOverLanPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ScvpServerPurpose"/>.</summary>
+    public static Oid ScvpServerPurposeOid => LazyInitializer.EnsureInitialized(ref s_scvpServerPurposeOid, () => InitializeOid(ScvpServerPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="ScvpClientPurpose"/>.</summary>
+    public static Oid ScvpClientPurposeOid => LazyInitializer.EnsureInitialized(ref s_scvpClientPurposeOid, () => InitializeOid(ScvpClientPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="IpsecIkePurpose"/>.</summary>
+    public static Oid IpsecIkePurposeOid => LazyInitializer.EnsureInitialized(ref s_ipsecIkePurposeOid, () => InitializeOid(IpsecIkePurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CapwapAcPurpose"/>.</summary>
+    public static Oid CapwapAcPurposeOid => LazyInitializer.EnsureInitialized(ref s_capwapAcPurposeOid, () => InitializeOid(CapwapAcPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CapwapWtpPurpose"/>.</summary>
+    public static Oid CapwapWtpPurposeOid => LazyInitializer.EnsureInitialized(ref s_capwapWtpPurposeOid, () => InitializeOid(CapwapWtpPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SipDomainPurpose"/>.</summary>
+    public static Oid SipDomainPurposeOid => LazyInitializer.EnsureInitialized(ref s_sipDomainPurposeOid, () => InitializeOid(SipDomainPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SecureShellClientPurpose"/>.</summary>
+    public static Oid SecureShellClientPurposeOid => LazyInitializer.EnsureInitialized(ref s_secureShellClientPurposeOid, () => InitializeOid(SecureShellClientPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SecureShellServerPurpose"/>.</summary>
+    public static Oid SecureShellServerPurposeOid => LazyInitializer.EnsureInitialized(ref s_secureShellServerPurposeOid, () => InitializeOid(SecureShellServerPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SendRouterPurpose"/>.</summary>
+    public static Oid SendRouterPurposeOid => LazyInitializer.EnsureInitialized(ref s_sendRouterPurposeOid, () => InitializeOid(SendRouterPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SendProxiedRouterPurpose"/>.</summary>
+    public static Oid SendProxiedRouterPurposeOid => LazyInitializer.EnsureInitialized(ref s_sendProxiedRouterPurposeOid, () => InitializeOid(SendProxiedRouterPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SendOwnerPurpose"/>.</summary>
+    public static Oid SendOwnerPurposeOid => LazyInitializer.EnsureInitialized(ref s_sendOwnerPurposeOid, () => InitializeOid(SendOwnerPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SendProxiedOwnerPurpose"/>.</summary>
+    public static Oid SendProxiedOwnerPurposeOid => LazyInitializer.EnsureInitialized(ref s_sendProxiedOwnerPurposeOid, () => InitializeOid(SendProxiedOwnerPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CmcCaPurpose"/>.</summary>
+    public static Oid CmcCaPurposeOid => LazyInitializer.EnsureInitialized(ref s_cmcCaPurposeOid, () => InitializeOid(CmcCaPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CmcRaPurpose"/>.</summary>
+    public static Oid CmcRaPurposeOid => LazyInitializer.EnsureInitialized(ref s_cmcRaPurposeOid, () => InitializeOid(CmcRaPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CmcArchivePurpose"/>.</summary>
+    public static Oid CmcArchivePurposeOid => LazyInitializer.EnsureInitialized(ref s_cmcArchivePurposeOid, () => InitializeOid(CmcArchivePurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="BgpSecRouterPurpose"/>.</summary>
+    public static Oid BgpSecRouterPurposeOid => LazyInitializer.EnsureInitialized(ref s_bgpSecRouterPurposeOid, () => InitializeOid(BgpSecRouterPurpose));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SmartCardLogonPurpose"/>.</summary>
+    public static Oid SmartCardLogonPurposeOid => LazyInitializer.EnsureInitialized(ref s_smartCardLogonPurposeOid, () => InitializeOid(SmartCardLogonPurpose));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="LifetimeSigningPurpose"/>.</summary>
+    public static Oid LifetimeSigningPurposeOid => LazyInitializer.EnsureInitialized(ref s_lifetimeSigningPurposeOid, () => InitializeOid(LifetimeSigningPurpose));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12PbeWithShaAnd3Key3Des"/>.</summary>
+    public static Oid Pkcs12PbeWithShaAnd3Key3DesOid => LazyInitializer.EnsureInitialized(ref s_pkcs12PbeWithShaAnd3Key3DesOid, () => InitializeOid(Pkcs12PbeWithShaAnd3Key3Des));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12PbeWithShaAnd2Key3Des"/>.</summary>
+    public static Oid Pkcs12PbeWithShaAnd2Key3DesOid => LazyInitializer.EnsureInitialized(ref s_pkcs12PbeWithShaAnd2Key3DesOid, () => InitializeOid(Pkcs12PbeWithShaAnd2Key3Des));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12PbeWithShaAnd128BitRC2"/>.</summary>
+    public static Oid Pkcs12PbeWithShaAnd128BitRC2Oid => LazyInitializer.EnsureInitialized(ref s_pkcs12PbeWithShaAnd128BitRC2Oid, () => InitializeOid(Pkcs12PbeWithShaAnd128BitRC2));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12PbeWithShaAnd40BitRC2"/>.</summary>
+    public static Oid Pkcs12PbeWithShaAnd40BitRC2Oid => LazyInitializer.EnsureInitialized(ref s_pkcs12PbeWithShaAnd40BitRC2Oid, () => InitializeOid(Pkcs12PbeWithShaAnd40BitRC2));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12KeyBag"/>.</summary>
+    public static Oid Pkcs12KeyBagOid => LazyInitializer.EnsureInitialized(ref s_pkcs12KeyBagOid, () => InitializeOid(Pkcs12KeyBag));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12ShroudedKeyBag"/>.</summary>
+    public static Oid Pkcs12ShroudedKeyBagOid => LazyInitializer.EnsureInitialized(ref s_pkcs12ShroudedKeyBagOid, () => InitializeOid(Pkcs12ShroudedKeyBag));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12CertBag"/>.</summary>
+    public static Oid Pkcs12CertBagOid => LazyInitializer.EnsureInitialized(ref s_pkcs12CertBagOid, () => InitializeOid(Pkcs12CertBag));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12CrlBag"/>.</summary>
+    public static Oid Pkcs12CrlBagOid => LazyInitializer.EnsureInitialized(ref s_pkcs12CrlBagOid, () => InitializeOid(Pkcs12CrlBag));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12SecretBag"/>.</summary>
+    public static Oid Pkcs12SecretBagOid => LazyInitializer.EnsureInitialized(ref s_pkcs12SecretBagOid, () => InitializeOid(Pkcs12SecretBag));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12SafeContentsBag"/>.</summary>
+    public static Oid Pkcs12SafeContentsBagOid => LazyInitializer.EnsureInitialized(ref s_pkcs12SafeContentsBagOid, () => InitializeOid(Pkcs12SafeContentsBag));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12X509CertBagType"/>.</summary>
+    public static Oid Pkcs12X509CertBagTypeOid => LazyInitializer.EnsureInitialized(ref s_pkcs12X509CertBagTypeOid, () => InitializeOid(Pkcs12X509CertBagType));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MsPkcs12KeyProviderName"/>.</summary>
+    public static Oid MsPkcs12KeyProviderNameOid => LazyInitializer.EnsureInitialized(ref s_msPkcs12KeyProviderNameOid, () => InitializeOid(MsPkcs12KeyProviderName));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MsPkcs12MachineKeySet"/>.</summary>
+    public static Oid MsPkcs12MachineKeySetOid => LazyInitializer.EnsureInitialized(ref s_msPkcs12MachineKeySetOid, () => InitializeOid(MsPkcs12MachineKeySet));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pkcs12SdsiCertBagType"/>.</summary>
+    public static Oid Pkcs12SdsiCertBagTypeOid => LazyInitializer.EnsureInitialized(ref s_pkcs12SdsiCertBagTypeOid, () => InitializeOid(Pkcs12SdsiCertBagType));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PbeWithMD5AndDESCBC"/>.</summary>
+    public static Oid PbeWithMD5AndDESCBCOid => LazyInitializer.EnsureInitialized(ref s_pbeWithMD5AndDESCBCOid, () => InitializeOid(PbeWithMD5AndDESCBC));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PbeWithMD5AndRC2CBC"/>.</summary>
+    public static Oid PbeWithMD5AndRC2CBCOid => LazyInitializer.EnsureInitialized(ref s_pbeWithMD5AndRC2CBCOid, () => InitializeOid(PbeWithMD5AndRC2CBC));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PbeWithSha1AndDESCBC"/>.</summary>
+    public static Oid PbeWithSha1AndDESCBCOid => LazyInitializer.EnsureInitialized(ref s_pbeWithSha1AndDESCBCOid, () => InitializeOid(PbeWithSha1AndDESCBC));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PbeWithSha1AndRC2CBC"/>.</summary>
+    public static Oid PbeWithSha1AndRC2CBCOid => LazyInitializer.EnsureInitialized(ref s_pbeWithSha1AndRC2CBCOid, () => InitializeOid(PbeWithSha1AndRC2CBC));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Pbkdf2"/>.</summary>
+    public static Oid Pbkdf2Oid => LazyInitializer.EnsureInitialized(ref s_pbkdf2Oid, () => InitializeOid(Pbkdf2));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="PasswordBasedEncryptionScheme2"/>.</summary>
+    public static Oid PasswordBasedEncryptionScheme2Oid => LazyInitializer.EnsureInitialized(ref s_passwordBasedEncryptionScheme2Oid, () => InitializeOid(PasswordBasedEncryptionScheme2));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="HmacWithSha1"/>.</summary>
+    public static Oid HmacWithSha1Oid => LazyInitializer.EnsureInitialized(ref s_hmacWithSha1Oid, () => InitializeOid(HmacWithSha1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="HmacWithSha256"/>.</summary>
+    public static Oid HmacWithSha256Oid => LazyInitializer.EnsureInitialized(ref s_hmacWithSha256Oid, () => InitializeOid(HmacWithSha256));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="HmacWithSha384"/>.</summary>
+    public static Oid HmacWithSha384Oid => LazyInitializer.EnsureInitialized(ref s_hmacWithSha384Oid, () => InitializeOid(HmacWithSha384));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="HmacWithSha512"/>.</summary>
+    public static Oid HmacWithSha512Oid => LazyInitializer.EnsureInitialized(ref s_hmacWithSha512Oid, () => InitializeOid(HmacWithSha512));
+
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="secp256r1"/>.</summary>
+    public static Oid secp256r1Oid => LazyInitializer.EnsureInitialized(ref s_secp256r1Oid, () => new Oid(secp256r1, nameof(ECCurve.NamedCurves.nistP256)));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="secp384r1"/>.</summary>
+    public static Oid secp384r1Oid => LazyInitializer.EnsureInitialized(ref s_secp384r1Oid, () => new Oid(secp384r1, nameof(ECCurve.NamedCurves.nistP384)));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="secp521r1"/>.</summary>
+    public static Oid secp521r1Oid => LazyInitializer.EnsureInitialized(ref s_secp521r1Oid, () => new Oid(secp521r1, nameof(ECCurve.NamedCurves.nistP521)));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="brainpoolP256r1"/>.</summary>
+    public static Oid brainpoolP256r1Oid => LazyInitializer.EnsureInitialized(ref s_brainpoolP256r1Oid, () => InitializeOid(brainpoolP256r1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="brainpoolP384r1"/>.</summary>
+    public static Oid brainpoolP384r1Oid => LazyInitializer.EnsureInitialized(ref s_brainpoolP384r1Oid, () => InitializeOid(brainpoolP384r1));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="X25519"/>.</summary>
+    public static Oid X25519Oid => LazyInitializer.EnsureInitialized(ref s_x25519Oid, () => InitializeOid(X25519));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="X448"/>.</summary>
+    public static Oid X448Oid => LazyInitializer.EnsureInitialized(ref s_x448Oid, () => InitializeOid(X448));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Ed25519"/>.</summary>
+    public static Oid Ed25519Oid => LazyInitializer.EnsureInitialized(ref s_ed25519Oid, () => InitializeOid(Ed25519));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="Ed448"/>.</summary>
+    public static Oid Ed448Oid => LazyInitializer.EnsureInitialized(ref s_ed448Oid, () => InitializeOid(Ed448));
+
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="DomainComponent"/>.</summary>
-    public static Oid DomainComponentOid => s_domainComponentOid ??= InitializeOid(DomainComponent);
+    public static Oid DomainComponentOid => LazyInitializer.EnsureInitialized(ref s_domainComponentOid, () => InitializeOid(DomainComponent));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="UserId"/>.</summary>
+    public static Oid UserIdOid => LazyInitializer.EnsureInitialized(ref s_userIdOid, () => InitializeOid(UserId));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="MacAddress"/>.</summary>
+    public static Oid MacAddressOid => LazyInitializer.EnsureInitialized(ref s_macAddressOid, () => InitializeOid(MacAddress));
 
     
     private static Oid InitializeOid(string oidValue)

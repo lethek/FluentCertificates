@@ -102,7 +102,7 @@ public class GeneralNameListBuilderTests
     [Test]
     public async Task AddIPAddress_AddsSingleIp()
     {
-        var ip = IPAddress.Parse("127.0.0.1");
+        var ip = IPAddress.Parse("127.0.0.1"); // DevSkim: ignore DS162092
         var builder = new GeneralNameListBuilder()
             .AddIPAddress(ip);
         var result = builder.Create();
