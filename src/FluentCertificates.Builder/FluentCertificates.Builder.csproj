@@ -8,6 +8,7 @@
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
     <RootNamespace>FluentCertificates</RootNamespace>
     <!-- Stryker's mutated compilation loses the #pragma trivia around the post-quantum call sites when it
          rolls a mutant back, so FLUENTCERT001 resurfaces as an error and no mutant can be built. Gated on an

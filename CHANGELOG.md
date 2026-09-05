@@ -23,6 +23,7 @@ release rather than record it as it happened.
 ### Changed
 
 - Bumped `System.Security.Cryptography.Pkcs`, `System.Collections.Immutable`, `SideData` and `TestableIO.System.IO.Abstractions` to their latest versions.
+- Marked all five packages `IsAotCompatible`. Native AOT publishing does not work yet: see [#104](https://github.com/lethek/FluentCertificates/issues/104).
 
 ### Fixed
 

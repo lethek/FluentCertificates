@@ -9,6 +9,7 @@
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <GenerateCompatibilitySuppressionFile>true</GenerateCompatibilitySuppressionFile>
+    <IsAotCompatible>true</IsAotCompatible>
     <RootNamespace>FluentCertificates</RootNamespace>
 
     <Authors>Michael Monsour</Authors>

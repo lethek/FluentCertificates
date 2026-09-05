@@ -8,6 +8,7 @@
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <IsPackable>true</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
     <RootNamespace>FluentCertificates</RootNamespace>
 
     <Authors>Michael Monsour</Authors>
