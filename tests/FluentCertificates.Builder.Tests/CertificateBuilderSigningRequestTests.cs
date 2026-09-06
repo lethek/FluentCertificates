@@ -277,27 +277,6 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
-    public async Task UseCertificateSigningRequest_WithAccept_ACriticalAuthorityInformationAccessExtension_ThrowsWhenBuilt()
-    {
-        //Proves the CSR loader preserves the critical flag through the accept predicate and into the
-        //builder's Extensions, where the guard catches it, just as one added by hand through AddExtension is.
-        //The request has to be built with CertificateRequest directly rather than through
-        //CreateCertificateSigningRequest(), since that now enforces the same guard on the CSR itself.
-        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var request = new CertificateRequest("CN=Critical Aia", requesterKeys, HashAlgorithmName.SHA256);
-        request.CertificateExtensions.Add(new X509AuthorityInformationAccessExtension(["http://ocsp.example.com/"], null, critical: true)); // DevSkim: ignore DS137138
-        var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest(), CertificateRequestLoadOptions.UnsafeLoadCertificateExtensions);
-
-        using var ca = BuildCa();
-        var builder = new CertificateBuilder()
-            .SetIssuer(ca)
-            .UseCertificateSigningRequest(csr, _ => true);
-
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
-    }
-
-
-    [Test]
     public async Task UseCertificateSigningRequest_WithAccept_AnAcceptedAuthorityKeyIdentifierReplacesTheIssuers()
     {
         //The issuer's own AKI is added straight to the CertificateRequest rather than through the extension

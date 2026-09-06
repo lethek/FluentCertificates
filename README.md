@@ -380,13 +380,48 @@ helpers replaces any earlier value rather than adding a second extension under t
 
 All three extensions are non-critical by default, but the specifications back that differently for each.
 Authority Information Access has no `critical` option at all: RFC 5280 s4.2.2.1 says it MUST be
-non-critical, and a critical one added by hand or accepted off a signing request is rejected when a
-certificate or a signing request is built. CRL Distribution Points only SHOULD be non-critical under RFC
-5280 s4.2.1.13; the CA/Browser Forum Baseline Requirements certificate profiles (s7.1.2) go further and
-require it. Certificate Policies criticality is neither required nor recommended either way by RFC 5280,
-which only says what a validator must do when the extension is critical, but the same Baseline Requirements
-profiles require it non-critical too. `SetCrlDistributionPoints` and `SetCertificatePolicies` both accept
-`critical: true` for a profile that needs otherwise, alongside a collection rather than `params`.
+non-critical. CRL Distribution Points only SHOULD be non-critical under RFC 5280 s4.2.1.13; the CA/Browser
+Forum Baseline Requirements certificate profiles (s7.1.2) go further and require it. Certificate Policies
+criticality is neither required nor recommended either way by RFC 5280, which only says what a validator
+must do when the extension is critical, but the same Baseline Requirements profiles require it non-critical
+too. `SetCrlDistributionPoints` and `SetCertificatePolicies` both accept `critical: true` for a profile that
+needs otherwise, alongside a collection rather than `params`.
+
+### Criticality conformance
+
+RFC 5280 states hard criticality rules for several extensions, and each is about the flag beside the
+extension rather than the value inside it. So an extension breaking one is written with the flag the RFC
+requires, and its value goes out exactly as supplied:
+
+|Extension|Required|Rule|
+|---|---|---|
+|Authority Key Identifier|non-critical|s4.2.1.1|
+|Subject Key Identifier|non-critical|s4.2.1.2|
+|Freshest CRL|non-critical|s4.2.1.15|
+|Authority Information Access|non-critical|s4.2.2.1|
+|Subject Information Access|non-critical|s4.2.2.2|
+|Basic Constraints, `cA=TRUE`|critical|s4.2.1.9|
+|Subject Alternative Name, empty subject|critical|s4.2.1.6|
+
+This matters most for `UseCertificateSigningRequest`, where the extension came from the requester rather
+than from you. An `accept` predicate that whitelists by OID alone would otherwise issue whatever
+criticality was asked for:
+
+```csharp
+using var issued = new CertificateBuilder()
+    .SetIssuer(ca)
+    //The request asks for a critical Authority Key Identifier, which RFC 5280 s4.2.1.1 forbids
+    .UseCertificateSigningRequest(csr, ext => ext.Oid?.Value == Oids.AuthorityKeyIdentifier)
+    .Create();
+
+//...but it is issued non-critical, with the key identifier the request named
+Console.WriteLine(issued.Extensions
+    .First(x => x.Oid?.Value == Oids.AuthorityKeyIdentifier)
+    .Critical); //False
+```
+
+Only criticality is corrected. What an extension says is still the `accept` predicate's decision, and
+`Extensions` on the builder keeps reporting whatever it was handed.
 
 ---
 

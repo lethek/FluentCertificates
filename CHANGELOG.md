@@ -18,6 +18,7 @@ release rather than record it as it happened.
 - `CertificateBuilder.SetAuthorityInformationAccess`, `SetCrlDistributionPoints` and `SetCertificatePolicies`. `SetCertificatePolicies` accepts `Oid`s or raw OID strings. `SetCrlDistributionPoints` and `SetCertificatePolicies` can mark the extension critical.
 - `X509CertificatePolicyExtension` encodes the Certificate Policies extension.
 - `Oids.DomainValidatedCertPolicy`, `OrganizationValidatedCertPolicy`, `IndividualValidatedCertPolicy`, `ExtendedValidationCertPolicy`, `ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`, the CA/Browser Forum's certificate policy identifiers.
+- `Oids.SubjectInformationAccess` and `Oids.FreshestCrl`.
 - `Oids` has a cached `Oid` property for every OID constant, not just a subset.
 - `CertificateBuilder.UseCertificateSigningRequest` issues a certificate from a received CSR, taking its subject and public key. An overload takes a predicate deciding which requested extensions the CA honours.
 
@@ -25,7 +26,7 @@ release rather than record it as it happened.
 
 - Bumped `System.Security.Cryptography.Pkcs`, `System.Collections.Immutable`, `SideData` and `TestableIO.System.IO.Abstractions` to their latest versions.
 - Marked all five packages `IsAotCompatible`. Native AOT publishing does not work yet: see [#104](https://github.com/lethek/FluentCertificates/issues/104).
-- **Breaking:** A certificate or signing request carrying a critical Authority Information Access extension is now rejected.
+- **Breaking:** A certificate or signing request is issued with the criticality RFC 5280 requires of an extension, whatever criticality was supplied for it.
 
 ### Fixed
 

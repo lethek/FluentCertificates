@@ -31,27 +31,10 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
-    public async Task Create_WithACriticalAuthorityInformationAccessExtension_Throws()
-    {
-        //RFC 5280 s4.2.2.1: conforming CAs MUST mark this extension as non-critical, so the helper offers no
-        //way to mark it critical and one added by hand is rejected rather than issued
-        var builder = new CertificateBuilder()
-            .SetSubject(x => x.SetCommonName(nameof(Create_WithACriticalAuthorityInformationAccessExtension_Throws)))
-            .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
-
-        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
-
-        //Pins the message to the extension it names, so a future unrelated InvalidOperationException elsewhere
-        //in Create() cannot keep this test green
-        await Assert.That(ex!.Message).Contains("Authority Information Access");
-    }
-
-
-    [Test]
     public async Task Create_WithANonCriticalHandSuppliedAuthorityInformationAccessExtension_IsIssuedNormally()
     {
-        //Pins that the guard only rejects a critical AIA extension, not every hand-supplied one -- without
-        //this test, an implementation rejecting every AddExtension'd AIA would still pass the other tests
+        //Pins that criticality conformance leaves a conforming hand-supplied AIA extension alone -- without
+        //this test, an implementation mangling every AddExtension'd AIA would still pass the other tests
         using var cert = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName(nameof(Create_WithANonCriticalHandSuppliedAuthorityInformationAccessExtension_IsIssuedNormally)))
             .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: false))
@@ -62,42 +45,6 @@ public class CertificateBuilderExtensionHelperTests
         await Assert.That(ext.Critical).IsFalse();
         await Assert.That(ReadAccessLocations(ext, Oids.OcspEndpoint)).IsEquivalentTo([OcspUri]);
         await Assert.That(ReadAccessLocations(ext, Oids.CertificateAuthorityIssuers)).IsEquivalentTo([CaIssuersUri]);
-    }
-
-
-    [Test]
-    public async Task CreateCertificateRequest_WithACriticalAuthorityInformationAccessExtension_Throws()
-    {
-        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-
-        var builder = new CertificateBuilder()
-            .SetSubject(x => x.SetCommonName(nameof(CreateCertificateRequest_WithACriticalAuthorityInformationAccessExtension_Throws)))
-            .SetKeyPair(keys)
-            .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
-
-        var ex = await Assert.That(() => builder.CreateCertificateRequest()).Throws<InvalidOperationException>();
-
-        //Pins the message to the extension it names, so a future unrelated InvalidOperationException elsewhere
-        //in CreateCertificateRequest() cannot keep this test green
-        await Assert.That(ex!.Message).Contains("Authority Information Access");
-    }
-
-
-    [Test]
-    public async Task Validate_WithACriticalAuthorityInformationAccessExtension_Throws()
-    {
-        //Validate() carries its own call site for the guard, separate from CreateCertificateRequest()'s;
-        //without this test, removing Validate()'s call site would leave every other test green, since
-        //Create() and CreateCertificateRequest() both reach the other call site
-        var builder = new CertificateBuilder()
-            .SetSubject(x => x.SetCommonName(nameof(Validate_WithACriticalAuthorityInformationAccessExtension_Throws)))
-            .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
-
-        var ex = await Assert.That(() => builder.Validate()).Throws<InvalidOperationException>();
-
-        //Pins the message to the extension it names, so a future unrelated InvalidOperationException elsewhere
-        //in Validate() cannot keep this test green
-        await Assert.That(ex!.Message).Contains("Authority Information Access");
     }
 
 

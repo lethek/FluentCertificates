@@ -369,7 +369,7 @@ public record CertificateBuilder
     /// <exception cref="ArgumentException">Thrown when both collections are <see langword="null"/> or empty.</exception>
     /// <remarks>The extension is non-critical, and there is no option to change that: RFC 5280 s4.2.2.1 requires
     /// conforming CAs to mark it non-critical. A critical one supplied through <see cref="AddExtension"/> or accepted
-    /// from a certificate signing request is rejected when a certificate or a signing request is built.</remarks>
+    /// from a certificate signing request is issued non-critical anyway; see <see cref="CreateCertificateRequest"/>.</remarks>
     public CertificateBuilder SetAuthorityInformationAccess(IEnumerable<string>? ocspUris, IEnumerable<string>? caIssuersUris)
         => SetExtension(new X509AuthorityInformationAccessExtension(ocspUris, caIssuersUris));
 
@@ -504,6 +504,12 @@ public record CertificateBuilder
     /// the requester cannot know, so honouring one describes a signer that did not sign.
     /// </para>
     /// <para>
+    /// An accepted extension is issued with the criticality RFC 5280 requires of it, whatever the requester
+    /// asked for; <see cref="CreateCertificateRequest"/> lists the rules. Its value is honoured as given, so
+    /// <paramref name="accept"/> remains the only thing standing between a requester and what an extension
+    /// says.
+    /// </para>
+    /// <para>
     /// Accepted extensions stay on the builder this returns, so issue each further request from the builder
     /// as it stood before this call rather than from its result.
     /// </para>
@@ -584,8 +590,6 @@ public record CertificateBuilder
     /// <summary>
     /// Validates the current builder configuration and throws if invalid.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when a critical Authority Information Access extension
-    /// is present, which RFC 5280 s4.2.2.1 forbids.</exception>
     public void Validate()
     {
         //A KeyAlgorithm carries its own key length, curve or parameter set, so there is no longer any
@@ -623,37 +627,66 @@ public record CertificateBuilder
                 throw new ArgumentException($"{nameof(SetPublicKey)} supplies no private key, so a self-signed certificate also needs a {nameof(SignatureGenerator)} to sign with, or an {nameof(Issuer)} to sign it", nameof(SignatureGenerator));
             }
         }
-
-        CheckAuthorityInformationAccessIsNotCritical(Extensions);
     }
 
 
-    //RFC 5280 s4.2.2.1: conforming CAs MUST mark Authority Information Access non-critical. Nothing this
-    //builder generates is a critical AIA extension, so a critical one can only have arrived from a caller:
-    //added by hand, or accepted off a certificate signing request. This runs from both Validate and
-    //CreateCertificateRequest because the request-building paths don't call Validate.
-    private static void CheckAuthorityInformationAccessIsNotCritical(IEnumerable<X509Extension> extensions)
+    //Returns the criticality RFC 5280 demands of this extension, or null where it leaves the choice open.
+    //Every rule here is a MUST, and every one of them is about the flag beside the extension rather than the
+    //value inside it, so an extension breaking one can be corrected without altering what it says.
+    private static bool? RequiredCriticality(X509Extension extension, CertificateBuilder builder)
+        => extension.Oid?.Value switch {
+            //s4.2.1.1, s4.2.1.2, s4.2.1.15, s4.2.2.1 and s4.2.2.2 each say conforming CAs MUST mark the
+            //extension non-critical.
+            Oids.AuthorityKeyIdentifier or Oids.SubjectKeyIdentifier or Oids.FreshestCrl
+                or Oids.AuthorityInformationAccess or Oids.SubjectInformationAccess
+                => false,
+            //s4.2.1.9: basic constraints MUST be critical in a CA certificate. The RFC says neither way for
+            //an end-entity one, so a cA=FALSE extension keeps whatever criticality it was given.
+            Oids.BasicConstraints2 when new X509BasicConstraintsExtension(extension, extension.Critical).CertificateAuthority
+                => true,
+            //s4.2.1.6: the subject alternative name MUST be critical when the subject is empty, because it is
+            //then the only name binding the certificate to anything.
+            Oids.SubjectAltName when builder.Subject.RelativeDistinguishedNames.IsEmpty
+                => true,
+            _ => null
+        };
+
+
+    //Nothing this builder generates breaks one of these rules, so an extension corrected here came from a
+    //caller: added by hand, set wholesale, or accepted off a certificate signing request. Criticality is
+    //encoded beside the extension rather than within it, so the corrected copy carries the exact value that
+    //was asked for. Correcting on the way out rather than on the way in keeps Extensions a faithful record of
+    //what the builder was handed, and is the only point at which the empty-subject rule can be settled, since
+    //the subject can still change after an extension is added.
+    private static X509Extension ConformCriticality(X509Extension extension, CertificateBuilder builder)
     {
-        if (extensions.Any(x => x.Critical && String.Equals(x.Oid?.Value, Oids.AuthorityInformationAccess))) {
-            throw new InvalidOperationException($"The Authority Information Access extension is marked critical, which RFC 5280 s4.2.2.1 forbids. Supply it non-critical, or through {nameof(SetAuthorityInformationAccess)}");
-        }
+        var required = RequiredCriticality(extension, builder);
+        return required == null || required == extension.Critical
+            ? extension
+            : new X509Extension(extension.Oid!, extension.RawData, required.Value);
     }
 
 
     /// <summary>
     /// Creates a <see cref="CertificateRequest"/> based on the builder's parameters.
     /// </summary>
-    /// <remarks>An <see cref="Issuer"/> contributes an Authority Key Identifier extension unless one was
-    /// already supplied, in which case the supplied extension stands.</remarks>
+    /// <remarks>
+    /// <para>An <see cref="Issuer"/> contributes an Authority Key Identifier extension unless one was
+    /// already supplied, in which case the supplied extension stands.</para>
+    /// <para>
+    /// Where RFC 5280 requires a particular criticality, the extension is written with it. Authority Key
+    /// Identifier (s4.2.1.1), Subject Key Identifier (s4.2.1.2), Freshest CRL (s4.2.1.15), Authority
+    /// Information Access (s4.2.2.1) and Subject Information Access (s4.2.2.2) go out non-critical; basic
+    /// constraints asserting <c>cA=TRUE</c> (s4.2.1.9) and a subject alternative name standing in for an empty
+    /// subject (s4.2.1.6) go out critical. The extension's value is untouched, and <see cref="Extensions"/>
+    /// still reports whatever it was given, so this changes only what is issued.
+    /// </para>
+    /// </remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
     /// <exception cref="ArgumentNullException">Thrown if no key pair is set. Make sure to call the <see cref="SetKeyPair(AsymmetricAlgorithm)"/> method as
     /// certificate requests require a manually specified key pair.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when a critical Authority Information Access extension
-    /// is present, which RFC 5280 s4.2.2.1 forbids.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
-        CheckAuthorityInformationAccessIsNotCritical(Extensions);
-
         if (PublicKey == null) {
             throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) first to provide an asymmetric public/private keypair");
         }
@@ -665,7 +698,7 @@ public record CertificateBuilder
         var extensions = BuildExtensions(this);
 
         foreach (var extension in extensions) {
-            request.CertificateExtensions.Add(extension);
+            request.CertificateExtensions.Add(ConformCriticality(extension, this));
         }
 
         //Unlike the extensions BuildExtensions generates, this one is added straight to the request and so
@@ -685,8 +718,6 @@ public record CertificateBuilder
     /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
     /// <exception cref="NotSupportedException">Thrown when the key to certify is an <see cref="System.Security.Cryptography.ECDiffieHellman"/>
     /// key, which cannot produce the proof-of-possession signature a PKCS#10 request is built around.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when a critical Authority Information Access extension
-    /// is present, which RFC 5280 s4.2.2.1 forbids.</exception>
     public CertificateSigningRequest CreateCertificateSigningRequest()
     {
         //PKCS#10 proves possession by signing the request with the very key being certified. A supplied
@@ -703,8 +734,6 @@ public record CertificateBuilder
     /// Builds an <see cref="X509Certificate2"/> instance based on the builder's parameters.
     /// </summary>
     /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when a critical Authority Information Access extension
-    /// is present, which RFC 5280 s4.2.2.1 forbids.</exception>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Create()
     {
