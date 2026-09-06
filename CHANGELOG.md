@@ -19,6 +19,7 @@ release rather than record it as it happened.
 - `X509CertificatePolicyExtension` encodes the Certificate Policies extension.
 - `Oids.DomainValidatedCertPolicy`, `OrganizationValidatedCertPolicy`, `IndividualValidatedCertPolicy`, `ExtendedValidationCertPolicy`, `ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`, the CA/Browser Forum's certificate policy identifiers.
 - `Oids` has a cached `Oid` property for every OID constant, not just a subset.
+- `CertificateBuilder.UseCertificateSigningRequest` issues a certificate from a received CSR, taking its subject and public key. An overload takes a predicate deciding which requested extensions the CA honours.
 
 ### Changed
 
@@ -28,6 +29,7 @@ release rather than record it as it happened.
 ### Fixed
 
 - `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
+- `CertificateBuilder` no longer throws when an Authority Key Identifier extension is supplied alongside an `Issuer`.
 
 ## [0.22.0] - 2026-09-01
 

@@ -412,6 +412,93 @@ public record CertificateBuilder
         => SetExtension(new X509CertificatePolicyExtension(policyIdentifiers));
 
 
+    /// <summary>
+    /// Takes the subject name and the public key to certify out of a received certificate signing request,
+    /// and nothing else. Everything a requester asked for beyond those two is discarded.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the CA half of a PKCS#10 exchange, and the counterpart to
+    /// <see cref="CreateCertificateSigningRequest"/>. Issuer, validity, usage profile and extensions all stay
+    /// the CA's to decide, so one configured builder can issue from many requests.
+    /// </para>
+    /// <para>
+    /// The private key stays with the requester, so the resulting certificate has none attached and an
+    /// <see cref="Issuer"/> or <see cref="SignatureGenerator"/> must sign it. Any subject, public key or key
+    /// pair already on the builder is replaced, and <see cref="KeyAlgorithm"/> follows the request's key,
+    /// subject to <see cref="SetPublicKey"/>'s rule that an existing <c>KeyAlgorithm.ECDiffieHellman()</c>
+    /// choice is kept. Nothing here re-checks the request's signature; that is settled when it is parsed.
+    /// </para>
+    /// </remarks>
+    /// <param name="csr">The received certificate signing request.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the request's subject and public key.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="csr"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the request's subject contains a multi-valued
+    /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent.</exception>
+    public CertificateBuilder UseCertificateSigningRequest(CertificateSigningRequest csr)
+    {
+        ArgumentNullException.ThrowIfNull(csr);
+
+        return SetSubject(csr.CertificateRequest.SubjectName)
+            .SetPublicKey(csr.CertificateRequest.PublicKey);
+    }
+
+
+    /// <summary>
+    /// Takes the subject name and the public key to certify out of a received certificate signing request,
+    /// along with those of its requested extensions that <paramref name="accept"/> returns
+    /// <see langword="true"/> for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A requester must not get to dictate their own subject alternative names, extended key usages or basic
+    /// constraints unchallenged, so every requested extension is offered to <paramref name="accept"/> and
+    /// applied only if it says so.
+    /// </para>
+    /// <para>
+    /// An accepted extension counts as the CA's own and wins outright: it replaces anything already present
+    /// under the same OID, and overrides what the <see cref="Usage"/> profile would have generated. Where a
+    /// request carries two extensions under one OID, the last one accepted is the one issued.
+    /// </para>
+    /// <para>
+    /// Only a helper that writes its extension directly, such as
+    /// <see cref="SetCertificatePolicies(IEnumerable{string})"/>, overrides an accepted extension afterwards.
+    /// A later <see cref="AddExtension"/> under the same OID and runtime type is ignored, and so is
+    /// <see cref="SetSubjectAlternativeNames(IEnumerable{GeneralName})"/>, which an accepted subject
+    /// alternative name beats whichever order the two are called in.
+    /// </para>
+    /// <para>
+    /// Accepting an Authority Key Identifier is worth refusing outright: it names the issuer's key, which
+    /// the requester cannot know, so honouring one describes a signer that did not sign.
+    /// </para>
+    /// <para>
+    /// Accepted extensions stay on the builder this returns, so issue each further request from the builder
+    /// as it stood before this call rather than from its result.
+    /// </para>
+    /// <para>
+    /// A request parsed without <see cref="CertificateRequestLoadOptions.UnsafeLoadCertificateExtensions"/>
+    /// carries no extensions at all, so <paramref name="accept"/> is never called.
+    /// </para>
+    /// </remarks>
+    /// <param name="csr">The received certificate signing request.</param>
+    /// <param name="accept">Decides, per requested extension, whether the CA honours it.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the request's subject, public key and accepted extensions.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="csr"/> or <paramref name="accept"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the request's subject contains a multi-valued
+    /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent.</exception>
+    public CertificateBuilder UseCertificateSigningRequest(CertificateSigningRequest csr, Func<X509Extension, bool> accept)
+    {
+        ArgumentNullException.ThrowIfNull(csr);
+        ArgumentNullException.ThrowIfNull(accept);
+
+        var builder = UseCertificateSigningRequest(csr);
+        foreach (var extension in csr.CertificateRequest.CertificateExtensions.Where(accept)) {
+            builder = builder.SetExtension(extension);
+        }
+        return builder;
+    }
+
+
     //Unlike AddExtension, this replaces any extension already present under the same OID, regardless of its
     //concrete type. X509ExtensionOidEqualityComparer treats a same-OID extension of a different runtime type
     //as unequal (by design -- see X509ExtensionOidEqualityComparerTests.Equals_SameOidDifferentTypes_IsFalse),
@@ -508,6 +595,8 @@ public record CertificateBuilder
     /// <summary>
     /// Creates a <see cref="CertificateRequest"/> based on the builder's parameters.
     /// </summary>
+    /// <remarks>An <see cref="Issuer"/> contributes an Authority Key Identifier extension unless one was
+    /// already supplied, in which case the supplied extension stands.</remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
     /// <exception cref="ArgumentNullException">Thrown if no key pair is set. Make sure to call the <see cref="SetKeyPair(AsymmetricAlgorithm)"/> method as
     /// certificate requests require a manually specified key pair.</exception>
@@ -521,11 +610,16 @@ public record CertificateBuilder
 
         var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
 
-        foreach (var extension in BuildExtensions(this)) {
+        var extensions = BuildExtensions(this);
+
+        foreach (var extension in extensions) {
             request.CertificateExtensions.Add(extension);
         }
 
-        if (Issuer != null) {
+        //Unlike the extensions BuildExtensions generates, this one is added straight to the request and so
+        //never passes through the set that lets a supplied extension replace a generated one. Adding both
+        //makes CertificateRequest throw, so a supplied authority key identifier wins here too.
+        if (Issuer != null && !extensions.Any(x => String.Equals(x.Oid?.Value, Oids.AuthorityKeyIdentifier))) {
             request.CertificateExtensions.Add(new X509AuthorityKeyIdentifierExtension(Issuer, false));
         }
 

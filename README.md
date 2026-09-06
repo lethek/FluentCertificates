@@ -57,6 +57,53 @@ Console.WriteLine(csr.ToPemString());
 csr.ExportAsPem("csr.pem");
 ```
 
+### Issue a certificate from a received CSR
+
+_For acting as the CA at the other end of that exchange._
+
+`UseCertificateSigningRequest` takes the subject name and the public key out of the request and nothing
+else. The issuer, validity and usage profile stay yours to decide, so one configured builder can issue from
+many requests. The requester keeps the private key, so the certificate comes back without one.
+
+```csharp
+//Note: the 'issuer' certificate used must have a private-key attached in order to sign the new certificate
+var csr = CertificateSigningRequest.FromPem(File.ReadAllText("csr.pem"));
+
+using var issued = new CertificateBuilder()
+    .SetUsage(CertificateUsage.Server)
+    .SetIssuer(issuer)
+    .UseCertificateSigningRequest(csr)
+    .SetSubjectAlternativeNames(x => x.AddDnsName("approved.fake.domain"))
+    .SetValidity(TimeSpan.FromDays(90))
+    .Create();
+```
+
+A requester should not get to dictate their own subject alternative names, extended key usages or basic
+constraints unchallenged, so anything the request asked for is discarded unless you say otherwise. To honour
+some of it, pass a predicate deciding one extension at a time:
+
+```csharp
+//Requested extensions are only readable at all when you ask for them at parse time
+var csr = CertificateSigningRequest.FromPem(
+    File.ReadAllText("csr.pem"),
+    CertificateRequestLoadOptions.UnsafeLoadCertificateExtensions);
+
+using var issued = new CertificateBuilder()
+    .SetUsage(CertificateUsage.Server)
+    .SetIssuer(issuer)
+    .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.SubjectAltName)
+    .SetValidity(TimeSpan.FromDays(90))
+    .Create();
+```
+
+An accepted extension is applied as though you had added it yourself, so it replaces anything already
+present under the same OID and overrides what the usage profile would otherwise have generated. It also
+stays on the builder that call returns, so issue each further request from your configured builder rather
+than from the result of the previous one, or the next requester inherits the last one's extensions.
+
+`FromPem` and `FromDer` verify the request's signature, which is how a PKCS#10 request proves the requester
+holds the private key. Passing `CertificateRequestLoadOptions.SkipSignatureValidation` gives that up.
+
 ### Build a self-signed web server certificate
 
 _Using the fluent style:_
