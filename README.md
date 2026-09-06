@@ -380,9 +380,10 @@ helpers replaces any earlier value rather than adding a second extension under t
 
 All three extensions are non-critical, which is what RFC 5280 and real-world practice call for. A profile
 that needs otherwise can pass `critical: true` to `SetCrlDistributionPoints` or `SetCertificatePolicies`,
-alongside a collection rather than `params`. Authority Information Access has no such option: RFC 5280
-s4.2.2.1 requires it to be non-critical, and a critical one added by hand or accepted off a signing request
-is rejected when the certificate is built.
+alongside a collection rather than `params`; the CA/Browser Forum Baseline Requirements go further, requiring
+CRL Distribution Points non-critical and recommending the same for Certificate Policies. Authority
+Information Access has no such option: RFC 5280 s4.2.2.1 requires it to be non-critical, and a critical one
+added by hand or accepted off a signing request is rejected when a certificate or a signing request is built.
 
 ---
 

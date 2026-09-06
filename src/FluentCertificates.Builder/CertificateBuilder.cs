@@ -369,7 +369,7 @@ public record CertificateBuilder
     /// <exception cref="ArgumentException">Thrown when both collections are <see langword="null"/> or empty.</exception>
     /// <remarks>The extension is non-critical, and there is no option to change that: RFC 5280 s4.2.2.1 requires
     /// conforming CAs to mark it non-critical. A critical one supplied through <see cref="AddExtension"/> or accepted
-    /// from a certificate signing request is rejected when the certificate is built.</remarks>
+    /// from a certificate signing request is rejected when a certificate or a signing request is built.</remarks>
     public CertificateBuilder SetAuthorityInformationAccess(IEnumerable<string>? ocspUris, IEnumerable<string>? caIssuersUris)
         => SetExtension(new X509AuthorityInformationAccessExtension(ocspUris, caIssuersUris));
 
@@ -389,7 +389,8 @@ public record CertificateBuilder
     /// Sets the CRL Distribution Points extension, naming where the issuer publishes its revocation lists.
     /// </summary>
     /// <param name="uris">The URIs the CRL can be downloaded from. Must contain at least one URI, and each must be ASCII.</param>
-    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.1.13 says conforming CAs SHOULD mark it non-critical.</param>
+    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.1.13 says conforming CAs SHOULD mark it non-critical;
+    /// the CA/Browser Forum Baseline Requirements go further and say it MUST NOT be critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty.</exception>
     /// <exception cref="CryptographicException">Thrown when a URI contains a character outside the 7-bit ASCII set.</exception>
@@ -422,7 +423,8 @@ public record CertificateBuilder
     /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
     /// </summary>
     /// <param name="policyIdentifiers">The policies to assert. Must contain at least one.</param>
-    /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that does not recognise the policy OIDs to reject the certificate.</param>
+    /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that does not recognise the policy OIDs to reject the certificate.
+    /// The CA/Browser Forum Baseline Requirements say it SHOULD NOT be critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
     /// <exception cref="ArgumentException">Thrown when an <see cref="Oid"/> in <paramref name="policyIdentifiers"/> has no <see cref="Oid.Value"/>.</exception>
@@ -434,7 +436,8 @@ public record CertificateBuilder
     /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
     /// </summary>
     /// <param name="policyIdentifiers">The OIDs of the policies to assert. Must contain at least one OID.</param>
-    /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that does not recognise the policy OIDs to reject the certificate.</param>
+    /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that does not recognise the policy OIDs to reject the certificate.
+    /// The CA/Browser Forum Baseline Requirements say it SHOULD NOT be critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
     public CertificateBuilder SetCertificatePolicies(IEnumerable<string> policyIdentifiers, bool critical = false)
@@ -618,6 +621,19 @@ public record CertificateBuilder
                 throw new ArgumentException($"{nameof(SetPublicKey)} supplies no private key, so a self-signed certificate also needs a {nameof(SignatureGenerator)} to sign with, or an {nameof(Issuer)} to sign it", nameof(SignatureGenerator));
             }
         }
+
+        CheckAuthorityInformationAccessIsNotCritical(Extensions);
+    }
+
+
+    //RFC 5280 s4.2.2.1: conforming CAs MUST mark Authority Information Access non-critical. Nothing this
+    //builder generates is critical, so the only way here is an extension the caller added or accepted off
+    //a certificate signing request.
+    private static void CheckAuthorityInformationAccessIsNotCritical(IEnumerable<X509Extension> extensions)
+    {
+        if (extensions.Any(x => x.Critical && String.Equals(x.Oid?.Value, Oids.AuthorityInformationAccess))) {
+            throw new InvalidOperationException($"The Authority Information Access extension is marked critical, which RFC 5280 s4.2.2.1 forbids. Supply it non-critical, or through {nameof(SetAuthorityInformationAccess)}");
+        }
     }
 
 
@@ -629,6 +645,8 @@ public record CertificateBuilder
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
     /// <exception cref="ArgumentNullException">Thrown if no key pair is set. Make sure to call the <see cref="SetKeyPair(AsymmetricAlgorithm)"/> method as
     /// certificate requests require a manually specified key pair.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a critical Authority Information Access extension
+    /// is present, which RFC 5280 s4.2.2.1 forbids.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
         if (PublicKey == null) {
@@ -662,6 +680,8 @@ public record CertificateBuilder
     /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
     /// <exception cref="NotSupportedException">Thrown when the key to certify is an <see cref="System.Security.Cryptography.ECDiffieHellman"/>
     /// key, which cannot produce the proof-of-possession signature a PKCS#10 request is built around.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a critical Authority Information Access extension
+    /// is present, which RFC 5280 s4.2.2.1 forbids.</exception>
     public CertificateSigningRequest CreateCertificateSigningRequest()
     {
         //PKCS#10 proves possession by signing the request with the very key being certified. A supplied
@@ -678,6 +698,8 @@ public record CertificateBuilder
     /// Builds an <see cref="X509Certificate2"/> instance based on the builder's parameters.
     /// </summary>
     /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when a critical Authority Information Access extension
+    /// is present, which RFC 5280 s4.2.2.1 forbids.</exception>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Create()
     {
@@ -861,12 +883,7 @@ public record CertificateBuilder
             ? builder._extensions.Union(extensions)
             : builder._extensions;
 
-        //RFC 5280 s4.2.2.1: conforming CAs MUST mark Authority Information Access non-critical. Nothing this
-        //builder generates is critical, so the only way here is an extension the caller added or accepted off
-        //a certificate signing request.
-        if (collated.Any(x => x.Critical && String.Equals(x.Oid?.Value, Oids.AuthorityInformationAccess))) {
-            throw new InvalidOperationException($"The Authority Information Access extension is marked critical, which RFC 5280 s4.2.2.1 forbids. Supply it non-critical, or through {nameof(SetAuthorityInformationAccess)}");
-        }
+        CheckAuthorityInformationAccessIsNotCritical(collated);
 
         return collated;
     }

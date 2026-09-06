@@ -39,7 +39,41 @@ public class CertificateBuilderExtensionHelperTests
             .SetSubject(x => x.SetCommonName(nameof(Create_WithACriticalAuthorityInformationAccessExtension_Throws)))
             .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
 
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        //Pins the message to the extension it names, so a future unrelated InvalidOperationException elsewhere
+        //in Create() cannot keep this test green
+        await Assert.That(ex!.Message).Contains("Authority Information Access");
+    }
+
+
+    [Test]
+    public async Task Create_WithACriticalAuthorityInformationAccessExtensionFromSetExtensions_Throws()
+    {
+        //The guard must fire for an extension supplied via SetExtensions, not only one added via AddExtension
+        var builder = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(Create_WithACriticalAuthorityInformationAccessExtensionFromSetExtensions_Throws)))
+            .SetExtensions(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
+
         await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithANonCriticalHandSuppliedAuthorityInformationAccessExtension_IsIssuedNormally()
+    {
+        //Pins that the guard only rejects a critical AIA extension, not every hand-supplied one -- without
+        //this test, an implementation rejecting every AddExtension'd AIA would still pass the other tests
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(Create_WithANonCriticalHandSuppliedAuthorityInformationAccessExtension_IsIssuedNormally)))
+            .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: false))
+            .Create();
+
+        var ext = FindExtension(cert, Oids.AuthorityInformationAccess);
+
+        await Assert.That(ext.Critical).IsFalse();
+        await Assert.That(ReadAccessLocations(ext, Oids.OcspEndpoint)).IsEquivalentTo([OcspUri]);
+        await Assert.That(ReadAccessLocations(ext, Oids.CertificateAuthorityIssuers)).IsEquivalentTo([CaIssuersUri]);
     }
 
 
@@ -209,7 +243,9 @@ public class CertificateBuilderExtensionHelperTests
             .SetCertificatePolicies([new Oid(PolicyOid)], critical: true)
             .Create();
 
-        await Assert.That(FindExtension(fromOids, Oids.CertPolicies).Critical).IsTrue();
+        var oidsExt = FindExtension(fromOids, Oids.CertPolicies);
+        await Assert.That(oidsExt.Critical).IsTrue();
+        await Assert.That(ReadPolicyIdentifiers(oidsExt)).IsEquivalentTo([PolicyOid]);
 
         using var fromStrings = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName(nameof(SetCertificatePolicies_MarkedCritical_CarriesTheCriticalFlag)))
