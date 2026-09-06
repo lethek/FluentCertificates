@@ -380,7 +380,8 @@ helpers replaces any earlier value rather than adding a second extension under t
 
 All three extensions are non-critical, which is what RFC 5280 and real-world practice call for. A profile
 that needs otherwise can pass `critical: true`, alongside a collection rather than `params` for
-`SetCrlDistributionPoints` and `SetCertificatePolicies`.
+`SetCrlDistributionPoints` and `SetCertificatePolicies`. Note that RFC 5280 s4.2.2.1 requires Authority
+Information Access to be non-critical, so marking that one critical produces a non-conforming certificate.
 
 ---
 

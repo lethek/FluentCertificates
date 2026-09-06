@@ -351,7 +351,7 @@ public record CertificateBuilder
     /// </summary>
     /// <param name="ocspUri">The URI of the OCSP responder, or <see langword="null"/> to omit it.</param>
     /// <param name="caIssuersUri">The URI the issuer's certificate can be downloaded from, or <see langword="null"/> to omit it.</param>
-    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.2.1 says conforming CAs SHOULD mark it non-critical.</param>
+    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.2.1 says conforming CAs MUST mark it non-critical, so a critical one is non-conforming.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Authority Information Access extension.</returns>
     /// <exception cref="ArgumentException">Thrown when both URIs are omitted.</exception>
     /// <remarks>Passing the literal <c>null</c> for both arguments is ambiguous with the collection overload; cast at least one, e.g. <c>(string?)null</c>.</remarks>
@@ -367,7 +367,7 @@ public record CertificateBuilder
     /// </summary>
     /// <param name="ocspUris">The URIs of the OCSP responders, or <see langword="null"/> to omit them.</param>
     /// <param name="caIssuersUris">The URIs the issuer's certificate can be downloaded from, or <see langword="null"/> to omit them.</param>
-    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.2.1 says conforming CAs SHOULD mark it non-critical.</param>
+    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.2.1 says conforming CAs MUST mark it non-critical, so a critical one is non-conforming.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Authority Information Access extension.</returns>
     /// <exception cref="ArgumentException">Thrown when both collections are <see langword="null"/> or empty.</exception>
     public CertificateBuilder SetAuthorityInformationAccess(IEnumerable<string>? ocspUris, IEnumerable<string>? caIssuersUris, bool critical = false)
