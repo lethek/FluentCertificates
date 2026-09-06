@@ -379,9 +379,10 @@ also accepted, as a single value or a collection, for callers who would rather n
 helpers replaces any earlier value rather than adding a second extension under the same OID.
 
 All three extensions are non-critical, which is what RFC 5280 and real-world practice call for. A profile
-that needs otherwise can pass `critical: true`, alongside a collection rather than `params` for
-`SetCrlDistributionPoints` and `SetCertificatePolicies`. Note that RFC 5280 s4.2.2.1 requires Authority
-Information Access to be non-critical, so marking that one critical produces a non-conforming certificate.
+that needs otherwise can pass `critical: true` to `SetCrlDistributionPoints` or `SetCertificatePolicies`,
+alongside a collection rather than `params`. Authority Information Access has no such option: RFC 5280
+s4.2.2.1 requires it to be non-critical, and a critical one added by hand or accepted off a signing request
+is rejected when the certificate is built.
 
 ---
 

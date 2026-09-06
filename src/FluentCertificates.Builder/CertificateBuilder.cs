@@ -351,15 +351,13 @@ public record CertificateBuilder
     /// </summary>
     /// <param name="ocspUri">The URI of the OCSP responder, or <see langword="null"/> to omit it.</param>
     /// <param name="caIssuersUri">The URI the issuer's certificate can be downloaded from, or <see langword="null"/> to omit it.</param>
-    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.2.1 says conforming CAs MUST mark it non-critical, so a critical one is non-conforming.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Authority Information Access extension.</returns>
     /// <exception cref="ArgumentException">Thrown when both URIs are omitted.</exception>
     /// <remarks>Passing the literal <c>null</c> for both arguments is ambiguous with the collection overload; cast at least one, e.g. <c>(string?)null</c>.</remarks>
-    public CertificateBuilder SetAuthorityInformationAccess(string? ocspUri, string? caIssuersUri, bool critical = false)
+    public CertificateBuilder SetAuthorityInformationAccess(string? ocspUri, string? caIssuersUri)
         => SetAuthorityInformationAccess(
             ocspUri == null ? null : [ocspUri],
-            caIssuersUri == null ? null : [caIssuersUri],
-            critical);
+            caIssuersUri == null ? null : [caIssuersUri]);
 
     /// <summary>
     /// Sets the Authority Information Access extension, naming where the issuer can be reached for
@@ -367,11 +365,13 @@ public record CertificateBuilder
     /// </summary>
     /// <param name="ocspUris">The URIs of the OCSP responders, or <see langword="null"/> to omit them.</param>
     /// <param name="caIssuersUris">The URIs the issuer's certificate can be downloaded from, or <see langword="null"/> to omit them.</param>
-    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.2.1 says conforming CAs MUST mark it non-critical, so a critical one is non-conforming.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Authority Information Access extension.</returns>
     /// <exception cref="ArgumentException">Thrown when both collections are <see langword="null"/> or empty.</exception>
-    public CertificateBuilder SetAuthorityInformationAccess(IEnumerable<string>? ocspUris, IEnumerable<string>? caIssuersUris, bool critical = false)
-        => SetExtension(new X509AuthorityInformationAccessExtension(ocspUris, caIssuersUris, critical));
+    /// <remarks>The extension is non-critical, and there is no option to change that: RFC 5280 s4.2.2.1 requires
+    /// conforming CAs to mark it non-critical. A critical one supplied through <see cref="AddExtension"/> or accepted
+    /// from a certificate signing request is rejected when the certificate is built.</remarks>
+    public CertificateBuilder SetAuthorityInformationAccess(IEnumerable<string>? ocspUris, IEnumerable<string>? caIssuersUris)
+        => SetExtension(new X509AuthorityInformationAccessExtension(ocspUris, caIssuersUris));
 
 
     /// <summary>
@@ -857,9 +857,18 @@ public record CertificateBuilder
         }
 
         //Collate extensions; manually specified ones in the `builder` may override matching generated ones above (e.g. Usage, DnsNames, Email, etc.)
-        return extensions.Count > 0
+        var collated = extensions.Count > 0
             ? builder._extensions.Union(extensions)
             : builder._extensions;
+
+        //RFC 5280 s4.2.2.1: conforming CAs MUST mark Authority Information Access non-critical. Nothing this
+        //builder generates is critical, so the only way here is an extension the caller added or accepted off
+        //a certificate signing request.
+        if (collated.Any(x => x.Critical && String.Equals(x.Oid?.Value, Oids.AuthorityInformationAccess))) {
+            throw new InvalidOperationException($"The Authority Information Access extension is marked critical, which RFC 5280 s4.2.2.1 forbids. Supply it non-critical, or through {nameof(SetAuthorityInformationAccess)}");
+        }
+
+        return collated;
     }
 
 

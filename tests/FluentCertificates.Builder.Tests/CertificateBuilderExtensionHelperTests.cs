@@ -31,21 +31,29 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
-    public async Task SetAuthorityInformationAccess_MarkedCritical_CarriesTheCriticalFlag()
+    public async Task Create_WithACriticalAuthorityInformationAccessExtension_Throws()
     {
-        using var cert = new CertificateBuilder()
-            .SetSubject(x => x.SetCommonName(nameof(SetAuthorityInformationAccess_MarkedCritical_CarriesTheCriticalFlag)))
-            .SetAuthorityInformationAccess(OcspUri, CaIssuersUri, critical: true)
-            .Create();
+        //RFC 5280 s4.2.2.1: conforming CAs MUST mark this extension as non-critical, so the helper offers no
+        //way to mark it critical and one added by hand is rejected rather than issued
+        var builder = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(Create_WithACriticalAuthorityInformationAccessExtension_Throws)))
+            .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
 
-        await Assert.That(FindExtension(cert, Oids.AuthorityInformationAccess).Critical).IsTrue();
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
 
-        using var fromCollections = new CertificateBuilder()
-            .SetSubject(x => x.SetCommonName(nameof(SetAuthorityInformationAccess_MarkedCritical_CarriesTheCriticalFlag)))
-            .SetAuthorityInformationAccess([OcspUri], [CaIssuersUri], critical: true)
-            .Create();
 
-        await Assert.That(FindExtension(fromCollections, Oids.AuthorityInformationAccess).Critical).IsTrue();
+    [Test]
+    public async Task CreateCertificateRequest_WithACriticalAuthorityInformationAccessExtension_Throws()
+    {
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var builder = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(CreateCertificateRequest_WithACriticalAuthorityInformationAccessExtension_Throws)))
+            .SetKeyPair(keys)
+            .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
+
+        await Assert.That(() => builder.CreateCertificateRequest()).Throws<InvalidOperationException>();
     }
 
 
