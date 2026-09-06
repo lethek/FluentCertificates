@@ -15,7 +15,7 @@ release rather than record it as it happened.
 
 ### Added
 
-- `CertificateBuilder.SetAuthorityInformationAccess`, `SetCrlDistributionPoints` and `SetCertificatePolicies`. `SetCertificatePolicies` accepts `Oid`s or raw OID strings.
+- `CertificateBuilder.SetAuthorityInformationAccess`, `SetCrlDistributionPoints` and `SetCertificatePolicies`. `SetCertificatePolicies` accepts `Oid`s or raw OID strings. `SetCrlDistributionPoints` and `SetCertificatePolicies` can mark the extension critical.
 - `X509CertificatePolicyExtension` encodes the Certificate Policies extension.
 - `Oids.DomainValidatedCertPolicy`, `OrganizationValidatedCertPolicy`, `IndividualValidatedCertPolicy`, `ExtendedValidationCertPolicy`, `ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`, the CA/Browser Forum's certificate policy identifiers.
 - `Oids` has a cached `Oid` property for every OID constant, not just a subset.

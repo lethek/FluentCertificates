@@ -75,7 +75,11 @@ public class CertificateBuilderExtensionHelperTests
             .SetKeyPair(keys)
             .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
 
-        await Assert.That(() => builder.CreateCertificateRequest()).Throws<InvalidOperationException>();
+        var ex = await Assert.That(() => builder.CreateCertificateRequest()).Throws<InvalidOperationException>();
+
+        //Pins the message to the extension it names, so a future unrelated InvalidOperationException elsewhere
+        //in CreateCertificateRequest() cannot keep this test green
+        await Assert.That(ex!.Message).Contains("Authority Information Access");
     }
 
 
@@ -89,7 +93,11 @@ public class CertificateBuilderExtensionHelperTests
             .SetSubject(x => x.SetCommonName(nameof(Validate_WithACriticalAuthorityInformationAccessExtension_Throws)))
             .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
 
-        await Assert.That(() => builder.Validate()).Throws<InvalidOperationException>();
+        var ex = await Assert.That(() => builder.Validate()).Throws<InvalidOperationException>();
+
+        //Pins the message to the extension it names, so a future unrelated InvalidOperationException elsewhere
+        //in Validate() cannot keep this test green
+        await Assert.That(ex!.Message).Contains("Authority Information Access");
     }
 
 
@@ -340,8 +348,13 @@ public class CertificateBuilderExtensionHelperTests
             .SetCertificatePolicies(PolicyOid)
             .Create();
 
+        var ext = FindExtension(cert, Oids.CertPolicies);
+
         await Assert.That(CountExtensions(cert, Oids.CertPolicies)).IsEqualTo(1);
-        await Assert.That(ReadPolicyIdentifiers(FindExtension(cert, Oids.CertPolicies))).IsEquivalentTo([PolicyOid]);
+        await Assert.That(ReadPolicyIdentifiers(ext)).IsEquivalentTo([PolicyOid]);
+        //RawData comparisons elsewhere in this file don't carry the critical bit -- pin the string route's
+        //default here, since the Oid route's default is pinned by SetCertificatePolicies_Oids_CarriesEveryPolicy
+        await Assert.That(ext.Critical).IsFalse();
     }
 
 

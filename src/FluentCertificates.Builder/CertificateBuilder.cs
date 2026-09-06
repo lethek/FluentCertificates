@@ -390,7 +390,7 @@ public record CertificateBuilder
     /// </summary>
     /// <param name="uris">The URIs the CRL can be downloaded from. Must contain at least one URI, and each must be ASCII.</param>
     /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.1.13 says conforming CAs SHOULD mark it non-critical;
-    /// the CA/Browser Forum Baseline Requirements go further and say it MUST NOT be critical.</param>
+    /// the CA/Browser Forum Baseline Requirements certificate profiles (s7.1.2) require it non-critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty.</exception>
     /// <exception cref="CryptographicException">Thrown when a URI contains a character outside the 7-bit ASCII set.</exception>
