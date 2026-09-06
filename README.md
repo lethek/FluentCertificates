@@ -378,6 +378,10 @@ also accepted, as a single value or a collection, for callers who would rather n
 `ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`. Each of the three
 helpers replaces any earlier value rather than adding a second extension under the same OID.
 
+All three extensions are non-critical, which is what RFC 5280 and real-world practice call for. A profile
+that needs otherwise can pass `critical: true`, alongside a collection rather than `params` for
+`SetCrlDistributionPoints` and `SetCertificatePolicies`.
+
 ---
 
 ## Key ownership and disposal

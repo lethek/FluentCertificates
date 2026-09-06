@@ -31,6 +31,25 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
+    public async Task SetAuthorityInformationAccess_MarkedCritical_CarriesTheCriticalFlag()
+    {
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(SetAuthorityInformationAccess_MarkedCritical_CarriesTheCriticalFlag)))
+            .SetAuthorityInformationAccess(OcspUri, CaIssuersUri, critical: true)
+            .Create();
+
+        await Assert.That(FindExtension(cert, Oids.AuthorityInformationAccess).Critical).IsTrue();
+
+        using var fromCollections = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(SetAuthorityInformationAccess_MarkedCritical_CarriesTheCriticalFlag)))
+            .SetAuthorityInformationAccess([OcspUri], [CaIssuersUri], critical: true)
+            .Create();
+
+        await Assert.That(FindExtension(fromCollections, Oids.AuthorityInformationAccess).Critical).IsTrue();
+    }
+
+
+    [Test]
     public async Task SetAuthorityInformationAccess_OcspOnly_OmitsCaIssuers()
     {
         using var cert = new CertificateBuilder()
@@ -104,6 +123,21 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
+    public async Task SetCrlDistributionPoints_MarkedCritical_CarriesTheCriticalFlag()
+    {
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(SetCrlDistributionPoints_MarkedCritical_CarriesTheCriticalFlag)))
+            .SetCrlDistributionPoints([CrlUri], critical: true)
+            .Create();
+
+        var ext = FindExtension(cert, Oids.CrlDistributionPoints);
+
+        await Assert.That(ext.Critical).IsTrue();
+        await Assert.That(ReadCrlDistributionPointUris(ext)).IsEquivalentTo([CrlUri]);
+    }
+
+
+    [Test]
     public async Task SetCrlDistributionPoints_ParamsAndEnumerable_ProduceTheSameExtension()
     {
         var fromParams = new CertificateBuilder().SetCrlDistributionPoints(CrlUri);
@@ -156,6 +190,28 @@ public class CertificateBuilderExtensionHelperTests
 
         await Assert.That(ext.Critical).IsFalse();
         await Assert.That(ReadPolicyIdentifiers(ext)).IsEquivalentTo([PolicyOid, Oids.AnyCertPolicy]);
+    }
+
+
+    [Test]
+    public async Task SetCertificatePolicies_MarkedCritical_CarriesTheCriticalFlag()
+    {
+        using var fromOids = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(SetCertificatePolicies_MarkedCritical_CarriesTheCriticalFlag)))
+            .SetCertificatePolicies([new Oid(PolicyOid)], critical: true)
+            .Create();
+
+        await Assert.That(FindExtension(fromOids, Oids.CertPolicies).Critical).IsTrue();
+
+        using var fromStrings = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(SetCertificatePolicies_MarkedCritical_CarriesTheCriticalFlag)))
+            .SetCertificatePolicies([PolicyOid], critical: true)
+            .Create();
+
+        var ext = FindExtension(fromStrings, Oids.CertPolicies);
+
+        await Assert.That(ext.Critical).IsTrue();
+        await Assert.That(ReadPolicyIdentifiers(ext)).IsEquivalentTo([PolicyOid]);
     }
 
 

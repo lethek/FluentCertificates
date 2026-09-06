@@ -9,15 +9,19 @@ namespace FluentCertificates;
 /// </summary>
 /// <remarks>
 /// Policy qualifiers are not represented: each policy is encoded as a bare <c>policyIdentifier</c>.
-/// The extension is non-critical, as recommended by RFC 5280 s4.2.1.4.
 /// </remarks>
 /// <param name="policyIdentifiers">
 /// The OIDs of the policies to assert. Must contain at least one OID, as required by RFC 5280 s4.2.1.4.
 /// Use <see cref="Oids.AnyCertPolicy"/> to assert the anyPolicy OID.
 /// </param>
+/// <param name="critical">
+/// Whether to mark the extension critical. Leave this <see langword="false"/> unless a certificate profile
+/// demands otherwise: a critical Certificate Policies extension forces any relying party that does not
+/// recognise the policy OIDs to reject the certificate.
+/// </param>
 /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty, or contains the same OID more than once.</exception>
-public class X509CertificatePolicyExtension(IEnumerable<string> policyIdentifiers)
-    : X509Extension(Oids.CertPolicies, EncodeExtension(policyIdentifiers), false)
+public class X509CertificatePolicyExtension(IEnumerable<string> policyIdentifiers, bool critical = false)
+    : X509Extension(Oids.CertPolicies, EncodeExtension(policyIdentifiers), critical)
 {
     /// <summary>
     /// Encodes the Certificate Policies extension from the supplied policy OIDs.

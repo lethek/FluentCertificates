@@ -19,6 +19,16 @@ public class X509CertificatePolicyExtensionTests
 
 
     [Test]
+    public async Task Extension_MarkedCritical_CarriesTheCriticalFlag()
+    {
+        var ext = new X509CertificatePolicyExtension([PolicyA], critical: true);
+
+        await Assert.That(ext.Critical).IsTrue();
+        await Assert.That(ReadPolicyIdentifiers(ext)).IsEquivalentTo([PolicyA]);
+    }
+
+
+    [Test]
     public async Task Encode_SinglePolicy_WritesOnePolicyInformation()
     {
         var ext = new X509CertificatePolicyExtension([PolicyA]);
