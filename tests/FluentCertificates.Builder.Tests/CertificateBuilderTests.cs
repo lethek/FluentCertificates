@@ -1133,11 +1133,13 @@ public class CertificateBuilderTests
     [Test]
     public async Task Build_CallerSuppliedExtension_OverridesGeneratedOneWithSameOid()
     {
-        //The builder de-duplicates extensions by OID, preferring the caller's own
+        //The builder de-duplicates extensions by OID, preferring the caller's own. The CA profile generates
+        //its own cA=TRUE extension with no path length; a caller-supplied one refines rather than contradicts
+        //it, which an end-entity profile would refuse.
         var basicConstraints = new X509BasicConstraintsExtension(true, true, 7, true);
 
         using var cert = new CertificateBuilder()
-            .SetUsage(CertificateUsage.Server)
+            .SetUsage(CertificateUsage.CA)
             .SetSubject(x => x.SetCommonName("Override Test"))
             .AddExtension(basicConstraints)
             .Create();

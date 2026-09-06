@@ -397,9 +397,13 @@ requires, and its value goes out exactly as supplied:
 |---|---|---|
 |Authority Key Identifier|non-critical|s4.2.1.1|
 |Subject Key Identifier|non-critical|s4.2.1.2|
+|Subject Directory Attributes|non-critical|s4.2.1.8|
 |Freshest CRL|non-critical|s4.2.1.15|
 |Authority Information Access|non-critical|s4.2.2.1|
 |Subject Information Access|non-critical|s4.2.2.2|
+|Name Constraints|critical|s4.2.1.10|
+|Policy Constraints|critical|s4.2.1.11|
+|Inhibit anyPolicy|critical|s4.2.1.14|
 |Basic Constraints, `cA=TRUE`|critical|s4.2.1.9|
 |Subject Alternative Name, empty subject|critical|s4.2.1.6|
 
@@ -410,18 +414,37 @@ criticality was asked for:
 ```csharp
 using var issued = new CertificateBuilder()
     .SetIssuer(ca)
-    //The request asks for a critical Authority Key Identifier, which RFC 5280 s4.2.1.1 forbids
-    .UseCertificateSigningRequest(csr, ext => ext.Oid?.Value == Oids.AuthorityKeyIdentifier)
+    //The request asks for a critical Authority Information Access, which RFC 5280 s4.2.2.1 forbids
+    .UseCertificateSigningRequest(csr, ext => ext.Oid?.Value == Oids.AuthorityInformationAccess)
     .Create();
 
-//...but it is issued non-critical, with the key identifier the request named
+//...but it is issued non-critical, with the OCSP and CA Issuers URIs the request named
 Console.WriteLine(issued.Extensions
-    .First(x => x.Oid?.Value == Oids.AuthorityKeyIdentifier)
+    .First(x => x.Oid?.Value == Oids.AuthorityInformationAccess)
     .Critical); //False
 ```
 
-Only criticality is corrected. What an extension says is still the `accept` predicate's decision, and
-`Extensions` on the builder keeps reporting whatever it was handed.
+An extension whose value will not decode has no rule to apply, so it is issued exactly as supplied.
+
+### Extensions that contradict the profile
+
+Criticality is a flag beside an extension, so a violation can be corrected. Some extensions instead
+contradict the `Usage` profile in their *value*, which cannot be corrected without deciding what the caller
+meant. Those are refused with an `InvalidOperationException`:
+
+- Basic Constraints disagreeing with the profile about whether this is a certificate authority. A requester
+  slipping `cA=TRUE` past a permissive `accept` predicate on an end-entity profile walks away able to issue
+  certificates for anyone, and correcting the criticality does not stop that: a validator honours `cA=TRUE`
+  whichever way the flag is set. The mirror case, `cA=FALSE` on `CertificateUsage.CA`, strips the authority
+  you asked for.
+- Key Usage asserting `keyCertSign` or `cRLSign` under an end-entity profile. Both flags exist only for a
+  certificate authority.
+
+Nothing is checked when no `Usage` is set, since a caller assembling a certificate by hand has no profile to
+contradict.
+
+Everything else an extension says is still the `accept` predicate's decision, and `Extensions` on the
+builder keeps reporting whatever it was handed.
 
 ---
 

@@ -96,12 +96,10 @@ public class CertificateBuilderCriticalityConformanceTests
     [Test]
     public async Task Create_WithANonCriticalCertificateAuthorityBasicConstraints_IssuesItCritical()
     {
-        //RFC 5280 s4.2.1.9: basic constraints MUST be critical in a CA certificate. The Server profile
-        //generates its own cA=FALSE extension, which the supplied one replaces, so this is the case a
-        //permissive accept predicate would otherwise let through.
+        //RFC 5280 s4.2.1.9: basic constraints MUST be critical in a CA certificate. No Usage profile is set,
+        //so nothing contradicts the extension and only its criticality is at stake.
         using var cert = new CertificateBuilder()
-            .SetUsage(CertificateUsage.Server)
-            .SetSubject("CN=Sneaky Ca")
+            .SetSubject("CN=Hand Built Ca")
             .AddExtension(new X509BasicConstraintsExtension(true, false, 0, critical: false))
             .Create();
 
@@ -109,6 +107,83 @@ public class CertificateBuilderCriticalityConformanceTests
 
         await Assert.That(ext.Critical).IsTrue();
         await Assert.That(new X509BasicConstraintsExtension(ext, ext.Critical).CertificateAuthority).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Create_WithAMalformedBasicConstraintsValue_IssuesItUnchanged()
+    {
+        //Reading the cA bit means decoding the requester's DER, and a value that will not decode has no bit
+        //to read. Refusing it here would be a new failure for input the builder issued verbatim before the
+        //criticality rules existed, so no rule applies and it goes out as supplied.
+        var supplied = new X509Extension(Oids.BasicConstraints2, [0x05, 0x00], critical: false);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Malformed Basic Constraints")
+            .AddExtension(supplied)
+            .Create();
+
+        var ext = FindExtension(cert, Oids.BasicConstraints2);
+
+        await Assert.That(ext.Critical).IsFalse();
+        await Assert.That(ext.RawData).IsEquivalentTo(supplied.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    [Arguments(Oids.NameConstraints)]           //s4.2.1.10
+    [Arguments(Oids.CertPolicyConstraints)]     //s4.2.1.11
+    [Arguments(Oids.InhibitAnyPolicyExtension)] //s4.2.1.14
+    public async Task Create_WithANonCriticalConstraintExtension_IssuesItCritical(string oid)
+    {
+        //Each of those sections says conforming CAs MUST mark the extension critical. A non-critical one is
+        //worse than useless: a relying party that does not implement the extension ignores the restriction
+        //rather than refusing the certificate it restricts. The value is opaque here, since only the flag is
+        //under test.
+        var supplied = new X509Extension(oid, [0x30, 0x00], critical: false);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Non Critical Constraint")
+            .AddExtension(supplied)
+            .Create();
+
+        var ext = FindExtension(cert, oid);
+
+        await Assert.That(ext.Critical).IsTrue();
+        await Assert.That(ext.RawData).IsEquivalentTo(supplied.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Create_WithACriticalSubjectDirectoryAttributes_IssuesItNonCritical()
+    {
+        //RFC 5280 s4.2.1.8: conforming CAs MUST mark this extension as non-critical. Marked critical it makes
+        //the certificate unusable, since s4.2 has every conforming client reject an unrecognised critical
+        //extension.
+        var supplied = new X509Extension(Oids.SubjectDirectoryAttributes, [0x30, 0x00], critical: true);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Critical Subject Directory Attributes")
+            .AddExtension(supplied)
+            .Create();
+
+        await Assert.That(FindExtension(cert, Oids.SubjectDirectoryAttributes).Critical).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Create_WithAnIssuer_IssuesTheIssuersAuthorityKeyIdentifierNonCritical()
+    {
+        //The issuer's own AKI is added straight to the request rather than through the extension set, so it
+        //is the one extension that could drift out of conformance without any other test noticing
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Issued Normally")
+            .SetIssuer(ca)
+            .Create();
+
+        await Assert.That(FindExtension(cert, Oids.AuthorityKeyIdentifier).Critical).IsFalse();
     }
 
 

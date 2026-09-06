@@ -441,6 +441,8 @@ public static class Oids
     public const string JabberId = "2.5.4.105";
 
     // Cert Extensions
+    /// <summary>Certificate extension OID <c>2.5.29.9</c>.</summary>
+    public const string SubjectDirectoryAttributes = "2.5.29.9";
     /// <summary>Certificate extension OID <c>2.5.29.10</c>.</summary>
     public const string BasicConstraints = "2.5.29.10";
     /// <summary>Certificate extension OID <c>2.5.29.14</c>.</summary>
@@ -874,6 +876,7 @@ public static class Oids
     private static Oid? s_intEmailOid;
     private static Oid? s_jabberIdOid;
 
+    private static Oid? s_subjectDirectoryAttributesOid;
     private static Oid? s_basicConstraintsOid;
     private static Oid? s_subjectKeyIdentifierOid;
     private static Oid? s_keyUsageOid;
@@ -1374,6 +1377,8 @@ public static class Oids
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="JabberId"/>.</summary>
     public static Oid JabberIdOid => LazyInitializer.EnsureInitialized(ref s_jabberIdOid, () => InitializeOid(JabberId));
 
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SubjectDirectoryAttributes"/>.</summary>
+    public static Oid SubjectDirectoryAttributesOid => LazyInitializer.EnsureInitialized(ref s_subjectDirectoryAttributesOid, () => InitializeOid(SubjectDirectoryAttributes));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="BasicConstraints"/>.</summary>
     public static Oid BasicConstraintsOid => LazyInitializer.EnsureInitialized(ref s_basicConstraintsOid, () => InitializeOid(BasicConstraints));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SubjectKeyIdentifier"/>.</summary>

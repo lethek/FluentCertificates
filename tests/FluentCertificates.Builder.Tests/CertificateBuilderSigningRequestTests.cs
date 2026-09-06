@@ -392,7 +392,9 @@ public class CertificateBuilderSigningRequestTests
         using var ca = BuildCa();
         var template = new CertificateBuilder().SetUsage(CertificateUsage.Server).SetIssuer(ca);
 
-        using var issuedFirst = template.UseCertificateSigningRequest(first, _ => true).Create();
+        //Everything except the request's cA=TRUE basic constraints, which contradicts the Server profile and
+        //is refused outright rather than issued
+        using var issuedFirst = template.UseCertificateSigningRequest(first, x => x.Oid?.Value != Oids.BasicConstraints2).Create();
         using var issuedSecond = template.UseCertificateSigningRequest(second).Create();
 
         await Assert.That(ReadDnsNames(issuedFirst)).IsEquivalentTo([RequestedDnsName]);
