@@ -389,7 +389,7 @@ public record CertificateBuilder
     /// Sets the CRL Distribution Points extension, naming where the issuer publishes its revocation lists.
     /// </summary>
     /// <param name="uris">The URIs the CRL can be downloaded from. Must contain at least one URI, and each must be ASCII.</param>
-    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.1.13 says conforming CAs SHOULD mark it non-critical;
+    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.1.13 says it SHOULD be non-critical;
     /// the CA/Browser Forum Baseline Requirements certificate profiles (s7.1.2) require it non-critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty.</exception>
@@ -423,7 +423,7 @@ public record CertificateBuilder
     /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
     /// </summary>
     /// <param name="policyIdentifiers">The policies to assert. Must contain at least one.</param>
-    /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that does not recognise the policy OIDs to reject the certificate.
+    /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that cannot interpret the Certificate Policies extension to reject the certificate.
     /// The CA/Browser Forum Baseline Requirements certificate profiles (s7.1.2) require it non-critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
@@ -436,7 +436,7 @@ public record CertificateBuilder
     /// Sets the Certificate Policies extension, naming the policies under which the certificate is issued.
     /// </summary>
     /// <param name="policyIdentifiers">The OIDs of the policies to assert. Must contain at least one OID.</param>
-    /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that does not recognise the policy OIDs to reject the certificate.
+    /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that cannot interpret the Certificate Policies extension to reject the certificate.
     /// The CA/Browser Forum Baseline Requirements certificate profiles (s7.1.2) require it non-critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
@@ -629,8 +629,8 @@ public record CertificateBuilder
 
 
     //RFC 5280 s4.2.2.1: conforming CAs MUST mark Authority Information Access non-critical. Nothing this
-    //builder generates is an AIA extension, so a critical one can only have arrived from a caller: added by
-    //hand, or accepted off a certificate signing request. This runs from both Validate and
+    //builder generates is a critical AIA extension, so a critical one can only have arrived from a caller:
+    //added by hand, or accepted off a certificate signing request. This runs from both Validate and
     //CreateCertificateRequest because the request-building paths don't call Validate.
     private static void CheckAuthorityInformationAccessIsNotCritical(IEnumerable<X509Extension> extensions)
     {

@@ -16,8 +16,8 @@ namespace FluentCertificates;
 /// </param>
 /// <param name="critical">
 /// Whether to mark the extension critical. Leave this <see langword="false"/> unless a certificate profile
-/// demands otherwise: a critical Certificate Policies extension forces any relying party that does not
-/// recognise the policy OIDs to reject the certificate. The CA/Browser Forum Baseline Requirements
+/// demands otherwise: a critical Certificate Policies extension forces any relying party that cannot
+/// interpret the extension to reject the certificate. The CA/Browser Forum Baseline Requirements
 /// certificate profiles (s7.1.2) require it non-critical.
 /// </param>
 /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty, or contains the same OID more than once.</exception>

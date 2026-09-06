@@ -383,10 +383,10 @@ Authority Information Access has no `critical` option at all: RFC 5280 s4.2.2.1 
 non-critical, and a critical one added by hand or accepted off a signing request is rejected when a
 certificate or a signing request is built. CRL Distribution Points only SHOULD be non-critical under RFC
 5280 s4.2.1.13; the CA/Browser Forum Baseline Requirements certificate profiles (s7.1.2) go further and
-require it. Certificate Policies criticality isn't addressed by RFC 5280 at all, but the same Baseline
-Requirements profiles require it non-critical too. `SetCrlDistributionPoints` and `SetCertificatePolicies`
-both accept `critical: true` for a profile that needs otherwise, alongside a collection rather than
-`params`.
+require it. Certificate Policies criticality is neither required nor recommended either way by RFC 5280,
+which only says what a validator must do when the extension is critical, but the same Baseline Requirements
+profiles require it non-critical too. `SetCrlDistributionPoints` and `SetCertificatePolicies` both accept
+`critical: true` for a profile that needs otherwise, alongside a collection rather than `params`.
 
 ---
 
