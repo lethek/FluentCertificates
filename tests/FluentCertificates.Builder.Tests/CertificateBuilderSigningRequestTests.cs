@@ -279,9 +279,8 @@ public class CertificateBuilderSigningRequestTests
     [Test]
     public async Task UseCertificateSigningRequest_WithAccept_ACriticalAuthorityInformationAccessExtension_ThrowsWhenBuilt()
     {
-        //This is the route SetAuthorityInformationAccess's own documentation justifies the guard with: a
-        //critical AIA extension accepted off a CSR must be rejected when the certificate is built, just as
-        //one added by hand through AddExtension is.
+        //Proves the CSR loader preserves the critical flag through the accept predicate and into the
+        //builder's Extensions, where the guard catches it, just as one added by hand through AddExtension is.
         //The request has to be built with CertificateRequest directly rather than through
         //CreateCertificateSigningRequest(), since that now enforces the same guard on the CSR itself.
         using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);

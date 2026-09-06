@@ -424,7 +424,7 @@ public record CertificateBuilder
     /// </summary>
     /// <param name="policyIdentifiers">The policies to assert. Must contain at least one.</param>
     /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that does not recognise the policy OIDs to reject the certificate.
-    /// The CA/Browser Forum Baseline Requirements say it SHOULD NOT be critical.</param>
+    /// The CA/Browser Forum Baseline Requirements certificate profiles (s7.1.2) require it non-critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
     /// <exception cref="ArgumentException">Thrown when an <see cref="Oid"/> in <paramref name="policyIdentifiers"/> has no <see cref="Oid.Value"/>.</exception>
@@ -437,7 +437,7 @@ public record CertificateBuilder
     /// </summary>
     /// <param name="policyIdentifiers">The OIDs of the policies to assert. Must contain at least one OID.</param>
     /// <param name="critical">Whether to mark the extension critical. A critical extension forces any relying party that does not recognise the policy OIDs to reject the certificate.
-    /// The CA/Browser Forum Baseline Requirements say it SHOULD NOT be critical.</param>
+    /// The CA/Browser Forum Baseline Requirements certificate profiles (s7.1.2) require it non-critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
     public CertificateBuilder SetCertificatePolicies(IEnumerable<string> policyIdentifiers, bool critical = false)
@@ -584,6 +584,8 @@ public record CertificateBuilder
     /// <summary>
     /// Validates the current builder configuration and throws if invalid.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when a critical Authority Information Access extension
+    /// is present, which RFC 5280 s4.2.2.1 forbids.</exception>
     public void Validate()
     {
         //A KeyAlgorithm carries its own key length, curve or parameter set, so there is no longer any
@@ -627,8 +629,9 @@ public record CertificateBuilder
 
 
     //RFC 5280 s4.2.2.1: conforming CAs MUST mark Authority Information Access non-critical. Nothing this
-    //builder generates is critical, so the only way here is an extension the caller added or accepted off
-    //a certificate signing request.
+    //builder generates is an AIA extension, so a critical one can only have arrived from a caller: added by
+    //hand, or accepted off a certificate signing request. This runs from both Validate and
+    //CreateCertificateRequest because the request-building paths don't call Validate.
     private static void CheckAuthorityInformationAccessIsNotCritical(IEnumerable<X509Extension> extensions)
     {
         if (extensions.Any(x => x.Critical && String.Equals(x.Oid?.Value, Oids.AuthorityInformationAccess))) {
@@ -649,6 +652,8 @@ public record CertificateBuilder
     /// is present, which RFC 5280 s4.2.2.1 forbids.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
+        CheckAuthorityInformationAccessIsNotCritical(Extensions);
+
         if (PublicKey == null) {
             throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) first to provide an asymmetric public/private keypair");
         }
@@ -879,13 +884,9 @@ public record CertificateBuilder
         }
 
         //Collate extensions; manually specified ones in the `builder` may override matching generated ones above (e.g. Usage, DnsNames, Email, etc.)
-        var collated = extensions.Count > 0
+        return extensions.Count > 0
             ? builder._extensions.Union(extensions)
             : builder._extensions;
-
-        CheckAuthorityInformationAccessIsNotCritical(collated);
-
-        return collated;
     }
 
 

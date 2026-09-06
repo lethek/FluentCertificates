@@ -48,18 +48,6 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
-    public async Task Create_WithACriticalAuthorityInformationAccessExtensionFromSetExtensions_Throws()
-    {
-        //The guard must fire for an extension supplied via SetExtensions, not only one added via AddExtension
-        var builder = new CertificateBuilder()
-            .SetSubject(x => x.SetCommonName(nameof(Create_WithACriticalAuthorityInformationAccessExtensionFromSetExtensions_Throws)))
-            .SetExtensions(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
-
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
-    }
-
-
-    [Test]
     public async Task Create_WithANonCriticalHandSuppliedAuthorityInformationAccessExtension_IsIssuedNormally()
     {
         //Pins that the guard only rejects a critical AIA extension, not every hand-supplied one -- without
@@ -88,6 +76,20 @@ public class CertificateBuilderExtensionHelperTests
             .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
 
         await Assert.That(() => builder.CreateCertificateRequest()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Validate_WithACriticalAuthorityInformationAccessExtension_Throws()
+    {
+        //Validate() carries its own call site for the guard, separate from CreateCertificateRequest()'s;
+        //without this test, removing Validate()'s call site would leave every other test green, since
+        //Create() and CreateCertificateRequest() both reach the other call site
+        var builder = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(Validate_WithACriticalAuthorityInformationAccessExtension_Throws)))
+            .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: true));
+
+        await Assert.That(() => builder.Validate()).Throws<InvalidOperationException>();
     }
 
 

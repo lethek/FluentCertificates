@@ -378,12 +378,13 @@ also accepted, as a single value or a collection, for callers who would rather n
 `ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`. Each of the three
 helpers replaces any earlier value rather than adding a second extension under the same OID.
 
-All three extensions are non-critical, which is what RFC 5280 and real-world practice call for. A profile
-that needs otherwise can pass `critical: true` to `SetCrlDistributionPoints` or `SetCertificatePolicies`,
-alongside a collection rather than `params`; the CA/Browser Forum Baseline Requirements go further, requiring
-CRL Distribution Points non-critical and recommending the same for Certificate Policies. Authority
-Information Access has no such option: RFC 5280 s4.2.2.1 requires it to be non-critical, and a critical one
-added by hand or accepted off a signing request is rejected when a certificate or a signing request is built.
+All three extensions are non-critical, which real-world practice calls for, and which RFC 5280 requires for
+Authority Information Access and CRL Distribution Points. A profile that needs otherwise can pass
+`critical: true` to `SetCrlDistributionPoints` or `SetCertificatePolicies`, alongside a collection rather
+than `params`; the CA/Browser Forum Baseline Requirements go further, requiring all three non-critical.
+Authority Information Access has no such option: RFC 5280 s4.2.2.1 requires it to be non-critical, and a
+critical one added by hand or accepted off a signing request is rejected when a certificate or a signing
+request is built.
 
 ---
 
