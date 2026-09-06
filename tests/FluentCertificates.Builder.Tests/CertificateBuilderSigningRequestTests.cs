@@ -428,14 +428,44 @@ public class CertificateBuilderSigningRequestTests
         //"CN=Multi Valued+OU=Sales" and its constructor rejects one. The subject of a received request is
         //peer-supplied, so a CA has to expect this rather than meet it as an unhandled fault.
         using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var request = new CertificateRequest(
-            new X500DistinguishedName("CN=Multi Valued+OU=Sales, O=Acme"),
-            keys,
-            HashAlgorithmName.SHA256);
+        var request = new CertificateRequest(MultiValuedSubject(), keys, HashAlgorithmName.SHA256);
         var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest());
 
         await Assert.That(() => new CertificateBuilder().UseCertificateSigningRequest(csr))
             .Throws<InvalidOperationException>();
+    }
+
+
+    /// <summary>
+    /// Encodes "CN=Multi Valued+OU=Sales, O=Acme" as DER: two relative distinguished names, the second of
+    /// which holds two attributes.
+    /// </summary>
+    /// <remarks>
+    /// Only Windows honours the '+' multi-value separator in the string constructor of
+    /// <see cref="X500DistinguishedName"/>. Elsewhere "Multi Valued+OU=Sales" parses as one common name
+    /// value, so a string here would build a single-valued name and silently test nothing.
+    /// </remarks>
+    private static X500DistinguishedName MultiValuedSubject()
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) {
+            using (writer.PushSetOf()) {
+                WriteAttribute(Oids.Organization, "Acme");
+            }
+            using (writer.PushSetOf()) {
+                WriteAttribute(Oids.CommonName, "Multi Valued");
+                WriteAttribute(Oids.OrganizationalUnit, "Sales");
+            }
+        }
+        return new X500DistinguishedName(writer.Encode());
+
+        void WriteAttribute(string oid, string value)
+        {
+            using (writer.PushSequence()) {
+                writer.WriteObjectIdentifier(oid);
+                writer.WriteCharacterString(UniversalTagNumber.PrintableString, value);
+            }
+        }
     }
 
 
