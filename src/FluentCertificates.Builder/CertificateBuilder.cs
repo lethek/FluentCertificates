@@ -1,8 +1,10 @@
 ﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 using FluentCertificates.Internals;
 
@@ -513,8 +515,9 @@ public record CertificateBuilder
     /// <para>
     /// <b>Everything else in the request is the requester's word for it.</b> This builder refuses only what
     /// no certificate could legitimately need — a value contradicting the <see cref="Usage"/> profile, or one
-    /// breaking an RFC 5280 MUST — because only the caller knows what their policy allows. Nothing else is
-    /// screened. In particular the subject name is taken from the request as given: call
+    /// breaking an RFC 5280 MUST — along with a value it cannot read back, which it can neither correct nor
+    /// vouch for. Only the caller knows what their policy allows, so nothing else is screened. In particular
+    /// the subject name is taken from the request as given: call
     /// <see cref="SetSubject(X500NameBuilder)"/> afterwards to overrule it, as a CA that issues under names
     /// it has verified will want to.
     /// </para>
@@ -771,10 +774,63 @@ public record CertificateBuilder
             return;
         }
 
-        if (subject.RawData.AsSpan().SequenceEqual(builder.Issuer.SubjectName.RawData)) {
+        if (String.Equals(CanonicalName(subject), CanonicalName(builder.Issuer.SubjectName), StringComparison.Ordinal)) {
             throw new InvalidOperationException($"The subject is the issuer's own name, which contradicts {nameof(CertificateUsage)}.{builder.Usage}: an end-entity certificate under that name can sign certificate revocation lists that relying parties accept as the issuer's own. Set a different subject, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
         }
     }
+
+
+    //Comparing the encoded bytes would not settle this. RFC 5280 s7.1 has relying parties compare names in a
+    //canonical form, and both OpenSSL's X509_NAME_cmp and Java's X500Principal do: they fold case, collapse
+    //whitespace and disregard which ASN.1 string type carried the characters. A requester chooses all three
+    //for their own subject -- this builder alone writes a common name as a UTF8String and a country as a
+    //PrintableString -- so the same name arrives under any number of encodings, and byte equality would wave
+    //every one of them through.
+    //The name is read apart rather than decoded to its display form, because that form escapes a leading or
+    //trailing space with a backslash, and the backslash survives any amount of whitespace folding.
+    //DER already sorts a multi-valued RDN, so attribute order within one needs no canonicalising here.
+    //Two names alike enough to collide under this are refused even where a validator might tell them apart,
+    //which is the safe direction: a certificate whose name differs from its issuer's only in case is not
+    //something to issue quietly. A name that will not parse falls back to its bytes, which is stricter.
+    private static string CanonicalName(X500DistinguishedName name)
+    {
+        try {
+            var canonical = new StringBuilder();
+            var rdns = new AsnReader(name.RawData, AsnEncodingRules.DER).ReadSequence();
+            while (rdns.HasData) {
+                var attributes = rdns.ReadSetOf();
+                while (attributes.HasData) {
+                    var attribute = attributes.ReadSequence();
+                    canonical.Append(attribute.ReadObjectIdentifier()).Append('=').Append(CanonicalAttributeValue(attribute)).Append(',');
+                }
+                canonical.Append(';');
+            }
+            return canonical.ToString();
+        } catch (AsnContentException) {
+            return Convert.ToHexString(name.RawData);
+        }
+    }
+
+
+    private static string CanonicalAttributeValue(AsnReader attribute)
+    {
+        var tag = attribute.PeekTag();
+
+        if (tag.TagClass != TagClass.Universal || Array.IndexOf(DirectoryStringTags, (UniversalTagNumber)tag.TagValue) < 0) {
+            //Not text, so there is nothing to fold and the encoding is the value
+            return Convert.ToHexString(attribute.ReadEncodedValue().Span);
+        }
+
+        var text = attribute.ReadCharacterString((UniversalTagNumber)tag.TagValue);
+        return String.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
+    }
+
+
+    private static readonly UniversalTagNumber[] DirectoryStringTags = [
+        UniversalTagNumber.UTF8String, UniversalTagNumber.NumericString, UniversalTagNumber.PrintableString,
+        UniversalTagNumber.T61String, UniversalTagNumber.IA5String, UniversalTagNumber.VisibleString,
+        UniversalTagNumber.UniversalString, UniversalTagNumber.BMPString
+    ];
 
 
     //Decodes an extension and refuses to answer unless it re-encodes to the very bytes it came from.
@@ -847,8 +903,8 @@ public record CertificateBuilder
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
     /// <exception cref="ArgumentNullException">Thrown if no key pair is set. Make sure to call the <see cref="SetKeyPair(AsymmetricAlgorithm)"/> method as
     /// certificate requests require a manually specified key pair.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when an extension's value, or the subject name,
+    /// contradicts the <see cref="Usage"/> profile.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
         if (PublicKey == null) {
@@ -888,8 +944,8 @@ public record CertificateBuilder
     /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
     /// <exception cref="NotSupportedException">Thrown when the key to certify is an <see cref="System.Security.Cryptography.ECDiffieHellman"/>
     /// key, which cannot produce the proof-of-possession signature a PKCS#10 request is built around.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when an extension's value, or the subject name,
+    /// contradicts the <see cref="Usage"/> profile.</exception>
     public CertificateSigningRequest CreateCertificateSigningRequest()
     {
         //PKCS#10 proves possession by signing the request with the very key being certified. A supplied
@@ -906,8 +962,8 @@ public record CertificateBuilder
     /// Builds an <see cref="X509Certificate2"/> instance based on the builder's parameters.
     /// </summary>
     /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when an extension's value, or the subject name,
+    /// contradicts the <see cref="Usage"/> profile.</exception>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Create()
     {

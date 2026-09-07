@@ -431,7 +431,8 @@ An extension whose value will not decode has no criticality rule to apply, so th
 Criticality is a flag beside an extension, so a violation can be corrected. Other things cannot be corrected
 without deciding what the caller meant, and those are refused with an `InvalidOperationException`. The line
 is drawn at what no certificate could legitimately need — a value contradicting the `Usage` profile, or one
-breaking an RFC 5280 MUST — because only you know what your policy allows:
+breaking an RFC 5280 MUST — plus the narrow case of a value this builder cannot read back, since it can
+neither correct nor vouch for that. Everything else is your policy to set:
 
 - **Basic Constraints disagreeing with the profile about whether this is a certificate authority.** A
   requester slipping `cA=TRUE` past a permissive `accept` predicate on an end-entity profile walks away able
@@ -441,8 +442,11 @@ breaking an RFC 5280 MUST — because only you know what your policy allows:
 - **A subject that is the issuer's own name, under an end-entity profile.** RFC 5280 s6.3.3 accepts a
   revocation list from any certificate whose subject matches the target's issuer and whose key usage asserts
   `cRLSign` — it does not require `cA=TRUE`. So a leaf bearing the CA's name can revoke everything that CA
-  ever issued, and both OpenSSL and Java PKIX honour it. A self-signed certificate is exempt, having no
-  separate issuer to collide with.
+  ever issued, and both OpenSSL and Java PKIX honour it. The names are compared the way a relying party
+  compares them, per RFC 5280 s7.1: case-folded, whitespace-collapsed, and regardless of which ASN.1 string
+  type carried the characters, so re-encoding `CN=Example CA` as a `UTF8String` instead of a
+  `PrintableString` is not a way past it. A self-signed certificate is exempt, having no separate issuer to
+  collide with.
 - **Basic Constraints bounding a path length without asserting `cA=TRUE`,** which RFC 5280 s4.2.1.9 forbids.
   The bound counts how many CAs may appear beneath this one, so on a certificate that is not a CA it
   constrains nothing.

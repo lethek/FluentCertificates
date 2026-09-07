@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -363,9 +364,6 @@ public class CertificateBuilderUsageAgreementTests
     }
 
 
-    //A plain X509Extension does not replace the profile's generated extension of the same OID -- the set
-    //matches on runtime type too -- so both would reach CertificateRequest and it would throw before any of
-    //this was reached. CopyFrom gives the right runtime type carrying the bytes under test.
     [Test]
     public async Task Create_WithASubjectMatchingTheIssuers_Throws()
     {
@@ -406,6 +404,78 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    [Arguments(UniversalTagNumber.PrintableString)] //the CA's own common name is a UTF8String
+    [Arguments(UniversalTagNumber.BMPString)]
+    public async Task Create_WithASubjectMatchingTheIssuersUnderAnotherStringEncoding_Throws(UniversalTagNumber encoding)
+    {
+        //RFC 5280 s7.1 has relying parties compare names canonically, and OpenSSL and Java both disregard
+        //which ASN.1 string type carried the characters. Comparing the encoded bytes would let the same name
+        //through under any encoding the requester picked, which is what this test caught.
+        using var ca = BuildCa();
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.Set(Oids.CommonNameOid, encoding, CaCommonName));
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    [Arguments("issuing ca")]      //case-folded
+    [Arguments("ISSUING CA")]
+    [Arguments("Issuing   CA")]    //whitespace collapsed
+    [Arguments("  Issuing CA  ")]
+    public async Task Create_WithASubjectMatchingTheIssuersButForCaseOrSpacing_Throws(string commonName)
+    {
+        //Canonical name comparison folds case and collapses whitespace, so neither is a way past the check
+        using var ca = BuildCa();
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(commonName));
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithASubjectMerelyResemblingTheIssuers_IsIssuedNormally()
+    {
+        //Pins that the comparison is not so loose that any similar name collides. Without this, an
+        //implementation refusing every subject would still pass every case above.
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(CaCommonName + " Subordinate"))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("Subordinate");
+    }
+
+
+    [Test]
+    public async Task Create_WithASubjectMatchingTheIssuersAndNoUsage_IsIssuedNormally()
+    {
+        //A builder with no Usage makes none of these refusals, as UseCertificateSigningRequest's remarks and
+        //the README both warn. Without this test, extending the check to an unconfigured builder would pass
+        //the whole suite, so the documented behaviour would not actually be pinned anywhere.
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetIssuer(ca)
+            .SetSubject(ca.SubjectName)
+            .Create();
+
+        await Assert.That(cert.SubjectName.RawData).IsEquivalentTo(ca.SubjectName.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+
+    [Test]
     public async Task Create_WithASubjectMatchingTheIssuersOnTheCaProfile_IsIssuedNormally()
     {
         //A self-issued CA certificate is ordinary key rollover, so the CA profile is exempt. Without this,
@@ -437,6 +507,12 @@ public class CertificateBuilderUsageAgreementTests
     }
 
 
+    private const string CaCommonName = "Issuing CA";
+
+
+    //A plain X509Extension does not replace the profile's generated extension of the same OID -- the set
+    //matches on runtime type too -- so both would reach CertificateRequest and it would throw before any of
+    //this was reached. CopyFrom gives the right runtime type carrying the bytes under test.
     private static X509Extension Retype(string oid, byte[] rawData)
     {
         X509Extension typed = oid == Oids.BasicConstraints2
@@ -452,7 +528,8 @@ public class CertificateBuilderUsageAgreementTests
         using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         return new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject("CN=Issuing CA")
+            //SetCommonName writes a UTF8String, so the encoding tests below have something to differ from
+            .SetSubject(x => x.SetCommonName(CaCommonName))
             .SetKeyPair(keys)
             .SetValidity(TimeSpan.FromDays(2))
             .Create();
