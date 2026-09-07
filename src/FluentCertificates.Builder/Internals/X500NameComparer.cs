@@ -95,7 +95,9 @@ internal static class X500NameComparer
     }
 
 
-    private const string Separators = ",+=;<>\"\\";
+    //'#' is here because Java renders an attribute value it will not print as '#' followed by the hex of its
+    //encoding, so a character folding into a leading '#' lets a value spell out another name's encoding.
+    private const string Separators = ",+=;<>\"\\#";
 
 
     /// <summary>

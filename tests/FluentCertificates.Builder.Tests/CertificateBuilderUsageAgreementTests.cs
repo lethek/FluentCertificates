@@ -666,6 +666,114 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    public async Task Create_WithASignatureGeneratorAndNoIssuer_ThrowsUnderTheCaProfileToo()
+    {
+        //The CA profile is no exemption from the rule above. Here the certificate certifies the requester's
+        //key under the signing authority's own name with cA=TRUE and keyCertSign, which is a certificate
+        //authority impersonated outright rather than the rollover the profile exists to allow.
+        using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName(CaCommonName))
+            .SetKeyPair(caKeys)
+            .SetValidity(TimeSpan.FromDays(2))
+            .Create();
+
+        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest(ca.SubjectName, requesterKeys, HashAlgorithmName.SHA256);
+        var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest());
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(caKeys))
+            .UseCertificateSigningRequest(csr);
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("signed by a key that is not its own");
+    }
+
+
+    [Test]
+    public async Task Create_WithACaSelfSignedOverItsOwnKey_IsIssuedNormally()
+    {
+        //Pins that the rule above turns on whose key signs, not on the CA profile. Without this, refusing
+        //every generator under that profile would still pass the case above.
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName("Self Signed Root"))
+            .SetKeyPair(keys)
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(keys))
+            .SetValidity(TimeSpan.FromDays(1))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("Self Signed Root");
+    }
+
+
+    [Test]
+    public async Task Create_WithACaRolloverUnderTheIssuersOwnName_IsIssuedNormally()
+    {
+        //Pins that the CA profile still exempts the name comparison, which is what rollover needs: a new CA
+        //certificate carries the same subject as the issuer signing it.
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(CaCommonName))
+            .SetValidity(TimeSpan.FromDays(1))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains(CaCommonName);
+    }
+
+
+    [Test]
+    public async Task Create_WithASubjectFoldingIntoAHexValueMarker_Throws()
+    {
+        //Java renders an attribute value it will not print as '#' followed by the hex of that value's
+        //encoding, and escapes a literal leading '#' before it normalises. A fullwidth '#' therefore arrives
+        //unescaped and folds into the marker, letting one common name spell out the encoding of another.
+        //Verified on JDK 21: a CN of U+FF03 then the hex of a BMPString-encoded "Widget CA" canonicalises to
+        //cn=#1e12005700690064006700650074002000430041, the same string that name itself produces, and
+        //X500Principal.equals reports the two equal.
+        Skip.Unless(CanFoldNames, "Folding a non-ASCII name needs ICU, which this runtime does not have");
+
+        using var ca = BuildCa();
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName("＃1e12005700690064006700650074002000430041"));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("becomes a name separator once folded");
+    }
+
+
+    [Test]
+    public async Task Create_WithALiteralHashInTheSubject_IsIssuedNormally()
+    {
+        //Pins that only a character that BECOMES '#' is refused. A '#' that was always a '#' is escaped
+        //consistently by every validator, so it stays issuable.
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName("Suite #3, Acme"))
+            .SetValidity(TimeSpan.FromDays(1))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("Suite #3");
+    }
+
+
+    [Test]
     public async Task Create_WithAnOcspSigningPurposeUnderAnEndEntityProfile_Throws()
     {
         //RFC 6960 s4.2.2.2 delegates to any certificate the CA issued directly that carries this purpose, so

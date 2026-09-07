@@ -449,12 +449,15 @@ neither correct nor vouch for that. Everything else is your policy to set:
   collide with, and so is `CertificateUsage.CA` — a certificate authority reissuing itself is ordinary key
   rollover, and the builder cannot tell that apart from a request asking for the same thing. So accepting a
   request onto a CA profile grants strictly more than any other profile does; screen the subject yourself
-  before doing it.
+  before doing it. Neither exemption reaches the `SignatureGenerator` rule below, which applies under every
+  `CertificateUsage`.
 
   A name is also refused when a character in it becomes a name separator once folded, such as a fullwidth
   comma in a common name. Java's `X500Principal` escapes an attribute value before normalising it, so such a
   character arrives unescaped and the name reads there as naming attributes it does not have, the issuer's
-  among them. Punctuation that was already punctuation is unaffected.
+  among them. A fullwidth `＃` counts too: Java writes a value it will not print as `#` and the hex of that
+  value's encoding, so one folding into that marker lets a name spell out another name's encoding.
+  Punctuation that was already punctuation is unaffected.
 
   Folding names that way needs ICU, which a build with `InvariantGlobalization` does not have. Wherever the
   comparison is made at all — an end-entity `CertificateUsage` with an `Issuer` set — **such a build refuses

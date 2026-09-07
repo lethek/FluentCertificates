@@ -742,13 +742,7 @@ public record CertificateBuilder
 
     private static void CheckSubjectAgreesWithUsage(CertificateBuilder builder, X500DistinguishedName subject)
     {
-        //RFC 5280 s6.3.3 accepts a certificate revocation list from any certificate whose subject matches
-        //the target certificate's issuer and whose key usage asserts cRLSign; nothing there requires
-        //cA=TRUE. So an end-entity certificate bearing its issuer's own name can revoke everything that CA
-        //ever issued, and OpenSSL and Java PKIX both honour it. The name collision is what does that rather
-        //than any one key usage bit, so the collision is what gets refused. A self-signed certificate has no
-        //separate issuer to collide with, and under the CA profile a self-issued certificate is rollover.
-        if (builder.Usage is null or CertificateUsage.CA) {
+        if (builder.Usage is null) {
             return;
         }
 
@@ -757,10 +751,22 @@ public record CertificateBuilder
             //with -- but only when the key signing it is the subject's own. A generator holding some other
             //key mints a certificate under a name of the requester's choosing that a relying party can still
             //build a path for, since the signature verifies against whoever does own that key. Java will then
-            //accept it as a certificate revocation list issuer for the name it bears, cA=FALSE and all.
+            //accept it as a certificate revocation list issuer for the name it bears, cA=FALSE and all. The CA
+            //profile is no exemption from this: there it certifies a foreign key under the signing authority's
+            //own name, with cA=TRUE and keyCertSign, which is that authority impersonated outright.
             if (builder.SignatureGenerator != null && !IsSubjectsOwnKey(builder)) {
                 throw new InvalidOperationException($"The certificate would be self-issued, naming itself as its own issuer, yet signed by a key that is not its own. A relying party reads that as the named issuer vouching for this subject. Set an {nameof(Issuer)} so the certificate names the authority that really signed it, or sign with the subject's own key");
             }
+            return;
+        }
+
+        //RFC 5280 s6.3.3 accepts a certificate revocation list from any certificate whose subject matches
+        //the target certificate's issuer and whose key usage asserts cRLSign; nothing there requires
+        //cA=TRUE. So an end-entity certificate bearing its issuer's own name can revoke everything that CA
+        //ever issued, and OpenSSL and Java PKIX both honour it. The name collision is what does that rather
+        //than any one key usage bit, so the collision is what gets refused. Under the CA profile a
+        //self-issued certificate is rollover, so the two names are meant to match.
+        if (builder.Usage is CertificateUsage.CA) {
             return;
         }
 
