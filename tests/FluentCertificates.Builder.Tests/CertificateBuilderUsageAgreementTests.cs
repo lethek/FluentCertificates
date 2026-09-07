@@ -121,8 +121,8 @@ public class CertificateBuilderUsageAgreementTests
     [Test]
     public async Task Create_WithAnOrdinaryKeyUsageOnAnEndEntityProfile_IsIssuedNormally()
     {
-        //Pins that only the two CA flags are refused. Without this, rejecting every hand-supplied key usage
-        //would still pass the cases above.
+        //Pins that only keyCertSign is refused. Without this, rejecting every hand-supplied key usage would
+        //still pass the cases above.
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Ordinary Key Usage")
@@ -266,9 +266,11 @@ public class CertificateBuilderUsageAgreementTests
     [Arguments(new byte[] { 0x30, 0x0A, 0x01, 0x01, 0xFF, 0x02, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00 })] //pathLenConstraint > Int32.MaxValue
     public async Task Create_WithAPathLengthDotNetCannotRepresent_ThrowsInvalidOperationException(byte[] rawData)
     {
-        //Both decode, then fail on the way back out: the re-encoding constructor rejects a negative path
-        //length, and neither value fits an Int32. The refusal has to arrive as InvalidOperationException like
-        //every other one, not as whatever the BCL happened to throw.
+        //The two fail in different halves of the round trip, which is the point of testing both: -1 decodes
+        //and then trips the re-encoding constructor, which rejects a negative path length, while a value
+        //above Int32.MaxValue throws at decode and never reaches the re-encode. Only the first exercises the
+        //widened catch. Either way the refusal has to arrive as InvalidOperationException like every other
+        //one, not as whatever the BCL happened to throw.
         var builder = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
             .SetSubject("CN=Unrepresentable Path Length")
@@ -364,6 +366,77 @@ public class CertificateBuilderUsageAgreementTests
     //A plain X509Extension does not replace the profile's generated extension of the same OID -- the set
     //matches on runtime type too -- so both would reach CertificateRequest and it would throw before any of
     //this was reached. CopyFrom gives the right runtime type carrying the bytes under test.
+    [Test]
+    public async Task Create_WithASubjectMatchingTheIssuers_Throws()
+    {
+        //RFC 5280 s6.3.3 accepts a revocation list from any certificate whose subject matches the target
+        //certificate's issuer and whose key usage asserts cRLSign, without requiring cA=TRUE. So a leaf under
+        //the CA's own name can revoke everything that CA ever issued; OpenSSL and Java PKIX both honour it.
+        using var ca = BuildCa();
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(ca.SubjectName);
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("issuer's own name");
+    }
+
+
+    [Test]
+    public async Task UseCertificateSigningRequest_WithASubjectMatchingTheIssuers_Throws()
+    {
+        //The route that matters: the subject comes off the request unchallenged, so the requester chooses it
+        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = BuildCa();
+
+        var request = new CertificateRequest(ca.SubjectName, requesterKeys, HashAlgorithmName.SHA256);
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.CrlSign, critical: true));
+        var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest(), CertificateRequestLoadOptions.UnsafeLoadCertificateExtensions);
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(csr, _ => true);
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithASubjectMatchingTheIssuersOnTheCaProfile_IsIssuedNormally()
+    {
+        //A self-issued CA certificate is ordinary key rollover, so the CA profile is exempt. Without this,
+        //refusing every name collision would still pass the cases above.
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetIssuer(ca)
+            .SetSubject(ca.SubjectName)
+            .Create();
+
+        await Assert.That(cert.SubjectName.RawData).IsEquivalentTo(ca.SubjectName.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Create_SelfSignedWithAnEndEntityProfile_IsIssuedNormally()
+    {
+        //A self-signed certificate is its own issuer, so the collision is unavoidable and means nothing.
+        //Without this, comparing against the subject rather than the issuer would break the commonest thing
+        //this library does.
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=localhost")
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).IsEqualTo(cert.IssuerName.Name);
+    }
+
+
     private static X509Extension Retype(string oid, byte[] rawData)
     {
         X509Extension typed = oid == Oids.BasicConstraints2

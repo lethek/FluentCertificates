@@ -511,11 +511,18 @@ public record CertificateBuilder
     /// the rest of its content.
     /// </para>
     /// <para>
+    /// <b>Everything else in the request is the requester's word for it.</b> This builder refuses only what
+    /// no certificate could legitimately need — a value contradicting the <see cref="Usage"/> profile, or one
+    /// breaking an RFC 5280 MUST — because only the caller knows what their policy allows. Nothing else is
+    /// screened. In particular the subject name is taken from the request as given: call
+    /// <see cref="SetSubject(X500NameBuilder)"/> afterwards to overrule it, as a CA that issues under names
+    /// it has verified will want to.
+    /// </para>
+    /// <para>
     /// <b>Set a <see cref="Usage"/> before accepting anything.</b> Those refusals are the only check on what
-    /// an accepted extension asserts, and every one of them compares it against the profile, so a builder
-    /// with no <see cref="Usage"/> has nothing to compare against and makes none of them. A request accepted
-    /// onto one can carry <c>cA=TRUE</c> and <c>keyCertSign</c>, and the certificate issued from it will sign
-    /// other certificates that chain to your issuer. Whether that is what you meant is exactly what
+    /// an accepted extension asserts, and a builder with no <see cref="Usage"/> makes none of them. A request
+    /// accepted onto one can carry <c>cA=TRUE</c> and <c>keyCertSign</c>, and the certificate issued from it
+    /// will sign other certificates that chain to your issuer. Whether that is what you meant is exactly what
     /// <see cref="SetUsage"/> tells this builder.
     /// </para>
     /// <para>
@@ -704,10 +711,11 @@ public record CertificateBuilder
     //able to mint others, so an end-entity profile has no business asserting it, and a CA without it cannot
     //sign what it was made to sign. cRLSign is left alone: an indirect CRL issuer is conventionally an
     //end-entity certificate asserting exactly that and nothing else.
-    //Criticality conformance cannot reach any of this: the contradiction is in the value, not the flag.
-    //Nothing is checked when no Usage is set. A caller assembling a certificate by hand has no profile to
-    //contradict, so a request accepted onto a builder with no Usage is governed by its accept predicate
-    //alone -- see UseCertificateSigningRequest's remarks.
+    //Criticality conformance cannot reach any of this: what is wrong is in the value, not the flag.
+    //A set Usage is what makes any of it checkable, and rather than run the one rule that needs no profile
+    //-- s4.2.1.9 -- on its own, the whole check is skipped without one: a caller assembling a certificate by
+    //hand has declared no intent to measure anything against. So a request accepted onto a builder with no
+    //Usage is governed by its accept predicate alone -- see UseCertificateSigningRequest's remarks.
     private static void CheckExtensionsAgreeWithUsage(CertificateBuilder builder, IEnumerable<X509Extension> extensions)
     {
         if (builder.Usage == null) {
@@ -745,6 +753,26 @@ public record CertificateBuilder
                     }
                     break;
             }
+        }
+    }
+
+
+    //An end-entity certificate bearing its issuer's own name is how a requester gets one that speaks for the
+    //issuer. RFC 5280 s6.3.3 accepts a certificate revocation list from any certificate whose subject matches
+    //the target certificate's issuer and whose key usage asserts cRLSign; nothing there requires cA=TRUE. So
+    //a leaf carrying the CA's name can revoke everything that CA ever issued, and relying parties honour it:
+    //verified against OpenSSL and Java PKIX, both of which report the target as revoked. The name collision
+    //is what does that rather than any one key usage bit, so the collision is what gets refused.
+    //A self-signed certificate is exempt, having no separate issuer to collide with, and so is the CA
+    //profile, where a self-issued certificate is ordinary key rollover.
+    private static void CheckSubjectAgreesWithUsage(CertificateBuilder builder, X500DistinguishedName subject)
+    {
+        if (builder.Usage is null or CertificateUsage.CA || builder.Issuer == null) {
+            return;
+        }
+
+        if (subject.RawData.AsSpan().SequenceEqual(builder.Issuer.SubjectName.RawData)) {
+            throw new InvalidOperationException($"The subject is the issuer's own name, which contradicts {nameof(CertificateUsage)}.{builder.Usage}: an end-entity certificate under that name can sign certificate revocation lists that relying parties accept as the issuer's own. Set a different subject, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
         }
     }
 
@@ -805,13 +833,15 @@ public record CertificateBuilder
     /// and <see cref="Extensions"/> still reports whatever it was given, so this changes only what is issued.
     /// </para>
     /// <para>
-    /// An extension whose value contradicts the <see cref="Usage"/> profile is refused rather than corrected,
-    /// since the contradiction is in the value: basic constraints disagreeing with the profile about whether
-    /// this is a certificate authority, a key usage asserting <c>keyCertSign</c> or <c>cRLSign</c> under an
-    /// end-entity profile, or one not asserting <c>keyCertSign</c> under <see cref="CertificateUsage.CA"/>.
-    /// Either extension is also refused when its value does not read back as the bytes it was supplied as,
-    /// since what it asserts to a validator cannot then be established here. Nothing is checked when no
-    /// <see cref="Usage"/> is set.
+    /// A basic constraints or key usage extension is refused rather than corrected, since what is wrong with
+    /// it is in the value: basic constraints disagreeing with the <see cref="Usage"/> profile about whether
+    /// this is a certificate authority, or bounding a path length without asserting <c>cA=TRUE</c> (RFC 5280
+    /// s4.2.1.9); a key usage asserting <c>keyCertSign</c> under an end-entity profile, or not asserting it
+    /// under <see cref="CertificateUsage.CA"/>. Either extension is also refused when its value does not read
+    /// back as the bytes it was supplied as, since what it asserts to a validator cannot then be established
+    /// here. So is a subject that is the <see cref="Issuer"/>'s own name, under an end-entity profile: such a
+    /// certificate can sign certificate revocation lists that relying parties accept as the issuer's own.
+    /// None of this is checked when no <see cref="Usage"/> is set.
     /// </para>
     /// </remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
@@ -826,6 +856,8 @@ public record CertificateBuilder
         }
 
         var dn = Subject.Create();
+
+        CheckSubjectAgreesWithUsage(this, dn);
 
         var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
 

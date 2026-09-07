@@ -426,17 +426,23 @@ Console.WriteLine(issued.Extensions
 
 An extension whose value will not decode has no criticality rule to apply, so the flag is left as supplied.
 
-### Extensions that contradict the profile
+### What the builder refuses
 
-Criticality is a flag beside an extension, so a violation can be corrected. Some extensions instead
-contradict the `Usage` profile in their *value*, which cannot be corrected without deciding what the caller
-meant. Those are refused with an `InvalidOperationException`:
+Criticality is a flag beside an extension, so a violation can be corrected. Other things cannot be corrected
+without deciding what the caller meant, and those are refused with an `InvalidOperationException`. The line
+is drawn at what no certificate could legitimately need — a value contradicting the `Usage` profile, or one
+breaking an RFC 5280 MUST — because only you know what your policy allows:
 
 - **Basic Constraints disagreeing with the profile about whether this is a certificate authority.** A
   requester slipping `cA=TRUE` past a permissive `accept` predicate on an end-entity profile walks away able
   to issue certificates for anyone, and correcting the criticality does not stop that: a validator honours
   `cA=TRUE` whichever way the flag is set. The mirror case, `cA=FALSE` on `CertificateUsage.CA`, strips the
   authority you asked for.
+- **A subject that is the issuer's own name, under an end-entity profile.** RFC 5280 s6.3.3 accepts a
+  revocation list from any certificate whose subject matches the target's issuer and whose key usage asserts
+  `cRLSign` — it does not require `cA=TRUE`. So a leaf bearing the CA's name can revoke everything that CA
+  ever issued, and both OpenSSL and Java PKIX honour it. A self-signed certificate is exempt, having no
+  separate issuer to collide with.
 - **Basic Constraints bounding a path length without asserting `cA=TRUE`,** which RFC 5280 s4.2.1.9 forbids.
   The bound counts how many CAs may appear beneath this one, so on a certificate that is not a CA it
   constrains nothing.
@@ -451,13 +457,15 @@ meant. Those are refused with an `InvalidOperationException`:
   decode and re-encode unchanged. Most values this rejects are malformed, but not all: a `pathLenConstraint`
   larger than an `Int32` conforms to RFC 5280 and is still refused, because .NET cannot represent it.
 
-> **Set a `Usage` before accepting anything from a request.** Every one of those refusals compares the
-> extension against the profile, so a builder with no `Usage` has nothing to compare against and makes none
-> of them. A request accepted onto one can carry `cA=TRUE` and `keyCertSign`, and the certificate issued
-> from it will sign other certificates that chain to your issuer.
+> **Set a `Usage` before accepting anything from a request.** A builder with no `Usage` has declared no
+> intent to measure an extension against, and makes none of these refusals — not even the RFC 5280 s4.2.1.9
+> one, which needs no profile. A request accepted onto such a builder can carry `cA=TRUE` and `keyCertSign`,
+> and the certificate issued from it will sign other certificates that chain to your issuer.
 
-Everything else an extension says is still the `accept` predicate's decision, and `Extensions` on the
-builder keeps reporting whatever it was handed.
+Nothing else in a request is screened. What an extension says is the `accept` predicate's decision, and
+every other field crosses over as the requester wrote it — the subject name included, so call `SetSubject`
+afterwards if your CA issues only under names it has verified. `Extensions` on the builder keeps reporting
+whatever it was handed.
 
 ---
 
