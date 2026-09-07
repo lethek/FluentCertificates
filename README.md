@@ -474,7 +474,13 @@ neither correct nor vouch for that. Everything else is your policy to set:
 - **Key Usage asserting `keyCertSign` under an end-entity profile,** or not asserting it under
   `CertificateUsage.CA`. `keyCertSign` is what makes a certificate able to mint others. `cRLSign` is left
   alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
-- **Either of those two extensions carrying a value that does not read back as the bytes it was supplied
+- **Extended Key Usage asserting the OCSP signing purpose under any profile but
+  `CertificateUsage.OcspSigning`,** or not asserting it under that one. RFC 6960 s4.2.2.2 delegates OCSP to
+  any certificate the CA issued directly that carries `id-kp-OCSPSigning`, so such a certificate answers for
+  every certificate that CA ever signed. It is the OCSP counterpart of `cA=TRUE`, and needs no name
+  collision to be useful to a requester. Every other purpose is left alone: refining the profile's own
+  extended key usage is the ordinary reason to supply one.
+- **Any of those extensions carrying a value that does not read back as the bytes it was supplied
   as.** .NET's decoder is stricter than the ones that read the certificate afterwards, so bytes it rejects —
   a well-formed `cA=TRUE` followed by a trailing `NULL`, say — are read by OpenSSL and Windows CryptoAPI as
   exactly what the well-formed part says. Issuing a value the builder could not read would let a requester

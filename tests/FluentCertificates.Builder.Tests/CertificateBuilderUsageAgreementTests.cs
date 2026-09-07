@@ -614,6 +614,81 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    public async Task Create_WithAnOcspSigningPurposeUnderAnEndEntityProfile_Throws()
+    {
+        //RFC 6960 s4.2.2.2 delegates to any certificate the CA issued directly that carries this purpose, so
+        //one accepted onto an endpoint profile answers for every certificate that CA ever issued. Verified:
+        //such a certificate signed OCSP responses OpenSSL 3.3.7 and JDK 21 both accepted, reporting an
+        //unrelated certificate as revoked and, with the index flipped, suppressing a genuine revocation.
+        using var ca = BuildCa();
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(
+                RequestFor("totally-ordinary.example.net", Oids.OcspSigningPurpose),
+                x => x.Oid?.Value == Oids.EnhancedKeyUsage);
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("OCSP");
+    }
+
+
+    [Test]
+    public async Task Create_WithAnOcspSigningProfileAndThatPurpose_IsIssuedNormally()
+    {
+        //The profile that says the caller meant it
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.OcspSigning)
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(
+                RequestFor("ocsp.example.net", Oids.OcspSigningPurpose),
+                x => x.Oid?.Value == Oids.EnhancedKeyUsage)
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("ocsp.example.net");
+    }
+
+
+    [Test]
+    public async Task Create_WithAnOrdinaryPurposeUnderAnEndEntityProfile_IsIssuedNormally()
+    {
+        //Only the delegating purpose is refused. A profile refining its own extended key usage, which is the
+        //ordinary reason to supply one, is untouched.
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(
+                RequestFor("ordinary.example.net", Oids.ServerAuthPurpose, Oids.ClientAuthPurpose),
+                x => x.Oid?.Value == Oids.EnhancedKeyUsage)
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("ordinary.example.net");
+    }
+
+
+    private static CertificateSigningRequest RequestFor(string commonName, params string[] purposes)
+    {
+        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var purposeOids = new OidCollection();
+        foreach (var purpose in purposes) {
+            purposeOids.Add(new Oid(purpose));
+        }
+
+        var request = new CertificateRequest($"CN={commonName}", requesterKeys, HashAlgorithmName.SHA256);
+        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(purposeOids, false));
+
+        return CertificateSigningRequest.FromDer(request.CreateSigningRequest(), CertificateRequestLoadOptions.UnsafeLoadCertificateExtensions);
+    }
+
+
+    [Test]
     public async Task Create_WithANonAsciiNameAndNoIcu_Throws()
     {
         //The mirror of every Skip.Unless(CanFoldNames) test above: on a build that cannot fold, a comparison

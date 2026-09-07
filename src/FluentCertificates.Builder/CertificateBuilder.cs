@@ -717,6 +717,24 @@ public record CertificateBuilder
                         throw new InvalidOperationException($"A key usage extension that does not assert {nameof(X509KeyUsageFlags.KeyCertSign)} contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}, whose certificates exist to sign other certificates. Reject it, or choose an end-entity {nameof(CertificateUsage)}");
                     }
                     break;
+
+                case Oids.EnhancedKeyUsage:
+                    //RFC 6960 s4.2.2.2 delegates OCSP for the whole CA to any certificate the CA issued
+                    //directly that asserts this purpose. It answers for every certificate that CA ever
+                    //issued, so it is the OCSP counterpart of cA=TRUE and gets the same treatment. Every
+                    //other purpose is the caller's to choose: refining the profile's own extended key usage
+                    //is the ordinary reason to supply one.
+                    var purposes = Decode(extension, x => new X509EnhancedKeyUsageExtension(x, x.Critical), x => new X509EnhancedKeyUsageExtension(x.EnhancedKeyUsages, extension.Critical))
+                        ?.EnhancedKeyUsages ?? throw UnreadableValue(extension, "extended key usage");
+                    bool profileIsOcspSigning = builder.Usage == CertificateUsage.OcspSigning;
+                    bool signsOcsp = purposes.Cast<Oid>().Any(x => String.Equals(x.Value, Oids.OcspSigningPurpose));
+                    if (signsOcsp && !profileIsOcspSigning) {
+                        throw new InvalidOperationException($"An extended key usage extension asserting the OCSP signing purpose contradicts {nameof(CertificateUsage)}.{builder.Usage}: RFC 6960 s4.2.2.2 lets such a certificate answer for every certificate its issuer ever signed. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.OcspSigning)}");
+                    }
+                    if (!signsOcsp && profileIsOcspSigning) {
+                        throw new InvalidOperationException($"An extended key usage extension that does not assert the OCSP signing purpose contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.OcspSigning)}, whose certificates exist to sign OCSP responses. Reject it, or choose another {nameof(CertificateUsage)}");
+                    }
+                    break;
             }
         }
     }
@@ -818,15 +836,17 @@ public record CertificateBuilder
     /// and <see cref="Extensions"/> still reports whatever it was given, so this changes only what is issued.
     /// </para>
     /// <para>
-    /// A basic constraints or key usage extension is refused rather than corrected, since what is wrong with
-    /// it is in the value: basic constraints disagreeing with the <see cref="Usage"/> profile about whether
-    /// this is a certificate authority, or bounding a path length without asserting <c>cA=TRUE</c> (RFC 5280
-    /// s4.2.1.9); a key usage asserting <c>keyCertSign</c> under an end-entity profile, or not asserting it
-    /// under <see cref="CertificateUsage.CA"/>. Either extension is also refused when its value does not read
-    /// back as the bytes it was supplied as, since what it asserts to a validator cannot then be established
-    /// here. So is a subject that is the <see cref="Issuer"/>'s own name, under an end-entity profile: such a
-    /// certificate can sign certificate revocation lists that relying parties accept as the issuer's own.
-    /// None of this is checked when no <see cref="Usage"/> is set.
+    /// A basic constraints, key usage or extended key usage extension is refused rather than corrected, since
+    /// what is wrong with it is in the value: basic constraints disagreeing with the <see cref="Usage"/>
+    /// profile about whether this is a certificate authority, or bounding a path length without asserting
+    /// <c>cA=TRUE</c> (RFC 5280 s4.2.1.9); a key usage asserting <c>keyCertSign</c> under an end-entity
+    /// profile, or not asserting it under <see cref="CertificateUsage.CA"/>; an extended key usage asserting
+    /// the OCSP signing purpose under any profile but <see cref="CertificateUsage.OcspSigning"/>, or not
+    /// asserting it under that one (RFC 6960 s4.2.2.2). Any of the three is also refused when its value does
+    /// not read back as the bytes it was supplied as, since what it asserts to a validator cannot then be
+    /// established here. So is a subject that is the <see cref="Issuer"/>'s own name, under an end-entity
+    /// profile: such a certificate can sign certificate revocation lists that relying parties accept as the
+    /// issuer's own. None of this is checked when no <see cref="Usage"/> is set.
     /// </para>
     /// </remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
