@@ -530,6 +530,13 @@ public record CertificateBuilder
     /// <see cref="SetUsage"/> tells this builder.
     /// </para>
     /// <para>
+    /// <see cref="CertificateUsage.CA"/> says you meant it, so it turns off the subject-name check as well:
+    /// a certificate authority reissuing itself is ordinary key rollover, and this builder cannot tell that
+    /// apart from a request asking for the same thing. Accepting a request onto a CA profile therefore grants
+    /// strictly more than any other profile does — the requester's key can end up signing certificates under
+    /// a name your relying parties read as your own. Screen the subject yourself before doing that.
+    /// </para>
+    /// <para>
     /// Accepted extensions stay on the builder this returns, so issue each further request from the builder
     /// as it stood before this call rather than from its result.
     /// </para>
@@ -775,10 +782,51 @@ public record CertificateBuilder
             return;
         }
 
-        if (IsSameName(subject, builder.Issuer.SubjectName)) {
+        //A name neither side can read apart cannot be compared, and letting it through would switch the rule
+        //off for that certificate authority altogether: no subject would ever match an issuer reduced to its
+        //bytes. Refusing costs nothing, since a name that will not parse is malformed to begin with.
+        var subjectName = CanonicalName(subject) ?? throw UnreadableName("subject");
+        var issuerName = CanonicalName(builder.Issuer.SubjectName) ?? throw UnreadableName("issuer's subject");
+
+        //Folding non-ASCII names needs ICU, which a globalization-invariant build does not have. Neither the
+        //collator nor Normalize says so -- both quietly do nothing -- so the capability is probed rather than
+        //asked for, and where it is missing and would be needed, this refuses instead of waving the name
+        //through. An ASCII pair needs no folding beyond case, which works everywhere.
+        if (!CanFoldNames && !(Ascii.IsValid(subjectName) && Ascii.IsValid(issuerName))) {
+            throw new InvalidOperationException($"The subject and the issuer's name cannot be compared on this build: telling them apart takes Unicode case folding, and globalization-invariant mode has none. Issue under an ASCII name, or build without InvariantGlobalization");
+        }
+
+        if (IsSameName(subjectName, issuerName)) {
             throw new InvalidOperationException($"The subject is the issuer's own name, which contradicts {nameof(CertificateUsage)}.{builder.Usage}: an end-entity certificate under that name can sign certificate revocation lists that relying parties accept as the issuer's own. Set a different subject, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
         }
     }
+
+
+    private static InvalidOperationException UnreadableName(string which)
+        => new($"The {which} is not a name this builder can read apart, so it cannot be checked against the other. Supply one encoded as valid DER");
+
+
+    //Whether this build can fold the characters the comparison below relies on. Both halves of it fail open
+    //in globalization-invariant mode -- CompareInfo.Compare degrades rather than throwing, and Normalize
+    //returns its input -- so each is probed for the equivalence it is there to catch.
+    //The culture Java canonicalises names under. A build restricted to predefined cultures has no such
+    //object to hand out, and there the invariant one is all there is.
+    private static readonly CultureInfo EnUs = GetEnUsOrInvariant();
+
+
+    private static CultureInfo GetEnUsOrInvariant()
+    {
+        try {
+            return CultureInfo.GetCultureInfo("en-US");
+        } catch (CultureNotFoundException) {
+            return CultureInfo.InvariantCulture;
+        }
+    }
+
+
+    private static readonly bool CanFoldNames =
+        CultureInfo.InvariantCulture.CompareInfo.Compare("ß", "ss", CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0
+        && !String.Equals("ﬁ".Normalize(NormalizationForm.FormKD), "ﬁ", StringComparison.Ordinal);
 
 
     //Comparing the encoded bytes would not settle this. RFC 5280 s7.1 has relying parties compare names in a
@@ -792,29 +840,33 @@ public record CertificateBuilder
     //DER already sorts a multi-valued RDN, so attribute order within one needs no canonicalising here.
     //Two names alike enough to collide under this are refused even where a validator might tell them apart,
     //which is the safe direction: a certificate whose name differs from its issuer's only in case is not
-    //something to issue quietly. A name that will not parse falls back to its bytes, which is stricter.
-    private static bool IsSameName(X500DistinguishedName subject, X500DistinguishedName issuer)
-    {
-        var left = CanonicalName(subject);
-        var right = CanonicalName(issuer);
+    //something to issue quietly.
+    //Asked two ways, because the validators do not agree with each other and neither one covers the other:
+    //ICU's collator equates "gross" with "groß", which no case mapping does, while Java equates a dotless i
+    //with an i and a combining ypogegrammeni with an iota, which the collator gives distinct weights. A
+    //scan of every Unicode codepoint through Java's own canonical form put the disagreement at 74 pairs,
+    //all in those two families. Either verdict of "the same" refuses.
+    private static bool IsSameName(string subject, string issuer)
+        => CultureInfo.InvariantCulture.CompareInfo.Compare(subject, issuer, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0
+        || String.Equals(FoldAsJavaDoes(subject), FoldAsJavaDoes(issuer), StringComparison.Ordinal);
 
+
+    //Java's X500Principal canonicalises by uppercasing and then lowercasing, which is not the same as
+    //lowercasing once: the round trip is what carries a dotless i onto an i.
+    //Java does this under Locale.US, and so does this. Invariant casing deliberately leaves a dotless i
+    //alone so that casing round-trips, which is the very mapping being reproduced here.
+    private static string FoldAsJavaDoes(string name)
+    {
+        var folded = name.ToUpper(EnUs).ToLower(EnUs);
         try {
-            //A linguistic comparison rather than an ordinal one, because case folding alone does not equate
-            //every pair a validator does: Java reads "grossfink" and "großfink" as one name, and no
-            //amount of ToUpper does that, since .NET never expands a character while changing its case.
-            //IgnoreNonSpace disregards combining marks too, so a name differing from its issuer's only in its
-            //diacritics collides here where a validator might separate them -- the safe direction for a rule
-            //that refuses.
-            return CultureInfo.InvariantCulture.CompareInfo.Compare(left, right, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0;
-        } catch (PlatformNotSupportedException) {
-            //Globalization-invariant mode has no linguistic comparison to offer. Normalisation above has
-            //already settled the compatibility equivalences, so this loses only the case expansions.
-            return String.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+            return folded.Normalize(NormalizationForm.FormKD);
+        } catch (ArgumentException) {
+            return folded;
         }
     }
 
 
-    private static string CanonicalName(X500DistinguishedName name)
+    private static string? CanonicalName(X500DistinguishedName name)
     {
         try {
             var canonical = new StringBuilder();
@@ -833,7 +885,9 @@ public record CertificateBuilder
             }
             return canonical.ToString();
         } catch (Exception ex) when (ex is AsnContentException or ArgumentException) {
-            return Convert.ToHexString(name.RawData);
+            //Null rather than the encoded bytes: a name reduced to its bytes matches nothing, which would
+            //quietly exempt it from the comparison instead of failing it
+            return null;
         }
     }
 

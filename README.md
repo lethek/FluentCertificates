@@ -446,7 +446,14 @@ neither correct nor vouch for that. Everything else is your policy to set:
   compares them, per RFC 5280 s7.1: case-folded, whitespace-collapsed, and regardless of which ASN.1 string
   type carried the characters, so re-encoding `CN=Example CA` as a `UTF8String` instead of a
   `PrintableString` is not a way past it. A self-signed certificate is exempt, having no separate issuer to
-  collide with.
+  collide with, and so is `CertificateUsage.CA` — a certificate authority reissuing itself is ordinary key
+  rollover, and the builder cannot tell that apart from a request asking for the same thing. So accepting a
+  request onto a CA profile grants strictly more than any other profile does; screen the subject yourself
+  before doing it.
+
+  Folding names that way needs ICU, which a build with `InvariantGlobalization` does not have. There the
+  comparison is only made for names that are entirely ASCII, and a non-ASCII one is refused rather than
+  waved through.
 - **Basic Constraints bounding a path length without asserting `cA=TRUE`,** which RFC 5280 s4.2.1.9 forbids.
   The bound counts how many CAs may appear beneath this one, so on a certificate that is not a CA it
   constrains nothing.

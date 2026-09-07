@@ -28,7 +28,7 @@ release rather than record it as it happened.
 - Marked all five packages `IsAotCompatible`. Native AOT publishing does not work yet: see [#104](https://github.com/lethek/FluentCertificates/issues/104).
 - **Breaking:** A certificate or signing request is issued with the criticality RFC 5280 requires of an extension, whatever criticality was supplied for it.
 - **Breaking:** A certificate or signing request is refused when a basic constraints or key usage extension contradicts the `CertificateUsage` profile, breaks RFC 5280 s4.2.1.9, or carries a value that does not read back as the bytes it was supplied as.
-- **Breaking:** A certificate or signing request under an end-entity `CertificateUsage` is refused when its subject is its issuer's own name.
+- **Breaking:** A certificate or signing request under an end-entity `CertificateUsage` is refused when its subject is its issuer's own name, compared as a relying party compares names. A build with `InvariantGlobalization` cannot make that comparison for a non-ASCII name and refuses those outright.
 
 ### Fixed
 

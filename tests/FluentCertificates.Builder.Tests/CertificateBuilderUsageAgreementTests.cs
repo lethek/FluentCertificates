@@ -467,6 +467,60 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    [Arguments("ıssuing CA")]  //dotless i: Java uppercases it to I, ICU gives it its own weight
+    public async Task Create_WithASubjectMatchingTheIssuersUnderJavasFolding_Throws(string commonName)
+    {
+        //Java's X500Principal canonicalises by uppercasing then lowercasing, which carries a dotless i onto
+        //an i; ICU's collator does not. Verified end to end: issued, then used to sign a revocation list an
+        //unmodified JDK 21 reported as REVOKED against a third party. Any CA name containing an ASCII i is
+        //reachable this way, so the comparison asks both ways round.
+        using var ca = BuildCa();
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(commonName));
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithASubjectMatchingAGreekIssuerByItsCombiningIota_Throws()
+    {
+        //The other family Java folds and the collator does not: combining ypogegrammeni uppercases to iota,
+        //while IgnoreNonSpace discards it as a combining mark
+        using var ca = BuildCa("Omega ΙA");
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName("Omega ͅA"));
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_UnderAnIssuerWhoseNameCannotBeReadApart_Throws()
+    {
+        //A name that will not parse used to fall back to its encoded bytes, which no subject could ever
+        //match -- switching the check off for that CA rather than failing it. Java reads such a CA's name
+        //with replacement characters, and a subject spelling those characters collided.
+        using var ca = BuildCaNamedWithInvalidUtf8();
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName("Anything At All"));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("read apart");
+    }
+
+
+    [Test]
     public async Task Create_UnderAnIssuerNamedWithAUniversalString_IsIssuedNormally()
     {
         //UniversalString is a legal DirectoryString choice, and AsnReader has no UCS-4 decoder for it. Read
@@ -626,6 +680,29 @@ public class CertificateBuilderUsageAgreementTests
                     //content go in as a pre-encoded value. The name is short enough for a short-form length.
                     var content = new UTF32Encoding(bigEndian: true, byteOrderMark: false).GetBytes(UniversalCaCommonName);
                     writer.WriteEncodedValue([0x1C, (byte)content.Length, .. content]);
+                }
+            }
+        }
+
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest(new X500DistinguishedName(writer.Encode()), keys, HashAlgorithmName.SHA256);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, critical: true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign | X509KeyUsageFlags.DigitalSignature, critical: true));
+
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(2));
+    }
+
+
+    //A UTF8String whose bytes are not valid UTF-8. X500NameBuilder cannot produce one, so the CA is built
+    //with CertificateRequest directly -- which is the only way such an issuer reaches SetIssuer anyway.
+    private static X509Certificate2 BuildCaNamedWithInvalidUtf8()
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) {
+            using (writer.PushSetOf()) {
+                using (writer.PushSequence()) {
+                    writer.WriteObjectIdentifier(Oids.CommonName);
+                    writer.WriteEncodedValue([0x0C, 0x04, 0x41, 0xFF, 0x28, 0xFE]); //UTF8String "A", 0xFF, "(", 0xFE
                 }
             }
         }
