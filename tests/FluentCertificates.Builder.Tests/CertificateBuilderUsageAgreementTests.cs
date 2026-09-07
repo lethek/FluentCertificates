@@ -53,20 +53,68 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
-    [Arguments(X509KeyUsageFlags.KeyCertSign)]
-    [Arguments(X509KeyUsageFlags.CrlSign)]
-    public async Task Create_WithACaOnlyKeyUsageOnAnEndEntityProfile_Throws(X509KeyUsageFlags flag)
+    public async Task Create_WithKeyCertSignOnAnEndEntityProfile_Throws()
     {
-        //Both flags exist only for a certificate authority, and the reviewer's exploit carried them alongside
-        //cA=TRUE
+        //keyCertSign is what makes a certificate able to mint others, and the security review's exploit
+        //carried it alongside cA=TRUE
         var builder = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Would Sign Certificates")
-            .AddExtension(new X509KeyUsageExtension(flag | X509KeyUsageFlags.DigitalSignature, critical: true));
+            .AddExtension(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.DigitalSignature, critical: true));
 
         var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
 
         await Assert.That(ex!.Message).Contains(nameof(CertificateUsage.Server));
+    }
+
+
+    [Test]
+    public async Task Create_WithCrlSignOnAnEndEntityProfile_IsIssuedNormally()
+    {
+        //An indirect CRL issuer is conventionally an end-entity certificate asserting cRLSign and nothing
+        //else, so refusing the flag outright would make that certificate inexpressible
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetSubject("CN=Crl Issuer")
+            .AddExtension(new X509KeyUsageExtension(X509KeyUsageFlags.CrlSign, critical: true))
+            .Create();
+
+        var ext = new X509KeyUsageExtension(cert.Extensions.Single(x => x.Oid?.Value == Oids.KeyUsage), true);
+
+        await Assert.That(ext.KeyUsages).IsEqualTo(X509KeyUsageFlags.CrlSign);
+    }
+
+
+    [Test]
+    public async Task Create_WithAPathLengthButNotACertificateAuthority_Throws()
+    {
+        //RFC 5280 s4.2.1.9: a CA MUST NOT include pathLenConstraint unless cA is asserted. These bytes are
+        //canonical DER for (cA=FALSE, pathLen=3) and round-trip cleanly, so only this rule catches them.
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Path Length Without Ca")
+            .AddExtension(Retype(Oids.BasicConstraints2, [0x30, 0x03, 0x02, 0x01, 0x03]));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("s4.2.1.9");
+    }
+
+
+    [Test]
+    public async Task Create_WithAPathLengthOnTheCaProfile_IsIssuedNormally()
+    {
+        //Pins that the rule is conditional on cA. Without this, refusing every path length would still pass
+        //the case above.
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Bounded Ca")
+            .AddExtension(new X509BasicConstraintsExtension(true, true, 3, critical: true))
+            .Create();
+
+        var ext = cert.Extensions.Single(x => x.Oid?.Value == Oids.BasicConstraints2);
+
+        await Assert.That(new X509BasicConstraintsExtension(ext, ext.Critical).PathLengthConstraint).IsEqualTo(3);
     }
 
 
@@ -209,7 +257,41 @@ public class CertificateBuilderUsageAgreementTests
 
         var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
 
-        await Assert.That(ex!.Message).Contains("not valid DER");
+        await Assert.That(ex!.Message).Contains("does not read back");
+    }
+
+
+    [Test]
+    [Arguments(new byte[] { 0x30, 0x06, 0x01, 0x01, 0xFF, 0x02, 0x01, 0xFF })]                   //pathLenConstraint = -1
+    [Arguments(new byte[] { 0x30, 0x0A, 0x01, 0x01, 0xFF, 0x02, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00 })] //pathLenConstraint > Int32.MaxValue
+    public async Task Create_WithAPathLengthDotNetCannotRepresent_ThrowsInvalidOperationException(byte[] rawData)
+    {
+        //Both decode, then fail on the way back out: the re-encoding constructor rejects a negative path
+        //length, and neither value fits an Int32. The refusal has to arrive as InvalidOperationException like
+        //every other one, not as whatever the BCL happened to throw.
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Unrepresentable Path Length")
+            .AddExtension(Retype(Oids.BasicConstraints2, rawData));
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithAnUndecodableKeyUsageAndNoUsage_IsIssuedUnchanged()
+    {
+        //The basic constraints twin of this is above; without both, the no-profile path is pinned for one
+        //extension only
+        var supplied = Retype(Oids.KeyUsage, [0x05, 0x00]);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Undecodable Key Usage No Profile")
+            .AddExtension(supplied)
+            .Create();
+
+        await Assert.That(cert.Extensions.Single(x => x.Oid?.Value == Oids.KeyUsage).RawData)
+            .IsEquivalentTo(supplied.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
 

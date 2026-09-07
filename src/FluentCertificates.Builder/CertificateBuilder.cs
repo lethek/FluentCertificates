@@ -700,8 +700,10 @@ public record CertificateBuilder
     //point: a CA refines its own profile. Two of them contradict it outright instead, and neither has a
     //legitimate use. A certificate either vouches for other certificates or identifies an endpoint, so
     //cA=TRUE on an end-entity profile is how a requester smuggles out a certificate authority, and cA=FALSE
-    //on the CA profile strips the authority the caller asked for. keyCertSign and cRLSign exist only for a
-    //CA, and a CA that asserts neither cannot sign what it was made to sign.
+    //on the CA profile strips the authority the caller asked for. keyCertSign is what makes a certificate
+    //able to mint others, so an end-entity profile has no business asserting it, and a CA without it cannot
+    //sign what it was made to sign. cRLSign is left alone: an indirect CRL issuer is conventionally an
+    //end-entity certificate asserting exactly that and nothing else.
     //Criticality conformance cannot reach any of this: the contradiction is in the value, not the flag.
     //Nothing is checked when no Usage is set. A caller assembling a certificate by hand has no profile to
     //contradict, so a request accepted onto a builder with no Usage is governed by its accept predicate
@@ -717,20 +719,26 @@ public record CertificateBuilder
         foreach (var extension in extensions) {
             switch (extension.Oid?.Value) {
                 case Oids.BasicConstraints2:
-                    bool isCa = Decode(extension, x => new X509BasicConstraintsExtension(x, x.Critical), x => new X509BasicConstraintsExtension(x.CertificateAuthority, x.HasPathLengthConstraint, x.PathLengthConstraint, extension.Critical))
-                        ?.CertificateAuthority ?? throw UnreadableValue(extension, "basic constraints");
-                    if (isCa != profileIsCa) {
-                        throw new InvalidOperationException(isCa
+                    var constraints = Decode(extension, x => new X509BasicConstraintsExtension(x, x.Critical), x => new X509BasicConstraintsExtension(x.CertificateAuthority, x.HasPathLengthConstraint, x.PathLengthConstraint, extension.Critical))
+                        ?? throw UnreadableValue(extension, "basic constraints");
+                    if (constraints.CertificateAuthority != profileIsCa) {
+                        throw new InvalidOperationException(constraints.CertificateAuthority
                             ? $"A basic constraints extension asserting cA=TRUE contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}"
                             : $"A basic constraints extension asserting cA=FALSE contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}. Reject it, or choose an end-entity {nameof(CertificateUsage)}");
+                    }
+                    //RFC 5280 s4.2.1.9: a CA MUST NOT include pathLenConstraint unless cA is asserted. It
+                    //bounds how many CAs may appear beneath this one, so on a certificate that is not a CA
+                    //it constrains nothing and no validator reads it.
+                    if (constraints is { HasPathLengthConstraint: true, CertificateAuthority: false }) {
+                        throw new InvalidOperationException($"A basic constraints extension carries a path length constraint without asserting cA=TRUE, which RFC 5280 s4.2.1.9 forbids. Reject it, or supply one without a path length");
                     }
                     break;
 
                 case Oids.KeyUsage:
                     var usages = Decode(extension, x => new X509KeyUsageExtension(x, x.Critical), x => new X509KeyUsageExtension(x.KeyUsages, extension.Critical))
                         ?.KeyUsages ?? throw UnreadableValue(extension, "key usage");
-                    if (!profileIsCa && (usages & CaOnlyKeyUsages) != 0) {
-                        throw new InvalidOperationException($"A key usage extension asserting {nameof(X509KeyUsageFlags.KeyCertSign)} or {nameof(X509KeyUsageFlags.CrlSign)} contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
+                    if (!profileIsCa && usages.HasFlag(X509KeyUsageFlags.KeyCertSign)) {
+                        throw new InvalidOperationException($"A key usage extension asserting {nameof(X509KeyUsageFlags.KeyCertSign)} contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
                     }
                     if (profileIsCa && !usages.HasFlag(X509KeyUsageFlags.KeyCertSign)) {
                         throw new InvalidOperationException($"A key usage extension that does not assert {nameof(X509KeyUsageFlags.KeyCertSign)} contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}, whose certificates exist to sign other certificates. Reject it, or choose an end-entity {nameof(CertificateUsage)}");
@@ -748,6 +756,9 @@ public record CertificateBuilder
     //assert to a validator exactly what the check above failed to see, so a value that does not survive the
     //round trip is refused rather than trusted. This matters only where the value decides something --
     //nothing else here decodes an extension at all.
+    //Both halves reject a value, and they do not agree on how: the decode throws CryptographicException for
+    //bytes it cannot parse, while the re-encode is a constructor that throws ArgumentException for a field it
+    //parsed but cannot represent, such as a negative pathLenConstraint.
     private static T? Decode<T>(X509Extension extension, Func<X509Extension, T> decode, Func<T, X509Extension> encode) where T : class
     {
         try {
@@ -757,17 +768,25 @@ public record CertificateBuilder
             return encode(decoded).RawData.AsSpan().SequenceEqual(extension.RawData)
                 ? decoded
                 : null;
-        } catch (CryptographicException) {
+        } catch (Exception ex) when (ex is CryptographicException or ArgumentException) {
             return null;
         }
     }
 
 
+    //Quotes the value because a caller has to find the offending extension among everything they accepted,
+    //and truncates it because a requester chooses how long it is. Not every refusal here is malformed DER:
+    //a pathLenConstraint too large for an Int32 is well-formed and conforms to RFC 5280, and is refused only
+    //because this builder cannot read it back.
     private static InvalidOperationException UnreadableValue(X509Extension extension, string name)
-        => new($"A {name} extension's value is not valid DER, so what it asserts cannot be established and it may not agree with {nameof(CertificateUsage)}. Reject it, or supply one this builder can read. Value: {Convert.ToHexString(extension.RawData)}");
+    {
+        var quoted = Convert.ToHexString(extension.RawData.AsSpan(0, Math.Min(extension.RawData.Length, QuotedValueLimit)));
+        var ellipsis = extension.RawData.Length > QuotedValueLimit ? "..." : "";
+        return new InvalidOperationException($"A {name} extension's value does not read back as the bytes it was supplied as, so what it asserts to a validator cannot be established here and may not agree with {nameof(CertificateUsage)}. Reject it, or supply one this builder can read. Value: {quoted}{ellipsis}");
+    }
 
 
-    private const X509KeyUsageFlags CaOnlyKeyUsages = X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign;
+    private const int QuotedValueLimit = 128;
 
 
     /// <summary>
@@ -789,9 +808,10 @@ public record CertificateBuilder
     /// An extension whose value contradicts the <see cref="Usage"/> profile is refused rather than corrected,
     /// since the contradiction is in the value: basic constraints disagreeing with the profile about whether
     /// this is a certificate authority, a key usage asserting <c>keyCertSign</c> or <c>cRLSign</c> under an
-    /// end-entity profile, or one asserting neither under <see cref="CertificateUsage.CA"/>. Either extension
-    /// is also refused when its value is not valid DER, since what it asserts to a validator cannot then be
-    /// established here. Nothing is checked when no <see cref="Usage"/> is set.
+    /// end-entity profile, or one not asserting <c>keyCertSign</c> under <see cref="CertificateUsage.CA"/>.
+    /// Either extension is also refused when its value does not read back as the bytes it was supplied as,
+    /// since what it asserts to a validator cannot then be established here. Nothing is checked when no
+    /// <see cref="Usage"/> is set.
     /// </para>
     /// </remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>

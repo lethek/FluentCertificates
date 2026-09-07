@@ -437,14 +437,19 @@ meant. Those are refused with an `InvalidOperationException`:
   to issue certificates for anyone, and correcting the criticality does not stop that: a validator honours
   `cA=TRUE` whichever way the flag is set. The mirror case, `cA=FALSE` on `CertificateUsage.CA`, strips the
   authority you asked for.
-- **Key Usage asserting `keyCertSign` or `cRLSign` under an end-entity profile,** or asserting neither under
-  `CertificateUsage.CA`. Both flags exist only for a certificate authority, and a CA that asserts neither
-  cannot sign what it was made to sign.
-- **Either of those two extensions carrying a value that is not valid DER.** .NET's decoder is stricter than
-  the ones that read the certificate afterwards, so bytes it rejects — a well-formed `cA=TRUE` followed by a
-  trailing `NULL`, say — are read by OpenSSL and Windows CryptoAPI as exactly what the well-formed part says.
-  Issuing a value the builder could not read would let a requester assert to a validator the very thing the
-  check above failed to see, so both extensions must survive a decode and re-encode unchanged.
+- **Basic Constraints bounding a path length without asserting `cA=TRUE`,** which RFC 5280 s4.2.1.9 forbids.
+  The bound counts how many CAs may appear beneath this one, so on a certificate that is not a CA it
+  constrains nothing.
+- **Key Usage asserting `keyCertSign` under an end-entity profile,** or not asserting it under
+  `CertificateUsage.CA`. `keyCertSign` is what makes a certificate able to mint others. `cRLSign` is left
+  alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
+- **Either of those two extensions carrying a value that does not read back as the bytes it was supplied
+  as.** .NET's decoder is stricter than the ones that read the certificate afterwards, so bytes it rejects —
+  a well-formed `cA=TRUE` followed by a trailing `NULL`, say — are read by OpenSSL and Windows CryptoAPI as
+  exactly what the well-formed part says. Issuing a value the builder could not read would let a requester
+  assert to a validator the very thing the check above failed to see, so both extensions must survive a
+  decode and re-encode unchanged. Most values this rejects are malformed, but not all: a `pathLenConstraint`
+  larger than an `Int32` conforms to RFC 5280 and is still refused, because .NET cannot represent it.
 
 > **Set a `Usage` before accepting anything from a request.** Every one of those refusals compares the
 > extension against the profile, so a builder with no `Usage` has nothing to compare against and makes none
