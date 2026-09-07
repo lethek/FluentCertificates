@@ -732,6 +732,60 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    public async Task Create_WithACaRolloverSignedByAForeignKey_Throws()
+    {
+        //The CA profile's rollover exemption above only accepts a same-named issuer when the certificate is
+        //genuinely signed by that issuer. Naming a real, trusted root as Issuer while actually signing with
+        //an unrelated key mints a certificate that looks like the root's own successor to any relying party
+        //doing the RFC 5280 s6.3.3 name match -- the same impersonation the no-Issuer case above refuses,
+        //just reached by borrowing the issuer's name instead of leaving Issuer unset.
+        using var ca = BuildCa();
+
+        using var attackerKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(CaCommonName))
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(attackerKeys))
+            .SetPublicKey(new PublicKey(attackerKeys));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("signed by a key that is not the issuer's own");
+    }
+
+
+    [Test]
+    public async Task Create_WithAGenuineCaRolloverSignedByTheIssuersOwnKey_IsIssuedNormally()
+    {
+        //Pins that the rule above turns on whose key actually signs, not on merely supplying a
+        //SignatureGenerator: genuine rollover through a generator that really is the issuer's own key, such
+        //as one backed by an HSM, must still be issued.
+        using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName(CaCommonName))
+            .SetKeyPair(caKeys)
+            .SetValidity(TimeSpan.FromDays(2))
+            .Create();
+
+        using var newKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(CaCommonName))
+            .SetKeyPair(newKeys)
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(caKeys))
+            .SetValidity(TimeSpan.FromDays(1))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains(CaCommonName);
+    }
+
+
+    [Test]
     public async Task Create_WithASubjectFoldingIntoAHexValueMarker_Throws()
     {
         //Java renders an attribute value it will not print as '#' followed by the hex of that value's
@@ -829,6 +883,97 @@ public class CertificateBuilderUsageAgreementTests
             .Create();
 
         await Assert.That(cert.SubjectName.Name).Contains("ordinary.example.net");
+    }
+
+
+    [Test]
+    [Arguments(CertificateUsage.Server)]
+    [Arguments(CertificateUsage.Client)]
+    public async Task Create_WithNameConstraintsOnAnEndEntityProfile_Throws(CertificateUsage usage)
+    {
+        //RFC 5280 s4.2.1.10 restricts this extension to a CA certificate. Left unenforced, an accepted
+        //request could carry it, critical and all, onto a certificate that was never meant to have one.
+        var builder = new CertificateBuilder()
+            .SetUsage(usage)
+            .SetSubject("CN=Would Constrain Names")
+            .AddExtension(new X509NameConstraintExtension(null, null));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("restricts it to a CA certificate");
+    }
+
+
+    [Test]
+    public async Task Create_WithNameConstraintsOnTheCaProfile_IsIssuedNormally()
+    {
+        //Pins that the rule above turns on Usage, not on the extension's mere presence.
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=May Constrain Names")
+            .AddExtension(new X509NameConstraintExtension(null, null))
+            .Create();
+
+        await Assert.That(cert.Extensions[Oids.NameConstraints]).IsNotNull();
+    }
+
+
+    [Test]
+    public async Task Create_WithPolicyConstraintsOnAnEndEntityProfile_Throws()
+    {
+        //RFC 5280 s4.2.1.11 restricts this extension to a CA certificate
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Would Constrain Policies")
+            .AddExtension(new X509Extension(Oids.CertPolicyConstraints, [0x30, 0x00], critical: true));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("restricts it to a CA certificate");
+    }
+
+
+    [Test]
+    public async Task Create_WithInhibitAnyPolicyOnAnEndEntityProfile_Throws()
+    {
+        //RFC 5280 s4.2.1.14 restricts this extension to a CA certificate
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Would Inhibit Any Policy")
+            .AddExtension(new X509Extension(Oids.InhibitAnyPolicyExtension, [0x02, 0x01, 0x00], critical: true));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("restricts it to a CA certificate");
+    }
+
+
+    [Test]
+    public async Task Create_WithASubjectAlternativeNameCarryingNoEntries_Throws()
+    {
+        //RFC 5280 s4.2.1.6: if present, the sequence MUST contain at least one entry
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Empty San")
+            .AddExtension(new X509Extension(Oids.SubjectAltName, [0x30, 0x00], critical: false));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("carries no entries");
+    }
+
+
+    [Test]
+    public async Task Create_WithAnOrdinarySubjectAlternativeName_IsIssuedNormally()
+    {
+        //Pins that the rule above turns on the entry count, not on the extension's mere presence
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Named San")
+            .SetSubjectAlternativeNames(x => x.AddDnsName("named.example.com"))
+            .Create();
+
+        await Assert.That(cert.Extensions[Oids.SubjectAltName]).IsNotNull();
     }
 
 

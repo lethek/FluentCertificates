@@ -1,6 +1,7 @@
 ﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -322,20 +323,31 @@ public record CertificateBuilder
 
 
     /// <summary>
-    /// Adds an extension to the certificate.
+    /// Adds an extension to the certificate, replacing any extension already present under the same OID
+    /// regardless of its runtime type.
     /// </summary>
+    /// <remarks>
+    /// Two extensions under one OID make <see cref="CertificateRequest"/> throw, and the builder's own
+    /// extension set cannot tell such a pair apart from an intentional replacement: a well-known OID it
+    /// generates by default, such as Subject Key Identifier, comes back as that concrete subclass, while
+    /// one built by hand is typically the base <see cref="X509Extension"/>. Replacing by OID rather than by
+    /// equality avoids that crash and matches <see cref="UseCertificateSigningRequest(CertificateSigningRequest,Func{X509Extension,bool})"/>,
+    /// which replaces the same way.
+    /// </remarks>
     /// <param name="extension">The extension to add.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the extension added.</returns>
     public CertificateBuilder AddExtension(X509Extension extension)
-        => this with { _extensions = _extensions.Add(extension) };
+        => SetExtension(extension);
 
     /// <summary>
-    /// Adds multiple extensions to the certificate.
+    /// Adds multiple extensions to the certificate, replacing any extension already present under the same
+    /// OID regardless of its runtime type. Where <paramref name="values"/> itself carries two extensions
+    /// under one OID, the last one replaces the others.
     /// </summary>
     /// <param name="values">The extensions to add.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the extensions added.</returns>
     public CertificateBuilder AddExtensions(params IEnumerable<X509Extension> values)
-        => this with { _extensions = _extensions.Union(values) };
+        => values.Aggregate(this, (builder, extension) => builder.SetExtension(extension));
 
     /// <summary>
     /// Sets the certificate extensions, replacing any existing ones.
@@ -488,10 +500,15 @@ public record CertificateBuilder
     /// OID and overrides what the <see cref="Usage"/> profile would have generated. Where a request carries
     /// two under one OID, the last accepted is the one issued. Afterwards only a helper that writes its
     /// extension directly, such as <see cref="SetCertificatePolicies(IEnumerable{string}, bool)"/>,
-    /// overrides it; a later <see cref="AddExtension"/> under the same OID and runtime type is ignored, and
-    /// so is <see cref="SetSubjectAlternativeNames(IEnumerable{GeneralName})"/>. Refuse an Authority Key
-    /// Identifier: it names the issuer's key, which the requester cannot know, so honouring one describes a
-    /// signer that did not sign.
+    /// overrides it; a later <see cref="AddExtension"/> under the same OID replaces it in turn, and so does
+    /// <see cref="SetSubjectAlternativeNames(IEnumerable{GeneralName})"/>.
+    /// </para>
+    /// <para>
+    /// A Subject Key Identifier or Authority Key Identifier is checked as it is accepted, since neither is
+    /// the requester's to assert: accepting one that does not identify the certified public key, or the
+    /// issuer's own key, throws immediately. The Authority Key Identifier half of that only fires when
+    /// <see cref="Issuer"/> is already set, so call <see cref="SetIssuer"/> before this method to have it
+    /// checked.
     /// </para>
     /// <para>
     /// <b>Everything else in the request is the requester's word for it.</b> Accepted extensions are still
@@ -528,17 +545,52 @@ public record CertificateBuilder
 
         var builder = UseCertificateSigningRequest(csr);
         foreach (var extension in csr.CertificateRequest.CertificateExtensions.Where(accept)) {
+            CheckKeyIdentifierIsGenuine(builder, extension);
             builder = builder.SetExtension(extension);
         }
         return builder;
     }
 
 
-    //Unlike AddExtension, this replaces any extension already present under the same OID, regardless of its
-    //concrete type. X509ExtensionOidEqualityComparer treats a same-OID extension of a different runtime type
-    //as unequal (by design -- see X509ExtensionOidEqualityComparerTests.Equals_SameOidDifferentTypes_IsFalse),
-    //so Remove(extension) alone would miss it and both would reach CertificateRequest, which throws. Filtering
-    //by Oid.Value directly finds it regardless of type.
+    /// <summary>
+    /// Refuses a requested Subject Key Identifier or Authority Key Identifier that does not identify a real
+    /// key. Checked here rather than at issuance, because only a value the request itself supplied is the
+    /// requester's word to doubt: one the CA set directly through <see cref="AddExtension(X509Extension)"/>
+    /// or a <c>Set*</c> helper is trusted as it already was.
+    /// </summary>
+    private static void CheckKeyIdentifierIsGenuine(CertificateBuilder builder, X509Extension extension)
+    {
+        switch (extension.Oid?.Value) {
+            //A Subject Key Identifier that does not match the certified public key can misdirect a
+            //validator that indexes candidate certificates by it, most consequentially during a CA's own
+            //key rollover, when only the identifier tells two same-named certificates apart.
+            case Oids.SubjectKeyIdentifier:
+                var expectedSki = new X509SubjectKeyIdentifierExtension(builder.PublicKey!, false);
+                if (!expectedSki.RawData.AsSpan().SequenceEqual(extension.RawData)) {
+                    throw new InvalidOperationException("A requested subject key identifier does not identify the certified public key, so it can misdirect a validator that indexes candidate certificates by it. Reject it; the correct value is generated automatically");
+                }
+                break;
+
+            //An Authority Key Identifier names whoever signs the certificate, which the requester cannot
+            //know before it is signed. Left unchecked, one naming a different key describes a signer that
+            //did not sign. Skipped when Issuer is not yet set, matching the Usage checks elsewhere in this
+            //class: there is nothing yet to check it against.
+            case Oids.AuthorityKeyIdentifier when builder.Issuer != null:
+                var expectedAki = new X509AuthorityKeyIdentifierExtension(builder.Issuer, false);
+                if (!expectedAki.RawData.AsSpan().SequenceEqual(extension.RawData)) {
+                    throw new InvalidOperationException("A requested authority key identifier does not identify the issuer's own key, which describes a signer that did not sign this certificate. Reject it; the correct value is generated automatically");
+                }
+                break;
+        }
+    }
+
+
+    //Unlike AddExtension used to, this replaces any extension already present under the same OID,
+    //regardless of its concrete type. X509ExtensionOidEqualityComparer treats a same-OID extension of a
+    //different runtime type as unequal (by design -- see
+    //X509ExtensionOidEqualityComparerTests.Equals_SameOidDifferentTypes_IsFalse), so Remove(extension) alone
+    //would miss it and both would reach CertificateRequest, which throws. Filtering by Oid.Value directly
+    //finds it regardless of type.
     private CertificateBuilder SetExtension(X509Extension extension)
         => this with {
             _extensions = _extensions
@@ -735,7 +787,34 @@ public record CertificateBuilder
                         throw new InvalidOperationException($"An extended key usage extension that does not assert the OCSP signing purpose contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.OcspSigning)}, whose certificates exist to sign OCSP responses. Reject it, or choose another {nameof(CertificateUsage)}");
                     }
                     break;
+
+                //RFC 5280 s4.2.1.10, s4.2.1.11 and s4.2.1.14 each restrict their extension to a CA
+                //certificate. Left unenforced, an accepted extension could carry a critical restriction (see
+                //RequiredCriticality) onto an end-entity certificate that was never meant to have one.
+                case Oids.NameConstraints when !profileIsCa:
+                    throw new InvalidOperationException($"A name constraints extension contradicts {nameof(CertificateUsage)}.{builder.Usage}: RFC 5280 s4.2.1.10 restricts it to a CA certificate. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
+
+                case Oids.CertPolicyConstraints when !profileIsCa:
+                    throw new InvalidOperationException($"A policy constraints extension contradicts {nameof(CertificateUsage)}.{builder.Usage}: RFC 5280 s4.2.1.11 restricts it to a CA certificate. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
+
+                case Oids.InhibitAnyPolicyExtension when !profileIsCa:
+                    throw new InvalidOperationException($"An inhibit anyPolicy extension contradicts {nameof(CertificateUsage)}.{builder.Usage}: RFC 5280 s4.2.1.14 restricts it to a CA certificate. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
+
+                //RFC 5280 s4.2.1.6: if present, the sequence MUST contain at least one entry.
+                case Oids.SubjectAltName when IsEmptyGeneralNames(extension):
+                    throw new InvalidOperationException("A subject alternative name extension carries no entries, which RFC 5280 s4.2.1.6 forbids: if present, it must name at least one alternative name. Reject it, or supply one that names something");
             }
+        }
+    }
+
+
+    private static bool IsEmptyGeneralNames(X509Extension extension)
+    {
+        try {
+            return !new AsnReader(extension.RawData, AsnEncodingRules.DER).ReadSequence().HasData;
+        } catch (AsnContentException) {
+            //Not this check's job to complain about a value that will not even parse as a sequence
+            return false;
         }
     }
 
@@ -767,6 +846,19 @@ public record CertificateBuilder
         //than any one key usage bit, so the collision is what gets refused. Under the CA profile a
         //self-issued certificate is rollover, so the two names are meant to match.
         if (builder.Usage is CertificateUsage.CA) {
+            //Rollover under the issuer's own name is ordinary, but only when the certificate is genuinely
+            //signed by that issuer. A SignatureGenerator holding some other key mints a certificate that
+            //only looks like a rollover to a relying party doing the same s6.3.3 name match above -- the
+            //same impersonation the no-Issuer case refuses, reached here by borrowing a real issuer's name
+            //instead of leaving Issuer unset. With no SignatureGenerator supplied, Create() signs with
+            //Issuer's own private key, so there is nothing to check.
+            if (builder.SignatureGenerator != null
+                && X500NameComparer.Read(subject) is { FoldsIntoSeparator: false } subjectRollover
+                && X500NameComparer.Read(builder.Issuer.SubjectName) is { FoldsIntoSeparator: false } issuerRollover
+                && X500NameComparer.IsSameName(subjectRollover.Value, issuerRollover.Value)
+                && !IsIssuersOwnKey(builder)) {
+                throw new InvalidOperationException($"The certificate would be issued under the issuer's own name, which is ordinarily key rollover, yet signed by a key that is not the issuer's own. A relying party reads that as the issuer vouching for a successor certificate it never signed. Sign with the issuer's own key, or issue under a different subject");
+            }
             return;
         }
 
@@ -798,6 +890,11 @@ public record CertificateBuilder
         => builder.PublicKey != null
         && builder.SignatureGenerator!.PublicKey.ExportSubjectPublicKeyInfo()
             .AsSpan().SequenceEqual(builder.PublicKey.ExportSubjectPublicKeyInfo());
+
+
+    private static bool IsIssuersOwnKey(CertificateBuilder builder)
+        => builder.SignatureGenerator!.PublicKey.ExportSubjectPublicKeyInfo()
+            .AsSpan().SequenceEqual(builder.Issuer!.PublicKey.ExportSubjectPublicKeyInfo());
 
 
     private static InvalidOperationException UnreadableName(string which)

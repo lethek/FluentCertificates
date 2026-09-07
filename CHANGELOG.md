@@ -28,8 +28,11 @@ release rather than record it as it happened.
 - Marked all five packages `IsAotCompatible`. Native AOT publishing does not work yet: see [#104](https://github.com/lethek/FluentCertificates/issues/104).
 - **Breaking:** A certificate or signing request is issued with the criticality RFC 5280 requires of an extension, whatever criticality was supplied for it.
 - **Breaking:** A certificate or signing request is refused when a basic constraints, key usage or extended key usage extension contradicts the `CertificateUsage` profile, breaks RFC 5280 s4.2.1.9, or carries a value that does not read back as the bytes it was supplied as. The extended key usage rule is the OCSP signing purpose, which only `CertificateUsage.OcspSigning` may assert and which it must.
-- **Breaking:** A certificate with a `CertificateUsage` set and no `Issuer` is refused when a `SignatureGenerator` signs it with a key that is not the subject's own, which would name the certificate as its own issuer while another key vouched for it.
+- **Breaking:** A certificate with a `CertificateUsage` set is refused when it is signed by a `SignatureGenerator` whose key is not the key it names as having signed it: the subject's own key when there is no `Issuer`, or the `Issuer`'s own key when `CertificateUsage.CA` issues under the issuer's own name as key rollover.
 - **Breaking:** A certificate or signing request under an end-entity `CertificateUsage` is refused when its subject is its issuer's own name, compared as a relying party compares names, or when either name carries a character that becomes a name separator once folded. A build with `InvariantGlobalization` cannot make that comparison and refuses a non-ASCII subject or issuer name wherever it applies.
+- **Breaking:** `CertificateBuilder.AddExtension` and `AddExtensions` now replace any extension already present under the same OID, regardless of its runtime type, instead of risking two extensions under one OID reaching the certificate.
+- **Breaking:** `UseCertificateSigningRequest`'s predicate overload refuses a requested Subject Key Identifier that does not identify the certified public key, or a requested Authority Key Identifier that does not identify the `Issuer`'s own key once one is set.
+- **Breaking:** A certificate or signing request is refused when a name constraints, policy constraints or inhibit anyPolicy extension is accepted onto a certificate whose `CertificateUsage` is not `CA`, or when a subject alternative name extension carries no entries.
 
 ### Fixed
 

@@ -450,7 +450,7 @@ neither correct nor vouch for that. Everything else is your policy to set:
   rollover, and the builder cannot tell that apart from a request asking for the same thing. So accepting a
   request onto a CA profile grants strictly more than any other profile does; screen the subject yourself
   before doing it. Neither exemption reaches the `SignatureGenerator` rule below, which applies under every
-  `CertificateUsage`.
+  `CertificateUsage` including a CA rollover under the issuer's own name.
 
   A name is also refused when a character in it becomes a name separator once folded, such as a fullwidth
   comma in a common name. Java's `X500Principal` escapes an attribute value before normalising it, so such a
@@ -477,18 +477,26 @@ neither correct nor vouch for that. Everything else is your policy to set:
 - **Key Usage asserting `keyCertSign` under an end-entity profile,** or not asserting it under
   `CertificateUsage.CA`. `keyCertSign` is what makes a certificate able to mint others. `cRLSign` is left
   alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
-- **A certificate with no `Issuer` whose `SignatureGenerator` holds a key that is not the subject's own.**
-  Such a certificate names itself as its own issuer while some other key vouches for it, so a relying party
-  can build a path for it against whoever does own that key. Java will then accept it as a certificate
-  revocation list issuer for the name it bears, `cA=FALSE` notwithstanding. Set an `Issuer` so the
-  certificate names the authority that really signed it. A generator over the subject's own key, which is
-  how an unexportable key signs its own certificate, is unaffected.
+- **A certificate whose `SignatureGenerator` holds a key other than the one it would name as having signed
+  it.** With no `Issuer`, that is the subject's own key: such a certificate names itself as its own issuer
+  while some other key vouches for it, so a relying party can build a path for it against whoever does own
+  that key. Java will then accept it as a certificate revocation list issuer for the name it bears,
+  `cA=FALSE` notwithstanding. Set an `Issuer` so the certificate names the authority that really signed it.
+  With `CertificateUsage.CA` issuing under the issuer's own name — ordinary key rollover — that key is the
+  issuer's own: naming a real, trusted CA as `Issuer` while actually signing with an unrelated key mints a
+  certificate a relying party reads as that CA's own successor. A generator over the key it should be
+  signing with, which is how an unexportable key signs, is unaffected either way.
 - **Extended Key Usage asserting the OCSP signing purpose under any profile but
   `CertificateUsage.OcspSigning`,** or not asserting it under that one. RFC 6960 s4.2.2.2 delegates OCSP to
   any certificate the CA issued directly that carries `id-kp-OCSPSigning`, so such a certificate answers for
   every certificate that CA ever signed. It is the OCSP counterpart of `cA=TRUE`, and needs no name
   collision to be useful to a requester. Every other purpose is left alone: refining the profile's own
   extended key usage is the ordinary reason to supply one.
+- **Name Constraints, Policy Constraints or Inhibit anyPolicy accepted onto a `CertificateUsage` other than
+  `CA`.** RFC 5280 s4.2.1.10, s4.2.1.11 and s4.2.1.14 each restrict their extension to a CA certificate; an
+  end-entity certificate carrying one was never meant to have it.
+- **A Subject Alternative Name extension with no entries.** RFC 5280 s4.2.1.6 requires at least one when the
+  extension is present at all.
 - **Any of those extensions carrying a value that does not read back as the bytes it was supplied
   as.** .NET's decoder is stricter than the ones that read the certificate afterwards, so bytes it rejects —
   a well-formed `cA=TRUE` followed by a trailing `NULL`, say — are read by OpenSSL and Windows CryptoAPI as
@@ -502,10 +510,15 @@ neither correct nor vouch for that. Everything else is your policy to set:
 > one, which needs no profile. A request accepted onto such a builder can carry `cA=TRUE` and `keyCertSign`,
 > and the certificate issued from it will sign other certificates that chain to your issuer.
 
-Nothing else in a request is screened. What an extension says is the `accept` predicate's decision, and
-every other field crosses over as the requester wrote it — the subject name included, so call `SetSubject`
-afterwards if your CA issues only under names it has verified. `Extensions` on the builder keeps reporting
-whatever it was handed.
+Almost nothing else in a request is screened. What an extension says is the `accept` predicate's decision,
+and every other field crosses over as the requester wrote it — the subject name included, so call
+`SetSubject` afterwards if your CA issues only under names it has verified. The two exceptions are a
+Subject Key Identifier or Authority Key Identifier: neither is the requester's to assert, since one names
+this certificate's own key and the other names whoever signs it, so accepting either checks it against the
+real value immediately rather than waiting for issuance. A Subject Key Identifier that does not match the
+certified public key is refused outright; an Authority Key Identifier is checked the same way once
+`SetIssuer` has been called, and is otherwise left unchecked, matching the `Usage` checks above. `Extensions`
+on the builder keeps reporting whatever it was handed.
 
 ---
 
