@@ -451,9 +451,17 @@ neither correct nor vouch for that. Everything else is your policy to set:
   request onto a CA profile grants strictly more than any other profile does; screen the subject yourself
   before doing it.
 
-  Folding names that way needs ICU, which a build with `InvariantGlobalization` does not have. There the
-  comparison is only made for names that are entirely ASCII, and a non-ASCII one is refused rather than
-  waved through.
+  Folding names that way needs ICU, which a build with `InvariantGlobalization` does not have. **Such a
+  build cannot issue an end-entity certificate under a non-ASCII name at all** — neither the subject's nor
+  the issuer's — because the comparison it would need cannot be made, and refusing is the only safe answer.
+  ASCII names are unaffected. An issuer whose own name is not valid DER is refused for the same reason: a
+  name that cannot be read apart cannot be compared, and treating it as matching nothing would switch this
+  rule off for that CA entirely.
+
+  How well the comparison matches a given relying party depends on the Unicode tables the *issuing* host
+  carries. A host on an older ICU will not fold characters added to Unicode since, so a validator with newer
+  tables may read as one name a pair this refused to treat as one. Keeping the issuing runtime current
+  narrows that gap.
 - **Basic Constraints bounding a path length without asserting `cA=TRUE`,** which RFC 5280 s4.2.1.9 forbids.
   The bound counts how many CAs may appear beneath this one, so on a certificate that is not a CA it
   constrains nothing.

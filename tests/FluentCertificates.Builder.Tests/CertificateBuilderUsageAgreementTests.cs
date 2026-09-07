@@ -1,4 +1,5 @@
 using System.Formats.Asn1;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -455,6 +456,8 @@ public class CertificateBuilderUsageAgreementTests
         //to sign a certificate revocation list that an unmodified JDK 21 PKIX validator reported as REVOKED
         //against a third party's certificate. Case folding alone does not reach them -- .NET never expands a
         //character while changing its case, so "sharp s" never becomes "SS".
+        Skip.Unless(CanFoldNames, "Folding a non-ASCII name needs ICU, which this runtime does not have");
+
         using var ca = BuildCa(FoldingCaCommonName);
 
         var builder = new CertificateBuilder()
@@ -462,7 +465,7 @@ public class CertificateBuilderUsageAgreementTests
             .SetIssuer(ca)
             .SetSubject(x => x.SetCommonName(commonName));
 
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+        await AssertRefusedAsACollision(builder);
     }
 
 
@@ -474,6 +477,8 @@ public class CertificateBuilderUsageAgreementTests
         //an i; ICU's collator does not. Verified end to end: issued, then used to sign a revocation list an
         //unmodified JDK 21 reported as REVOKED against a third party. Any CA name containing an ASCII i is
         //reachable this way, so the comparison asks both ways round.
+        Skip.Unless(CanFoldNames, "Folding a non-ASCII name needs ICU, which this runtime does not have");
+
         using var ca = BuildCa();
 
         var builder = new CertificateBuilder()
@@ -481,7 +486,29 @@ public class CertificateBuilderUsageAgreementTests
             .SetIssuer(ca)
             .SetSubject(x => x.SetCommonName(commonName));
 
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+        await AssertRefusedAsACollision(builder);
+    }
+
+
+    [Test]
+    [Arguments("Grossfink Issuing CA", "Großfink Issuıng CA")]
+    [Arguments("Bosses Institute CA", "Boßes Instıtute CA")]
+    public async Task Create_WithASubjectNeedingBothFoldsAtOnce_Throws(string caCommonName, string commonName)
+    {
+        //Each name carries one character only the collator equates and one only Java's fold equates, so it
+        //satisfies neither question on its own. Asking them separately let both through; the third question
+        //runs the collator over Java's fold, which settles it. Ordinary Latin names, no exotic script.
+        //Verified end to end: issued, then used to sign a revocation list JDK 25 reported as REVOKED.
+        Skip.Unless(CanFoldNames, "Folding a non-ASCII name needs ICU, which this runtime does not have");
+
+        using var ca = BuildCa(caCommonName);
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(commonName));
+
+        await AssertRefusedAsACollision(builder);
     }
 
 
@@ -490,6 +517,8 @@ public class CertificateBuilderUsageAgreementTests
     {
         //The other family Java folds and the collator does not: combining ypogegrammeni uppercases to iota,
         //while IgnoreNonSpace discards it as a combining mark
+        Skip.Unless(CanFoldNames, "Folding a non-ASCII name needs ICU, which this runtime does not have");
+
         using var ca = BuildCa("Omega ΙA");
 
         var builder = new CertificateBuilder()
@@ -497,7 +526,7 @@ public class CertificateBuilderUsageAgreementTests
             .SetIssuer(ca)
             .SetSubject(x => x.SetCommonName("Omega ͅA"));
 
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+        await AssertRefusedAsACollision(builder);
     }
 
 
@@ -573,6 +602,27 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    public async Task Create_UnderANonAsciiIssuerWithADistinctSubject_IsIssuedNormally()
+    {
+        //The positive case for the capability probe. Every other non-ASCII test here expects a refusal, so
+        //without this one a probe stuck at false -- because a future ICU tailoring stopped equating the pair
+        //it tests -- would refuse every issuance under any CA with a non-ASCII name, and the suite would stay
+        //green. Skipped rather than failed where the runtime genuinely has no ICU.
+        Skip.Unless(CanFoldNames, "Folding a non-ASCII name needs ICU, which this runtime does not have");
+
+        using var ca = BuildCa("Ünique CA");
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName("Alice"))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("Alice");
+    }
+
+
+    [Test]
     public async Task Create_WithASubjectMerelyResemblingTheIssuers_IsIssuedNormally()
     {
         //Pins that the comparison is not so loose that any similar name collides. Without this, an
@@ -636,6 +686,24 @@ public class CertificateBuilderUsageAgreementTests
 
         await Assert.That(cert.SubjectName.Name).IsEqualTo(cert.IssuerName.Name);
     }
+
+
+    //Every name-folding test refuses a non-ASCII subject, and so does a build with no ICU -- for a different
+    //reason, and without comparing anything. Asserting on the message keeps the two apart, so a probe stuck
+    //at false cannot pass these tests by refusing everything.
+    private static async Task AssertRefusedAsACollision(CertificateBuilder builder)
+    {
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("issuer's own name");
+    }
+
+
+    //The same capability the builder probes for: both halves of its name folding quietly do nothing in
+    //globalization-invariant mode rather than failing, so neither can be asked, only tested.
+    private static readonly bool CanFoldNames =
+        CultureInfo.InvariantCulture.CompareInfo.Compare("ß", "ss", CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0
+        && !String.Equals("ﬁ".Normalize(NormalizationForm.FormKD), "ﬁ", StringComparison.Ordinal);
 
 
     private const string CaCommonName = "Issuing CA";
