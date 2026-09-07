@@ -1,6 +1,7 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
@@ -442,6 +443,82 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    [Arguments("Großfink Kappa CA")]      //sharp s for "ss"
+    [Arguments("Grossﬁnk Kappa CA")]      //fi ligature
+    [Arguments("Grossfink Kappa CA")]     //Kelvin sign for K
+    [Arguments("Ｇrossfink Kappa CA")]     //fullwidth G
+    [Arguments("großﬁnk Kappa ca")]
+    public async Task Create_WithASubjectMatchingTheIssuersUnderUnicodeFolding_Throws(string commonName)
+    {
+        //Java's X500Principal canonical form applies compatibility folding as well as case mapping, so it
+        //reads every one of these as the issuer's own name. Each was verified end to end: issued, then used
+        //to sign a certificate revocation list that an unmodified JDK 21 PKIX validator reported as REVOKED
+        //against a third party's certificate. Case folding alone does not reach them -- .NET never expands a
+        //character while changing its case, so "sharp s" never becomes "SS".
+        using var ca = BuildCa(FoldingCaCommonName);
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(commonName));
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_UnderAnIssuerNamedWithAUniversalString_IsIssuedNormally()
+    {
+        //UniversalString is a legal DirectoryString choice, and AsnReader has no UCS-4 decoder for it. Read
+        //through ReadCharacterString it throws ArgumentOutOfRangeException, which escaped Create() and broke
+        //every issuance under such a CA -- reachable through the issuer, the one name never rebuilt by
+        //X500NameBuilder.
+        using var ca = BuildUniversalStringCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName("Ordinary Leaf"))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("Ordinary Leaf");
+    }
+
+
+    [Test]
+    public async Task Create_UnderAUniversalStringIssuerWithTheSameName_Throws()
+    {
+        //And decoding it properly matters: a UTF8String spelling of a UniversalString issuer's name is the
+        //same name to a validator, so falling back to comparing bytes would let it through
+        using var ca = BuildUniversalStringCa();
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(UniversalCaCommonName));
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithASubjectSpellingTheIssuersStructureInsideOneAttribute_IsIssuedNormally()
+    {
+        //The canonical form joins attributes with separators, so an attribute whose own text contains them
+        //could otherwise pass itself off as several. Escaping keeps this a different name, which it is.
+        using var ca = BuildCa(x => x.SetCommonName("Two Part CA").SetOrganization("Example"));
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName($"Two Part CA,;{Oids.Organization}=Example"))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("Two Part CA");
+    }
+
+
+    [Test]
     public async Task Create_WithASubjectMerelyResemblingTheIssuers_IsIssuedNormally()
     {
         //Pins that the comparison is not so loose that any similar name collides. Without this, an
@@ -508,6 +585,8 @@ public class CertificateBuilderUsageAgreementTests
 
 
     private const string CaCommonName = "Issuing CA";
+    private const string FoldingCaCommonName = "Grossfink Kappa CA";
+    private const string UniversalCaCommonName = "Universal CA";
 
 
     //A plain X509Extension does not replace the profile's generated extension of the same OID -- the set
@@ -523,13 +602,49 @@ public class CertificateBuilderUsageAgreementTests
     }
 
 
+    //SetCommonName writes a UTF8String, so the encoding tests have something to differ from
     private static X509Certificate2 BuildCa()
+        => BuildCa(x => x.SetCommonName(CaCommonName));
+
+
+    private static X509Certificate2 BuildCa(string commonName)
+        => BuildCa(x => x.SetCommonName(commonName));
+
+
+    //Neither X500NameBuilder nor the BCL's own X500DistinguishedNameBuilder will write a UniversalString, so
+    //this CA's name is assembled as DER by hand and the certificate is built with CertificateRequest rather
+    //than with the library. That is the point of the test: such an issuer can only come from elsewhere, and
+    //SetIssuer accepts any certificate.
+    private static X509Certificate2 BuildUniversalStringCa()
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) {
+            using (writer.PushSetOf()) {
+                using (writer.PushSequence()) {
+                    writer.WriteObjectIdentifier(Oids.CommonName);
+                    //AsnWriter refuses a UniversalString tag on every typed method, so the tag, length and
+                    //content go in as a pre-encoded value. The name is short enough for a short-form length.
+                    var content = new UTF32Encoding(bigEndian: true, byteOrderMark: false).GetBytes(UniversalCaCommonName);
+                    writer.WriteEncodedValue([0x1C, (byte)content.Length, .. content]);
+                }
+            }
+        }
+
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest(new X500DistinguishedName(writer.Encode()), keys, HashAlgorithmName.SHA256);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, critical: true));
+        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign | X509KeyUsageFlags.DigitalSignature, critical: true));
+
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(2));
+    }
+
+
+    private static X509Certificate2 BuildCa(Func<X500NameBuilder, X500NameBuilder> configureSubject)
     {
         using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         return new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            //SetCommonName writes a UTF8String, so the encoding tests below have something to differ from
-            .SetSubject(x => x.SetCommonName(CaCommonName))
+            .SetSubject(configureSubject)
             .SetKeyPair(keys)
             .SetValidity(TimeSpan.FromDays(2))
             .Create();

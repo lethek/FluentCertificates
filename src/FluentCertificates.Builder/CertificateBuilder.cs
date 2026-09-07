@@ -2,6 +2,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Formats.Asn1;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -774,7 +775,7 @@ public record CertificateBuilder
             return;
         }
 
-        if (String.Equals(CanonicalName(subject), CanonicalName(builder.Issuer.SubjectName), StringComparison.Ordinal)) {
+        if (IsSameName(subject, builder.Issuer.SubjectName)) {
             throw new InvalidOperationException($"The subject is the issuer's own name, which contradicts {nameof(CertificateUsage)}.{builder.Usage}: an end-entity certificate under that name can sign certificate revocation lists that relying parties accept as the issuer's own. Set a different subject, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
         }
     }
@@ -792,6 +793,27 @@ public record CertificateBuilder
     //Two names alike enough to collide under this are refused even where a validator might tell them apart,
     //which is the safe direction: a certificate whose name differs from its issuer's only in case is not
     //something to issue quietly. A name that will not parse falls back to its bytes, which is stricter.
+    private static bool IsSameName(X500DistinguishedName subject, X500DistinguishedName issuer)
+    {
+        var left = CanonicalName(subject);
+        var right = CanonicalName(issuer);
+
+        try {
+            //A linguistic comparison rather than an ordinal one, because case folding alone does not equate
+            //every pair a validator does: Java reads "grossfink" and "großfink" as one name, and no
+            //amount of ToUpper does that, since .NET never expands a character while changing its case.
+            //IgnoreNonSpace disregards combining marks too, so a name differing from its issuer's only in its
+            //diacritics collides here where a validator might separate them -- the safe direction for a rule
+            //that refuses.
+            return CultureInfo.InvariantCulture.CompareInfo.Compare(left, right, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0;
+        } catch (PlatformNotSupportedException) {
+            //Globalization-invariant mode has no linguistic comparison to offer. Normalisation above has
+            //already settled the compatibility equivalences, so this loses only the case expansions.
+            return String.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+
     private static string CanonicalName(X500DistinguishedName name)
     {
         try {
@@ -801,13 +823,28 @@ public record CertificateBuilder
                 var attributes = rdns.ReadSetOf();
                 while (attributes.HasData) {
                     var attribute = attributes.ReadSequence();
-                    canonical.Append(attribute.ReadObjectIdentifier()).Append('=').Append(CanonicalAttributeValue(attribute)).Append(',');
+                    //Escaped so that no attribute's own text can pass itself off as this structure
+                    Append(canonical, attribute.ReadObjectIdentifier());
+                    canonical.Append('=');
+                    Append(canonical, CanonicalAttributeValue(attribute));
+                    canonical.Append(',');
                 }
                 canonical.Append(';');
             }
             return canonical.ToString();
-        } catch (AsnContentException) {
+        } catch (Exception ex) when (ex is AsnContentException or ArgumentException) {
             return Convert.ToHexString(name.RawData);
+        }
+    }
+
+
+    private static void Append(StringBuilder canonical, string value)
+    {
+        foreach (var c in value) {
+            if (c is '\\' or ',' or ';' or '=') {
+                canonical.Append('\\');
+            }
+            canonical.Append(c);
         }
     }
 
@@ -816,21 +853,55 @@ public record CertificateBuilder
     {
         var tag = attribute.PeekTag();
 
-        if (tag.TagClass != TagClass.Universal || Array.IndexOf(DirectoryStringTags, (UniversalTagNumber)tag.TagValue) < 0) {
-            //Not text, so there is nothing to fold and the encoding is the value
-            return Convert.ToHexString(attribute.ReadEncodedValue().Span);
-        }
+        var text = tag.TagClass != TagClass.Universal
+            ? null
+            : (UniversalTagNumber)tag.TagValue switch {
+                //System.Formats.Asn1 will not read or write UCS-4 under any of its typed methods, so this one
+                //is taken apart by hand. Left to ReadCharacterString it throws, and an issuer certificate
+                //carrying one -- a legal DirectoryString choice -- would break every issuance under that CA.
+                UniversalTagNumber.UniversalString => Ucs4.GetString(ContentOctets(attribute.ReadEncodedValue().Span)),
+                var known when Array.IndexOf(DirectoryStringTags, known) >= 0 => attribute.ReadCharacterString(known),
+                _ => null
+            };
 
-        var text = attribute.ReadCharacterString((UniversalTagNumber)tag.TagValue);
-        return String.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
+        //Not text, so there is nothing to fold and the encoding is the value
+        return text == null
+            ? Convert.ToHexString(attribute.ReadEncodedValue().Span)
+            : Fold(text);
+    }
+
+
+    //Strips the tag and length off an encoded value, leaving what it carries.
+    private static ReadOnlySpan<byte> ContentOctets(ReadOnlySpan<byte> encoded)
+    {
+        AsnDecoder.ReadEncodedValue(encoded, AsnEncodingRules.DER, out int contentOffset, out int contentLength, out _);
+        return encoded.Slice(contentOffset, contentLength);
+    }
+
+
+    //Compatibility normalisation first, so that a ligature, a fullwidth letter and the Kelvin sign each
+    //reduce to the letters they stand for, as Java's canonical name form reduces them. Then whitespace, which
+    //every validator collapses. Case is left to the comparison itself.
+    private static string Fold(string text)
+    {
+        string normalized;
+        try {
+            normalized = text.Normalize(NormalizationForm.FormKD);
+        } catch (ArgumentException) {
+            //Text that is not valid Unicode has no normal form; compare what is there
+            normalized = text;
+        }
+        return String.Join(" ", normalized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 
 
     private static readonly UniversalTagNumber[] DirectoryStringTags = [
         UniversalTagNumber.UTF8String, UniversalTagNumber.NumericString, UniversalTagNumber.PrintableString,
         UniversalTagNumber.T61String, UniversalTagNumber.IA5String, UniversalTagNumber.VisibleString,
-        UniversalTagNumber.UniversalString, UniversalTagNumber.BMPString
+        UniversalTagNumber.BMPString
     ];
+
+    private static readonly UTF32Encoding Ucs4 = new(bigEndian: true, byteOrderMark: false);
 
 
     //Decodes an extension and refuses to answer unless it re-encodes to the very bytes it came from.
