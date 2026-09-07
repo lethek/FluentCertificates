@@ -511,6 +511,14 @@ public record CertificateBuilder
     /// the rest of its content.
     /// </para>
     /// <para>
+    /// <b>Set a <see cref="Usage"/> before accepting anything.</b> Those refusals are the only check on what
+    /// an accepted extension asserts, and every one of them compares it against the profile, so a builder
+    /// with no <see cref="Usage"/> has nothing to compare against and makes none of them. A request accepted
+    /// onto one can carry <c>cA=TRUE</c> and <c>keyCertSign</c>, and the certificate issued from it will sign
+    /// other certificates that chain to your issuer. Whether that is what you meant is exactly what
+    /// <see cref="SetUsage"/> tells this builder.
+    /// </para>
+    /// <para>
     /// Accepted extensions stay on the builder this returns, so issue each further request from the builder
     /// as it stood before this call rather than from its result.
     /// </para>
@@ -673,18 +681,6 @@ public record CertificateBuilder
     }
 
 
-    //As above: an undecodable key usage extension asserts nothing this builder can read, so it claims none of
-    //the flags reserved to a CA.
-    private static X509KeyUsageFlags KeyUsagesOf(X509Extension extension)
-    {
-        try {
-            return new X509KeyUsageExtension(extension, extension.Critical).KeyUsages;
-        } catch (CryptographicException) {
-            return X509KeyUsageFlags.None;
-        }
-    }
-
-
     //Nothing this builder generates breaks one of these rules, so an extension corrected here came from a
     //caller: added by hand, set wholesale, or accepted off a certificate signing request. Criticality is
     //encoded beside the extension rather than within it, so the corrected copy carries the exact value that
@@ -701,14 +697,15 @@ public record CertificateBuilder
 
 
     //A supplied extension replaces whatever the Usage profile generated under the same OID, which is the
-    //point: a CA refines its own profile. Two replacements contradict it outright instead, and neither has a
+    //point: a CA refines its own profile. Two of them contradict it outright instead, and neither has a
     //legitimate use. A certificate either vouches for other certificates or identifies an endpoint, so
     //cA=TRUE on an end-entity profile is how a requester smuggles out a certificate authority, and cA=FALSE
     //on the CA profile strips the authority the caller asked for. keyCertSign and cRLSign exist only for a
-    //CA, so an end-entity profile has no business asserting either.
+    //CA, and a CA that asserts neither cannot sign what it was made to sign.
     //Criticality conformance cannot reach any of this: the contradiction is in the value, not the flag.
-    //Nothing is checked when no Usage is set, since a caller assembling a certificate by hand has no profile
-    //to contradict.
+    //Nothing is checked when no Usage is set. A caller assembling a certificate by hand has no profile to
+    //contradict, so a request accepted onto a builder with no Usage is governed by its accept predicate
+    //alone -- see UseCertificateSigningRequest's remarks.
     private static void CheckExtensionsAgreeWithUsage(CertificateBuilder builder, IEnumerable<X509Extension> extensions)
     {
         if (builder.Usage == null) {
@@ -719,16 +716,55 @@ public record CertificateBuilder
 
         foreach (var extension in extensions) {
             switch (extension.Oid?.Value) {
-                case Oids.BasicConstraints2 when IsCertificateAuthority(extension) is { } isCa && isCa != profileIsCa:
-                    throw new InvalidOperationException(isCa
-                        ? $"A basic constraints extension asserting cA=TRUE contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}"
-                        : $"A basic constraints extension asserting cA=FALSE contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}. Reject it, or choose an end-entity {nameof(CertificateUsage)}");
+                case Oids.BasicConstraints2:
+                    bool isCa = Decode(extension, x => new X509BasicConstraintsExtension(x, x.Critical), x => new X509BasicConstraintsExtension(x.CertificateAuthority, x.HasPathLengthConstraint, x.PathLengthConstraint, extension.Critical))
+                        ?.CertificateAuthority ?? throw UnreadableValue(extension, "basic constraints");
+                    if (isCa != profileIsCa) {
+                        throw new InvalidOperationException(isCa
+                            ? $"A basic constraints extension asserting cA=TRUE contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}"
+                            : $"A basic constraints extension asserting cA=FALSE contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}. Reject it, or choose an end-entity {nameof(CertificateUsage)}");
+                    }
+                    break;
 
-                case Oids.KeyUsage when !profileIsCa && (KeyUsagesOf(extension) & CaOnlyKeyUsages) != 0:
-                    throw new InvalidOperationException($"A key usage extension asserting {nameof(X509KeyUsageFlags.KeyCertSign)} or {nameof(X509KeyUsageFlags.CrlSign)} contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
+                case Oids.KeyUsage:
+                    var usages = Decode(extension, x => new X509KeyUsageExtension(x, x.Critical), x => new X509KeyUsageExtension(x.KeyUsages, extension.Critical))
+                        ?.KeyUsages ?? throw UnreadableValue(extension, "key usage");
+                    if (!profileIsCa && (usages & CaOnlyKeyUsages) != 0) {
+                        throw new InvalidOperationException($"A key usage extension asserting {nameof(X509KeyUsageFlags.KeyCertSign)} or {nameof(X509KeyUsageFlags.CrlSign)} contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
+                    }
+                    if (profileIsCa && !usages.HasFlag(X509KeyUsageFlags.KeyCertSign)) {
+                        throw new InvalidOperationException($"A key usage extension that does not assert {nameof(X509KeyUsageFlags.KeyCertSign)} contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}, whose certificates exist to sign other certificates. Reject it, or choose an end-entity {nameof(CertificateUsage)}");
+                    }
+                    break;
             }
         }
     }
+
+
+    //Decodes an extension and refuses to answer unless it re-encodes to the very bytes it came from.
+    //.NET's decoder is stricter than the ones that will later read the certificate: bytes it rejects, such
+    //as a well-formed SEQUENCE with a trailing NULL after it, are read by OpenSSL and Windows CryptoAPI as
+    //whatever the well-formed part says. Issuing a value this builder could not read would let a requester
+    //assert to a validator exactly what the check above failed to see, so a value that does not survive the
+    //round trip is refused rather than trusted. This matters only where the value decides something --
+    //nothing else here decodes an extension at all.
+    private static T? Decode<T>(X509Extension extension, Func<X509Extension, T> decode, Func<T, X509Extension> encode) where T : class
+    {
+        try {
+            var decoded = decode(extension);
+            //Re-encoding is also what forces the decode: the BCL types parse lazily, on first read of a
+            //decoded property, so this is where a bad value throws.
+            return encode(decoded).RawData.AsSpan().SequenceEqual(extension.RawData)
+                ? decoded
+                : null;
+        } catch (CryptographicException) {
+            return null;
+        }
+    }
+
+
+    private static InvalidOperationException UnreadableValue(X509Extension extension, string name)
+        => new($"A {name} extension's value is not valid DER, so what it asserts cannot be established and it may not agree with {nameof(CertificateUsage)}. Reject it, or supply one this builder can read. Value: {Convert.ToHexString(extension.RawData)}");
 
 
     private const X509KeyUsageFlags CaOnlyKeyUsages = X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign;
@@ -752,8 +788,10 @@ public record CertificateBuilder
     /// <para>
     /// An extension whose value contradicts the <see cref="Usage"/> profile is refused rather than corrected,
     /// since the contradiction is in the value: basic constraints disagreeing with the profile about whether
-    /// this is a certificate authority, or a key usage asserting <c>keyCertSign</c> or <c>cRLSign</c> under an
-    /// end-entity profile. Nothing is checked when no <see cref="Usage"/> is set.
+    /// this is a certificate authority, a key usage asserting <c>keyCertSign</c> or <c>cRLSign</c> under an
+    /// end-entity profile, or one asserting neither under <see cref="CertificateUsage.CA"/>. Either extension
+    /// is also refused when its value is not valid DER, since what it asserts to a validator cannot then be
+    /// established here. Nothing is checked when no <see cref="Usage"/> is set.
     /// </para>
     /// </remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
@@ -781,10 +819,11 @@ public record CertificateBuilder
 
         //Unlike the extensions BuildExtensions generates, this one is added straight to the request and so
         //never passes through the set that lets a supplied extension replace a generated one. Adding both
-        //makes CertificateRequest throw, so a supplied authority key identifier wins here too. It still goes
-        //through ConformCriticality, so this call site cannot drift out of conformance on its own.
+        //makes CertificateRequest throw, so a supplied authority key identifier wins here too. RFC 5280
+        //s4.2.1.1 has this non-critical, which is what the false below says; it does not go through
+        //ConformCriticality, because a constant that already conforms has nothing to correct.
         if (Issuer != null && !extensions.Any(x => String.Equals(x.Oid?.Value, Oids.AuthorityKeyIdentifier))) {
-            request.CertificateExtensions.Add(ConformCriticality(new X509AuthorityKeyIdentifierExtension(Issuer, false), this));
+            request.CertificateExtensions.Add(new X509AuthorityKeyIdentifierExtension(Issuer, false));
         }
 
         return request;

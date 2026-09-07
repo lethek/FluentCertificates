@@ -177,23 +177,118 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
-    public async Task Create_WithAMalformedKeyUsageValueOnAnEndEntityProfile_IsIssuedUnchanged()
+    public async Task Create_WithAKeyUsageThatDoesNotSignCertificatesOnTheCaProfile_Throws()
     {
-        //A value that will not decode asserts no flag this builder can read, so it claims none of the ones
-        //reserved to a CA and is issued as supplied, exactly as it was before the check existed.
-        //CopyFrom rather than a plain X509Extension so the supplied extension replaces the Server profile's
-        //generated key usage: the extension set matches on runtime type as well as OID.
-        var supplied = new X509KeyUsageExtension();
-        supplied.CopyFrom(new X509Extension(Oids.KeyUsage, [0x05, 0x00], critical: false));
+        //The mirror of the keyCertSign refusal above. A CA certificate whose key usage does not assert
+        //keyCertSign cannot sign what it was made to sign, and this is the same harm the cA=FALSE refusal
+        //exists for, reached through the other extension.
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Would Not Sign")
+            .AddExtension(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: true));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains(nameof(X509KeyUsageFlags.KeyCertSign));
+    }
+
+
+    [Test]
+    [Arguments(Oids.BasicConstraints2, new byte[] { 0x30, 0x03, 0x01, 0x01, 0xFF, 0x05, 0x00 })] //cA=TRUE, then a trailing NULL
+    [Arguments(Oids.KeyUsage, new byte[] { 0x03, 0x02, 0x01, 0x04, 0x00 })]                      //keyCertSign, then a trailing octet
+    public async Task Create_WithATrailingDataValueOnAnEndEntityProfile_Throws(string oid, byte[] rawData)
+    {
+        //The bypass a security review demonstrated end to end: .NET's decoder rejects both of these, while
+        //OpenSSL and Windows CryptoAPI read the well-formed part and honour cA=TRUE and Certificate Sign.
+        //Treating "I cannot read it" as "it asserts nothing" issued a working certificate authority under an
+        //end-entity profile and chained a forged leaf through it. What this builder cannot read, it refuses.
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Trailing Data")
+            .AddExtension(Retype(oid, rawData));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("not valid DER");
+    }
+
+
+    [Test]
+    [Arguments(Oids.BasicConstraints2, new byte[] { 0x05, 0x00 })]
+    [Arguments(Oids.KeyUsage, new byte[] { 0x05, 0x00 })]
+    public async Task Create_WithAnUndecodableValueOnAnEndEntityProfile_Throws(string oid, byte[] rawData)
+    {
+        //Same rule for a value with no well-formed part at all, so the refusal does not depend on the
+        //attacker's encoding being nearly right
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Undecodable")
+            .AddExtension(Retype(oid, rawData));
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithAnUndecodableBasicConstraintsAndNoUsage_IsIssuedUnchanged()
+    {
+        //Nothing is compared when there is no profile, so nothing is refused either: the extension goes out
+        //as supplied, exactly as it did before any of these checks existed. Without this test, refusing an
+        //undecodable value unconditionally would still pass every case above.
+        var supplied = Retype(Oids.BasicConstraints2, [0x05, 0x00]);
 
         using var cert = new CertificateBuilder()
-            .SetUsage(CertificateUsage.Server)
-            .SetSubject("CN=Malformed Key Usage")
+            .SetSubject("CN=Undecodable No Profile")
             .AddExtension(supplied)
             .Create();
 
-        await Assert.That(cert.Extensions.Single(x => x.Oid?.Value == Oids.KeyUsage).RawData)
+        await Assert.That(cert.Extensions.Single(x => x.Oid?.Value == Oids.BasicConstraints2).RawData)
             .IsEquivalentTo(supplied.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Create_WithAnExplicitDefaultInBasicConstraints_Throws()
+    {
+        //DER omits a field at its default, so cA spelled out as FALSE re-encodes to different bytes. It
+        //asserts nothing dangerous, but the builder cannot promise every validator reads it the way .NET
+        //does, and RFC 5280 s4.1 requires DER in the first place.
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Explicit Default")
+            .AddExtension(Retype(Oids.BasicConstraints2, [0x30, 0x03, 0x01, 0x01, 0x00]));
+
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithACanonicalBasicConstraintsOnAnEndEntityProfile_IsIssuedNormally()
+    {
+        //Pins that the round trip accepts what it should. Without this, refusing every basic constraints
+        //extension would still pass every refusal case above.
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Canonical Basic Constraints")
+            .AddExtension(new X509BasicConstraintsExtension(false, false, 0, critical: true))
+            .Create();
+
+        var ext = cert.Extensions.Single(x => x.Oid?.Value == Oids.BasicConstraints2);
+
+        await Assert.That(new X509BasicConstraintsExtension(ext, ext.Critical).CertificateAuthority).IsFalse();
+    }
+
+
+    //A plain X509Extension does not replace the profile's generated extension of the same OID -- the set
+    //matches on runtime type too -- so both would reach CertificateRequest and it would throw before any of
+    //this was reached. CopyFrom gives the right runtime type carrying the bytes under test.
+    private static X509Extension Retype(string oid, byte[] rawData)
+    {
+        X509Extension typed = oid == Oids.BasicConstraints2
+            ? new X509BasicConstraintsExtension()
+            : new X509KeyUsageExtension();
+        typed.CopyFrom(new X509Extension(oid, rawData, critical: false));
+        return typed;
     }
 
 

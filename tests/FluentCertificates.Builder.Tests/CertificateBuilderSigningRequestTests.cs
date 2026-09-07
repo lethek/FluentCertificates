@@ -399,9 +399,10 @@ public class CertificateBuilderSigningRequestTests
 
         await Assert.That(ReadDnsNames(issuedFirst)).IsEquivalentTo([RequestedDnsName]);
 
-        //None of the first requester's extensions reached the second certificate
+        //None of the first requester's extensions reached the second certificate. Its basic constraints are
+        //not worth asserting on: the predicate above never accepts that OID, so the Server profile's own
+        //cA=FALSE stands whether anything leaks or not.
         await Assert.That(issuedSecond.Extensions.Any(x => x.Oid?.Value == Oids.SubjectAltName)).IsFalse();
-        await Assert.That(issuedSecond.Extensions.OfType<X509BasicConstraintsExtension>().Single().CertificateAuthority).IsFalse();
         await Assert.That(ReadEnhancedKeyUsages(issuedSecond)).IsEquivalentTo([Oids.ServerAuthPurpose]);
     }
 

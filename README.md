@@ -424,7 +424,7 @@ Console.WriteLine(issued.Extensions
     .Critical); //False
 ```
 
-An extension whose value will not decode has no rule to apply, so it is issued exactly as supplied.
+An extension whose value will not decode has no criticality rule to apply, so the flag is left as supplied.
 
 ### Extensions that contradict the profile
 
@@ -432,16 +432,24 @@ Criticality is a flag beside an extension, so a violation can be corrected. Some
 contradict the `Usage` profile in their *value*, which cannot be corrected without deciding what the caller
 meant. Those are refused with an `InvalidOperationException`:
 
-- Basic Constraints disagreeing with the profile about whether this is a certificate authority. A requester
-  slipping `cA=TRUE` past a permissive `accept` predicate on an end-entity profile walks away able to issue
-  certificates for anyone, and correcting the criticality does not stop that: a validator honours `cA=TRUE`
-  whichever way the flag is set. The mirror case, `cA=FALSE` on `CertificateUsage.CA`, strips the authority
-  you asked for.
-- Key Usage asserting `keyCertSign` or `cRLSign` under an end-entity profile. Both flags exist only for a
-  certificate authority.
+- **Basic Constraints disagreeing with the profile about whether this is a certificate authority.** A
+  requester slipping `cA=TRUE` past a permissive `accept` predicate on an end-entity profile walks away able
+  to issue certificates for anyone, and correcting the criticality does not stop that: a validator honours
+  `cA=TRUE` whichever way the flag is set. The mirror case, `cA=FALSE` on `CertificateUsage.CA`, strips the
+  authority you asked for.
+- **Key Usage asserting `keyCertSign` or `cRLSign` under an end-entity profile,** or asserting neither under
+  `CertificateUsage.CA`. Both flags exist only for a certificate authority, and a CA that asserts neither
+  cannot sign what it was made to sign.
+- **Either of those two extensions carrying a value that is not valid DER.** .NET's decoder is stricter than
+  the ones that read the certificate afterwards, so bytes it rejects — a well-formed `cA=TRUE` followed by a
+  trailing `NULL`, say — are read by OpenSSL and Windows CryptoAPI as exactly what the well-formed part says.
+  Issuing a value the builder could not read would let a requester assert to a validator the very thing the
+  check above failed to see, so both extensions must survive a decode and re-encode unchanged.
 
-Nothing is checked when no `Usage` is set, since a caller assembling a certificate by hand has no profile to
-contradict.
+> **Set a `Usage` before accepting anything from a request.** Every one of those refusals compares the
+> extension against the profile, so a builder with no `Usage` has nothing to compare against and makes none
+> of them. A request accepted onto one can carry `cA=TRUE` and `keyCertSign`, and the certificate issued
+> from it will sign other certificates that chain to your issuer.
 
 Everything else an extension says is still the `accept` predicate's decision, and `Extensions` on the
 builder keeps reporting whatever it was handed.

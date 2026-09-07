@@ -27,7 +27,7 @@ release rather than record it as it happened.
 - Bumped `System.Security.Cryptography.Pkcs`, `System.Collections.Immutable`, `SideData` and `TestableIO.System.IO.Abstractions` to their latest versions.
 - Marked all five packages `IsAotCompatible`. Native AOT publishing does not work yet: see [#104](https://github.com/lethek/FluentCertificates/issues/104).
 - **Breaking:** A certificate or signing request is issued with the criticality RFC 5280 requires of an extension, whatever criticality was supplied for it.
-- **Breaking:** A certificate or signing request is refused when an extension's value contradicts the `CertificateUsage` profile: basic constraints disagreeing about whether this is a certificate authority, or a key usage asserting `keyCertSign` or `cRLSign` under an end-entity profile.
+- **Breaking:** A certificate or signing request is refused when a basic constraints or key usage extension contradicts the `CertificateUsage` profile, or carries a value that is not valid DER.
 
 ### Fixed
 
