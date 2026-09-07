@@ -1,8 +1,6 @@
 ﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.Formats.Asn1;
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -486,63 +484,35 @@ public record CertificateBuilder
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A requester must not get to dictate their own subject alternative names, extended key usages or basic
-    /// constraints unchallenged, so every requested extension is offered to <paramref name="accept"/> and
-    /// applied only if it says so.
+    /// An accepted extension counts as the CA's own: it replaces anything already present under the same
+    /// OID and overrides what the <see cref="Usage"/> profile would have generated. Where a request carries
+    /// two under one OID, the last accepted is the one issued. Afterwards only a helper that writes its
+    /// extension directly, such as <see cref="SetCertificatePolicies(IEnumerable{string}, bool)"/>,
+    /// overrides it; a later <see cref="AddExtension"/> under the same OID and runtime type is ignored, and
+    /// so is <see cref="SetSubjectAlternativeNames(IEnumerable{GeneralName})"/>. Refuse an Authority Key
+    /// Identifier: it names the issuer's key, which the requester cannot know, so honouring one describes a
+    /// signer that did not sign.
     /// </para>
     /// <para>
-    /// An accepted extension counts as the CA's own and wins outright: it replaces anything already present
-    /// under the same OID, and overrides what the <see cref="Usage"/> profile would have generated. Where a
-    /// request carries two extensions under one OID, the last one accepted is the one issued.
-    /// </para>
-    /// <para>
-    /// Only a helper that writes its extension directly, such as
-    /// <see cref="SetCertificatePolicies(IEnumerable{string}, bool)"/>, overrides an accepted extension afterwards.
-    /// A later <see cref="AddExtension"/> under the same OID and runtime type is ignored, and so is
-    /// <see cref="SetSubjectAlternativeNames(IEnumerable{GeneralName})"/>, which an accepted subject
-    /// alternative name beats whichever order the two are called in.
-    /// </para>
-    /// <para>
-    /// Accepting an Authority Key Identifier is worth refusing outright: it names the issuer's key, which
-    /// the requester cannot know, so honouring one describes a signer that did not sign.
-    /// </para>
-    /// <para>
-    /// An accepted extension is issued with the criticality RFC 5280 requires of it, whatever the requester
-    /// asked for, and one whose value contradicts the <see cref="Usage"/> profile is refused outright;
-    /// <see cref="CreateCertificateRequest"/> gives both sets of rules. Everything else an extension says is
-    /// honoured as given, so <paramref name="accept"/> remains the only thing standing between a requester and
-    /// the rest of its content.
-    /// </para>
-    /// <para>
-    /// <b>Everything else in the request is the requester's word for it.</b> This builder refuses only what
-    /// no certificate could legitimately need — a value contradicting the <see cref="Usage"/> profile, or one
-    /// breaking an RFC 5280 MUST — along with a value it cannot read back, which it can neither correct nor
-    /// vouch for. Only the caller knows what their policy allows, so nothing else is screened. In particular
-    /// the subject name is taken from the request as given: call
-    /// <see cref="SetSubject(X500NameBuilder)"/> afterwards to overrule it, as a CA that issues under names
-    /// it has verified will want to.
+    /// <b>Everything else in the request is the requester's word for it.</b> Accepted extensions are still
+    /// subject to the criticality corrections and refusals <see cref="CreateCertificateRequest"/> describes,
+    /// but nothing else is screened, because only the caller knows what their policy allows. The subject
+    /// name in particular is taken as given: call <see cref="SetSubject(X500NameBuilder)"/> afterwards to
+    /// issue under a name you have verified.
     /// </para>
     /// <para>
     /// <b>Set a <see cref="Usage"/> before accepting anything.</b> Those refusals are the only check on what
-    /// an accepted extension asserts, and a builder with no <see cref="Usage"/> makes none of them. A request
-    /// accepted onto one can carry <c>cA=TRUE</c> and <c>keyCertSign</c>, and the certificate issued from it
-    /// will sign other certificates that chain to your issuer. Whether that is what you meant is exactly what
-    /// <see cref="SetUsage"/> tells this builder.
-    /// </para>
-    /// <para>
-    /// <see cref="CertificateUsage.CA"/> says you meant it, so it turns off the subject-name check as well:
-    /// a certificate authority reissuing itself is ordinary key rollover, and this builder cannot tell that
-    /// apart from a request asking for the same thing. Accepting a request onto a CA profile therefore grants
-    /// strictly more than any other profile does — the requester's key can end up signing certificates under
-    /// a name your relying parties read as your own. Screen the subject yourself before doing that.
+    /// an accepted extension asserts, and a builder with no <see cref="Usage"/> makes none of them: a
+    /// request can then carry <c>cA=TRUE</c> and <c>keyCertSign</c> and issue a certificate that signs
+    /// others chaining to your issuer. <see cref="CertificateUsage.CA"/> also turns off the subject-name
+    /// check, a self-issued certificate there being ordinary key rollover, so screen the subject yourself
+    /// before accepting a request onto one.
     /// </para>
     /// <para>
     /// Accepted extensions stay on the builder this returns, so issue each further request from the builder
-    /// as it stood before this call rather than from its result.
-    /// </para>
-    /// <para>
-    /// A request parsed without <see cref="CertificateRequestLoadOptions.UnsafeLoadCertificateExtensions"/>
-    /// carries no extensions at all, so <paramref name="accept"/> is never called.
+    /// as it stood before this call. A request parsed without
+    /// <see cref="CertificateRequestLoadOptions.UnsafeLoadCertificateExtensions"/> carries no extensions, so
+    /// <paramref name="accept"/> is never called.
     /// </para>
     /// </remarks>
     /// <param name="csr">The received certificate signing request.</param>
@@ -657,9 +627,11 @@ public record CertificateBuilder
     }
 
 
-    //Returns the criticality RFC 5280 demands of this extension, or null where it leaves the choice open.
-    //Every rule here is a MUST about the flag beside the extension rather than the value inside it, so a
-    //violation can be corrected without altering what the extension says.
+    /// <summary>
+    /// Returns the criticality RFC 5280 demands of this extension, or <see langword="null"/> where it
+    /// leaves the choice open. Every rule here is a MUST about the flag beside the extension rather than
+    /// the value inside it, so a violation can be corrected without altering what the extension says.
+    /// </summary>
     private static bool? RequiredCriticality(X509Extension extension, CertificateBuilder builder)
         => extension.Oid?.Value switch {
             //s4.2.1.1, s4.2.1.2, s4.2.1.8, s4.2.1.15, s4.2.2.1 and s4.2.2.2: MUST be non-critical.
@@ -681,8 +653,6 @@ public record CertificateBuilder
         };
 
 
-    //Reads the cA bit, or null when the value will not decode. An undecodable extension is the caller's to
-    //answer for, and was issued verbatim before this check existed.
     private static bool? IsCertificateAuthority(X509Extension extension)
     {
         try {
@@ -693,12 +663,12 @@ public record CertificateBuilder
     }
 
 
-    //Correcting on the way out rather than on the way in keeps Extensions a faithful record of what the
-    //builder was handed, and is the only point at which the empty-subject rule can be settled, since the
-    //subject can still change after an extension is added. Criticality is encoded beside the extension
-    //rather than within it, so the corrected copy carries the exact value that was asked for.
     private static X509Extension ConformCriticality(X509Extension extension, CertificateBuilder builder)
     {
+        //Correcting on the way out rather than on the way in keeps Extensions a faithful record of what the
+        //builder was handed, and is the only point at which the empty-subject rule can be settled, since
+        //the subject can still change after an extension is added. Criticality is encoded beside the
+        //extension rather than within it, so the corrected copy carries the value that was asked for.
         var required = RequiredCriticality(extension, builder);
         return required == null || required == extension.Critical
             ? extension
@@ -706,15 +676,14 @@ public record CertificateBuilder
     }
 
 
-    //A supplied extension normally replaces whatever the Usage profile generated under the same OID, which
-    //is the point: a CA refines its own profile. These two contradict it instead, and what is wrong is in
-    //the value, so criticality conformance cannot reach it. cRLSign is deliberately not checked: an
-    //indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
-    //Without a Usage there is no profile to measure against, so the whole check is skipped rather than run
-    //down to the one rule that needs none. A request accepted onto such a builder is governed by its accept
-    //predicate alone -- see UseCertificateSigningRequest's remarks.
     private static void CheckExtensionsAgreeWithUsage(CertificateBuilder builder, IEnumerable<X509Extension> extensions)
     {
+        //A supplied extension normally replaces whatever the Usage profile generated under the same OID,
+        //which is the point: a CA refines its own profile. These two contradict it instead, and what is
+        //wrong is in the value, so criticality conformance cannot reach it. cRLSign is deliberately not
+        //checked: an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
+        //Without a Usage there is no profile to measure against, so the whole check is skipped rather than
+        //run down to the one rule that needs none, leaving such a request to its accept predicate alone.
         if (builder.Usage == null) {
             return;
         }
@@ -753,31 +722,37 @@ public record CertificateBuilder
     }
 
 
-    //RFC 5280 s6.3.3 accepts a certificate revocation list from any certificate whose subject matches the
-    //target certificate's issuer and whose key usage asserts cRLSign; nothing there requires cA=TRUE. So an
-    //end-entity certificate bearing its issuer's own name can revoke everything that CA ever issued, and
-    //OpenSSL and Java PKIX both honour it. The name collision is what does that rather than any one key
-    //usage bit, so the collision is what gets refused. A self-signed certificate has no separate issuer to
-    //collide with, and under the CA profile a self-issued certificate is ordinary key rollover.
     private static void CheckSubjectAgreesWithUsage(CertificateBuilder builder, X500DistinguishedName subject)
     {
+        //RFC 5280 s6.3.3 accepts a certificate revocation list from any certificate whose subject matches
+        //the target certificate's issuer and whose key usage asserts cRLSign; nothing there requires
+        //cA=TRUE. So an end-entity certificate bearing its issuer's own name can revoke everything that CA
+        //ever issued, and OpenSSL and Java PKIX both honour it. The name collision is what does that rather
+        //than any one key usage bit, so the collision is what gets refused. A self-signed certificate has no
+        //separate issuer to collide with, and under the CA profile a self-issued certificate is rollover.
         if (builder.Usage is null or CertificateUsage.CA || builder.Issuer == null) {
             return;
         }
 
         //Letting an unreadable name through would switch the rule off for that certificate authority
         //altogether: no subject would ever match an issuer reduced to its bytes.
-        var subjectName = CanonicalName(subject) ?? throw UnreadableName("subject");
-        var issuerName = CanonicalName(builder.Issuer.SubjectName) ?? throw UnreadableName("issuer's subject");
+        var subjectName = X500NameComparer.Read(subject) ?? throw UnreadableName("subject");
+        var issuerName = X500NameComparer.Read(builder.Issuer.SubjectName) ?? throw UnreadableName("issuer's subject");
 
-        //Folding non-ASCII names needs ICU, which a globalization-invariant build lacks. Neither the collator
-        //nor Normalize says so, both silently do nothing, so this refuses rather than wave through a name it
-        //could not fold. An ASCII pair needs no folding beyond case, which works everywhere.
-        if (!CanFoldNames && !(Ascii.IsValid(subjectName) && Ascii.IsValid(issuerName))) {
-            throw new InvalidOperationException($"The subject and the issuer's name cannot be compared on this build: telling them apart takes Unicode folding, and globalization-invariant mode has none. No end-entity certificate can be issued under a non-ASCII name here. Issue under an ASCII name, or build without InvariantGlobalization");
+        if (subjectName.FoldsIntoSeparator) {
+            throw AmbiguousName("subject");
         }
 
-        if (IsSameName(subjectName, issuerName)) {
+        if (issuerName.FoldsIntoSeparator) {
+            throw AmbiguousName("issuer's subject");
+        }
+
+        //An ASCII pair needs no folding beyond case, which works on any build
+        if (!X500NameComparer.CanFold && !(Ascii.IsValid(subjectName.Value) && Ascii.IsValid(issuerName.Value))) {
+            throw new InvalidOperationException($"The subject and the issuer's name cannot be compared on this build: telling them apart takes Unicode folding, and globalization-invariant mode has none. Issue under ASCII names, or build without InvariantGlobalization");
+        }
+
+        if (X500NameComparer.IsSameName(subjectName.Value, issuerName.Value)) {
             throw new InvalidOperationException($"The subject is the issuer's own name, which contradicts {nameof(CertificateUsage)}.{builder.Usage}: an end-entity certificate under that name can sign certificate revocation lists that relying parties accept as the issuer's own. Set a different subject, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
         }
     }
@@ -787,168 +762,23 @@ public record CertificateBuilder
         => new($"The {which} is not a name this builder can read apart, so it cannot be checked against the other. Supply one encoded as valid DER");
 
 
-    //The culture Java canonicalises names under. A build restricted to predefined cultures has no such
-    //object to hand out, and there the invariant one is all there is.
-    private static readonly CultureInfo EnUs = GetEnUsOrInvariant();
+    private static InvalidOperationException AmbiguousName(string which)
+        => new($"The {which} carries a character that becomes a name separator once folded, so a relying party can read it as naming attributes this certificate does not have, the issuer's own among them. Supply a name whose punctuation is punctuation");
 
 
-    private static CultureInfo GetEnUsOrInvariant()
-    {
-        try {
-            return CultureInfo.GetCultureInfo("en-US");
-        } catch (CultureNotFoundException) {
-            return CultureInfo.InvariantCulture;
-        }
-    }
-
-
-    //Whether this build can fold what the comparison relies on. Both halves fail open in globalization-
-    //invariant mode -- Compare degrades rather than throwing, Normalize returns its input -- so the
-    //capability is tested for the equivalence it is there to catch, not asked for.
-    private static readonly bool CanFoldNames =
-        CultureInfo.InvariantCulture.CompareInfo.Compare("ß", "ss", CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0
-        && !String.Equals("ﬁ".Normalize(NormalizationForm.FormKD), "ﬁ", StringComparison.Ordinal);
-
-
-    //RFC 5280 s7.1 has relying parties compare names in a canonical form, and OpenSSL's X509_NAME_cmp and
-    //Java's X500Principal both do: they fold case, collapse whitespace and disregard which ASN.1 string type
-    //carried the characters. A requester chooses all three for their own subject, so byte equality would
-    //wave through every re-encoding of one name. The display form is no good either: it escapes a leading or
-    //trailing space with a backslash that survives whitespace folding. DER already sorts a multi-valued RDN.
-    //Asked three ways because the validators disagree and neither covers the other. ICU's collator equates
-    //"gross" with "groß", which no case mapping does; Java equates a dotless i with an i and a combining
-    //ypogegrammeni with an iota, which the collator weighs apart. A name needing both at once satisfies
-    //neither alone, so the third question runs the collator over Java's fold, composing them rather than
-    //choosing. That also settles the order the two normalise in: the canonical form normalises before case
-    //mapping and Java after, which reorders combining marks differently.
-    private static bool IsSameName(string subject, string issuer)
-        => CultureInfo.InvariantCulture.CompareInfo.Compare(subject, issuer, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0
-        || String.Equals(FoldAsJavaDoes(subject), FoldAsJavaDoes(issuer), StringComparison.Ordinal)
-        || CultureInfo.InvariantCulture.CompareInfo.Compare(FoldAsJavaDoes(subject), FoldAsJavaDoes(issuer), CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0;
-
-
-    //Java's X500Principal uppercases and then lowercases, which differs from lowercasing once: the round
-    //trip is what carries a dotless i onto an i. It does this under Locale.US, and so does this, because
-    //invariant casing deliberately leaves a dotless i alone.
-    private static string FoldAsJavaDoes(string name)
-    {
-        //Normalising again after the case round trip mirrors Java's order rather than answering any case
-        //seen so far. The values were already normalised into the canonical form and NFKD is idempotent
-        //here, so this is for agreement by construction.
-        var folded = name.ToUpper(EnUs).ToLower(EnUs);
-        try {
-            return folded.Normalize(NormalizationForm.FormKD);
-        } catch (ArgumentException) {
-            return folded;
-        }
-    }
-
-
-    private static string? CanonicalName(X500DistinguishedName name)
-    {
-        try {
-            var canonical = new StringBuilder();
-            var rdns = new AsnReader(name.RawData, AsnEncodingRules.DER).ReadSequence();
-            while (rdns.HasData) {
-                var attributes = rdns.ReadSetOf();
-                while (attributes.HasData) {
-                    var attribute = attributes.ReadSequence();
-                    //Escaped so that no attribute's own text can pass itself off as this structure
-                    Append(canonical, attribute.ReadObjectIdentifier());
-                    canonical.Append('=');
-                    Append(canonical, CanonicalAttributeValue(attribute));
-                    canonical.Append(',');
-                }
-                canonical.Append(';');
-            }
-            return canonical.ToString();
-        } catch (Exception ex) when (ex is AsnContentException or ArgumentException) {
-            //Null rather than the encoded bytes: a name reduced to its bytes matches nothing, which would
-            //quietly exempt it from the comparison instead of failing it
-            return null;
-        }
-    }
-
-
-    private static void Append(StringBuilder canonical, string value)
-    {
-        foreach (var c in value) {
-            if (c is '\\' or ',' or ';' or '=') {
-                canonical.Append('\\');
-            }
-            canonical.Append(c);
-        }
-    }
-
-
-    private static string CanonicalAttributeValue(AsnReader attribute)
-    {
-        var tag = attribute.PeekTag();
-
-        var text = tag.TagClass != TagClass.Universal
-            ? null
-            : (UniversalTagNumber)tag.TagValue switch {
-                //System.Formats.Asn1 will not read UCS-4 under any typed method, so this one is taken apart
-                //by hand. ReadCharacterString throws on it, and UniversalString is a legal DirectoryString
-                //choice, so an issuer carrying one would otherwise break every issuance under that CA.
-                UniversalTagNumber.UniversalString => Ucs4.GetString(ContentOctets(attribute.ReadEncodedValue().Span)),
-                var known when Array.IndexOf(DirectoryStringTags, known) >= 0 => attribute.ReadCharacterString(known),
-                _ => null
-            };
-
-        //Not text, so there is nothing to fold and the encoding is the value
-        return text == null
-            ? Convert.ToHexString(attribute.ReadEncodedValue().Span)
-            : Fold(text);
-    }
-
-
-    //Strips the tag and length off an encoded value, leaving what it carries.
-    private static ReadOnlySpan<byte> ContentOctets(ReadOnlySpan<byte> encoded)
-    {
-        AsnDecoder.ReadEncodedValue(encoded, AsnEncodingRules.DER, out int contentOffset, out int contentLength, out _);
-        return encoded.Slice(contentOffset, contentLength);
-    }
-
-
-    //Compatibility normalisation first, so a ligature, a fullwidth letter and the Kelvin sign each reduce to
-    //the letters they stand for, as Java's canonical form does. Then whitespace, which every validator
-    //collapses. Case is left to the comparison itself.
-    private static string Fold(string text)
-    {
-        string normalized;
-        try {
-            normalized = text.Normalize(NormalizationForm.FormKD);
-        } catch (ArgumentException) {
-            //Text that is not valid Unicode has no normal form; compare what is there
-            normalized = text;
-        }
-        return String.Join(" ", normalized.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-    }
-
-
-    private static readonly UniversalTagNumber[] DirectoryStringTags = [
-        UniversalTagNumber.UTF8String, UniversalTagNumber.NumericString, UniversalTagNumber.PrintableString,
-        UniversalTagNumber.T61String, UniversalTagNumber.IA5String, UniversalTagNumber.VisibleString,
-        UniversalTagNumber.BMPString
-    ];
-
-    private static readonly UTF32Encoding Ucs4 = new(bigEndian: true, byteOrderMark: false);
-
-
-    //Decodes an extension and refuses to answer unless it re-encodes to the very bytes it came from. .NET's
-    //decoder is stricter than the ones that will later read the certificate: bytes it rejects, such as a
-    //well-formed SEQUENCE with a trailing NULL after it, are read by OpenSSL and Windows CryptoAPI as
-    //whatever the well-formed part says, which would let a requester assert exactly what the check above
-    //failed to see. The two halves reject differently: the decode throws CryptographicException, while the
-    //re-encoding constructor throws ArgumentException for a field it parsed but cannot represent, such as a
-    //negative pathLenConstraint.
     private static T? Decode<T>(X509Extension extension, Func<X509Extension, T> decode, Func<T, X509Extension> encode) where T : class
     {
+        //Answers only if the value re-encodes to the very bytes it came from. .NET's decoder is stricter
+        //than the ones that will later read the certificate: bytes it rejects, such as a well-formed
+        //SEQUENCE with a trailing NULL after it, are read by OpenSSL and Windows CryptoAPI as whatever the
+        //well-formed part says, letting a requester assert what the caller's check failed to see.
         try {
             var decoded = decode(extension);
+
             //Re-encoding is also what forces the decode: the BCL types parse lazily, on first read of a
-            //decoded property, so this is where a bad value throws.
+            //decoded property, so this is where a bad value throws. The two halves throw differently, the
+            //decoder CryptographicException and this constructor ArgumentException for a field it parsed
+            //but cannot represent, such as a negative pathLenConstraint.
             return encode(decoded).RawData.AsSpan().SequenceEqual(extension.RawData)
                 ? decoded
                 : null;
@@ -958,11 +788,11 @@ public record CertificateBuilder
     }
 
 
-    //Quoted so a caller can find the offending extension among everything they accepted, truncated because
-    //a requester chooses how long it is. Not every refusal here is malformed DER: a pathLenConstraint too
-    //large for an Int32 is well-formed and conforming, and is refused only because it cannot be read back.
     private static InvalidOperationException UnreadableValue(X509Extension extension, string name)
     {
+        //Quoted so a caller can find the offending extension among everything they accepted, truncated
+        //because a requester chooses how long it is. Not every refusal is malformed DER: a pathLenConstraint
+        //too large for an Int32 is well-formed and conforming, and is refused only for being unreadable.
         var quoted = Convert.ToHexString(extension.RawData.AsSpan(0, Math.Min(extension.RawData.Length, QuotedValueLimit)));
         var ellipsis = extension.RawData.Length > QuotedValueLimit ? "..." : "";
         return new InvalidOperationException($"A {name} extension's value does not read back as the bytes it was supplied as, so what it asserts to a validator cannot be established here and may not agree with {nameof(CertificateUsage)}. Reject it, or supply one this builder can read. Value: {quoted}{ellipsis}");

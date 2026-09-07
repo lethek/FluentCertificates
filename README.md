@@ -451,12 +451,18 @@ neither correct nor vouch for that. Everything else is your policy to set:
   request onto a CA profile grants strictly more than any other profile does; screen the subject yourself
   before doing it.
 
-  Folding names that way needs ICU, which a build with `InvariantGlobalization` does not have. **Such a
-  build cannot issue an end-entity certificate under a non-ASCII name at all** — neither the subject's nor
-  the issuer's — because the comparison it would need cannot be made, and refusing is the only safe answer.
-  ASCII names are unaffected. An issuer whose own name is not valid DER is refused for the same reason: a
-  name that cannot be read apart cannot be compared, and treating it as matching nothing would switch this
-  rule off for that CA entirely.
+  A name is also refused when a character in it becomes a name separator once folded, such as a fullwidth
+  comma in a common name. Java's `X500Principal` escapes an attribute value before normalising it, so such a
+  character arrives unescaped and the name reads there as naming attributes it does not have, the issuer's
+  among them. Punctuation that was already punctuation is unaffected.
+
+  Folding names that way needs ICU, which a build with `InvariantGlobalization` does not have. Wherever the
+  comparison is made at all — an end-entity `CertificateUsage` with an `Issuer` set — **such a build refuses
+  a non-ASCII subject or issuer name**, because the comparison it would need cannot be made and refusing is
+  the only safe answer. A self-signed certificate, or one built with no `Usage`, is not compared and so is
+  not affected; nor are ASCII names. An issuer whose own name is not valid DER is refused for the same
+  reason: a name that cannot be read apart cannot be compared, and treating it as matching nothing would
+  switch this rule off for that CA entirely.
 
   How well the comparison matches a given relying party depends on the Unicode tables the *issuing* host
   carries. A host on an older ICU will not fold characters added to Unicode since, so a validator with newer

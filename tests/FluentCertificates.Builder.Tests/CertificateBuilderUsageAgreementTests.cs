@@ -401,7 +401,7 @@ public class CertificateBuilderUsageAgreementTests
             .SetIssuer(ca)
             .UseCertificateSigningRequest(csr, _ => true);
 
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+        await AssertRefusedAsACollision(builder);
     }
 
 
@@ -420,7 +420,7 @@ public class CertificateBuilderUsageAgreementTests
             .SetIssuer(ca)
             .SetSubject(x => x.Set(Oids.CommonNameOid, encoding, CaCommonName));
 
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+        await AssertRefusedAsACollision(builder);
     }
 
 
@@ -439,7 +439,7 @@ public class CertificateBuilderUsageAgreementTests
             .SetIssuer(ca)
             .SetSubject(x => x.SetCommonName(commonName));
 
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+        await AssertRefusedAsACollision(builder);
     }
 
 
@@ -513,6 +513,70 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    [Arguments('，')] //fullwidth comma, NFKD-folds to ','
+    [Arguments('﹐')] //small comma, likewise
+    public async Task Create_WithASubjectFoldingIntoTheIssuersRdnStructure_Throws(char comma)
+    {
+        //One attribute value carrying a separator that only appears once it is folded. Java escapes the
+        //value before normalising it, so this single CN canonicalises to the issuer's two RDNs and
+        //X500Principal.equals reports the two names equal. Verified against JDK 21.
+        Skip.Unless(CanFoldNames, "Folding a non-ASCII name needs ICU, which this runtime does not have");
+
+        using var ca = BuildCa(x => x.SetCommonName("Issuing CA").SetOrganizationalUnits("PKI"));
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName($"Issuing CA{comma}OU=PKI"));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("becomes a name separator once folded");
+    }
+
+
+    [Test]
+    public async Task Create_WithAnIssuerWhoseNameFoldsIntoASeparator_Throws()
+    {
+        //The same ambiguity on the CA's side leaves nothing dependable to compare a subject against
+        Skip.Unless(CanFoldNames, "Folding a non-ASCII name needs ICU, which this runtime does not have");
+
+        using var ca = BuildCa("Issuing CA，OU=PKI");
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName("Unrelated Leaf"));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("issuer's subject");
+    }
+
+
+    [Test]
+    [Arguments("Acme, Inc")]        //a comma that was always a comma
+    [Arguments("Acme=Widgets")]     //likewise an equals sign
+    [Arguments("株式会社カギ")]        //non-ASCII that folds to nothing punctuating
+    public async Task Create_WithASubjectWhosePunctuationSurvivesFolding_IsIssuedNormally(string commonName)
+    {
+        //Only a character that BECOMES a separator is refused. Punctuation that was already punctuation is
+        //escaped consistently by every validator, so it stays issuable.
+        Skip.Unless(CanFoldNames, "Folding a non-ASCII name needs ICU, which this runtime does not have");
+
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName(commonName))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains(commonName.Split(',')[0]);
+    }
+
+
+    [Test]
     public async Task Create_WithASubjectMatchingAGreekIssuerByItsCombiningIota_Throws()
     {
         //The other family Java folds and the collator does not: combining ypogegrammeni uppercases to iota,
@@ -550,12 +614,53 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    public async Task Create_WithANonAsciiNameAndNoIcu_Throws()
+    {
+        //The mirror of every Skip.Unless(CanFoldNames) test above: on a build that cannot fold, a comparison
+        //that would need folding is refused rather than made badly. Without this the branch is exercised
+        //nowhere, because the tests that reach it are exactly the ones such a build skips.
+        Skip.When(CanFoldNames, "This build has ICU, so the comparison is made rather than refused");
+
+        using var ca = BuildCa();
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName("Ünique Leaf"));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("cannot be compared on this build");
+    }
+
+
+    [Test]
+    public async Task Create_WithANonAsciiNameAndNoIcu_IsIssuedWhenNothingIsCompared()
+    {
+        //The refusal is scoped to the comparison, not to non-ASCII names as such: with no Issuer there is
+        //nothing to compare against, so the same name still issues.
+        Skip.When(CanFoldNames, "This build has ICU, so nothing is refused for want of folding");
+
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetSubject(x => x.SetCommonName("Ünique Leaf"))
+            .SetKeyPair(keys)
+            .SetValidity(TimeSpan.FromDays(1))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("Leaf");
+    }
+
+
+    [Test]
     public async Task Create_UnderAnIssuerNamedWithAUniversalString_IsIssuedNormally()
     {
-        //UniversalString is a legal DirectoryString choice, and AsnReader has no UCS-4 decoder for it. Read
-        //through ReadCharacterString it throws ArgumentOutOfRangeException, which escaped Create() and broke
-        //every issuance under such a CA -- reachable through the issuer, the one name never rebuilt by
-        //X500NameBuilder.
+        //UniversalString is a legal DirectoryString choice and AsnReader has no UCS-4 decoder for it, so it
+        //is read by hand. Such a CA is reachable only through the issuer, the one name X500NameBuilder never
+        //rebuilds. The sibling test below is what pins the hand-rolled decoding; this one only holds that an
+        //ordinary leaf under such a CA still issues.
         using var ca = BuildUniversalStringCa();
 
         using var cert = new CertificateBuilder()
@@ -580,7 +685,9 @@ public class CertificateBuilderUsageAgreementTests
             .SetIssuer(ca)
             .SetSubject(x => x.SetCommonName(UniversalCaCommonName));
 
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+        //Asserting the reason: an ArgumentException from decoding the name would become UnreadableName,
+        //also an InvalidOperationException, and this test would pass without comparing anything
+        await AssertRefusedAsACollision(builder);
     }
 
 
