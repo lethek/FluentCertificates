@@ -748,7 +748,19 @@ public record CertificateBuilder
         //ever issued, and OpenSSL and Java PKIX both honour it. The name collision is what does that rather
         //than any one key usage bit, so the collision is what gets refused. A self-signed certificate has no
         //separate issuer to collide with, and under the CA profile a self-issued certificate is rollover.
-        if (builder.Usage is null or CertificateUsage.CA || builder.Issuer == null) {
+        if (builder.Usage is null or CertificateUsage.CA) {
+            return;
+        }
+
+        if (builder.Issuer == null) {
+            //With no Issuer the certificate is written self-issued, so there is no separate name to collide
+            //with -- but only when the key signing it is the subject's own. A generator holding some other
+            //key mints a certificate under a name of the requester's choosing that a relying party can still
+            //build a path for, since the signature verifies against whoever does own that key. Java will then
+            //accept it as a certificate revocation list issuer for the name it bears, cA=FALSE and all.
+            if (builder.SignatureGenerator != null && !IsSubjectsOwnKey(builder)) {
+                throw new InvalidOperationException($"The certificate would be self-issued, naming itself as its own issuer, yet signed by a key that is not its own. A relying party reads that as the named issuer vouching for this subject. Set an {nameof(Issuer)} so the certificate names the authority that really signed it, or sign with the subject's own key");
+            }
             return;
         }
 
@@ -774,6 +786,12 @@ public record CertificateBuilder
             throw new InvalidOperationException($"The subject is the issuer's own name, which contradicts {nameof(CertificateUsage)}.{builder.Usage}: an end-entity certificate under that name can sign certificate revocation lists that relying parties accept as the issuer's own. Set a different subject, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
         }
     }
+
+
+    private static bool IsSubjectsOwnKey(CertificateBuilder builder)
+        => builder.PublicKey != null
+        && builder.SignatureGenerator!.PublicKey.ExportSubjectPublicKeyInfo()
+            .AsSpan().SequenceEqual(builder.PublicKey.ExportSubjectPublicKeyInfo());
 
 
     private static InvalidOperationException UnreadableName(string which)
@@ -846,7 +864,10 @@ public record CertificateBuilder
     /// not read back as the bytes it was supplied as, since what it asserts to a validator cannot then be
     /// established here. So is a subject that is the <see cref="Issuer"/>'s own name, under an end-entity
     /// profile: such a certificate can sign certificate revocation lists that relying parties accept as the
-    /// issuer's own. None of this is checked when no <see cref="Usage"/> is set.
+    /// issuer's own. With no <see cref="Issuer"/> there is no name to collide with, but a
+    /// <see cref="SignatureGenerator"/> holding a key that is not the subject's own is refused there, since
+    /// the certificate would name itself as its own issuer while another key vouched for it. None of this is
+    /// checked when no <see cref="Usage"/> is set.
     /// </para>
     /// </remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>

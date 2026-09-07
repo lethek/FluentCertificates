@@ -614,6 +614,58 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    public async Task Create_WithASignatureGeneratorAndNoIssuer_ThrowsWhenTheKeyIsNotTheSubjectsOwn()
+    {
+        //With no Issuer the certificate is written self-issued, so the subject-name check has nothing to
+        //compare against and steps aside. That is only sound when the signing key is the subject's own. A
+        //generator holding the CA's key instead mints a certificate under whatever name the requester chose,
+        //signed by the CA: Java's CertPathBuilder selects it as a CRL issuer by the CRL's AKID, accepts it as
+        //an end-entity certificate whose signature verifies against the anchor, and reports a third party
+        //REVOKED. Verified on JDK 21; with this certificate absent the same run reports only
+        //UNDETERMINED_REVOCATION_STATUS, so it is this certificate being trusted and not the real CA.
+        using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject(x => x.SetCommonName(CaCommonName))
+            .SetKeyPair(caKeys)
+            .SetValidity(TimeSpan.FromDays(2))
+            .Create();
+
+        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var request = new CertificateRequest(ca.SubjectName, requesterKeys, HashAlgorithmName.SHA256);
+        var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest());
+
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(caKeys))
+            .UseCertificateSigningRequest(csr);
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("signed by a key that is not its own");
+    }
+
+
+    [Test]
+    public async Task Create_WithASignatureGeneratorOverItsOwnKey_IsIssuedNormally()
+    {
+        //The legitimate reason to supply a generator with no issuer: the subject's own key lives somewhere
+        //that will not export it. That certificate really is self-signed, so nothing is refused.
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Client)
+            .SetSubject(x => x.SetCommonName("Self Signed Leaf"))
+            .SetKeyPair(keys)
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(keys))
+            .SetValidity(TimeSpan.FromDays(1))
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).Contains("Self Signed Leaf");
+    }
+
+
+    [Test]
     public async Task Create_WithAnOcspSigningPurposeUnderAnEndEntityProfile_Throws()
     {
         //RFC 6960 s4.2.2.2 delegates to any certificate the CA issued directly that carries this purpose, so

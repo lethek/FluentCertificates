@@ -474,6 +474,12 @@ neither correct nor vouch for that. Everything else is your policy to set:
 - **Key Usage asserting `keyCertSign` under an end-entity profile,** or not asserting it under
   `CertificateUsage.CA`. `keyCertSign` is what makes a certificate able to mint others. `cRLSign` is left
   alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
+- **A certificate with no `Issuer` whose `SignatureGenerator` holds a key that is not the subject's own.**
+  Such a certificate names itself as its own issuer while some other key vouches for it, so a relying party
+  can build a path for it against whoever does own that key. Java will then accept it as a certificate
+  revocation list issuer for the name it bears, `cA=FALSE` notwithstanding. Set an `Issuer` so the
+  certificate names the authority that really signed it. A generator over the subject's own key, which is
+  how an unexportable key signs its own certificate, is unaffected.
 - **Extended Key Usage asserting the OCSP signing purpose under any profile but
   `CertificateUsage.OcspSigning`,** or not asserting it under that one. RFC 6960 s4.2.2.2 delegates OCSP to
   any certificate the CA issued directly that carries `id-kp-OCSPSigning`, so such a certificate answers for
