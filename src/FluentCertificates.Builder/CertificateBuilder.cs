@@ -1,10 +1,8 @@
 ﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 
 using FluentCertificates.Internals;
 
@@ -521,9 +519,9 @@ public record CertificateBuilder
     /// <b>Set a <see cref="Usage"/> before accepting anything.</b> Those refusals are the only check on what
     /// an accepted extension asserts, and a builder with no <see cref="Usage"/> makes none of them: a
     /// request can then carry <c>cA=TRUE</c> and <c>keyCertSign</c> and issue a certificate that signs
-    /// others chaining to your issuer. <see cref="CertificateUsage.CA"/> also turns off the subject-name
-    /// check, a self-issued certificate there being ordinary key rollover, so screen the subject yourself
-    /// before accepting a request onto one.
+    /// others chaining to your issuer. Nothing here screens the subject the request asks for, which is
+    /// yours to judge: a certificate under your own issuer's name can sign certificate revocation lists
+    /// that relying parties accept as that issuer's own.
     /// </para>
     /// <para>
     /// Accepted extensions stay on the builder this returns, so issue each further request from the builder
@@ -734,8 +732,8 @@ public record CertificateBuilder
         //which is the point: a CA refines its own profile. These two contradict it instead, and what is
         //wrong is in the value, so criticality conformance cannot reach it. cRLSign is deliberately not
         //checked: an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
-        //Without a Usage there is no profile to measure against, so the whole check is skipped rather than
-        //run down to the one rule that needs none, leaving such a request to its accept predicate alone.
+        //Without a Usage there is no profile to measure against, so the check is skipped entirely, leaving
+        //such a request to its accept predicate alone.
         if (builder.Usage == null) {
             return;
         }
@@ -752,11 +750,6 @@ public record CertificateBuilder
                             ? $"A basic constraints extension asserting cA=TRUE contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}"
                             : $"A basic constraints extension asserting cA=FALSE contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}. Reject it, or choose an end-entity {nameof(CertificateUsage)}");
                     }
-                    //RFC 5280 s4.2.1.9: pathLenConstraint MUST NOT appear unless cA is asserted. It bounds
-                    //how many CAs may appear beneath this one, so on a non-CA certificate nothing reads it.
-                    if (constraints is { HasPathLengthConstraint: true, CertificateAuthority: false }) {
-                        throw new InvalidOperationException($"A basic constraints extension carries a path length constraint without asserting cA=TRUE, which RFC 5280 s4.2.1.9 forbids. Reject it, or supply one without a path length");
-                    }
                     break;
 
                 case Oids.KeyUsage:
@@ -769,52 +762,7 @@ public record CertificateBuilder
                         throw new InvalidOperationException($"A key usage extension that does not assert {nameof(X509KeyUsageFlags.KeyCertSign)} contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}, whose certificates exist to sign other certificates. Reject it, or choose an end-entity {nameof(CertificateUsage)}");
                     }
                     break;
-
-                case Oids.EnhancedKeyUsage:
-                    //RFC 6960 s4.2.2.2 delegates OCSP for the whole CA to any certificate the CA issued
-                    //directly that asserts this purpose. It answers for every certificate that CA ever
-                    //issued, so it is the OCSP counterpart of cA=TRUE and gets the same treatment. Every
-                    //other purpose is the caller's to choose: refining the profile's own extended key usage
-                    //is the ordinary reason to supply one.
-                    var purposes = Decode(extension, x => new X509EnhancedKeyUsageExtension(x, x.Critical), x => new X509EnhancedKeyUsageExtension(x.EnhancedKeyUsages, extension.Critical))
-                        ?.EnhancedKeyUsages ?? throw UnreadableValue(extension, "extended key usage");
-                    bool profileIsOcspSigning = builder.Usage == CertificateUsage.OcspSigning;
-                    bool signsOcsp = purposes.Cast<Oid>().Any(x => String.Equals(x.Value, Oids.OcspSigningPurpose));
-                    if (signsOcsp && !profileIsOcspSigning) {
-                        throw new InvalidOperationException($"An extended key usage extension asserting the OCSP signing purpose contradicts {nameof(CertificateUsage)}.{builder.Usage}: RFC 6960 s4.2.2.2 lets such a certificate answer for every certificate its issuer ever signed. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.OcspSigning)}");
-                    }
-                    if (!signsOcsp && profileIsOcspSigning) {
-                        throw new InvalidOperationException($"An extended key usage extension that does not assert the OCSP signing purpose contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.OcspSigning)}, whose certificates exist to sign OCSP responses. Reject it, or choose another {nameof(CertificateUsage)}");
-                    }
-                    break;
-
-                //RFC 5280 s4.2.1.10, s4.2.1.11 and s4.2.1.14 each restrict their extension to a CA
-                //certificate. Left unenforced, an accepted extension could carry a critical restriction (see
-                //RequiredCriticality) onto an end-entity certificate that was never meant to have one.
-                case Oids.NameConstraints when !profileIsCa:
-                    throw new InvalidOperationException($"A name constraints extension contradicts {nameof(CertificateUsage)}.{builder.Usage}: RFC 5280 s4.2.1.10 restricts it to a CA certificate. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
-
-                case Oids.CertPolicyConstraints when !profileIsCa:
-                    throw new InvalidOperationException($"A policy constraints extension contradicts {nameof(CertificateUsage)}.{builder.Usage}: RFC 5280 s4.2.1.11 restricts it to a CA certificate. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
-
-                case Oids.InhibitAnyPolicyExtension when !profileIsCa:
-                    throw new InvalidOperationException($"An inhibit anyPolicy extension contradicts {nameof(CertificateUsage)}.{builder.Usage}: RFC 5280 s4.2.1.14 restricts it to a CA certificate. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
-
-                //RFC 5280 s4.2.1.6: if present, the sequence MUST contain at least one entry.
-                case Oids.SubjectAltName when IsEmptyGeneralNames(extension):
-                    throw new InvalidOperationException("A subject alternative name extension carries no entries, which RFC 5280 s4.2.1.6 forbids: if present, it must name at least one alternative name. Reject it, or supply one that names something");
             }
-        }
-    }
-
-
-    private static bool IsEmptyGeneralNames(X509Extension extension)
-    {
-        try {
-            return !new AsnReader(extension.RawData, AsnEncodingRules.DER).ReadSequence().HasData;
-        } catch (AsnContentException) {
-            //Not this check's job to complain about a value that will not even parse as a sequence
-            return false;
         }
     }
 
@@ -839,49 +787,17 @@ public record CertificateBuilder
             return;
         }
 
-        //RFC 5280 s6.3.3 accepts a certificate revocation list from any certificate whose subject matches
-        //the target certificate's issuer and whose key usage asserts cRLSign; nothing there requires
-        //cA=TRUE. So an end-entity certificate bearing its issuer's own name can revoke everything that CA
-        //ever issued, and OpenSSL and Java PKIX both honour it. The name collision is what does that rather
-        //than any one key usage bit, so the collision is what gets refused. Under the CA profile a
-        //self-issued certificate is rollover, so the two names are meant to match.
-        if (builder.Usage is CertificateUsage.CA) {
-            //Rollover under the issuer's own name is ordinary, but only when the certificate is genuinely
-            //signed by that issuer. A SignatureGenerator holding some other key mints a certificate that
-            //only looks like a rollover to a relying party doing the same s6.3.3 name match above -- the
-            //same impersonation the no-Issuer case refuses, reached here by borrowing a real issuer's name
-            //instead of leaving Issuer unset. With no SignatureGenerator supplied, Create() signs with
-            //Issuer's own private key, so there is nothing to check.
-            if (builder.SignatureGenerator != null
-                && X500NameComparer.Read(subject) is { FoldsIntoSeparator: false } subjectRollover
-                && X500NameComparer.Read(builder.Issuer.SubjectName) is { FoldsIntoSeparator: false } issuerRollover
-                && X500NameComparer.IsSameName(subjectRollover.Value, issuerRollover.Value)
-                && !IsIssuersOwnKey(builder)) {
-                throw new InvalidOperationException($"The certificate would be issued under the issuer's own name, which is ordinarily key rollover, yet signed by a key that is not the issuer's own. A relying party reads that as the issuer vouching for a successor certificate it never signed. Sign with the issuer's own key, or issue under a different subject");
-            }
-            return;
-        }
-
-        //Letting an unreadable name through would switch the rule off for that certificate authority
-        //altogether: no subject would ever match an issuer reduced to its bytes.
-        var subjectName = X500NameComparer.Read(subject) ?? throw UnreadableName("subject");
-        var issuerName = X500NameComparer.Read(builder.Issuer.SubjectName) ?? throw UnreadableName("issuer's subject");
-
-        if (subjectName.FoldsIntoSeparator) {
-            throw AmbiguousName("subject");
-        }
-
-        if (issuerName.FoldsIntoSeparator) {
-            throw AmbiguousName("issuer's subject");
-        }
-
-        //An ASCII pair needs no folding beyond case, which works on any build
-        if (!X500NameComparer.CanFold && !(Ascii.IsValid(subjectName.Value) && Ascii.IsValid(issuerName.Value))) {
-            throw new InvalidOperationException($"The subject and the issuer's name cannot be compared on this build: telling them apart takes Unicode folding, and globalization-invariant mode has none. Issue under ASCII names, or build without InvariantGlobalization");
-        }
-
-        if (X500NameComparer.IsSameName(subjectName.Value, issuerName.Value)) {
-            throw new InvalidOperationException($"The subject is the issuer's own name, which contradicts {nameof(CertificateUsage)}.{builder.Usage}: an end-entity certificate under that name can sign certificate revocation lists that relying parties accept as the issuer's own. Set a different subject, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
+        //A certificate under the issuer's own name is ordinarily key rollover, but only when the issuer
+        //genuinely signed it. A SignatureGenerator holding some other key mints one that a relying party
+        //doing the RFC 5280 s6.3.3 name match reads as the issuer's successor -- the same impersonation the
+        //no-Issuer case refuses, reached by borrowing a real issuer's name instead of leaving Issuer unset.
+        //Whether some other name would also be read as the issuer's is the caller's to judge, so the names
+        //are compared as encoded rather than folded. With no SignatureGenerator supplied, Create() signs
+        //with Issuer's own private key, so there is nothing to check.
+        if (builder.SignatureGenerator != null
+            && subject.RawData.AsSpan().SequenceEqual(builder.Issuer.SubjectName.RawData)
+            && !IsIssuersOwnKey(builder)) {
+            throw new InvalidOperationException($"The certificate would be issued under the issuer's own name, which is ordinarily key rollover, yet signed by a key that is not the issuer's own. A relying party reads that as the issuer vouching for a successor certificate it never signed. Sign with the issuer's own key, or issue under a different subject");
         }
     }
 
@@ -895,14 +811,6 @@ public record CertificateBuilder
     private static bool IsIssuersOwnKey(CertificateBuilder builder)
         => builder.SignatureGenerator!.PublicKey.ExportSubjectPublicKeyInfo()
             .AsSpan().SequenceEqual(builder.Issuer!.PublicKey.ExportSubjectPublicKeyInfo());
-
-
-    private static InvalidOperationException UnreadableName(string which)
-        => new($"The {which} is not a name this builder can read apart, so it cannot be checked against the other. Supply one encoded as valid DER");
-
-
-    private static InvalidOperationException AmbiguousName(string which)
-        => new($"The {which} carries a character that becomes a name separator once folded, so a relying party can read it as naming attributes this certificate does not have, the issuer's own among them. Supply a name whose punctuation is punctuation");
 
 
     private static T? Decode<T>(X509Extension extension, Func<X509Extension, T> decode, Func<T, X509Extension> encode) where T : class
@@ -957,28 +865,25 @@ public record CertificateBuilder
     /// and <see cref="Extensions"/> still reports whatever it was given, so this changes only what is issued.
     /// </para>
     /// <para>
-    /// A basic constraints, key usage or extended key usage extension is refused rather than corrected, since
-    /// what is wrong with it is in the value: basic constraints disagreeing with the <see cref="Usage"/>
-    /// profile about whether this is a certificate authority, or bounding a path length without asserting
-    /// <c>cA=TRUE</c> (RFC 5280 s4.2.1.9); a key usage asserting <c>keyCertSign</c> under an end-entity
-    /// profile, or not asserting it under <see cref="CertificateUsage.CA"/>; an extended key usage asserting
-    /// the OCSP signing purpose under any profile but <see cref="CertificateUsage.OcspSigning"/>, or not
-    /// asserting it under that one (RFC 6960 s4.2.2.2). Any of the three is also refused when its value does
-    /// not read back as the bytes it was supplied as, since what it asserts to a validator cannot then be
-    /// established here. So is a subject that is the <see cref="Issuer"/>'s own name, under an end-entity
-    /// profile: such a certificate can sign certificate revocation lists that relying parties accept as the
-    /// issuer's own. With no <see cref="Issuer"/> there is no name to collide with, but a
-    /// <see cref="SignatureGenerator"/> holding a key that is not the subject's own is refused there, since
-    /// the certificate would name itself as its own issuer while another key vouched for it. None of this is
-    /// checked when no <see cref="Usage"/> is set.
+    /// A basic constraints or key usage extension is refused rather than corrected, since what is wrong with
+    /// it is in the value: basic constraints disagreeing with the <see cref="Usage"/> profile about whether
+    /// this is a certificate authority, or a key usage asserting <c>keyCertSign</c> under an end-entity
+    /// profile or not asserting it under <see cref="CertificateUsage.CA"/>. Either is also refused when its
+    /// value does not read back as the bytes it was supplied as, since what it asserts to a validator cannot
+    /// then be established here. Separately, a <see cref="SignatureGenerator"/> signing with a key that is
+    /// not the one the certificate names as its issuer is refused: with no <see cref="Issuer"/> the
+    /// certificate is self-issued and the key must be the subject's own, and under the
+    /// <see cref="Issuer"/>'s own encoded name it must be the issuer's own. What extensions a profile
+    /// permits, and whether a subject is entitled to the name it asks for, are the caller's to decide. None
+    /// of this is checked when no <see cref="Usage"/> is set.
     /// </para>
     /// </remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
     /// <exception cref="ArgumentNullException">Thrown if no key pair is set. Make sure to call the <see cref="SetKeyPair(AsymmetricAlgorithm)"/> method as
     /// certificate requests require a manually specified key pair.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value, or the subject name,
-    /// contradicts the <see cref="Usage"/> profile; when a name cannot be read apart to compare; or when this
-    /// build cannot fold the names it would have to compare.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
+    /// <see cref="Usage"/> profile, or when the certificate would be signed by a key that is not the one it
+    /// names as its issuer.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
         if (PublicKey == null) {
@@ -1016,9 +921,9 @@ public record CertificateBuilder
     /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
     /// <exception cref="NotSupportedException">Thrown when the key to certify is an <see cref="System.Security.Cryptography.ECDiffieHellman"/>
     /// key, which cannot produce the proof-of-possession signature a PKCS#10 request is built around.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value, or the subject name,
-    /// contradicts the <see cref="Usage"/> profile; when a name cannot be read apart to compare; or when this
-    /// build cannot fold the names it would have to compare.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
+    /// <see cref="Usage"/> profile, or when the certificate would be signed by a key that is not the one it
+    /// names as its issuer.</exception>
     public CertificateSigningRequest CreateCertificateSigningRequest()
     {
         //PKCS#10 proves possession by signing the request with the very key being certified. A supplied
@@ -1035,9 +940,9 @@ public record CertificateBuilder
     /// Builds an <see cref="X509Certificate2"/> instance based on the builder's parameters.
     /// </summary>
     /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value, or the subject name,
-    /// contradicts the <see cref="Usage"/> profile; when a name cannot be read apart to compare; or when this
-    /// build cannot fold the names it would have to compare.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
+    /// <see cref="Usage"/> profile, or when the certificate would be signed by a key that is not the one it
+    /// names as its issuer.</exception>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Create()
     {
