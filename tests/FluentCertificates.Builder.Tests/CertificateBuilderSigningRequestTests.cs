@@ -353,11 +353,13 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
-    public async Task Create_UnderAnIssuerWithNoSubjectKeyIdentifier_NamesTheIssuerByIssuerAndSerial()
+    public async Task Create_UnderAnIssuerWithNoSubjectKeyIdentifier_DerivesTheKeyIdentifierFromItsPublicKey()
     {
-        //RFC 5280 s4.2.1.1 requires the extension in every certificate a conforming CA issues, and there is
-        //no Subject Key Identifier to name this issuer by, so it is named by issuer and serial number
-        //instead. Emitting an empty sequence would satisfy neither that requirement nor a validator.
+        //RFC 5280 s4.2.1.1 requires the keyIdentifier field in every certificate a conforming CA generates,
+        //bar a self-signed one, so there is always a value to write. This issuer publishes no Subject Key
+        //Identifier to copy, and that section's own advice is that the value "SHOULD be derived from the
+        //public key used to verify the certificate's signature". Naming the issuer by issuer and serial
+        //number instead would leave out the very field the requirement names.
         using var ca = BuildCaWithoutSubjectKeyIdentifier();
 
         using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -369,10 +371,11 @@ public class CertificateBuilderSigningRequestTests
             .Create();
 
         var aki = new X509AuthorityKeyIdentifierExtension(FindExtension(issued, Oids.AuthorityKeyIdentifier).RawData, false);
+        var derived = new X509SubjectKeyIdentifierExtension(ca.PublicKey, false);
 
-        await Assert.That(aki.KeyIdentifier).IsNull();
-        await Assert.That(aki.NamedIssuer!.Name).IsEqualTo(ca.SubjectName.Name);
-        await Assert.That(Convert.ToHexString(aki.SerialNumber!.Value.Span)).IsEqualTo(ca.SerialNumber);
+        await Assert.That(aki.KeyIdentifier).IsNotNull();
+        await Assert.That(aki.KeyIdentifier!.Value.ToArray())
+            .IsEquivalentTo(derived.SubjectKeyIdentifierBytes.ToArray(), CollectionOrdering.Matching);
     }
 
 
@@ -405,27 +408,21 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
-    public async Task UseCertificateSigningRequest_WithAccept_AnAuthorityKeyIdentifierUnderAnIssuerWithNoSubjectKeyIdentifier_IsIssued()
+    public async Task UseCertificateSigningRequest_WithAccept_AnAuthorityKeyIdentifierUnderAnIssuerWithNoSubjectKeyIdentifier_IsCheckedAgainstTheDerivedValue()
     {
-        //Such an issuer establishes no expected value, so there is nothing for a requested identifier to
-        //disagree with, and a keyIdentifier naming any key at all goes through. Comparing whole encodings
-        //refused every request here, since the extension this library generates for such an issuer names it
-        //by issuer and serial number and so matches no keyIdentifier the requester could send.
+        //An issuer publishing no Subject Key Identifier still has an expected value, since one is derived
+        //from its public key, so a requested identifier is measured against that rather than waved through.
         using var ca = BuildCaWithoutSubjectKeyIdentifier();
 
         using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        using var unrelatedKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        using var unrelated = new CertificateBuilder()
-            .SetUsage(CertificateUsage.CA)
-            .SetSubject("CN=Unrelated CA")
-            .SetKeyPair(unrelatedKeys)
-            .Create();
-        var requested = new X509Extension(KeyIdentifierAkiFor(unrelated), false);
+        var derived = new X509SubjectKeyIdentifierExtension(ca.PublicKey, false);
+        var matching = new X509Extension(
+            X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(derived.SubjectKeyIdentifierBytes.Span), false);
 
         var csr = LoadWithExtensions(new CertificateBuilder()
-            .SetSubject("CN=Aki Without A Ski To Match")
+            .SetSubject("CN=Aki Matching A Derived Identifier")
             .SetKeyPair(requesterKeys)
-            .AddExtension(requested)
+            .AddExtension(matching)
             .CreateCertificateSigningRequest());
 
         using var issued = new CertificateBuilder()
@@ -434,7 +431,56 @@ public class CertificateBuilderSigningRequestTests
             .Create();
 
         await Assert.That(FindExtension(issued, Oids.AuthorityKeyIdentifier).RawData)
-            .IsEquivalentTo(requested.RawData, CollectionOrdering.Matching);
+            .IsEquivalentTo(matching.RawData, CollectionOrdering.Matching);
+
+        using var unrelatedKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var unrelated = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Unrelated CA")
+            .SetKeyPair(unrelatedKeys)
+            .Create();
+        var wrong = LoadWithExtensions(new CertificateBuilder()
+            .SetSubject("CN=Aki Naming Another Key")
+            .SetKeyPair(requesterKeys)
+            .AddExtension(new X509Extension(KeyIdentifierAkiFor(unrelated), false))
+            .CreateCertificateSigningRequest());
+
+        var builder = new CertificateBuilder().SetIssuer(ca);
+        var ex = await Assert.That(() => builder.UseCertificateSigningRequest(wrong, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier))
+            .Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("does not identify the issuer's own key");
+    }
+
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task UseCertificateSigningRequest_WithAccept_AnAuthorityKeyIdentifierWithNoReadableKeyIdentifier_Throws(bool decodable)
+    {
+        //RFC 5280 s4.2.1.1 requires the keyIdentifier field in every certificate a conforming CA generates.
+        //An accepted extension without one names no signing key, and it displaces the extension the builder
+        //would have contributed, so the certificate would identify its issuer by nothing at all. The
+        //undecodable case is the same outcome by a different route: what it asserts cannot be established.
+        using var ca = BuildCa();
+        var value = decodable
+            //Well-formed, but carrying only authorityCertIssuer and authorityCertSerialNumber
+            ? X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: false, includeIssuerAndSerial: true).RawData
+            : [0x30, 0x03, 0x81, 0x01, 0x41];
+
+        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var csr = LoadWithExtensions(new CertificateBuilder()
+            .SetSubject("CN=Aki Naming No Key")
+            .SetKeyPair(requesterKeys)
+            .AddExtension(new X509Extension(Oids.AuthorityKeyIdentifier, value, critical: false))
+            .CreateCertificateSigningRequest());
+
+        var builder = new CertificateBuilder().SetIssuer(ca);
+
+        var ex = await Assert.That(() => builder.UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier))
+            .Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("carries no readable key identifier");
     }
 
 

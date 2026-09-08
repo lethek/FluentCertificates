@@ -20,7 +20,7 @@ release rather than record it as it happened.
 - `Oids.DomainValidatedCertPolicy`, `OrganizationValidatedCertPolicy`, `IndividualValidatedCertPolicy`, `ExtendedValidationCertPolicy`, `ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`, the CA/Browser Forum's certificate policy identifiers.
 - `Oids.SubjectInformationAccess`, `Oids.SubjectDirectoryAttributes` and `Oids.FreshestCrl`.
 - `Oids` has a cached `Oid` property for every OID constant, not just a subset.
-- `CertificateBuilder.UseCertificateSigningRequest` issues a certificate from a received CSR, taking its subject and public key. An overload takes a predicate deciding which requested extensions the CA honours.
+- `CertificateBuilder.UseCertificateSigningRequest` issues a certificate from a received CSR, taking its subject and public key. An overload takes a predicate deciding which requested extensions the CA honours, and refuses an accepted Authority Key Identifier that does not identify the `Issuer`'s own key once one is set.
 
 ### Changed
 
@@ -31,14 +31,13 @@ release rather than record it as it happened.
 - **Breaking:** A certificate with a `CertificateUsage` set is refused when it is signed by a `SignatureGenerator` whose key is not the key it names as having signed it: the subject's own key when there is no `Issuer`, or the `Issuer`'s own key when the subject is the `Issuer`'s own encoded name.
 - **Breaking:** `CertificateBuilder.AddExtension`, `AddExtensions` and `SetExtensions` now replace any extension already present under the same OID, regardless of its runtime type, and the `Usage` profile's own generated extensions are replaced the same way.
 - **Breaking:** `CertificateBuilder.SetSubjectAlternativeNames` discards any Subject Alternative Name extension already on the builder, so the last call to name the certificate's alternative names is the one issued.
-- **Breaking:** `UseCertificateSigningRequest`'s predicate overload refuses a requested Authority Key Identifier that does not identify the `Issuer`'s own key once one is set.
 - **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
 
 ### Fixed
 
 - `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
 - `CertificateBuilder` no longer throws when an Authority Key Identifier extension is supplied alongside an `Issuer`.
-- A certificate issued under a certificate authority that carries no Subject Key Identifier names that authority by issuer name and serial number in its Authority Key Identifier extension, instead of carrying an empty sequence.
+- A certificate issued under a certificate authority that carries no Subject Key Identifier names that authority by a key identifier derived from its public key, instead of carrying an empty sequence.
 
 ## [0.22.0] - 2026-09-01
 

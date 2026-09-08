@@ -510,9 +510,17 @@ whoever signs the certificate, which the requester cannot know beforehand, so ac
 the issuer's real key immediately rather than waiting for issuance. RFC 5280 s4.2.1.2 states the rule as a
 MUST: the issuer's subject key identifier is the value that belongs in the key identifier field of the
 certificates it issues. Only that field is compared, so an extension also carrying `authorityCertIssuer` and
-`authorityCertSerialNumber`, which s4.2.1.1 permits, is not refused for carrying them. The check needs
-something to compare against, so it is skipped until `SetIssuer` has been called, and skipped for an issuer
-with no subject key identifier of its own.
+`authorityCertSerialNumber`, which s4.2.1.1 permits alongside it, is not refused for carrying them. An
+extension with no readable key identifier at all is refused, because s4.2.1.1 requires that field in every
+certificate a conforming CA generates, and accepting one displaces the extension the builder would have
+written, leaving the certificate naming no signing key. Add such an extension yourself with `AddExtension`
+if you have a reason to; your own input is not screened. The check needs an issuer to compare against, so it
+is skipped until `SetIssuer` has been called.
+
+Where an issuer publishes no subject key identifier of its own, the value is derived from its public key
+rather than substituted with its name and serial number, both for the extension the builder writes and for
+the one it compares a request against. That follows s4.2.1.1's own advice that the key identifier "SHOULD be
+derived from the public key used to verify the certificate's signature".
 
 A requested Subject Key Identifier is *not* checked, which is worth saying because the symmetry invites the
 assumption that it is. It labels the requester's own key, so the requester knows the right answer. RFC 5280
