@@ -559,7 +559,7 @@ public record CertificateBuilder
 
         //s4.2.1.2: the issuer's subject key identifier MUST be the value placed in the key identifier field
         //of the authority key identifier extension of certificates it issues.
-        if (!requested.Value.Span.SequenceEqual(IssuerKeyIdentifier(builder.Issuer).Span)) {
+        if (!requested.Value.Span.SequenceEqual(GetSubjectKeyIdentifier(builder.Issuer).Span)) {
             throw new InvalidOperationException("A requested authority key identifier does not identify the issuer's own key, which describes a signer that did not sign this certificate. Reject it; the correct value is generated automatically");
         }
     }
@@ -923,18 +923,11 @@ public record CertificateBuilder
         //extension replace it and adding both would make CertificateRequest throw: hence the guard. The
         //false is RFC 5280 s4.2.1.1's non-critical, already conforming, so ConformCriticality is not needed.
         if (Issuer != null && !extensions.Any(x => String.Equals(x.Oid?.Value, Oids.AuthorityKeyIdentifier))) {
-            request.CertificateExtensions.Add(BuildAuthorityKeyIdentifierFor(Issuer));
+            request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(GetSubjectKeyIdentifier(Issuer).Span));
         }
 
         return request;
     }
-
-
-    /// <summary>
-    /// Builds the Authority Key Identifier extension naming a certificate authority's key.
-    /// </summary>
-    private static X509AuthorityKeyIdentifierExtension BuildAuthorityKeyIdentifierFor(X509Certificate2 ca)
-        => X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(IssuerKeyIdentifier(ca).Span);
 
 
     /// <summary>
@@ -950,7 +943,7 @@ public record CertificateBuilder
     /// leave out the field the MUST names, since those two are permitted alongside it rather than in place
     /// of it.
     /// </remarks>
-    private static ReadOnlyMemory<byte> IssuerKeyIdentifier(X509Certificate2 ca)
+    private static ReadOnlyMemory<byte> GetSubjectKeyIdentifier(X509Certificate2 ca)
         => ca.Extensions.OfType<X509SubjectKeyIdentifierExtension>().FirstOrDefault() is { } published
             ? published.SubjectKeyIdentifierBytes
             : new X509SubjectKeyIdentifierExtension(ca.PublicKey, false).SubjectKeyIdentifierBytes;
