@@ -544,12 +544,12 @@ public record CertificateBuilder
         //authorityCertSerialNumber, so comparing the whole encoding would refuse a conforming extension for
         //carrying optional fields the issuer's own encoding leaves out. Nothing is asserted about those
         //fields: they name the issuer, which the certificate already does.
-        var requested = RequestedKeyIdentifier(extension);
+        var requested = ReadKeyIdentifier(extension);
         var issuers = builder.Issuer.Extensions.OfType<X509SubjectKeyIdentifierExtension>().FirstOrDefault();
 
         //Nothing to compare: an issuer with no Subject Key Identifier establishes no expected value, and a
-        //value this builder cannot read establishes nothing either. Neither is grounds to refuse, since the
-        //rule below is about two identifiers disagreeing.
+        //value this builder cannot read doesn't establish anything either. Neither is grounds to refuse, since
+        //the rule below is about two identifiers disagreeing.
         if (requested == null || issuers == null) {
             return;
         }
@@ -562,7 +562,7 @@ public record CertificateBuilder
     }
 
 
-    private static ReadOnlyMemory<byte>? RequestedKeyIdentifier(X509Extension extension)
+    private static ReadOnlyMemory<byte>? ReadKeyIdentifier(X509Extension extension)
     {
         try {
             return new X509AuthorityKeyIdentifierExtension(extension.RawData, extension.Critical).KeyIdentifier;
@@ -641,9 +641,6 @@ public record CertificateBuilder
     /// </summary>
     public void Validate()
     {
-        //A KeyAlgorithm carries its own key length, curve or parameter set, so there is no longer any
-        //combination of those to police here: an invalid one cannot be constructed in the first place.
-
         if (NotBefore >= NotAfter) {
             throw new ArgumentException($"{nameof(NotBefore)} cannot be later than or equal to {nameof(NotAfter)}", nameof(NotAfter));
         }
@@ -684,7 +681,7 @@ public record CertificateBuilder
     /// leaves the choice open. Every rule here is a MUST about the flag beside the extension rather than
     /// the value inside it, so a violation can be corrected without altering what the extension says.
     /// </summary>
-    private static bool? RequiredCriticality(X509Extension extension, CertificateBuilder builder, IEnumerable<X509Extension> extensions)
+    private static bool? IsRequiredCriticality(X509Extension extension, CertificateBuilder builder, IEnumerable<X509Extension> extensions)
         => extension.Oid?.Value switch {
             //s4.2.1.1, s4.2.1.2, s4.2.1.8, s4.2.1.15, s4.2.2.1 and s4.2.2.2: MUST be non-critical.
             Oids.AuthorityKeyIdentifier or Oids.SubjectKeyIdentifier or Oids.SubjectDirectoryAttributes
@@ -744,7 +741,7 @@ public record CertificateBuilder
         //builder was handed, and is the only point at which the empty-subject rule can be settled, since
         //the subject can still change after an extension is added. Criticality is encoded beside the
         //extension rather than within it, so the corrected copy carries the value that was asked for.
-        var required = RequiredCriticality(extension, builder, extensions);
+        var required = IsRequiredCriticality(extension, builder, extensions);
         return required == null || required == extension.Critical
             ? extension
             : new X509Extension(extension.Oid!, extension.RawData, required.Value);
@@ -923,7 +920,7 @@ public record CertificateBuilder
         //extension replace it and adding both would make CertificateRequest throw: hence the guard. The
         //false is RFC 5280 s4.2.1.1's non-critical, already conforming, so ConformCriticality is not needed.
         if (Issuer != null && !extensions.Any(x => String.Equals(x.Oid?.Value, Oids.AuthorityKeyIdentifier))) {
-            request.CertificateExtensions.Add(AuthorityKeyIdentifierFor(Issuer));
+            request.CertificateExtensions.Add(BuildAuthorityKeyIdentifierFor(Issuer));
         }
 
         return request;
@@ -936,7 +933,7 @@ public record CertificateBuilder
     /// serial number where it has none. Those fields are equally permitted by s4.2.1.1, and that section
     /// requires the extension in every certificate a conforming CA issues, so omitting it is not an option.
     /// </summary>
-    private static X509AuthorityKeyIdentifierExtension AuthorityKeyIdentifierFor(X509Certificate2 ca)
+    private static X509AuthorityKeyIdentifierExtension BuildAuthorityKeyIdentifierFor(X509Certificate2 ca)
         => ca.Extensions.OfType<X509SubjectKeyIdentifierExtension>().Any()
             ? X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: true, includeIssuerAndSerial: false)
             : X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: false, includeIssuerAndSerial: true);
