@@ -1,8 +1,5 @@
-using System.Formats.Asn1;
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
@@ -471,8 +468,8 @@ public class CertificateBuilderUsageAgreementTests
     [Test]
     public async Task Create_WithACaRolloverUnderTheIssuersOwnName_IsIssuedNormally()
     {
-        //Pins that the CA profile still exempts the name comparison, which is what rollover needs: a new CA
-        //certificate carries the same subject as the issuer signing it.
+        //Rollover is the ordinary reason a certificate carries its issuer's own subject, and nothing refuses
+        //it: with no SignatureGenerator the issuer's own private key signs, which is what the check asks for.
         using var ca = BuildCa();
 
         using var cert = new CertificateBuilder()
@@ -566,7 +563,8 @@ public class CertificateBuilderUsageAgreementTests
     [Test]
     public async Task Create_WithAnOcspSigningProfileAndThatPurpose_IsIssuedNormally()
     {
-        //The profile that says the caller meant it
+        //The profile named for this purpose carries it too, since which purposes a requester may have is the
+        //caller's policy either way
         using var ca = BuildCa();
 
         using var cert = new CertificateBuilder()
@@ -613,6 +611,46 @@ public class CertificateBuilderUsageAgreementTests
             .Create();
 
         await Assert.That(cert.Extensions[Oids.NameConstraints]!.Critical).IsTrue();
+    }
+
+
+    [Test]
+    [Arguments(Oids.CertPolicyConstraints)]     //s4.2.1.11
+    [Arguments(Oids.InhibitAnyPolicyExtension)] //s4.2.1.14
+    public async Task Create_WithAPolicyConstraintExtensionOnAnEndEntityProfile_IsIssuedNormally(string oid)
+    {
+        //Both sections restrict these to a CA certificate, and both are certificate policy machinery, which
+        //the caller's policy governs rather than this library. The criticality those sections require is
+        //still applied. The value is opaque here, since only the refusal is under test.
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Would Constrain Policies")
+            .AddExtension(new X509Extension(oid, [0x30, 0x00], critical: false))
+            .Create();
+
+        await Assert.That(cert.Extensions[oid]!.Critical).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Create_WithAnOcspSigningProfileAndNoOcspPurpose_IsIssuedNormally()
+    {
+        //The converse of the two tests above: the profile named for OCSP does not oblige a requester to ask
+        //for that purpose. Which purposes an accepted extended key usage must carry is the caller's policy,
+        //and the accept predicate is where they apply it.
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.OcspSigning)
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(
+                RequestFor("not-really-ocsp.example.net", Oids.ServerAuthPurpose),
+                x => x.Oid?.Value == Oids.EnhancedKeyUsage)
+            .Create();
+
+        var eku = cert.Extensions.OfType<X509EnhancedKeyUsageExtension>().Single();
+
+        await Assert.That(eku.EnhancedKeyUsages.Cast<Oid>().Select(x => x.Value)).DoesNotContain(Oids.OcspSigningPurpose);
     }
 
 
@@ -677,12 +715,17 @@ public class CertificateBuilderUsageAgreementTests
     public async Task Create_WithASubjectMatchingTheIssuersAndNoUsage_IsIssuedNormally()
     {
         //A builder with no Usage makes none of these refusals, as UseCertificateSigningRequest's remarks and
-        //the README both warn.
+        //the README both warn. The same arrangement under a Usage is refused by
+        //Create_WithACaRolloverSignedByAForeignKey_Throws.
         using var ca = BuildCa();
+
+        using var attackerKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
         using var cert = new CertificateBuilder()
             .SetIssuer(ca)
             .SetSubject(ca.SubjectName)
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(attackerKeys))
+            .SetPublicKey(new PublicKey(attackerKeys))
             .Create();
 
         await Assert.That(cert.SubjectName.RawData).IsEquivalentTo(ca.SubjectName.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
@@ -698,6 +741,27 @@ public class CertificateBuilderUsageAgreementTests
 
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
+            .SetIssuer(ca)
+            .SetSubject(ca.SubjectName)
+            .Create();
+
+        await Assert.That(cert.SubjectName.RawData).IsEquivalentTo(ca.SubjectName.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    [Arguments(CertificateUsage.Server)]
+    [Arguments(CertificateUsage.Client)]
+    public async Task Create_WithASubjectMatchingTheIssuersOnAnEndEntityProfile_IsIssuedNormally(CertificateUsage usage)
+    {
+        //An end-entity certificate under its issuer's own name is how an indirect CRL issuer is conventionally
+        //made, and RFC 5280 s6.3.3 has a relying party match that name to decide whose revocation lists it
+        //will accept. Whether a subject is entitled to the name is the caller's to judge, so only the signing
+        //key behind it is checked, exactly as on the CA profile above.
+        using var ca = BuildCa();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(usage)
             .SetIssuer(ca)
             .SetSubject(ca.SubjectName)
             .Create();
@@ -736,15 +800,11 @@ public class CertificateBuilderUsageAgreementTests
 
 
     private static X509Certificate2 BuildCa()
-        => BuildCa(x => x.SetCommonName(CaCommonName));
-
-
-    private static X509Certificate2 BuildCa(Func<X500NameBuilder, X500NameBuilder> configureSubject)
     {
         using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         return new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
-            .SetSubject(configureSubject)
+            .SetSubject(x => x.SetCommonName(CaCommonName))
             .SetKeyPair(keys)
             .SetValidity(TimeSpan.FromDays(2))
             .Create();

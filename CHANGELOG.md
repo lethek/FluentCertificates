@@ -29,7 +29,7 @@ release rather than record it as it happened.
 - **Breaking:** A certificate or signing request is issued with the criticality RFC 5280 requires of an extension, whatever criticality was supplied for it.
 - **Breaking:** A certificate or signing request is refused when a basic constraints or key usage extension contradicts the `CertificateUsage` profile about whether the certificate is a certificate authority or may sign certificates, or carries a value that does not read back as the bytes it was supplied as.
 - **Breaking:** A certificate with a `CertificateUsage` set is refused when it is signed by a `SignatureGenerator` whose key is not the key it names as having signed it: the subject's own key when there is no `Issuer`, or the `Issuer`'s own key when the subject is the `Issuer`'s own encoded name.
-- **Breaking:** `CertificateBuilder.AddExtension` and `AddExtensions` now replace any extension already present under the same OID, regardless of its runtime type, instead of risking two extensions under one OID reaching the certificate.
+- **Breaking:** `CertificateBuilder.AddExtension` and `AddExtensions` now replace any extension already present under the same OID, regardless of its runtime type.
 - **Breaking:** `UseCertificateSigningRequest`'s predicate overload refuses a requested Subject Key Identifier that does not identify the certified public key, or a requested Authority Key Identifier that does not identify the `Issuer`'s own key once one is set.
 
 ### Fixed

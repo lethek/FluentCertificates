@@ -424,7 +424,9 @@ Console.WriteLine(issued.Extensions
     .Critical); //False
 ```
 
-An extension whose value will not decode has no criticality rule to apply, so the flag is left as supplied.
+Every rule above keys off the extension's OID alone, except the last two. Basic Constraints is corrected
+only when its value decodes and says `cA=TRUE`, so a value this library cannot read goes out with the flag
+as supplied. Subject Alternative Name is corrected only when the subject name is empty.
 
 ### What this library is responsible for
 

@@ -535,7 +535,9 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the request's subject, public key and accepted extensions.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="csr"/> or <paramref name="accept"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the request's subject contains a multi-valued
-    /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent.</exception>
+    /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent; or when an accepted
+    /// Subject Key Identifier does not identify the certified public key, or an accepted Authority Key
+    /// Identifier does not identify the <see cref="Issuer"/>'s own key.</exception>
     public CertificateBuilder UseCertificateSigningRequest(CertificateSigningRequest csr, Func<X509Extension, bool> accept)
     {
         ArgumentNullException.ThrowIfNull(csr);
