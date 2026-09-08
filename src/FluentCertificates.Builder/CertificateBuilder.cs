@@ -936,8 +936,9 @@ public record CertificateBuilder
     /// <exception cref="NotSupportedException">Thrown when the key to certify is an <see cref="System.Security.Cryptography.ECDiffieHellman"/>
     /// key, which cannot produce the proof-of-possession signature a PKCS#10 request is built around.</exception>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, or when the certificate would be signed by a key that is not the one it
-    /// names as its issuer.</exception>
+    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
+    /// names as its issuer, or when an Authority Key Identifier does not identify the <see cref="Issuer"/>'s
+    /// own key.</exception>
     public CertificateSigningRequest CreateCertificateSigningRequest()
     {
         //PKCS#10 proves possession by signing the request with the very key being certified. A supplied
@@ -955,8 +956,9 @@ public record CertificateBuilder
     /// </summary>
     /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, or when the certificate would be signed by a key that is not the one it
-    /// names as its issuer.</exception>
+    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
+    /// names as its issuer, or when an Authority Key Identifier does not identify the <see cref="Issuer"/>'s
+    /// own key.</exception>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Create()
     {
