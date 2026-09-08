@@ -333,14 +333,43 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
+    public async Task Create_WithAnAuthorityKeyIdentifierNamingAnotherCaAddedDirectly_Throws()
+    {
+        //The check measures what would be issued against the Issuer, not where the value came from. RFC 5280
+        //s4.2.1.2 makes the issuer's subject key identifier the value that MUST appear here, so there is one
+        //right answer and naming an Issuer settles it, exactly as setting a Usage settles what basic
+        //constraints may say. A certificate that deliberately names some other key needs no Issuer set.
+        using var otherKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var other = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Some Other CA")
+            .SetKeyPair(otherKeys)
+            .Create();
+
+        using var subjectKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = BuildCa();
+
+        var builder = new CertificateBuilder()
+            .SetSubject("CN=Aki Added By The Ca Itself")
+            .SetKeyPair(subjectKeys)
+            .SetIssuer(ca)
+            .AddExtension(new X509Extension(KeyIdentifierAkiFor(other), false));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("does not identify the issuer's own key");
+    }
+
+
+    [Test]
     [Arguments(true)]
     [Arguments(false)]
     public async Task UseCertificateSigningRequest_WithAccept_AnAuthorityKeyIdentifierNoLongerBeingIssued_IsNotRefused(bool discardedBySetExtensions)
     {
-        //The refusal exists to keep the requester's value out of a certificate, so it applies only while
-        //that value is still the one under the OID. A CA that writes its own over the top, or clears the
-        //extension set outright, is back to its own input, which was never screened. Refusing either would
-        //take a capability from a CA doing nothing wrong.
+        //The refusal turns on what would be issued, not on what was once accepted. Clearing the extension
+        //set leaves the builder to generate the issuer's own identifier, and writing a correct one over the
+        //top is the value the check wants anyway: refusing either would take a capability from a CA doing
+        //nothing wrong.
         using var otherKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         using var other = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
