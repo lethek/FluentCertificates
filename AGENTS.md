@@ -17,6 +17,55 @@ break as a cost when weighing an option up. Judge a feature, fix or refactor on 
 
 Record the break in `CHANGELOG.md` under `### Changed`, one line, prefixed `**Breaking:**`.
 
+## Responsibility boundary
+
+This is a library for building certificates, not a certificate authority. It does not own anyone's
+issuance policy and must not adopt one on the caller's behalf.
+
+Everything the builder consumes is the caller's own except a PKCS#10 signing request. A caller
+configuring a builder is the trust authority for what they are making, and can already produce any
+certificate they like from `CertificateRequest` in a few lines. A signing request is the one input that
+arrives from someone else, and it contributes three things: a subject name, a public key, and whichever
+extensions the caller explicitly accepted. That split decides what gets checked.
+
+In scope:
+
+- Encoding faithfully what the caller described.
+- Correcting criticality where RFC 5280 states a MUST. The rule set is fixed, and it corrects rather
+  than refuses.
+- Never letting a signing request silently replace something the caller set explicitly. Either the
+  caller's call wins or it throws; a silent no-op is a defect.
+- Refusing a certificate that contradicts a stated `Usage` about whether it is a certificate authority
+  and whether it may sign certificates.
+- Checking what a signing request supplies where the requester cannot know the right answer, such as a
+  key identifier naming the issuer's key.
+
+Out of scope:
+
+- Whether a requester is entitled to the name they asked for.
+- Which extensions a policy permits and what values they may carry. Certificate policies, extended key
+  usage purposes, revocation and access locations, and name constraints are all policy.
+- Conformance with any profile beyond RFC 5280's MUSTs. The CA/Browser Forum's requirements are a
+  policy the caller may or may not be operating under.
+- Whether a certificate is fit to be trusted. No such property exists independently of the policy it
+  was issued under.
+
+### Judging a proposed check
+
+Before adding a refusal, answer three questions. It needs a yes to one of them.
+
+1. Does it protect against input the caller did not supply?
+2. Does it stop the builder producing something other than what the caller asked for?
+3. Does it catch a self-contradiction the caller cannot have intended, at negligible cost?
+
+Three noes means the finding is a feature request against the caller's policy, not a defect here.
+Document the hazard and leave the decision with them.
+
+Weigh two costs against any new refusal. It fires on every caller, so a rule that is wrong in an edge
+case removes a capability from people who were doing nothing wrong. And a refusal asserts a standards
+claim: getting that claim wrong breaks working code, which is worse than not checking at all. Verify
+the clause before citing it.
+
 ## Build and test
 
 Plain `dotnet` CLI, no wrapper. `.github/workflows/dotnet.yml` calls it directly. The solution file is

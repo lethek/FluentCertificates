@@ -426,6 +426,25 @@ Console.WriteLine(issued.Extensions
 
 An extension whose value will not decode has no criticality rule to apply, so the flag is left as supplied.
 
+### What this library is responsible for
+
+FluentCertificates builds the certificate you describe. It is not a certificate authority, and it does
+not own your issuance policy.
+
+Everything it consumes is yours except a signing request. When you configure a builder you are the
+trust authority for what you are making, and you could produce the same certificate from
+`CertificateRequest` directly. A signing request is the one input that comes from somebody else, and it
+contributes a subject name, a public key, and whichever extensions you explicitly accepted.
+
+So the library takes responsibility for encoding faithfully what you asked for, for correcting
+criticality where RFC 5280 requires it, for never letting a request quietly replace something you set
+yourself, and for refusing a certificate that contradicts the `Usage` you stated.
+
+It does not decide whether you *should* issue. Whether a requester is entitled to a name, which
+extensions your policy permits, what values those may carry, and what your CA may certify are all
+yours. A certificate this library agrees to build is not thereby safe to trust, because no such
+property exists independently of the policy you issue under.
+
 ### What the builder refuses
 
 Criticality is a flag beside an extension, so a violation can be corrected. Other things cannot be corrected
