@@ -3,32 +3,20 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace FluentCertificates;
 
-/// <summary>
-/// Represents the X.509 Certificate Policies extension, which names the policies under which the
-/// certificate was issued.
-/// </summary>
-/// <remarks>
-/// Policy qualifiers are not represented: each policy is encoded as a bare <c>policyIdentifier</c>.
-/// </remarks>
-/// <param name="policyIdentifiers">
-/// The OIDs of the policies to assert. Must contain at least one OID, as required by RFC 5280 s4.2.1.4.
-/// Use <see cref="Oids.AnyCertPolicy"/> to assert the anyPolicy OID.
-/// </param>
-/// <param name="critical">
-/// Whether to mark the extension critical. Leave this <see langword="false"/> unless a certificate profile
-/// demands otherwise: a critical Certificate Policies extension forces any relying party that cannot
-/// interpret the extension to reject the certificate. The CA/Browser Forum Baseline Requirements
-/// certificate profiles (s7.1.2) require it non-critical.
-/// </param>
-/// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty, or contains the same OID more than once.</exception>
+/// <summary>Represents the X.509 Certificate Policies extension, naming the policies under which the
+/// certificate was issued.</summary>
+/// <remarks>Policy qualifiers are not represented: each policy is encoded as a bare <c>policyIdentifier</c>.</remarks>
+/// <param name="policyIdentifiers">The policy OIDs to assert. RFC 5280 s4.2.1.4 requires at least one; use
+/// <see cref="Oids.AnyCertPolicy"/> for anyPolicy.</param>
+/// <param name="critical">Whether to mark the extension critical, which forces a relying party that cannot
+/// interpret it to reject the certificate. CA/Browser Forum s7.1.2 requires it non-critical.</param>
+/// <exception cref="ArgumentException"><paramref name="policyIdentifiers"/> is empty, or contains the same OID more than once.</exception>
 public class X509CertificatePolicyExtension(IEnumerable<string> policyIdentifiers, bool critical = false)
     : X509Extension(Oids.CertPolicies, EncodeExtension(policyIdentifiers), critical)
 {
-    /// <summary>
-    /// Encodes the Certificate Policies extension from the supplied policy OIDs.
-    /// </summary>
+    /// <summary>Encodes the Certificate Policies extension from the supplied policy OIDs.</summary>
     /// <param name="policyIdentifiers">The policy OIDs to encode.</param>
-    /// <returns>A byte array containing the DER-encoded extension value.</returns>
+    /// <returns>The DER-encoded extension value.</returns>
     private static byte[] EncodeExtension(IEnumerable<string> policyIdentifiers)
     {
         ArgumentNullException.ThrowIfNull(policyIdentifiers);
