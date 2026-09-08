@@ -490,11 +490,15 @@ your policy to set:
   folded, since whether some other name would also be read as your issuer's is a judgement about your own
   naming policy. A generator over the key it should be signing with, which is how an unexportable key signs,
   is unaffected either way.
+- **An Authority Key Identifier naming a key other than the `Issuer`'s,** or carrying no readable key
+  identifier at all. This one turns on `Issuer` rather than `Usage`: RFC 5280 s4.2.1.2 makes the issuer's
+  subject key identifier the value that MUST appear there, so naming an issuer settles what belongs in it
+  and anything else contradicts the certificate's own account of who signed it. Detailed below.
 
 > **Set a `Usage` before accepting anything from a request.** A builder with no `Usage` has declared no
-> intent to measure an extension against, and makes none of these refusals. A request accepted onto such a
-> builder can carry `cA=TRUE` and `keyCertSign`, and the certificate issued from it will sign other
-> certificates that chain to your issuer.
+> intent to measure an extension against, and makes none of these refusals bar the Authority Key Identifier
+> one. A request accepted onto such a builder can carry `cA=TRUE` and `keyCertSign`, and the certificate
+> issued from it will sign other certificates that chain to your issuer.
 
 Almost nothing else in a request is screened. What an extension says is the `accept` predicate's decision,
 and every other field crosses over as the requester wrote it — **the subject name included**. Nothing here
@@ -505,17 +509,23 @@ leaf you issue under your own CA's name can revoke everything that CA ever issue
 PKIX honour that. Comparing a requested name against your own is a judgement about how a relying party will
 read it, which depends on the validator and the Unicode tables it carries, so it stays with you.
 
-The one exception is an Authority Key Identifier. It is not the requester's to assert, because it names
-whoever signs the certificate, which the requester cannot know beforehand, so accepting one checks it against
-the issuer's real key immediately rather than waiting for issuance. RFC 5280 s4.2.1.2 states the rule as a
-MUST: the issuer's subject key identifier is the value that belongs in the key identifier field of the
-certificates it issues. Only that field is compared, so an extension also carrying `authorityCertIssuer` and
+The one exception is an Authority Key Identifier. It names whoever signs the certificate, which the requester
+cannot know beforehand, and unlike everything else here there is exactly one right answer that the builder
+already knows. RFC 5280 s4.2.1.2 states it as a MUST: the issuer's subject key identifier is the value that
+belongs in the key identifier field of the certificates it issues. So an Authority Key Identifier that names
+some other key is refused at issuance, whether it arrived through `AddExtension`, a `Set*` helper or an
+accepted request, and regardless of whether `SetIssuer` was called before or after it. This is the same shape
+as the `Usage` refusals: setting an issuer declares who signs, and an identifier naming a different key
+contradicts it.
+
+Only the key identifier field is compared, so an extension also carrying `authorityCertIssuer` and
 `authorityCertSerialNumber`, which s4.2.1.1 permits alongside it, is not refused for carrying them. An
-extension with no readable key identifier at all is refused, because s4.2.1.1 requires that field in every
-certificate a conforming CA generates, and accepting one displaces the extension the builder would have
-written, leaving the certificate naming no signing key. Add such an extension yourself with `AddExtension`
-if you have a reason to; your own input is not screened. The check needs an issuer to compare against, so it
-is skipped until `SetIssuer` has been called.
+extension with no readable key identifier at all is refused too, because s4.2.1.1 requires that field in
+every certificate a conforming CA generates, and a supplied one displaces the extension the builder would
+have written, leaving the certificate naming no signing key. The check needs an issuer to compare against,
+so it is skipped where none is set: to build a certificate whose Authority Key Identifier deliberately names
+something else, leave `Issuer` unset and sign it with `SetSignatureGenerator`, or use `CertificateRequest`
+directly.
 
 Where an issuer publishes no subject key identifier of its own, the value is derived from its public key
 rather than substituted with its name and serial number, both for the extension the builder writes and for
