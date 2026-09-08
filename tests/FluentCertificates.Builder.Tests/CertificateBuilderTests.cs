@@ -1340,6 +1340,60 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Build_SetExtensions_KeepsTheLastOfTwoUnderOneOid()
+    {
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("SetExtensions Duplicate Oid Test"))
+            .SetExtensions(
+                new X509Extension(new Oid(TestExtensionOid1), [0x05, 0x00], false),
+                new X509Extension(new Oid(TestExtensionOid1), [0x04, 0x00], false))
+            .Create();
+
+        var written = cert.Extensions.Single(x => x.Oid?.Value == TestExtensionOid1);
+
+        await Assert.That(written.RawData).IsEquivalentTo(new byte[] { 0x04, 0x00 }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Build_AddExtension_RawExtensionReplacesAGeneratedOneOfTheSameOid()
+    {
+        //A well-known OID the builder generates itself comes back as a concrete X509Extension subclass, while
+        //one built by hand is the base type. Both are the same extension to a certificate, which carries at
+        //most one per OID, so the supplied one replaces the generated one rather than joining it.
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var generatedSki = new X509SubjectKeyIdentifierExtension(new PublicKey(keys), false);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("Raw Subject Key Identifier"))
+            .SetKeyPair(keys)
+            .AddExtension(new X509Extension(new Oid(Oids.SubjectKeyIdentifier), generatedSki.RawData, false))
+            .Create();
+
+        await Assert.That(cert.Extensions.Count(x => x.Oid?.Value == Oids.SubjectKeyIdentifier)).IsEqualTo(1);
+    }
+
+
+    [Test]
+    public async Task Build_AddExtension_RawExtensionReplacesOneTheUsageProfileGenerates()
+    {
+        //The same as above for an extension the Usage profile contributes rather than every certificate
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject(x => x.SetCommonName("Raw Basic Constraints"))
+            .SetKeyPair(keys)
+            .AddExtension(new X509Extension(new Oid(Oids.BasicConstraints2), [0x30, 0x00], critical: true))
+            .Create();
+
+        var written = cert.Extensions.Single(x => x.Oid?.Value == Oids.BasicConstraints2);
+
+        await Assert.That(written.RawData).IsEquivalentTo(new byte[] { 0x30, 0x00 }, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
     public async Task Extensions_ReportsWhatWasAddedAndReplaced()
     {
         var added = new CertificateBuilder()

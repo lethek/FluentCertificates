@@ -66,7 +66,7 @@ public record CertificateBuilder
 
     /// <summary>Gets the collection of certificate extensions.</summary>
     public IReadOnlyCollection<X509Extension> Extensions => _extensions;
-    private ImmutableHashSet<X509Extension> _extensions { get; init; } = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
+    private ImmutableHashSet<X509Extension> _extensions { get; init; } = EmptyExtensions;
     
     /// <summary>Gets the list of subject alternative names, or <see langword="null"/> if not set.</summary>
     public IReadOnlyList<GeneralName>? SubjectAlternativeNames => _subjectAlternativeNames;
@@ -325,11 +325,11 @@ public record CertificateBuilder
     /// regardless of its runtime type.
     /// </summary>
     /// <remarks>
-    /// Two extensions under one OID make <see cref="CertificateRequest"/> throw, and the builder's own
-    /// extension set cannot tell such a pair apart from an intentional replacement: a well-known OID it
-    /// generates by default, such as Subject Key Identifier, comes back as that concrete subclass, while
-    /// one built by hand is typically the base <see cref="X509Extension"/>. Replacing by OID rather than by
-    /// equality avoids that crash and matches <see cref="UseCertificateSigningRequest(CertificateSigningRequest,Func{X509Extension,bool})"/>,
+    /// Two extensions under one OID make <see cref="CertificateRequest"/> throw, and runtime type is no
+    /// guide to whether a pair is a duplicate: a well-known OID the builder generates by default, such as
+    /// Subject Key Identifier, comes back as that concrete subclass, while one built by hand is typically
+    /// the base <see cref="X509Extension"/>. Replacing on the OID alone avoids that crash for either shape,
+    /// and matches <see cref="UseCertificateSigningRequest(CertificateSigningRequest,Func{X509Extension,bool})"/>,
     /// which replaces the same way.
     /// </remarks>
     /// <param name="extension">The extension to add.</param>
@@ -348,12 +348,13 @@ public record CertificateBuilder
         => values.Aggregate(this, (builder, extension) => builder.SetExtension(extension));
 
     /// <summary>
-    /// Sets the certificate extensions, replacing any existing ones.
+    /// Sets the certificate extensions, replacing any already on the builder. Where <paramref name="values"/>
+    /// itself carries two extensions under one OID, the last one replaces the others.
     /// </summary>
     /// <param name="values">The extensions to set.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified extensions.</returns>
     public CertificateBuilder SetExtensions(params IEnumerable<X509Extension> values)
-        => this with { _extensions = values.ToImmutableHashSet(X509ExtensionOidEqualityComparer) };
+        => values.Aggregate(this with { _extensions = EmptyExtensions }, (builder, extension) => builder.SetExtension(extension));
 
 
     /// <summary>
@@ -585,20 +586,15 @@ public record CertificateBuilder
     }
 
 
-    //Unlike AddExtension used to, this replaces any extension already present under the same OID,
-    //regardless of its concrete type.
+    //Adding over an extension already under this OID would keep the one already there, since that is how
+    //ImmutableHashSet resolves a collision, so removing first is what makes this a replacement. Remove reads
+    //the set's own comparer, which matches on the OID alone.
     private CertificateBuilder SetExtension(X509Extension extension)
-    {
-        var builder = RemoveExtensions(extension.Oid?.Value);
-        return builder with { _extensions = builder._extensions.Add(extension) };
-    }
+        => this with { _extensions = _extensions.Remove(extension).Add(extension) };
 
 
-    //X509ExtensionOidEqualityComparer treats a same-OID extension of a different runtime type as unequal (by
-    //design -- see X509ExtensionOidEqualityComparerTests.Equals_SameOidDifferentTypes_IsFalse), so
-    //Remove(extension) alone would miss it and both would reach CertificateRequest, which throws. Filtering
-    //by Oid.Value directly finds it regardless of type.
-    private CertificateBuilder RemoveExtensions(string? oid)
+    //For a caller holding an OID but no extension to hand Remove
+    private CertificateBuilder RemoveExtensionsByOidValue(string? oid)
         => this with {
             _extensions = _extensions
                 .Where(x => !String.Equals(x.Oid?.Value, oid))
@@ -651,7 +647,7 @@ public record CertificateBuilder
     /// Subject Alternative Name extension at all, discarding any already present.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified SANs.</returns>
     public CertificateBuilder SetSubjectAlternativeNames(IEnumerable<GeneralName> san)
-        => RemoveExtensions(Oids.SubjectAltName) with { _subjectAlternativeNames = [.. san] };
+        => RemoveExtensionsByOidValue(Oids.SubjectAltName) with { _subjectAlternativeNames = [.. san] };
 
 
     /// <summary>
@@ -1398,4 +1394,5 @@ public record CertificateBuilder
 
     private static readonly X500NameBuilder EmptyNameBuilder = new();
     private static readonly X509ExtensionOidEqualityComparer X509ExtensionOidEqualityComparer = new();
+    private static readonly ImmutableHashSet<X509Extension> EmptyExtensions = ImmutableHashSet<X509Extension>.Empty.WithComparer(X509ExtensionOidEqualityComparer);
 }
