@@ -11,30 +11,17 @@ using FluentCertificates.Internals;
 
 namespace FluentCertificates;
 
-/// <summary>
-/// A certificate source reading certificate files from a directory.
-/// </summary>
+/// <summary>A certificate source reading certificate files from a directory.</summary>
 /// <remarks>
-/// A record, so two instances naming the same directory, recursion setting and file system compare equal
-/// and <see cref="CertificateFinder"/> reads that directory once however many times it was added.
-/// Searching the top level and searching the tree are different searches, so they are different sources.
-/// <para>
-/// A file that cannot be read as a certificate is skipped rather than throwing, so one bad file does not
-/// hide the good ones beside it. So is a subdirectory that cannot be opened, and a directory that is not
-/// there yields no results, matching what <see cref="CertificateStoreSource"/> does with a store that
-/// does not exist. Set <see cref="OnLoadFailure"/> to learn what was skipped.
-/// </para>
+/// A file that will not parse, a subdirectory that cannot be opened, and a directory that is not there
+/// are all skipped rather than throwing. Set <see cref="OnLoadFailure"/> to learn what was skipped.
 /// </remarks>
 public sealed record CertificateDirectorySource : AbstractCertificateSource
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="CertificateDirectorySource"/> class.
-    /// </summary>
-    /// <param name="path">The file system path to the directory containing certificates.</param>
+    /// <summary>Initializes a new instance of the <see cref="CertificateDirectorySource"/> class.</summary>
+    /// <param name="path">The directory containing certificates.</param>
     /// <param name="recurse">Whether to search subdirectories.</param>
-    /// <param name="fileSystem">
-    /// The file system to read through. If <see langword="null"/>, the real one is used.
-    /// </param>
+    /// <param name="fileSystem">The file system to read through; <see langword="null"/> uses the real one.</param>
     public CertificateDirectorySource(string path, bool recurse = false, IFileSystem? fileSystem = null)
     {
         Path = path;
@@ -55,11 +42,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// Which file names to read, matched the way <see cref="System.IO.Directory.EnumerateFiles(string,string)"/>
     /// matches them. Defaults to <c>"*"</c>, every file.
     /// </summary>
-    /// <remarks>
-    /// The one filter worth pushing down to a directory: it decides what is read and parsed, where a
-    /// predicate on the certificate can only be answered by parsing the file first. It narrows the set of
-    /// supported extensions rather than widening it, so <c>"*.txt"</c> still finds nothing.
-    /// </remarks>
+    /// <remarks>Narrows the supported extensions, never widens them, so <c>"*.txt"</c> finds nothing.</remarks>
     public string SearchPattern { get; init; } = "*";
 
 
@@ -67,31 +50,13 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     public IFileSystem FileSystem { get; init; }
 
 
-    /// <summary>
-    /// The password protecting the <c>.pfx</c>, <c>.p12</c> and <c>.pkcs12</c> files in this directory.
-    /// One password covers the whole directory. A file this password does not open is skipped like any
-    /// other file that cannot be read, and reported through <see cref="OnLoadFailure"/>.
-    /// </summary>
-    /// <remarks>
-    /// Redacted from <see cref="ToString"/>, since a <see cref="CertificateFinderResult"/> carries the
-    /// source it came from and would otherwise print the password with it.
-    /// </remarks>
+    /// <summary>The one password covering every PKCS#12 file in this directory.</summary>
+    /// <remarks>Redacted from <see cref="ToString"/>.</remarks>
     public string? Password { get; init; }
 
 
-    /// <summary>
-    /// Called with the path and the exception each time this source skips something it could not read:
-    /// a file that would not parse, or the directory itself when it is not there. Nothing is reported
-    /// by default, which makes a search that skipped forty files look like one that found nothing.
-    /// </summary>
-    /// <remarks>
-    /// Diagnostics only. The search carries on regardless of what this does, but an exception thrown
-    /// here is not caught and will end the search.
-    /// <para>
-    /// Part of the record's value equality, like every other property, so two sources reading the same
-    /// directory with different handlers are two sources and that directory is read twice.
-    /// </para>
-    /// </remarks>
+    /// <summary>Called with the path and the exception each time this source skips what it cannot read.</summary>
+    /// <remarks>An exception thrown here is not caught and will end the search.</remarks>
     public Action<string, Exception>? OnLoadFailure { get; init; }
 
 
@@ -100,11 +65,11 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Prints every property, with <see cref="Password"/> redacted. Written out by hand rather than
-    /// generated, so a property added to this record has to be added here too.
+    /// Prints every property, with <see cref="Password"/> redacted. Hand-written, so a property added to
+    /// this record has to be added here too.
     /// </summary>
     /// <param name="builder">Receives the printed members.</param>
-    /// <returns>Always <see langword="true"/>: this record always prints something.</returns>
+    /// <returns>Always <see langword="true"/>.</returns>
     protected override bool PrintMembers(StringBuilder builder)
     {
         base.PrintMembers(builder);
@@ -118,58 +83,34 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     }
 
 
-    /// <summary>
-    /// Reads every certificate file in the directory. Nothing here is filtered natively yet: a predicate
-    /// on the certificate cannot be answered without parsing the file, which is the same work as loading
-    /// it.
-    /// </summary>
-    /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <returns>One batch per file, each holding every certificate that file yielded.</returns>
+    /// <inheritdoc/>
+    /// <remarks>Nothing is filtered natively: answering a predicate means parsing the file anyway.</remarks>
     protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
         => Load(CertificateFiles());
 
 
-    /// <summary>
-    /// Reverses the file listing before loading anything, so a caller after the last match parses from the
-    /// end of the directory rather than through all of it. Only the paths are buffered, but the listing
-    /// itself has to run to completion before the first certificate is yielded.
-    /// </summary>
-    /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <returns>One batch per file, last file first.</returns>
+    /// <inheritdoc/>
+    /// <remarks>The listing runs to completion before the first certificate is yielded.</remarks>
     protected override IEnumerable<CertificateBatch> EnumerateDescending(CertificateFilter filter)
         => Load(CertificateFiles().Reverse());
 
 
-    /// <summary>
-    /// Reads each file asynchronously, which is where a directory search spends its time. The listing
-    /// itself stays synchronous: <see cref="IFileSystem"/> offers no asynchronous form of it, and it is
-    /// one enumeration against the file system rather than a read per certificate.
-    /// </summary>
-    /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <param name="cancellationToken">Cancels the enumeration; the file reads honour it.</param>
-    /// <returns>One batch per file, each holding every certificate that file yielded.</returns>
+    /// <inheritdoc/>
+    /// <remarks>The file reads are asynchronous; the directory listing stays synchronous.</remarks>
     protected override IAsyncEnumerable<CertificateBatch> EnumerateAsync(
         CertificateFilter filter,
         CancellationToken cancellationToken)
         => LoadAsync(CertificateFiles(), cancellationToken);
 
 
-    /// <summary>
-    /// The asynchronous counterpart of <see cref="EnumerateDescending"/>.
-    /// </summary>
-    /// <param name="filter">The predicates the caller asked for; unused.</param>
-    /// <param name="cancellationToken">Cancels the enumeration; the file reads honour it.</param>
-    /// <returns>One batch per file, last file first.</returns>
+    /// <inheritdoc/>
     protected override IAsyncEnumerable<CertificateBatch> EnumerateDescendingAsync(
         CertificateFilter filter,
         CancellationToken cancellationToken)
         => LoadAsync(CertificateFiles().Reverse(), cancellationToken);
 
 
-    /// <summary>
-    /// The files worth reading, each paired with the format its extension names. A file whose extension
-    /// names no format is not one of ours and never reaches <see cref="Parse"/>.
-    /// </summary>
+    /// <summary>The files whose extension names a format, paired with that format.</summary>
     private IEnumerable<(string Path, FileFormat Format)> CertificateFiles()
     {
         foreach (var path in ListFiles()) {
@@ -180,11 +121,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     }
 
 
-    /// <summary>
-    /// Lists the directory, yielding nothing rather than throwing if it is not there. A directory that
-    /// cannot be opened needs no guard: <see cref="EnumerationOptions.IgnoreInaccessible"/> covers the
-    /// root of the scan as well as the subdirectories below it.
-    /// </summary>
+    //An unopenable root needs no guard here: IgnoreInaccessible covers the root of the scan too
     private IEnumerable<string> ListFiles()
     {
         try {
@@ -196,9 +133,6 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     }
 
 
-    //One batch per file: a container format yields several certificates from the one path, and they are
-    //all parsed together. The path is canonicalised once for the batch, so the same file reached from two
-    //overlapping roots reports one location
     private IEnumerable<CertificateBatch> Load(IEnumerable<(string Path, FileFormat Format)> files)
         => files.Select(x => new CertificateBatch(
             Load(x.Path, x.Format),
@@ -224,7 +158,6 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         try {
             return Parse(format, FileSystem.File.ReadAllBytes(path));
         } catch (Exception ex) {
-            //One bad file must not hide the good ones beside it, so it is skipped and reported
             OnLoadFailure?.Invoke(path, ex);
             return [];
         }
@@ -239,32 +172,24 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         try {
             return Parse(format, await FileSystem.File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false));
         } catch (Exception ex) when (ex is not OperationCanceledException) {
-            //Cancellation is not a file that could not be read, so it propagates rather than being reported
+            //Cancellation is not an unreadable file: it must propagate rather than be reported and skipped
             OnLoadFailure?.Invoke(path, ex);
             return [];
         }
     }
 
 
-    /// <summary>
-    /// Turns a file's bytes into certificates. Split from reading them so the synchronous and asynchronous
-    /// paths differ only in how they get the bytes, rather than carrying a copy of this each.
-    /// </summary>
-    /// <param name="format">The format the file's extension named.</param>
-    /// <param name="data">The file's contents.</param>
-    /// <returns>Every certificate the file holds.</returns>
+    /// <summary>Turns a file's bytes into certificates.</summary>
     private IEnumerable<X509Certificate2> Parse(FileFormat format, ReadOnlySpan<byte> data)
     {
         switch (format) {
             case FileFormat.Pkcs12:
-                //PKCS#12 is binary alone. There is no PEM form of it to look for, and its own loader is
-                //the only one that reads it, so it is settled before anything sniffs the bytes.
                 return CertTools.LoadPkcs12Collection(data, Password);
 
             case FileFormat.Certificates:
             case FileFormat.Pem:
-                //Everything else is read by what the file holds rather than by what its name promised,
-                //since those extensions are all used for both encodings and for each other's payloads.
+                //Read by what the file holds, not by what its name promised: those extensions are all
+                //used for both encodings and for each other's payloads
                 return IsDer(data)
                     ? ReadDer(data)
                     : ReadPem(data, mayBeEmpty: format == FileFormat.Pem);
@@ -276,14 +201,9 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Reads every certificate a file's PEM text holds.
+    /// Reads every certificate a file's PEM text holds. Only <c>.pem</c> and <c>.ca-bundle</c> may
+    /// legitimately hold none, so under any other extension an empty result is reported as a failure.
     /// </summary>
-    /// <param name="data">The file's bytes, already established not to be DER.</param>
-    /// <param name="mayBeEmpty">
-    /// Whether holding no certificates is a legitimate answer, which only <c>.pem</c> and
-    /// <c>.ca-bundle</c> promise. Under an extension naming certificates outright an empty result means
-    /// the file is not what it claims, and reporting it is the only way a caller learns that.
-    /// </param>
     private static X509Certificate2Collection ReadPem(ReadOnlySpan<byte> data, bool mayBeEmpty)
     {
         var certs = ParsePem(DecodeText(data));
@@ -296,16 +216,13 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Reads every certificate PEM text holds, whether written as <c>CERTIFICATE</c> blocks or as a
-    /// PKCS#7 bundle. Blocks holding neither are passed over, so a private key or a CRL beside the
-    /// certificates costs nothing.
+    /// Reads every certificate PEM text holds, as <c>CERTIFICATE</c> blocks or as a PKCS#7 bundle, and
+    /// passes over blocks holding neither.
     /// </summary>
     /// <remarks>
     /// A block is read by what it decodes to rather than by the label over it, since the two are
     /// routinely at odds: <c>openssl crl2pkcs7</c> writes a <c>PKCS7</c> block that people save as
-    /// <c>.pem</c>, and <c>certutil -encode</c> labels whatever it converts <c>CERTIFICATE</c>, PKCS#7
-    /// included. The label decides only the one case the content cannot: whether data that is not
-    /// PKCS#7 was meant to be a certificate, and so should be reported when it will not load.
+    /// <c>.pem</c>, and <c>certutil -encode</c> labels whatever it converts <c>CERTIFICATE</c>.
     /// </remarks>
     private static X509Certificate2Collection ParsePem(string text)
     {
@@ -319,9 +236,8 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
             return certs;
 
         } catch {
-            //A batch that never reaches its caller has no other owner, so what was read before the bad
-            //block must be released here. No test can observe this: an undisposed certificate is only
-            //unreachable, so a mutation run reports the loop below as a survivor.
+            //This batch never reaches its caller, so nothing else can release what was read before the bad
+            //block. Unobservable from a test, so a mutation run reports the loop below as a survivor.
             foreach (var cert in certs) {
                 cert.Dispose();
             }
@@ -337,29 +253,20 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         } else if (label.SequenceEqual("CERTIFICATE")) {
             certs.Add(CertTools.LoadCertificate(der));
         }
-        //Anything else is not certificate material: a private key, a CRL, a CMS content type carrying
-        //no certificates. It sits beside the certificates rather than naming them, so it is passed over
-        //instead of costing the whole file.
     }
 
 
-    /// <summary>
-    /// Reads DER as whatever its content says it is: a PKCS#7 bundle, or a lone certificate. Data that
-    /// is neither reaches the certificate loader and throws, so it is reported rather than read as empty.
-    /// </summary>
+    /// <summary>Reads DER as whatever its content says it is: a PKCS#7 bundle, or a lone certificate.</summary>
     private static X509Certificate2Collection ReadDer(ReadOnlySpan<byte> der)
         => IsPkcs7(der) ? DecodePkcs7(der) : [CertTools.LoadCertificate(der)];
 
 
     /// <summary>
     /// Whether a file's bytes are binary rather than text: one complete DER value and nothing after it.
-    /// DER must never be read as text, since its bytes decode to characters that can spell out anything
-    /// at all, a PEM block that is no part of the encoding included.
     /// </summary>
     /// <remarks>
     /// The opening tag alone will not do. A SEQUENCE opens with <c>0x30</c>, which is also the digit
-    /// <c>0</c>, so a bundle whose text happens to start with one would be taken for binary and only
-    /// its first certificate read. Requiring the value to span the whole file separates the two.
+    /// <c>0</c>, so a PEM bundle starting with one would be truncated to its first certificate.
     /// </remarks>
     private static bool IsDer(ReadOnlySpan<byte> data)
     {
@@ -373,20 +280,17 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
     /// <summary>
     /// Whether DER holds the signed-data PKCS#7 that <see cref="SignedCms"/> reads, rather than a lone
-    /// certificate. Both are a SEQUENCE, and what separates them is the first thing inside it: the OID
-    /// naming a ContentInfo's content type, where a certificate opens with its TBSCertificate SEQUENCE.
+    /// certificate.
     /// </summary>
     private static bool IsPkcs7(ReadOnlySpan<byte> der)
     {
         try {
-            //A certificate opens its SEQUENCE with the TBSCertificate SEQUENCE, so reading the OID
-            //outright would answer the commonest case by throwing. Peeking keeps it off that path.
+            //Peek, don't read: a certificate opens with the TBSCertificate SEQUENCE, so reading the OID
+            //outright would answer the commonest case by throwing
             var content = new AsnValueReader(der, AsnEncodingRules.BER).ReadSequence();
             return content.PeekTag() == Asn1Tag.ObjectIdentifier
                 && content.ReadObjectIdentifier() == Oids.Pkcs7Signed;
         } catch (AsnContentException) {
-            //Not readable as ASN.1 at all, so it is no more PKCS#7 than it is a certificate. Loading it
-            //as the latter is what reports the file as unreadable.
             return false;
         }
     }
@@ -402,9 +306,8 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Decodes PEM text the way <c>File.ReadAllText</c> would: a byte order mark names the encoding, and
-    /// UTF-8 is assumed when there is none. Reading the bytes and decoding them here is what lets one
-    /// parser serve both paths.
+    /// Decodes PEM text as <c>File.ReadAllText</c> would: a byte order mark names the encoding, UTF-8 is
+    /// assumed without one.
     /// </summary>
     private static string DecodeText(ReadOnlySpan<byte> data)
     {
@@ -418,8 +321,8 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// The encodings a byte order mark can name, longest mark first: UTF-32 little endian opens with
-    /// the same two bytes as UTF-16 little endian, so testing it second would never match.
+    /// The encodings a byte order mark can name. Longest mark first: UTF-32 LE opens with the same two
+    /// bytes as UTF-16 LE, so testing it second would never match.
     /// </summary>
     private static readonly Encoding[] MarkedEncodings = [
         Encoding.UTF32,
@@ -431,9 +334,9 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
 
 
     /// <summary>
-    /// Matches what the <see cref="SearchOption"/> overload of <c>EnumerateFiles</c> does, save for
+    /// Matches the <see cref="SearchOption"/> overload of <c>EnumerateFiles</c>, save for
     /// <see cref="EnumerationOptions.IgnoreInaccessible"/>: that overload aborts a recursive scan at the
-    /// first subdirectory it cannot open, losing every certificate below and beside it.
+    /// first subdirectory it cannot open.
     /// </summary>
     private EnumerationOptions ListingOptions => new() {
         RecurseSubdirectories = Recurse,
@@ -444,16 +347,7 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     };
 
 
-    /// <summary>
-    /// Every file extension this source reads, each naming how that extension is read. One table rather
-    /// than a set beside a switch, so an extension cannot be recognised without saying how to read it.
-    /// Compared case-insensitively: file systems commonly preserve whatever case the file was created
-    /// with, so a certificate named "SERVER.PFX" must be found just as "server.pfx" is.
-    /// </summary>
-    /// <remarks>
-    /// Internal so a test can check these extensions against the formats the tests write, which is what
-    /// has every one of them read end to end in the format it really holds.
-    /// </remarks>
+    /// <summary>Every file extension this source reads, each naming how that extension is read.</summary>
     internal static readonly FrozenDictionary<string, FileFormat> FileFormats =
         new Dictionary<string, FileFormat> {
             [".crt"] = FileFormat.Certificates,
@@ -469,28 +363,16 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
 
-    /// <summary>
-    /// How an extension is read, which is all an extension still decides. Which encoding and which
-    /// payload a file holds are read from the file, so <c>.crt</c> and <c>.p7b</c> land on one value.
-    /// </summary>
+    /// <summary>How an extension is read; its encoding and payload are read from the file itself.</summary>
     internal enum FileFormat
     {
-        /// <summary>
-        /// An extension naming certificates outright, so a file holding none is reported rather than
-        /// read as empty.
-        /// </summary>
+        /// <summary>An extension naming certificates outright, so a file holding none is reported.</summary>
         Certificates,
 
-        /// <summary>
-        /// A PKCS#12 container, which needs <see cref="Password"/> when one protects it. The one format
-        /// with no text form, and the one its own loader alone can read.
-        /// </summary>
+        /// <summary>A PKCS#12 container, which needs <see cref="Password"/> when one protects it.</summary>
         Pkcs12,
 
-        /// <summary>
-        /// PEM text, which may carry other material beside the certificates or hold none at all, so an
-        /// empty result is a real answer.
-        /// </summary>
+        /// <summary>PEM text, which may hold no certificates at all.</summary>
         Pem
     }
 }
