@@ -448,10 +448,10 @@ property exists independently of the policy you issue under.
 ### What the builder refuses
 
 Criticality is a flag beside an extension, so a violation can be corrected. Other things cannot be corrected
-without deciding what the caller meant, and those are refused with an `InvalidOperationException`. The line
-is drawn at what no certificate could legitimately need — a value contradicting the `Usage` profile, or one
-breaking an RFC 5280 MUST — plus the narrow case of a value this builder cannot read back, since it can
-neither correct nor vouch for that. Everything else is your policy to set:
+without deciding what the caller meant, and those are refused with an `InvalidOperationException`. What is
+refused follows the boundary above: a value contradicting the `Usage` you stated, a value breaking an
+RFC 5280 MUST, and the narrow case of a value this builder cannot read back, since it can neither correct
+nor vouch for that. Everything else is your policy to set:
 
 - **Basic Constraints disagreeing with the profile about whether this is a certificate authority.** A
   requester slipping `cA=TRUE` past a permissive `accept` predicate on an end-entity profile walks away able
