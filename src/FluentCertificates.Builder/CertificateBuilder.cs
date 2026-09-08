@@ -6,6 +6,8 @@ using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
 
+using BclAuthorityKeyIdentifier = System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension;
+
 
 namespace FluentCertificates;
 
@@ -536,11 +538,38 @@ public record CertificateBuilder
         //before it is signed. Left unchecked, one naming a different key describes a signer that did not
         //sign. Skipped when Issuer is not yet set, matching the Usage checks elsewhere in this class: there
         //is nothing yet to check it against.
-        if (extension.Oid?.Value == Oids.AuthorityKeyIdentifier && builder.Issuer != null) {
-            var expectedAki = new X509AuthorityKeyIdentifierExtension(builder.Issuer, false);
-            if (!expectedAki.RawData.AsSpan().SequenceEqual(extension.RawData)) {
-                throw new InvalidOperationException("A requested authority key identifier does not identify the issuer's own key, which describes a signer that did not sign this certificate. Reject it; the correct value is generated automatically");
-            }
+        if (extension.Oid?.Value != Oids.AuthorityKeyIdentifier || builder.Issuer == null) {
+            return;
+        }
+
+        //Only the keyIdentifier field is compared. RFC 5280 s4.2.1.1 also permits authorityCertIssuer and
+        //authorityCertSerialNumber, so comparing the whole encoding would refuse a conforming extension for
+        //carrying optional fields the issuer's own encoding leaves out. Nothing is asserted about those
+        //fields: they name the issuer, which the certificate already does.
+        var requested = RequestedKeyIdentifier(extension);
+        var issuers = builder.Issuer.Extensions.OfType<X509SubjectKeyIdentifierExtension>().FirstOrDefault();
+
+        //Nothing to compare: an issuer with no Subject Key Identifier establishes no expected value, and a
+        //value this builder cannot read establishes nothing either. Neither is grounds to refuse, since the
+        //rule below is about two identifiers disagreeing.
+        if (requested == null || issuers == null) {
+            return;
+        }
+
+        //RFC 5280 s4.2.1.2: the issuer's subject key identifier MUST be the value placed in the key
+        //identifier field of the authority key identifier extension of certificates it issues.
+        if (!requested.Value.Span.SequenceEqual(issuers.SubjectKeyIdentifierBytes.Span)) {
+            throw new InvalidOperationException("A requested authority key identifier does not identify the issuer's own key, which describes a signer that did not sign this certificate. Reject it; the correct value is generated automatically");
+        }
+    }
+
+
+    private static ReadOnlyMemory<byte>? RequestedKeyIdentifier(X509Extension extension)
+    {
+        try {
+            return new BclAuthorityKeyIdentifier(extension.RawData, extension.Critical).KeyIdentifier;
+        } catch (CryptographicException) {
+            return null;
         }
     }
 

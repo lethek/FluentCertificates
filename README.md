@@ -502,8 +502,12 @@ read it, which depends on the validator and the Unicode tables it carries, so it
 
 The one exception is an Authority Key Identifier. It is not the requester's to assert, because it names
 whoever signs the certificate, which the requester cannot know beforehand, so accepting one checks it against
-the issuer's real key immediately rather than waiting for issuance. That check needs an issuer to compare
-against, so it only runs once `SetIssuer` has been called, matching the `Usage` checks above.
+the issuer's real key immediately rather than waiting for issuance. RFC 5280 s4.2.1.2 states the rule as a
+MUST: the issuer's subject key identifier is the value that belongs in the key identifier field of the
+certificates it issues. Only that field is compared, so an extension also carrying `authorityCertIssuer` and
+`authorityCertSerialNumber`, which s4.2.1.1 permits, is not refused for carrying them. The check needs
+something to compare against, so it is skipped until `SetIssuer` has been called, and skipped for an issuer
+with no subject key identifier of its own.
 
 A requested Subject Key Identifier is *not* checked, which is worth saying because the symmetry invites the
 assumption that it is. It labels the requester's own key, so the requester knows the right answer. RFC 5280

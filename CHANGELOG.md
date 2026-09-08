@@ -37,6 +37,7 @@ release rather than record it as it happened.
 
 - `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
 - `CertificateBuilder` no longer throws when an Authority Key Identifier extension is supplied alongside an `Issuer`.
+- `X509AuthorityKeyIdentifierExtension` names a certificate authority that carries no Subject Key Identifier by its issuer name and serial number, instead of encoding an empty sequence.
 
 ## [0.22.0] - 2026-09-01
 

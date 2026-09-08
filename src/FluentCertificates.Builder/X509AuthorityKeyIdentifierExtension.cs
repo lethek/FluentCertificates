@@ -1,36 +1,25 @@
-﻿using System.Formats.Asn1;
 using System.Security.Cryptography.X509Certificates;
+
+using BclAuthorityKeyIdentifier = System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension;
 
 namespace FluentCertificates;
 
 /// <summary>
 /// Represents the X.509 Authority Key Identifier extension, which identifies the public key corresponding to the certificate authority (CA) that signed the certificate.
 /// </summary>
-/// <param name="certificateAuthority">The certificate authority whose key identifier will be encoded in the extension.</param>
+/// <remarks>
+/// The extension names the CA by its Subject Key Identifier, which RFC 5280 s4.2.1.2 requires every CA
+/// certificate to carry. Where the CA has none, it names the CA by issuer and serial number instead: those
+/// fields are equally permitted by s4.2.1.1, and an extension asserting nothing at all would leave the
+/// certificate without the key identifier that same section requires of a conforming CA.
+/// </remarks>
+/// <param name="certificateAuthority">The certificate authority to identify.</param>
 /// <param name="critical">Indicates whether the extension is critical.</param>
 public sealed class X509AuthorityKeyIdentifierExtension(X509Certificate2 certificateAuthority, bool critical)
     : X509Extension(Oids.AuthorityKeyIdentifierOid, EncodeExtension(certificateAuthority), critical)
 {
-    /// <summary>
-    /// Encodes the Authority Key Identifier extension using the subject key identifier of the provided CA certificate.
-    /// </summary>
-    /// <param name="ca">The certificate authority whose subject key identifier will be used.</param>
-    /// <returns>A byte array containing the DER-encoded extension value.</returns>
     private static byte[] EncodeExtension(X509Certificate2 ca)
-    {
-        var writer = new AsnWriter(AsnEncodingRules.DER);
-
-        using (writer.PushSequence()) {
-            var subjectKeyIdentifier = ca.Extensions.OfType<X509SubjectKeyIdentifierExtension>().FirstOrDefault();
-            if (subjectKeyIdentifier != null) {
-                // Write the subject key identifier as a context-specific tagged octet string (tag 0)
-                writer.WriteOctetString(subjectKeyIdentifier.RawData.AsSpan().Slice(2), KeyIdTag);
-            }
-        }
-
-        return writer.Encode();
-    }
-    
-    
-    private static readonly Asn1Tag KeyIdTag = new(TagClass.ContextSpecific, 0);
+        => ca.Extensions.OfType<X509SubjectKeyIdentifierExtension>().Any()
+            ? BclAuthorityKeyIdentifier.CreateFromCertificate(ca, includeKeyIdentifier: true, includeIssuerAndSerial: false).RawData
+            : BclAuthorityKeyIdentifier.CreateFromCertificate(ca, includeKeyIdentifier: false, includeIssuerAndSerial: true).RawData;
 }
