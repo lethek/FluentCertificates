@@ -500,12 +500,20 @@ leaf you issue under your own CA's name can revoke everything that CA ever issue
 PKIX honour that. Comparing a requested name against your own is a judgement about how a relying party will
 read it, which depends on the validator and the Unicode tables it carries, so it stays with you.
 
-The two exceptions are a Subject Key Identifier or Authority Key Identifier: neither is the requester's to
-assert, since one names this certificate's own key and the other names whoever signs it, so accepting
-either checks it against the real value immediately rather than waiting for issuance. A Subject Key
-Identifier that does not match the certified public key is refused outright; an Authority Key Identifier is
-checked the same way once `SetIssuer` has been called, and is otherwise left unchecked, matching the
-`Usage` checks above. `Extensions` on the builder keeps reporting whatever it was handed.
+The one exception is an Authority Key Identifier. It is not the requester's to assert, because it names
+whoever signs the certificate, which the requester cannot know beforehand, so accepting one checks it against
+the issuer's real key immediately rather than waiting for issuance. That check needs an issuer to compare
+against, so it only runs once `SetIssuer` has been called, matching the `Usage` checks above.
+
+A requested Subject Key Identifier is *not* checked, which is worth saying because the symmetry invites the
+assumption that it is. It labels the requester's own key, so the requester knows the right answer. RFC 5280
+s4.2.1.2 only recommends deriving that label from the key: it describes two common derivations, the full
+SHA-1 hash and a truncated 8-byte form, and then allows that other methods of generating unique numbers are
+acceptable too. A label need not be a function of the key at all, so no comparison distinguishes a
+conforming one from a careless one, and refusing on a mismatch would assert a rule that section does not
+state. Which labels you honour is your policy, applied through the `accept` predicate.
+
+`Extensions` on the builder keeps reporting whatever it was handed.
 
 ---
 

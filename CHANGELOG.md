@@ -31,7 +31,7 @@ release rather than record it as it happened.
 - **Breaking:** A certificate with a `CertificateUsage` set is refused when it is signed by a `SignatureGenerator` whose key is not the key it names as having signed it: the subject's own key when there is no `Issuer`, or the `Issuer`'s own key when the subject is the `Issuer`'s own encoded name.
 - **Breaking:** `CertificateBuilder.AddExtension`, `AddExtensions` and `SetExtensions` now replace any extension already present under the same OID, regardless of its runtime type, and the `Usage` profile's own generated extensions are replaced the same way.
 - **Breaking:** `CertificateBuilder.SetSubjectAlternativeNames` discards any Subject Alternative Name extension already on the builder, so the last call to name the certificate's alternative names is the one issued.
-- **Breaking:** `UseCertificateSigningRequest`'s predicate overload refuses a requested Subject Key Identifier that does not identify the certified public key, or a requested Authority Key Identifier that does not identify the `Issuer`'s own key once one is set.
+- **Breaking:** `UseCertificateSigningRequest`'s predicate overload refuses a requested Authority Key Identifier that does not identify the `Issuer`'s own key once one is set.
 
 ### Fixed
 

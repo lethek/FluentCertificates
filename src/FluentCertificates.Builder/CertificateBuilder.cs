@@ -495,34 +495,24 @@ public record CertificateBuilder
     /// </summary>
     /// <remarks>
     /// <para>
-    /// An accepted extension counts as the CA's own: it replaces anything already present under the same
-    /// OID and overrides what the <see cref="Usage"/> profile would have generated. Where a request carries
-    /// two under one OID, the last accepted is the one issued. The last call still wins afterwards, so
-    /// <see cref="AddExtension"/> under the same OID replaces it, and so do
-    /// <see cref="SetCertificatePolicies(IEnumerable{string}, bool)"/> and
-    /// <see cref="SetSubjectAlternativeNames(IEnumerable{GeneralName})"/>.
+    /// An accepted extension counts as the CA's own: it replaces anything already present under the same OID
+    /// and overrides what the <see cref="Usage"/> profile would have generated. Afterwards the last call
+    /// wins, so <see cref="AddExtension"/> or a <c>Set*</c> helper writing that OID replaces it in turn.
     /// </para>
     /// <para>
-    /// A Subject Key Identifier or Authority Key Identifier is checked as it is accepted, since neither is
-    /// the requester's to assert: accepting one that does not identify the certified public key, or the
-    /// issuer's own key, throws immediately. The Authority Key Identifier half of that only fires when
-    /// <see cref="Issuer"/> is already set, so call <see cref="SetIssuer"/> before this method to have it
-    /// checked.
+    /// <b>Nothing in the request is screened except an accepted Authority Key Identifier</b>, which is
+    /// refused unless it identifies the <see cref="Issuer"/>'s own key, and only once
+    /// <see cref="SetIssuer"/> has been called. Not the subject name, not a Subject Key Identifier, and not
+    /// what any other extension asserts. Only you know what your policy allows, so apply it in
+    /// <paramref name="accept"/>, and call <see cref="SetSubject(X500NameBuilder)"/> afterwards to issue
+    /// under a name you have verified.
     /// </para>
     /// <para>
-    /// <b>Everything else in the request is the requester's word for it.</b> Accepted extensions are still
-    /// subject to the criticality corrections and refusals <see cref="CreateCertificateRequest"/> describes,
-    /// but nothing else is screened, because only the caller knows what their policy allows. The subject
-    /// name in particular is taken as given: call <see cref="SetSubject(X500NameBuilder)"/> afterwards to
-    /// issue under a name you have verified.
-    /// </para>
-    /// <para>
-    /// <b>Set a <see cref="Usage"/> before accepting anything.</b> Those refusals are the only check on what
-    /// an accepted extension asserts, and a builder with no <see cref="Usage"/> makes none of them: a
-    /// request can then carry <c>cA=TRUE</c> and <c>keyCertSign</c> and issue a certificate that signs
-    /// others chaining to your issuer. Nothing here screens the subject the request asks for, which is
-    /// yours to judge: a certificate under your own issuer's name can sign certificate revocation lists
-    /// that relying parties accept as that issuer's own.
+    /// <b>Set a <see cref="Usage"/> before accepting anything.</b> The refusals
+    /// <see cref="CreateCertificateRequest"/> describes are the only check on what an accepted extension
+    /// asserts, and a builder with no <see cref="Usage"/> makes none of them: a request can then carry
+    /// <c>cA=TRUE</c> and <c>keyCertSign</c> and issue a certificate that signs others chaining to your
+    /// issuer.
     /// </para>
     /// <para>
     /// Accepted extensions stay on the builder this returns, so issue each further request from the builder
@@ -537,8 +527,7 @@ public record CertificateBuilder
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="csr"/> or <paramref name="accept"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the request's subject contains a multi-valued
     /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent; or when an accepted
-    /// Subject Key Identifier does not identify the certified public key, or an accepted Authority Key
-    /// Identifier does not identify the <see cref="Issuer"/>'s own key.</exception>
+    /// Authority Key Identifier does not identify the <see cref="Issuer"/>'s own key.</exception>
     public CertificateBuilder UseCertificateSigningRequest(CertificateSigningRequest csr, Func<X509Extension, bool> accept)
     {
         ArgumentNullException.ThrowIfNull(csr);
@@ -554,34 +543,31 @@ public record CertificateBuilder
 
 
     /// <summary>
-    /// Refuses a requested Subject Key Identifier or Authority Key Identifier that does not identify a real
-    /// key. Checked here rather than at issuance, because only a value the request itself supplied is the
-    /// requester's word to doubt: one the CA set directly through <see cref="AddExtension(X509Extension)"/>
-    /// or a <c>Set*</c> helper is trusted as it already was.
+    /// Refuses a requested Authority Key Identifier that does not identify the issuer's own key. Checked here
+    /// rather than at issuance, because only a value the request itself supplied is the requester's word to
+    /// doubt: one the CA set directly through <see cref="AddExtension(X509Extension)"/> or a <c>Set*</c>
+    /// helper is trusted as it already was.
     /// </summary>
+    /// <remarks>
+    /// A requested Subject Key Identifier is deliberately not checked. It labels the requester's own key, so
+    /// the requester knows the right answer, and RFC 5280 s4.2.1.2 only <em>recommends</em> deriving that
+    /// label from the key: it describes two common derivations and then allows that "other methods of
+    /// generating unique numbers are also acceptable". A label is therefore not required to be a function of
+    /// the key at all, so no comparison can tell a conforming one from a careless one, and refusing on a
+    /// mismatch would assert a rule the section does not state. Which labels to honour is the CA's policy,
+    /// applied through the accept predicate.
+    /// </remarks>
     private static void CheckKeyIdentifierIsGenuine(CertificateBuilder builder, X509Extension extension)
     {
-        switch (extension.Oid?.Value) {
-            //A Subject Key Identifier that does not match the certified public key can misdirect a
-            //validator that indexes candidate certificates by it, most consequentially during a CA's own
-            //key rollover, when only the identifier tells two same-named certificates apart.
-            case Oids.SubjectKeyIdentifier:
-                var expectedSki = new X509SubjectKeyIdentifierExtension(builder.PublicKey!, false);
-                if (!expectedSki.RawData.AsSpan().SequenceEqual(extension.RawData)) {
-                    throw new InvalidOperationException("A requested subject key identifier does not identify the certified public key, so it can misdirect a validator that indexes candidate certificates by it. Reject it; the correct value is generated automatically");
-                }
-                break;
-
-            //An Authority Key Identifier names whoever signs the certificate, which the requester cannot
-            //know before it is signed. Left unchecked, one naming a different key describes a signer that
-            //did not sign. Skipped when Issuer is not yet set, matching the Usage checks elsewhere in this
-            //class: there is nothing yet to check it against.
-            case Oids.AuthorityKeyIdentifier when builder.Issuer != null:
-                var expectedAki = new X509AuthorityKeyIdentifierExtension(builder.Issuer, false);
-                if (!expectedAki.RawData.AsSpan().SequenceEqual(extension.RawData)) {
-                    throw new InvalidOperationException("A requested authority key identifier does not identify the issuer's own key, which describes a signer that did not sign this certificate. Reject it; the correct value is generated automatically");
-                }
-                break;
+        //An Authority Key Identifier names whoever signs the certificate, which the requester cannot know
+        //before it is signed. Left unchecked, one naming a different key describes a signer that did not
+        //sign. Skipped when Issuer is not yet set, matching the Usage checks elsewhere in this class: there
+        //is nothing yet to check it against.
+        if (extension.Oid?.Value == Oids.AuthorityKeyIdentifier && builder.Issuer != null) {
+            var expectedAki = new X509AuthorityKeyIdentifierExtension(builder.Issuer, false);
+            if (!expectedAki.RawData.AsSpan().SequenceEqual(extension.RawData)) {
+                throw new InvalidOperationException("A requested authority key identifier does not identify the issuer's own key, which describes a signer that did not sign this certificate. Reject it; the correct value is generated automatically");
+            }
         }
     }
 

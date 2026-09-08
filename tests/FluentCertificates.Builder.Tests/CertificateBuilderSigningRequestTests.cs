@@ -353,26 +353,63 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
-    public async Task UseCertificateSigningRequest_WithAccept_ASubjectKeyIdentifierNotMatchingTheCertifiedKey_Throws()
+    public async Task UseCertificateSigningRequest_WithAccept_ATruncatedSubjectKeyIdentifier_IsIssuedAsAsked()
     {
-        //A Subject Key Identifier names this certificate's own key, which the requester has no reason to
-        //get wrong unless they are trying to misdirect a validator that indexes candidates by it.
+        //RFC 5280 s4.2.1.2's second common derivation: the four-bit type field 0100, then the least
+        //significant 60 bits of the same SHA-1 hash the first derivation uses whole. It labels the certified
+        //key exactly as well as the 20-byte form, so comparing against the 20-byte form would refuse it.
         using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        using var unrelatedKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var requested = new X509SubjectKeyIdentifierExtension(new PublicKey(unrelatedKeys), false);
+        var requested = new X509SubjectKeyIdentifierExtension(TruncatedKeyIdentifier(new PublicKey(requesterKeys)), false);
         var csr = LoadWithExtensions(new CertificateBuilder()
-            .SetSubject("CN=Asked For A Wrong Ski")
+            .SetSubject("CN=Short Ski")
             .SetKeyPair(requesterKeys)
             .AddExtension(requested)
             .CreateCertificateSigningRequest());
 
         using var ca = BuildCa();
-        var builder = new CertificateBuilder().SetIssuer(ca);
+        using var issued = new CertificateBuilder()
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.SubjectKeyIdentifier)
+            .Create();
 
-        var ex = await Assert.That(() => builder.UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.SubjectKeyIdentifier))
-            .Throws<InvalidOperationException>();
+        await Assert.That(FindExtension(issued, Oids.SubjectKeyIdentifier).RawData)
+            .IsEquivalentTo(requested.RawData, CollectionOrdering.Matching);
+    }
 
-        await Assert.That(ex!.Message).Contains("does not identify the certified public key");
+
+    [Test]
+    public async Task UseCertificateSigningRequest_WithAccept_ASubjectKeyIdentifierNotMatchingTheCertifiedKey_IsIssuedAsAsked()
+    {
+        //A label need not be derived from the key at all, since that section allows "other methods of
+        //generating unique numbers" besides the two it describes. Nothing here can tell a conforming label
+        //from a careless one, so whether to honour this one is the CA's policy and belongs to the predicate.
+        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var unrelatedKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var requested = new X509SubjectKeyIdentifierExtension(new PublicKey(unrelatedKeys), false);
+        var csr = LoadWithExtensions(new CertificateBuilder()
+            .SetSubject("CN=Unrelated Ski")
+            .SetKeyPair(requesterKeys)
+            .AddExtension(requested)
+            .CreateCertificateSigningRequest());
+
+        using var ca = BuildCa();
+        using var issued = new CertificateBuilder()
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.SubjectKeyIdentifier)
+            .Create();
+
+        await Assert.That(CountExtensions(issued, Oids.SubjectKeyIdentifier)).IsEqualTo(1);
+        await Assert.That(FindExtension(issued, Oids.SubjectKeyIdentifier).RawData)
+            .IsEquivalentTo(requested.RawData, CollectionOrdering.Matching);
+    }
+
+
+    //RFC 5280 s4.2.1.2 method (2), over the same BIT STRING subjectPublicKey contents method (1) hashes
+    private static byte[] TruncatedKeyIdentifier(PublicKey publicKey)
+    {
+        var identifier = SHA1.HashData(publicKey.EncodedKeyValue.RawData)[^8..];
+        identifier[0] = (byte)(0x40 | (identifier[0] & 0x0F));
+        return identifier;
     }
 
 
