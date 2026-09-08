@@ -333,6 +333,49 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task UseCertificateSigningRequest_WithAccept_AnAuthorityKeyIdentifierNoLongerBeingIssued_IsNotRefused(bool discardedBySetExtensions)
+    {
+        //The refusal exists to keep the requester's value out of a certificate, so it applies only while
+        //that value is still the one under the OID. A CA that writes its own over the top, or clears the
+        //extension set outright, is back to its own input, which was never screened. Refusing either would
+        //take a capability from a CA doing nothing wrong.
+        using var otherKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var other = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Some Other CA")
+            .SetKeyPair(otherKeys)
+            .Create();
+
+        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var csr = LoadWithExtensions(new CertificateBuilder()
+            .SetSubject("CN=Aki Then Written Over")
+            .SetKeyPair(requesterKeys)
+            .AddExtension(new X509Extension(KeyIdentifierAkiFor(other), false))
+            .CreateCertificateSigningRequest());
+
+        using var ca = BuildCa();
+        var accepted = new CertificateBuilder()
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier);
+
+        var builder = discardedBySetExtensions
+            ? accepted.SetExtensions(new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ClientAuthPurpose) }, false))
+            : accepted.AddExtension(new X509Extension(KeyIdentifierAkiFor(ca), false));
+
+        using var issued = builder.Create();
+
+        var aki = new X509AuthorityKeyIdentifierExtension(FindExtension(issued, Oids.AuthorityKeyIdentifier).RawData, false);
+        var caSki = ca.Extensions.OfType<X509SubjectKeyIdentifierExtension>().First();
+
+        await Assert.That(aki.KeyIdentifier).IsNotNull();
+        await Assert.That(aki.KeyIdentifier!.Value.ToArray())
+            .IsEquivalentTo(caSki.SubjectKeyIdentifierBytes.ToArray(), CollectionOrdering.Matching);
+    }
+
+
+    [Test]
     public async Task UseCertificateSigningRequest_WithAccept_AnAuthorityKeyIdentifierMatchingTheIssuer_IsIssued()
     {
         //Pins that the check above turns on the value, not on merely accepting the OID: a request that

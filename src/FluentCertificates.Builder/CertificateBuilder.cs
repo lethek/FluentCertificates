@@ -63,10 +63,12 @@ public record CertificateBuilder
     public IReadOnlyCollection<X509Extension> Extensions => _extensions;
     private ImmutableHashSet<X509Extension> _extensions { get; init; } = EmptyExtensions;
 
-    //Tracks the Authority Key Identifier accepted out of a signing request, if it is still the one that
-    //would be issued, so CreateCertificateRequest can check it against Issuer regardless of what order
-    //SetIssuer and UseCertificateSigningRequest were called in. Cleared whenever the CA overwrites that OID
-    //directly, since a value the CA asserts itself is trusted as it already was.
+    //The last Authority Key Identifier accepted out of a signing request, so CreateCertificateRequest can
+    //check it against Issuer regardless of what order SetIssuer and UseCertificateSigningRequest were called
+    //in. Held as the instance rather than a flag: the check consults it only while that same instance is
+    //still the one _extensions would issue, so anything that replaces or discards it -- AddExtension, a
+    //Set* helper, SetExtensions clearing the set outright -- takes it out of scope without needing to know
+    //this field exists.
     private X509Extension? _acceptedAuthorityKeyIdentifier { get; init; }
     
     /// <summary>Gets the list of subject alternative names, or <see langword="null"/> if not set.</summary>
@@ -538,12 +540,17 @@ public record CertificateBuilder
     /// </remarks>
     private static void CheckKeyIdentifierIsGenuine(CertificateBuilder builder)
     {
-        //Nothing to check once the OID is no longer the one accepted out of a request: either none was
-        //accepted, or the CA has since overwritten it directly, which SetExtension already treats as
-        //trusted. Skipped when Issuer is not yet set, matching the Usage checks elsewhere in this class:
-        //there is nothing yet to check it against.
+        //Only the accepted extension itself is doubted, and only while it is still the one that would be
+        //issued. The set matches on OID alone, so the instance it hands back settles whether the value under
+        //that OID is still the requester's: anything the CA wrote over it, or a SetExtensions that cleared
+        //the set, leaves a different instance or none, and its own input was never screened. Skipped when
+        //Issuer is not set, matching the Usage checks elsewhere in this class: there is nothing to check
+        //it against, and the certificate carries no generated identifier for it to have displaced.
         var extension = builder._acceptedAuthorityKeyIdentifier;
-        if (extension == null || builder.Issuer == null) {
+        if (extension == null
+            || builder.Issuer == null
+            || !builder._extensions.TryGetValue(extension, out var issuing)
+            || !ReferenceEquals(issuing, extension)) {
             return;
         }
 
@@ -588,8 +595,8 @@ public record CertificateBuilder
     private CertificateBuilder SetExtension(X509Extension extension, bool acceptedFromCsr = false)
         => this with {
             _extensions = _extensions.Remove(extension).Add(extension),
-            _acceptedAuthorityKeyIdentifier = extension.Oid?.Value == Oids.AuthorityKeyIdentifier
-                ? (acceptedFromCsr ? extension : null)
+            _acceptedAuthorityKeyIdentifier = acceptedFromCsr && extension.Oid?.Value == Oids.AuthorityKeyIdentifier
+                ? extension
                 : _acceptedAuthorityKeyIdentifier
         };
 
