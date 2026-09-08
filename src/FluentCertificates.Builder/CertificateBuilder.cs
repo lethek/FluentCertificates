@@ -12,11 +12,6 @@ namespace FluentCertificates;
 /// <summary>
 /// Provides a fluent API for building and creating X.509 certificates and certificate requests.
 /// </summary>
-/// <remarks>
-/// The <c>CertificateBuilder</c> record allows configuration of certificate properties, key generation,
-/// extensions, and other parameters. It supports both self-signed and CA-signed certificates,
-/// and can generate Certificate Signing Requests (CSRs).
-/// </remarks>
 public record CertificateBuilder
 {
     /// <summary>Gets the primary usage of the certificate, which determines default extensions.</summary>
@@ -220,23 +215,16 @@ public record CertificateBuilder
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This is the counterpart to <see cref="SetSignatureGenerator"/> for keys this process cannot use
-    /// directly, such as those held in an HSM, a TPM or a cloud KMS: the public key goes into the
-    /// certificate while the private key never leaves the device.
+    /// The counterpart to <see cref="SetSignatureGenerator"/> for a key this process cannot use directly,
+    /// such as one held in an HSM, a TPM or a cloud KMS. It clears
+    /// <see cref="SetKeyPair(AsymmetricAlgorithm)"/> and suppresses the automatic key generation
+    /// <see cref="Create"/> would otherwise do, so the resulting certificate has no private key attached.
+    /// <see cref="KeyAlgorithm"/> follows the key where the algorithm is recognised.
     /// </para>
     /// <para>
-    /// It is mutually exclusive with <see cref="SetKeyPair(AsymmetricAlgorithm)"/>, which it clears, and it suppresses the
-    /// automatic key generation that would otherwise happen during <see cref="Create"/>. The resulting
-    /// certificate has no private key attached.
-    /// </para>
-    /// <para>
-    /// Self-signing a certificate this way also requires <see cref="SetSignatureGenerator"/>, since the
-    /// builder holds no key it could sign with. Nothing checks that the generator actually corresponds to
-    /// this public key; that pairing is the caller's to get right.
-    /// </para>
-    /// <para>
-    /// <see cref="KeyAlgorithm"/> is updated to match the key where the algorithm is recognised, and left
-    /// unchanged otherwise.
+    /// Self-signing this way also needs <see cref="SetSignatureGenerator"/>, since the builder holds no key
+    /// it could sign with. Nothing checks that the generator corresponds to this public key; that pairing is
+    /// yours to get right.
     /// </para>
     /// </remarks>
     /// <param name="value">The public key to certify, or <see langword="null"/> to remove it.</param>
@@ -298,19 +286,16 @@ public record CertificateBuilder
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This is the extension point for keys this process cannot use directly, such as those held in an HSM,
-    /// a TPM or a cloud KMS: implement <see cref="X509SignatureGenerator"/> against the remote key and the
-    /// builder never needs the private key itself.
+    /// The extension point for a key this process cannot use directly, such as one held in an HSM, a TPM or
+    /// a cloud KMS: implement <see cref="X509SignatureGenerator"/> against the remote key and the builder
+    /// never needs the private key itself. The generator determines its own signature algorithm, so
+    /// <see cref="HashAlgorithm"/> and <see cref="RSASignaturePadding"/> do not apply to it.
     /// </para>
     /// <para>
-    /// The generator replaces whichever signature would otherwise have been produced. When
-    /// <see cref="Issuer"/> is set that is the issuer's signature, and the issuer certificate no longer needs
-    /// an attached private key. Otherwise it is the self-signature, which requires the matching key pair from
-    /// <see cref="SetKeyPair(AsymmetricAlgorithm)"/> so the certificate's own public key agrees with the signature.
-    /// </para>
-    /// <para>
-    /// <see cref="HashAlgorithm"/> and <see cref="RSASignaturePadding"/> are not applied to a supplied
-    /// generator; it determines its own signature algorithm.
+    /// It replaces whichever signature would otherwise have been produced. With an <see cref="Issuer"/> set
+    /// that is the issuer's signature, and the issuer certificate no longer needs an attached private key.
+    /// Otherwise it is the self-signature, which also needs the matching key pair from
+    /// <see cref="SetKeyPair(AsymmetricAlgorithm)"/> so the certificate's own public key agrees with it.
     /// </para>
     /// </remarks>
     /// <param name="value">The signature generator to sign with, or <see langword="null"/> to derive one from the signing key.</param>
@@ -324,14 +309,6 @@ public record CertificateBuilder
     /// Adds an extension to the certificate, replacing any extension already present under the same OID
     /// regardless of its runtime type.
     /// </summary>
-    /// <remarks>
-    /// Two extensions under one OID make <see cref="CertificateRequest"/> throw, and runtime type is no
-    /// guide to whether a pair is a duplicate: a well-known OID the builder generates by default, such as
-    /// Subject Key Identifier, comes back as that concrete subclass, while one built by hand is typically
-    /// the base <see cref="X509Extension"/>. Replacing on the OID alone avoids that crash for either shape,
-    /// and matches <see cref="UseCertificateSigningRequest(CertificateSigningRequest,Func{X509Extension,bool})"/>,
-    /// which replaces the same way.
-    /// </remarks>
     /// <param name="extension">The extension to add.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the extension added.</returns>
     public CertificateBuilder AddExtension(X509Extension extension)
@@ -461,18 +438,14 @@ public record CertificateBuilder
     /// and nothing else. Everything a requester asked for beyond those two is discarded.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// This is the CA half of a PKCS#10 exchange, and the counterpart to
+    /// The CA half of a PKCS#10 exchange, and the counterpart to
     /// <see cref="CreateCertificateSigningRequest"/>. Issuer, validity, usage profile and extensions all stay
-    /// the CA's to decide, so one configured builder can issue from many requests.
-    /// </para>
-    /// <para>
-    /// The private key stays with the requester, so the resulting certificate has none attached and an
-    /// <see cref="Issuer"/> or <see cref="SignatureGenerator"/> must sign it. Any subject, public key or key
-    /// pair already on the builder is replaced, and <see cref="KeyAlgorithm"/> follows the request's key,
-    /// subject to <see cref="SetPublicKey"/>'s rule that an existing <c>KeyAlgorithm.ECDiffieHellman()</c>
-    /// choice is kept. Nothing here re-checks the request's signature; that is settled when it is parsed.
-    /// </para>
+    /// yours, so one configured builder can issue from many requests. The private key stays with the
+    /// requester, so the certificate has none attached and an <see cref="Issuer"/> or
+    /// <see cref="SignatureGenerator"/> must sign it. Any subject, public key or key pair already on the
+    /// builder is replaced, and <see cref="KeyAlgorithm"/> follows the request's key under
+    /// <see cref="SetPublicKey"/>'s rules. Nothing here re-checks the request's signature; that is settled
+    /// when it is parsed.
     /// </remarks>
     /// <param name="csr">The received certificate signing request.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the request's subject and public key.</returns>
@@ -858,26 +831,16 @@ public record CertificateBuilder
     /// <para>An <see cref="Issuer"/> contributes an Authority Key Identifier extension unless one was
     /// already supplied, in which case the supplied extension stands.</para>
     /// <para>
-    /// Where RFC 5280 requires a particular criticality, the extension is written with it. Authority Key
-    /// Identifier (s4.2.1.1), Subject Key Identifier (s4.2.1.2), Subject Directory Attributes (s4.2.1.8),
-    /// Freshest CRL (s4.2.1.15), Authority Information Access (s4.2.2.1) and Subject Information Access
-    /// (s4.2.2.2) go out non-critical; name constraints (s4.2.1.10), policy constraints (s4.2.1.11), inhibit
-    /// anyPolicy (s4.2.1.14), basic constraints asserting <c>cA=TRUE</c> (s4.2.1.9) and a subject alternative
-    /// name standing in for an empty subject (s4.2.1.6) go out critical. The extension's value is untouched,
-    /// and <see cref="Extensions"/> still reports whatever it was given, so this changes only what is issued.
+    /// Where RFC 5280 states a criticality MUST for an extension, it is written with that criticality. The
+    /// value is untouched and <see cref="Extensions"/> still reports whatever it was given, so this changes
+    /// only what is issued. The README lists which extensions and which sections.
     /// </para>
     /// <para>
-    /// A basic constraints or key usage extension is refused rather than corrected, since what is wrong with
-    /// it is in the value: basic constraints disagreeing with the <see cref="Usage"/> profile about whether
-    /// this is a certificate authority, or a key usage asserting <c>keyCertSign</c> under an end-entity
-    /// profile or not asserting it under <see cref="CertificateUsage.CA"/>. Either is also refused when its
-    /// value does not read back as the bytes it was supplied as, since what it asserts to a validator cannot
-    /// then be established here. Separately, a <see cref="SignatureGenerator"/> signing with a key that is
-    /// not the one the certificate names as its issuer is refused: with no <see cref="Issuer"/> the
-    /// certificate is self-issued and the key must be the subject's own, and under the
-    /// <see cref="Issuer"/>'s own encoded name it must be the issuer's own. What extensions a profile
-    /// permits, and whether a subject is entitled to the name it asks for, are the caller's to decide. None
-    /// of this is checked when no <see cref="Usage"/> is set.
+    /// A basic constraints or key usage extension is refused rather than corrected, because what is wrong
+    /// with it is in the value: one disagreeing with the <see cref="Usage"/> profile about whether this is a
+    /// certificate authority or may sign certificates, or one whose value does not read back as the bytes it
+    /// was supplied as. Neither is checked without a <see cref="Usage"/>. What extensions a profile permits,
+    /// and whether a subject is entitled to the name it asks for, are yours to decide.
     /// </para>
     /// </remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
