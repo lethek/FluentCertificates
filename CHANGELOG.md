@@ -37,6 +37,7 @@ release rather than record it as it happened.
 ### Fixed
 
 - `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
+- `CertificateBuilder.CreateCertificateSigningRequest` ignores any `Issuer` on the builder, rather than writing that issuer's Authority Key Identifier into a request nothing has agreed to sign yet.
 - `CertificateBuilder` no longer throws when an Authority Key Identifier extension is supplied alongside an `Issuer`.
 - A certificate issued under a certificate authority that carries no Subject Key Identifier names that authority by a key identifier derived from its public key, instead of carrying an empty sequence.
 

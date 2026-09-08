@@ -947,7 +947,12 @@ public record CertificateBuilder
             throw new NotSupportedException($"A {KeyAlgorithm.Name} key cannot sign, so it cannot sign the request that asks for it to be certified");
         }
 
-        return new(CreateCertificateRequest(), SignatureGenerator ?? CreateSignatureGenerator(KeyPair));
+        //Nothing signs a request but the key it certifies, so an Issuer set for later issuance has no
+        //bearing here: it must neither contribute an Authority Key Identifier naming a signer the requester
+        //cannot know, nor be measured against one already supplied.
+        var builder = Issuer != null ? this with { Issuer = null } : this;
+
+        return new(builder.CreateCertificateRequest(), SignatureGenerator ?? CreateSignatureGenerator(KeyPair));
     }
 
 

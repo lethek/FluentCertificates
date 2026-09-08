@@ -1015,6 +1015,52 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task CreateCertificateSigningRequest_WithAnIssuerSet_IgnoresIt()
+    {
+        //Nothing signs a request but the key it certifies, so an Issuer set for later issuance has no
+        //bearing on it: no Authority Key Identifier is contributed, and one already supplied is not
+        //measured against a signer the requester could not know.
+        using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Some CA")
+            .SetKeyPair(caKeys)
+            .Create();
+
+        using var otherKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var other = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Some Other CA")
+            .SetKeyPair(otherKeys)
+            .Create();
+
+        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var foreignAki = new X509Extension(
+            X509AuthorityKeyIdentifierExtension.CreateFromCertificate(other, includeKeyIdentifier: true, includeIssuerAndSerial: false),
+            false);
+
+        var withoutAki = new CertificateBuilder()
+            .SetSubject("CN=Requester")
+            .SetKeyPair(requesterKeys)
+            .SetIssuer(ca)
+            .CreateCertificateSigningRequest();
+
+        await Assert.That(withoutAki.CertificateRequest.CertificateExtensions.Select(x => x.Oid?.Value))
+            .DoesNotContain(Oids.AuthorityKeyIdentifier);
+
+        var withForeignAki = new CertificateBuilder()
+            .SetSubject("CN=Requester")
+            .SetKeyPair(requesterKeys)
+            .SetIssuer(ca)
+            .AddExtension(foreignAki)
+            .CreateCertificateSigningRequest();
+
+        await Assert.That(withForeignAki.CertificateRequest.CertificateExtensions.Select(x => x.Oid?.Value))
+            .Contains(Oids.AuthorityKeyIdentifier);
+    }
+
+
+    [Test]
     public async Task CreateCertificateSigningRequest_WithECDiffieHellman_Throws()
     {
         //A CSR is signed by the subject's own key, which an ECDH key cannot do
