@@ -62,6 +62,12 @@ public record CertificateBuilder
     /// <summary>Gets the collection of certificate extensions.</summary>
     public IReadOnlyCollection<X509Extension> Extensions => _extensions;
     private ImmutableHashSet<X509Extension> _extensions { get; init; } = EmptyExtensions;
+
+    //Tracks the Authority Key Identifier accepted out of a signing request, if it is still the one that
+    //would be issued, so CreateCertificateRequest can check it against Issuer regardless of what order
+    //SetIssuer and UseCertificateSigningRequest were called in. Cleared whenever the CA overwrites that OID
+    //directly, since a value the CA asserts itself is trusted as it already was.
+    private X509Extension? _acceptedAuthorityKeyIdentifier { get; init; }
     
     /// <summary>Gets the list of subject alternative names, or <see langword="null"/> if not set.</summary>
     public IReadOnlyList<GeneralName>? SubjectAlternativeNames => _subjectAlternativeNames;
@@ -473,10 +479,11 @@ public record CertificateBuilder
     /// wins, so <see cref="AddExtension"/> or a <c>Set*</c> helper writing that OID replaces it in turn.
     /// </para>
     /// <para>
-    /// <b>Nothing in the request is screened except an accepted Authority Key Identifier</b>, which is
-    /// refused unless it identifies the <see cref="Issuer"/>'s own key, and only once
-    /// <see cref="SetIssuer"/> has been called. Not the subject name, not a Subject Key Identifier, and not
-    /// what any other extension asserts. Only you know what your policy allows, so apply it in
+    /// <b>Nothing in the request is screened except an accepted Authority Key Identifier</b>, which
+    /// <see cref="CreateCertificateRequest"/> refuses unless it identifies the <see cref="Issuer"/>'s own
+    /// key, once one is set, regardless of whether <see cref="SetIssuer"/> is called before or after this
+    /// method. Not the subject name, not a Subject Key Identifier, and not what any other extension
+    /// asserts. Only you know what your policy allows, so apply it in
     /// <paramref name="accept"/>, and call <see cref="SetSubject(X500NameBuilder)"/> afterwards to issue
     /// under a name you have verified.
     /// </para>
@@ -499,8 +506,7 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the request's subject, public key and accepted extensions.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="csr"/> or <paramref name="accept"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the request's subject contains a multi-valued
-    /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent; or when an accepted
-    /// Authority Key Identifier does not identify the <see cref="Issuer"/>'s own key.</exception>
+    /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent.</exception>
     public CertificateBuilder UseCertificateSigningRequest(CertificateSigningRequest csr, Func<X509Extension, bool> accept)
     {
         ArgumentNullException.ThrowIfNull(csr);
@@ -508,18 +514,18 @@ public record CertificateBuilder
 
         var builder = UseCertificateSigningRequest(csr);
         foreach (var extension in csr.CertificateRequest.CertificateExtensions.Where(accept)) {
-            CheckKeyIdentifierIsGenuine(builder, extension);
-            builder = builder.SetExtension(extension);
+            builder = builder.SetExtension(extension, acceptedFromCsr: true);
         }
         return builder;
     }
 
 
     /// <summary>
-    /// Refuses a requested Authority Key Identifier that does not identify the issuer's own key. Checked here
-    /// rather than at issuance, because only a value the request itself supplied is the requester's word to
-    /// doubt: one the CA set directly through <see cref="AddExtension(X509Extension)"/> or a <c>Set*</c>
-    /// helper is trusted as it already was.
+    /// Refuses an accepted Authority Key Identifier that does not identify the issuer's own key. Checked here
+    /// rather than where it was accepted, because only a value the request itself supplied is the requester's
+    /// word to doubt: one the CA set directly through <see cref="AddExtension(X509Extension)"/> or a
+    /// <c>Set*</c> helper is trusted as it already was. Deferred to here, rather than run immediately on
+    /// acceptance, because it needs <see cref="Issuer"/>, which <see cref="SetIssuer"/> may not have set yet.
     /// </summary>
     /// <remarks>
     /// A requested Subject Key Identifier is deliberately not checked. It labels the requester's own key, so
@@ -530,13 +536,14 @@ public record CertificateBuilder
     /// mismatch would assert a rule the section does not state. Which labels to honour is the CA's policy,
     /// applied through the accept predicate.
     /// </remarks>
-    private static void CheckKeyIdentifierIsGenuine(CertificateBuilder builder, X509Extension extension)
+    private static void CheckKeyIdentifierIsGenuine(CertificateBuilder builder)
     {
-        //An Authority Key Identifier names whoever signs the certificate, which the requester cannot know
-        //before it is signed. Left unchecked, one naming a different key describes a signer that did not
-        //sign. Skipped when Issuer is not yet set, matching the Usage checks elsewhere in this class: there
-        //is nothing yet to check it against.
-        if (extension.Oid?.Value != Oids.AuthorityKeyIdentifier || builder.Issuer == null) {
+        //Nothing to check once the OID is no longer the one accepted out of a request: either none was
+        //accepted, or the CA has since overwritten it directly, which SetExtension already treats as
+        //trusted. Skipped when Issuer is not yet set, matching the Usage checks elsewhere in this class:
+        //there is nothing yet to check it against.
+        var extension = builder._acceptedAuthorityKeyIdentifier;
+        if (extension == null || builder.Issuer == null) {
             return;
         }
 
@@ -578,8 +585,13 @@ public record CertificateBuilder
     //Adding over an extension already under this OID would keep the one already there, since that is how
     //ImmutableHashSet resolves a collision, so removing first is what makes this a replacement. Remove reads
     //the set's own comparer, which matches on the OID alone.
-    private CertificateBuilder SetExtension(X509Extension extension)
-        => this with { _extensions = _extensions.Remove(extension).Add(extension) };
+    private CertificateBuilder SetExtension(X509Extension extension, bool acceptedFromCsr = false)
+        => this with {
+            _extensions = _extensions.Remove(extension).Add(extension),
+            _acceptedAuthorityKeyIdentifier = extension.Oid?.Value == Oids.AuthorityKeyIdentifier
+                ? (acceptedFromCsr ? extension : null)
+                : _acceptedAuthorityKeyIdentifier
+        };
 
 
     //For a caller holding an OID but no extension to hand Remove
@@ -897,8 +909,9 @@ public record CertificateBuilder
     /// <exception cref="ArgumentNullException">Thrown if no key pair is set. Make sure to call the <see cref="SetKeyPair(AsymmetricAlgorithm)"/> method as
     /// certificate requests require a manually specified key pair.</exception>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, or when the certificate would be signed by a key that is not the one it
-    /// names as its issuer.</exception>
+    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
+    /// names as its issuer, or when an accepted Authority Key Identifier does not identify the
+    /// <see cref="Issuer"/>'s own key.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
         if (PublicKey == null) {
@@ -908,6 +921,7 @@ public record CertificateBuilder
         var dn = Subject.Create();
 
         CheckSubjectAgreesWithUsage(this, dn);
+        CheckKeyIdentifierIsGenuine(this);
 
         var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
 

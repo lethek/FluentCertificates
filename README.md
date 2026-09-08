@@ -507,15 +507,15 @@ read it, which depends on the validator and the Unicode tables it carries, so it
 
 The one exception is an Authority Key Identifier. It is not the requester's to assert, because it names
 whoever signs the certificate, which the requester cannot know beforehand, so accepting one checks it against
-the issuer's real key immediately rather than waiting for issuance. RFC 5280 s4.2.1.2 states the rule as a
-MUST: the issuer's subject key identifier is the value that belongs in the key identifier field of the
-certificates it issues. Only that field is compared, so an extension also carrying `authorityCertIssuer` and
-`authorityCertSerialNumber`, which s4.2.1.1 permits alongside it, is not refused for carrying them. An
-extension with no readable key identifier at all is refused, because s4.2.1.1 requires that field in every
-certificate a conforming CA generates, and accepting one displaces the extension the builder would have
-written, leaving the certificate naming no signing key. Add such an extension yourself with `AddExtension`
-if you have a reason to; your own input is not screened. The check needs an issuer to compare against, so it
-is skipped until `SetIssuer` has been called.
+the issuer's real key at issuance, regardless of whether `SetIssuer` is called before or after it is accepted.
+RFC 5280 s4.2.1.2 states the rule as a MUST: the issuer's subject key identifier is the value that belongs in
+the key identifier field of the certificates it issues. Only that field is compared, so an extension also
+carrying `authorityCertIssuer` and `authorityCertSerialNumber`, which s4.2.1.1 permits alongside it, is not
+refused for carrying them. An extension with no readable key identifier at all is refused, because s4.2.1.1
+requires that field in every certificate a conforming CA generates, and accepting one displaces the extension
+the builder would have written, leaving the certificate naming no signing key. Add such an extension yourself
+with `AddExtension` if you have a reason to; your own input is not screened. The check needs an issuer to
+compare against, so it is skipped where none is ever set.
 
 Where an issuer publishes no subject key identifier of its own, the value is derived from its public key
 rather than substituted with its name and serial number, both for the extension the builder writes and for

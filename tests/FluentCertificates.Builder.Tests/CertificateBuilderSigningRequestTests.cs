@@ -296,11 +296,15 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
-    public async Task UseCertificateSigningRequest_WithAccept_AnAuthorityKeyIdentifierNamingAnotherCa_Throws()
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task UseCertificateSigningRequest_WithAccept_AnAuthorityKeyIdentifierNamingAnotherCa_ThrowsRegardlessOfCallOrder(bool issuerSetFirst)
     {
         //An Authority Key Identifier names whoever signs the certificate, which the requester cannot know.
         //An accept predicate that whitelists the OID without checking its value would otherwise issue a
-        //certificate that names a signer other than the one that actually signed it.
+        //certificate that names a signer other than the one that actually signed it. Checked at issuance
+        //rather than where the extension was accepted, so whether SetIssuer is called before or after
+        //UseCertificateSigningRequest does not decide whether the check runs.
         using var otherKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         using var other = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
@@ -317,9 +321,11 @@ public class CertificateBuilderSigningRequestTests
             .CreateCertificateSigningRequest());
 
         using var ca = BuildCa();
-        var builder = new CertificateBuilder().SetIssuer(ca);
+        var builder = issuerSetFirst
+            ? new CertificateBuilder().SetIssuer(ca).UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier)
+            : new CertificateBuilder().UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier).SetIssuer(ca);
 
-        var ex = await Assert.That(() => builder.UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier))
+        var ex = await Assert.That(() => builder.CreateCertificateRequest())
             .Throws<InvalidOperationException>();
 
         await Assert.That(ex!.Message).Contains("does not identify the issuer's own key");
@@ -445,8 +451,9 @@ public class CertificateBuilderSigningRequestTests
             .AddExtension(new X509Extension(KeyIdentifierAkiFor(unrelated), false))
             .CreateCertificateSigningRequest());
 
-        var builder = new CertificateBuilder().SetIssuer(ca);
-        var ex = await Assert.That(() => builder.UseCertificateSigningRequest(wrong, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier))
+        var builder = new CertificateBuilder().SetIssuer(ca)
+            .UseCertificateSigningRequest(wrong, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier);
+        var ex = await Assert.That(() => builder.CreateCertificateRequest())
             .Throws<InvalidOperationException>();
 
         await Assert.That(ex!.Message).Contains("does not identify the issuer's own key");
@@ -475,9 +482,10 @@ public class CertificateBuilderSigningRequestTests
             .AddExtension(new X509Extension(Oids.AuthorityKeyIdentifier, value, critical: false))
             .CreateCertificateSigningRequest());
 
-        var builder = new CertificateBuilder().SetIssuer(ca);
+        var builder = new CertificateBuilder().SetIssuer(ca)
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier);
 
-        var ex = await Assert.That(() => builder.UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.AuthorityKeyIdentifier))
+        var ex = await Assert.That(() => builder.CreateCertificateRequest())
             .Throws<InvalidOperationException>();
 
         await Assert.That(ex!.Message).Contains("carries no readable key identifier");
