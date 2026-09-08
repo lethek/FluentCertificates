@@ -6,8 +6,6 @@ using System.Security.Cryptography.X509Certificates;
 
 using FluentCertificates.Internals;
 
-using BclAuthorityKeyIdentifier = System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension;
-
 
 namespace FluentCertificates;
 
@@ -567,7 +565,7 @@ public record CertificateBuilder
     private static ReadOnlyMemory<byte>? RequestedKeyIdentifier(X509Extension extension)
     {
         try {
-            return new BclAuthorityKeyIdentifier(extension.RawData, extension.Critical).KeyIdentifier;
+            return new X509AuthorityKeyIdentifierExtension(extension.RawData, extension.Critical).KeyIdentifier;
         } catch (CryptographicException) {
             return null;
         }
@@ -902,11 +900,23 @@ public record CertificateBuilder
         //extension replace it and adding both would make CertificateRequest throw: hence the guard. The
         //false is RFC 5280 s4.2.1.1's non-critical, already conforming, so ConformCriticality is not needed.
         if (Issuer != null && !extensions.Any(x => String.Equals(x.Oid?.Value, Oids.AuthorityKeyIdentifier))) {
-            request.CertificateExtensions.Add(new X509AuthorityKeyIdentifierExtension(Issuer, false));
+            request.CertificateExtensions.Add(AuthorityKeyIdentifierFor(Issuer));
         }
 
         return request;
     }
+
+
+    /// <summary>
+    /// Names a certificate authority for the Authority Key Identifier extension: by its Subject Key
+    /// Identifier, which RFC 5280 s4.2.1.2 requires every CA certificate to carry, or by issuer name and
+    /// serial number where it has none. Those fields are equally permitted by s4.2.1.1, and that section
+    /// requires the extension in every certificate a conforming CA issues, so omitting it is not an option.
+    /// </summary>
+    private static X509AuthorityKeyIdentifierExtension AuthorityKeyIdentifierFor(X509Certificate2 ca)
+        => ca.Extensions.OfType<X509SubjectKeyIdentifierExtension>().Any()
+            ? X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: true, includeIssuerAndSerial: false)
+            : X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: false, includeIssuerAndSerial: true);
 
 
     /// <summary>

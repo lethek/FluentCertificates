@@ -4,7 +4,6 @@ using System.Security.Cryptography.X509Certificates;
 
 using TUnit.Assertions.Enums;
 
-using BclAuthorityKeyIdentifier = System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension;
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
 
@@ -292,7 +291,7 @@ public class CertificateBuilderSigningRequestTests
 
         await Assert.That(CountExtensions(issued, Oids.AuthorityKeyIdentifier)).IsEqualTo(1);
         await Assert.That(FindExtension(issued, Oids.AuthorityKeyIdentifier).RawData)
-            .IsEquivalentTo(new X509AuthorityKeyIdentifierExtension(ca, false).RawData, CollectionOrdering.Matching);
+            .IsEquivalentTo(KeyIdentifierAkiFor(ca).RawData, CollectionOrdering.Matching);
     }
 
 
@@ -310,7 +309,7 @@ public class CertificateBuilderSigningRequestTests
             .Create();
 
         using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var requested = new X509AuthorityKeyIdentifierExtension(other, false);
+        var requested = KeyIdentifierAkiFor(other);
         var csr = LoadWithExtensions(new CertificateBuilder()
             .SetSubject("CN=Asked For An Aki")
             .SetKeyPair(requesterKeys)
@@ -335,7 +334,7 @@ public class CertificateBuilderSigningRequestTests
         using var ca = BuildCa();
 
         using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var requested = new X509AuthorityKeyIdentifierExtension(ca, false);
+        var requested = KeyIdentifierAkiFor(ca);
         var csr = LoadWithExtensions(new CertificateBuilder()
             .SetSubject("CN=Asked For The Right Aki")
             .SetKeyPair(requesterKeys)
@@ -369,7 +368,7 @@ public class CertificateBuilderSigningRequestTests
             .UseCertificateSigningRequest(csr)
             .Create();
 
-        var aki = new BclAuthorityKeyIdentifier(FindExtension(issued, Oids.AuthorityKeyIdentifier).RawData, false);
+        var aki = new X509AuthorityKeyIdentifierExtension(FindExtension(issued, Oids.AuthorityKeyIdentifier).RawData, false);
 
         await Assert.That(aki.KeyIdentifier).IsNull();
         await Assert.That(aki.NamedIssuer!.Name).IsEqualTo(ca.SubjectName.Name);
@@ -385,7 +384,7 @@ public class CertificateBuilderSigningRequestTests
         //the extra fields do not make a correct identifier look wrong.
         using var ca = BuildCa();
         var requested = new X509Extension(
-            BclAuthorityKeyIdentifier.CreateFromCertificate(ca, includeKeyIdentifier: true, includeIssuerAndSerial: true),
+            X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: true, includeIssuerAndSerial: true),
             false);
 
         using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -421,7 +420,7 @@ public class CertificateBuilderSigningRequestTests
             .SetSubject("CN=Unrelated CA")
             .SetKeyPair(unrelatedKeys)
             .Create();
-        var requested = new X509Extension(new X509AuthorityKeyIdentifierExtension(unrelated, false), false);
+        var requested = new X509Extension(KeyIdentifierAkiFor(unrelated), false);
 
         var csr = LoadWithExtensions(new CertificateBuilder()
             .SetSubject("CN=Aki Without A Ski To Match")
@@ -717,6 +716,11 @@ public class CertificateBuilderSigningRequestTests
         request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
         return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow.AddDays(2));
     }
+
+
+    //Every CA these tests build carries a Subject Key Identifier, so the keyIdentifier-only form is available
+    private static X509AuthorityKeyIdentifierExtension KeyIdentifierAkiFor(X509Certificate2 ca)
+        => X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: true, includeIssuerAndSerial: false);
 
 
     private static int CountExtensions(X509Certificate2 cert, string oid)

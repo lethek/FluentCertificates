@@ -20,7 +20,7 @@ public class CertificateBuilderCriticalityConformanceTests
     {
         //RFC 5280 s4.2.1.1: conforming CAs MUST mark this extension as non-critical
         using var ca = BuildCa();
-        var supplied = new X509Extension(Oids.AuthorityKeyIdentifier, new X509AuthorityKeyIdentifierExtension(ca, false).RawData, critical: true);
+        var supplied = new X509Extension(Oids.AuthorityKeyIdentifier, X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: true, includeIssuerAndSerial: false).RawData, critical: true);
 
         using var cert = new CertificateBuilder()
             .SetSubject("CN=Critical Aki")
@@ -247,7 +247,7 @@ public class CertificateBuilderCriticalityConformanceTests
         using var ca = BuildCa();
 
         var request = new CertificateRequest("CN=Critical Aki From Csr", requesterKeys, HashAlgorithmName.SHA256);
-        request.CertificateExtensions.Add(new X509Extension(Oids.AuthorityKeyIdentifier, new X509AuthorityKeyIdentifierExtension(ca, false).RawData, critical: true));
+        request.CertificateExtensions.Add(new X509Extension(Oids.AuthorityKeyIdentifier, X509AuthorityKeyIdentifierExtension.CreateFromCertificate(ca, includeKeyIdentifier: true, includeIssuerAndSerial: false).RawData, critical: true));
         var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest(), CertificateRequestLoadOptions.UnsafeLoadCertificateExtensions);
 
         using var cert = new CertificateBuilder()

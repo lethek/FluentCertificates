@@ -32,12 +32,13 @@ release rather than record it as it happened.
 - **Breaking:** `CertificateBuilder.AddExtension`, `AddExtensions` and `SetExtensions` now replace any extension already present under the same OID, regardless of its runtime type, and the `Usage` profile's own generated extensions are replaced the same way.
 - **Breaking:** `CertificateBuilder.SetSubjectAlternativeNames` discards any Subject Alternative Name extension already on the builder, so the last call to name the certificate's alternative names is the one issued.
 - **Breaking:** `UseCertificateSigningRequest`'s predicate overload refuses a requested Authority Key Identifier that does not identify the `Issuer`'s own key once one is set.
+- **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
 
 ### Fixed
 
 - `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
 - `CertificateBuilder` no longer throws when an Authority Key Identifier extension is supplied alongside an `Issuer`.
-- `X509AuthorityKeyIdentifierExtension` names a certificate authority that carries no Subject Key Identifier by its issuer name and serial number, instead of encoding an empty sequence.
+- A certificate issued under a certificate authority that carries no Subject Key Identifier names that authority by issuer name and serial number in its Authority Key Identifier extension, instead of carrying an empty sequence.
 
 ## [0.22.0] - 2026-09-01
 
