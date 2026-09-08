@@ -407,7 +407,7 @@ requires, and its value goes out exactly as supplied:
 |Name Constraints|critical|s4.2.1.10|
 |Policy Constraints|critical|s4.2.1.11|
 |Inhibit anyPolicy|critical|s4.2.1.14|
-|Basic Constraints, `cA=TRUE`|critical|s4.2.1.9|
+|Basic Constraints, `cA=TRUE` with `keyCertSign`|critical|s4.2.1.9|
 |Subject Alternative Name, empty subject|critical|s4.2.1.6|
 
 This matters most for `UseCertificateSigningRequest`, where the extension came from the requester rather
@@ -428,8 +428,13 @@ Console.WriteLine(issued.Extensions
 ```
 
 Every rule above keys off the extension's OID alone, except the last two. Basic Constraints is corrected
-only when its value decodes and says `cA=TRUE`, so a value this library cannot read goes out with the flag
-as supplied. Subject Alternative Name is corrected only when the subject name is empty.
+only when its value decodes and says `cA=TRUE` *and* the certificate's key may validate signatures on
+certificates, since s4.2.1.9 attaches its requirement to that condition and leaves the choice open
+otherwise: a CA certificate whose key signs only revocation lists keeps whatever flag you gave it. A key
+usage extension that reads back and omits `keyCertSign` is the only thing that settles this, so a
+certificate with no key usage at all, or one this library cannot read, is treated as able to sign
+certificates. A Basic Constraints value that will not decode goes out with the flag as supplied. Subject
+Alternative Name is corrected only when the subject name is empty.
 
 ### What this library is responsible for
 

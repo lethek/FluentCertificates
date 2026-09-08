@@ -684,7 +684,7 @@ public record CertificateBuilder
     /// leaves the choice open. Every rule here is a MUST about the flag beside the extension rather than
     /// the value inside it, so a violation can be corrected without altering what the extension says.
     /// </summary>
-    private static bool? RequiredCriticality(X509Extension extension, CertificateBuilder builder)
+    private static bool? RequiredCriticality(X509Extension extension, CertificateBuilder builder, IEnumerable<X509Extension> extensions)
         => extension.Oid?.Value switch {
             //s4.2.1.1, s4.2.1.2, s4.2.1.8, s4.2.1.15, s4.2.2.1 and s4.2.2.2: MUST be non-critical.
             Oids.AuthorityKeyIdentifier or Oids.SubjectKeyIdentifier or Oids.SubjectDirectoryAttributes
@@ -694,9 +694,11 @@ public record CertificateBuilder
             //does not implement the extension ignores the restriction instead of refusing the certificate.
             Oids.NameConstraints or Oids.CertPolicyConstraints or Oids.InhibitAnyPolicyExtension
                 => true,
-            //s4.2.1.9: MUST be critical in a CA certificate, unstated for an end-entity one. A value that
-            //will not decode has no cA bit to read, so it goes out as supplied.
-            Oids.BasicConstraints2 when IsCertificateAuthority(extension) == true
+            //s4.2.1.9: MUST be critical in a CA certificate whose key validates signatures on certificates.
+            //That same sentence leaves the choice open for a CA certificate whose key does not, naming an
+            //indirect CRL issuer as the example, and for an end-entity certificate. A value that will not
+            //decode has no cA bit to read, so it goes out as supplied.
+            Oids.BasicConstraints2 when IsCertificateAuthority(extension) == true && MayValidateCertificateSignatures(extensions)
                 => true,
             //s4.2.1.6: MUST be critical when the subject is empty, being then the only name in the certificate.
             Oids.SubjectAltName when builder.Subject.RelativeDistinguishedNames.IsEmpty
@@ -715,13 +717,34 @@ public record CertificateBuilder
     }
 
 
-    private static X509Extension ConformCriticality(X509Extension extension, CertificateBuilder builder)
+    /// <summary>
+    /// Whether the certified key may be used to validate signatures on certificates, which is the condition
+    /// RFC 5280 s4.2.1.9 attaches to its criticality MUST. Only a key usage extension that reads back and
+    /// omits <see cref="X509KeyUsageFlags.KeyCertSign"/> settles that it may not: with none present the key
+    /// is unrestricted, and one this builder cannot read establishes no restriction either.
+    /// </summary>
+    private static bool MayValidateCertificateSignatures(IEnumerable<X509Extension> extensions)
+    {
+        var keyUsage = extensions.FirstOrDefault(x => String.Equals(x.Oid?.Value, Oids.KeyUsage));
+        if (keyUsage == null) {
+            return true;
+        }
+
+        try {
+            return new X509KeyUsageExtension(keyUsage, keyUsage.Critical).KeyUsages.HasFlag(X509KeyUsageFlags.KeyCertSign);
+        } catch (CryptographicException) {
+            return true;
+        }
+    }
+
+
+    private static X509Extension ConformCriticality(X509Extension extension, CertificateBuilder builder, IEnumerable<X509Extension> extensions)
     {
         //Correcting on the way out rather than on the way in keeps Extensions a faithful record of what the
         //builder was handed, and is the only point at which the empty-subject rule can be settled, since
         //the subject can still change after an extension is added. Criticality is encoded beside the
         //extension rather than within it, so the corrected copy carries the value that was asked for.
-        var required = RequiredCriticality(extension, builder);
+        var required = RequiredCriticality(extension, builder, extensions);
         return required == null || required == extension.Critical
             ? extension
             : new X509Extension(extension.Oid!, extension.RawData, required.Value);
@@ -893,7 +916,7 @@ public record CertificateBuilder
         CheckExtensionsAgreeWithUsage(this, extensions);
 
         foreach (var extension in extensions) {
-            request.CertificateExtensions.Add(ConformCriticality(extension, this));
+            request.CertificateExtensions.Add(ConformCriticality(extension, this, extensions));
         }
 
         //Added straight to the request rather than through BuildExtensions, so nothing lets a supplied

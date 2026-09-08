@@ -111,6 +111,40 @@ public class CertificateBuilderCriticalityConformanceTests
 
 
     [Test]
+    public async Task Create_WithACrlSigningOnlyCertificateAuthority_LeavesBasicConstraintsAsSupplied()
+    {
+        //s4.2.1.9 attaches its MUST to a CA certificate whose key validates signatures on certificates, and
+        //says the extension MAY be critical or non-critical in one whose key does not, naming a CRL-signing
+        //key as the example. Without keyCertSign there is no MUST to apply, so the flag is left alone.
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Indirect Crl Issuer")
+            .AddExtension(new X509BasicConstraintsExtension(true, false, 0, critical: false))
+            .AddExtension(new X509KeyUsageExtension(X509KeyUsageFlags.CrlSign, critical: true))
+            .Create();
+
+        var ext = FindExtension(cert, Oids.BasicConstraints2);
+
+        await Assert.That(ext.Critical).IsFalse();
+        await Assert.That(new X509BasicConstraintsExtension(ext, ext.Critical).CertificateAuthority).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Create_WithACertificateSigningCertificateAuthority_IssuesBasicConstraintsCritical()
+    {
+        //The converse: keyCertSign puts the certificate inside the MUST, so a non-critical flag is corrected
+        //even though the same builder leaves the CRL-signing case above alone.
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Signing Ca")
+            .AddExtension(new X509BasicConstraintsExtension(true, false, 0, critical: false))
+            .AddExtension(new X509KeyUsageExtension(X509KeyUsageFlags.CrlSign | X509KeyUsageFlags.KeyCertSign, critical: true))
+            .Create();
+
+        await Assert.That(FindExtension(cert, Oids.BasicConstraints2).Critical).IsTrue();
+    }
+
+
+    [Test]
     public async Task Create_WithAMalformedBasicConstraintsValue_IssuesItUnchanged()
     {
         //Reading the cA bit means decoding the requester's DER, and a value that will not decode has no bit
