@@ -250,6 +250,8 @@ public static class Oids
     public const string ApplicationCertPolicies = "1.3.6.1.4.1.311.21.10";
     /// <summary>Cryptographic attribute type OID <c>1.3.6.1.5.5.7.1.1</c>.</summary>
     public const string AuthorityInformationAccess = "1.3.6.1.5.5.7.1.1";
+    /// <summary>Cryptographic attribute type OID <c>1.3.6.1.5.5.7.1.11</c>.</summary>
+    public const string SubjectInformationAccess = "1.3.6.1.5.5.7.1.11";
     /// <summary>Cryptographic attribute type OID <c>1.3.6.1.5.5.7.48.1</c>.</summary>
     public const string OcspEndpoint = "1.3.6.1.5.5.7.48.1";
     /// <summary>Cryptographic attribute type OID <c>1.3.6.1.5.5.7.48.2</c>.</summary>
@@ -439,6 +441,8 @@ public static class Oids
     public const string JabberId = "2.5.4.105";
 
     // Cert Extensions
+    /// <summary>Certificate extension OID <c>2.5.29.9</c>.</summary>
+    public const string SubjectDirectoryAttributes = "2.5.29.9";
     /// <summary>Certificate extension OID <c>2.5.29.10</c>.</summary>
     public const string BasicConstraints = "2.5.29.10";
     /// <summary>Certificate extension OID <c>2.5.29.14</c>.</summary>
@@ -471,6 +475,8 @@ public static class Oids
     public const string CertPolicyConstraints = "2.5.29.36";
     /// <summary>Certificate extension OID <c>2.5.29.37</c>.</summary>
     public const string EnhancedKeyUsage = "2.5.29.37";
+    /// <summary>Certificate extension OID <c>2.5.29.46</c>.</summary>
+    public const string FreshestCrl = "2.5.29.46";
     /// <summary>Certificate extension OID <c>2.5.29.54</c>.</summary>
     public const string InhibitAnyPolicyExtension = "2.5.29.54";
 
@@ -774,6 +780,7 @@ public static class Oids
     private static Oid? s_certificateTemplateOid;
     private static Oid? s_applicationCertPoliciesOid;
     private static Oid? s_authorityInformationAccessOid;
+    private static Oid? s_subjectInformationAccessOid;
     private static Oid? s_ocspEndpointOid;
     private static Oid? s_certificateAuthorityIssuersOid;
     private static Oid? s_pkcs9ExtensionRequestOid;
@@ -869,6 +876,7 @@ public static class Oids
     private static Oid? s_intEmailOid;
     private static Oid? s_jabberIdOid;
 
+    private static Oid? s_subjectDirectoryAttributesOid;
     private static Oid? s_basicConstraintsOid;
     private static Oid? s_subjectKeyIdentifierOid;
     private static Oid? s_keyUsageOid;
@@ -885,6 +893,7 @@ public static class Oids
     private static Oid? s_authorityKeyIdentifierOid;
     private static Oid? s_certPolicyConstraintsOid;
     private static Oid? s_enhancedKeyUsageOid;
+    private static Oid? s_freshestCrlOid;
     private static Oid? s_inhibitAnyPolicyExtensionOid;
 
     private static Oid? s_tstInfoOid;
@@ -1185,6 +1194,8 @@ public static class Oids
     public static Oid ApplicationCertPoliciesOid => LazyInitializer.EnsureInitialized(ref s_applicationCertPoliciesOid, () => InitializeOid(ApplicationCertPolicies));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="AuthorityInformationAccess"/>.</summary>
     public static Oid AuthorityInformationAccessOid => LazyInitializer.EnsureInitialized(ref s_authorityInformationAccessOid, () => InitializeOid(AuthorityInformationAccess));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SubjectInformationAccess"/>.</summary>
+    public static Oid SubjectInformationAccessOid => LazyInitializer.EnsureInitialized(ref s_subjectInformationAccessOid, () => InitializeOid(SubjectInformationAccess));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="OcspEndpoint"/>.</summary>
     public static Oid OcspEndpointOid => LazyInitializer.EnsureInitialized(ref s_ocspEndpointOid, () => InitializeOid(OcspEndpoint));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="CertificateAuthorityIssuers"/>.</summary>
@@ -1366,6 +1377,8 @@ public static class Oids
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="JabberId"/>.</summary>
     public static Oid JabberIdOid => LazyInitializer.EnsureInitialized(ref s_jabberIdOid, () => InitializeOid(JabberId));
 
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SubjectDirectoryAttributes"/>.</summary>
+    public static Oid SubjectDirectoryAttributesOid => LazyInitializer.EnsureInitialized(ref s_subjectDirectoryAttributesOid, () => InitializeOid(SubjectDirectoryAttributes));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="BasicConstraints"/>.</summary>
     public static Oid BasicConstraintsOid => LazyInitializer.EnsureInitialized(ref s_basicConstraintsOid, () => InitializeOid(BasicConstraints));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="SubjectKeyIdentifier"/>.</summary>
@@ -1398,6 +1411,8 @@ public static class Oids
     public static Oid CertPolicyConstraintsOid => LazyInitializer.EnsureInitialized(ref s_certPolicyConstraintsOid, () => InitializeOid(CertPolicyConstraints));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="EnhancedKeyUsage"/>.</summary>
     public static Oid EnhancedKeyUsageOid => LazyInitializer.EnsureInitialized(ref s_enhancedKeyUsageOid, () => InitializeOid(EnhancedKeyUsage));
+    /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="FreshestCrl"/>.</summary>
+    public static Oid FreshestCrlOid => LazyInitializer.EnsureInitialized(ref s_freshestCrlOid, () => InitializeOid(FreshestCrl));
     /// <summary>A shared, cached <see cref="Oid"/> instance for <see cref="InhibitAnyPolicyExtension"/>.</summary>
     public static Oid InhibitAnyPolicyExtensionOid => LazyInitializer.EnsureInitialized(ref s_inhibitAnyPolicyExtensionOid, () => InitializeOid(InhibitAnyPolicyExtension));
 

@@ -97,9 +97,12 @@ using var issued = new CertificateBuilder()
 ```
 
 An accepted extension is applied as though you had added it yourself, so it replaces anything already
-present under the same OID and overrides what the usage profile would otherwise have generated. It also
-stays on the builder that call returns, so issue each further request from your configured builder rather
-than from the result of the previous one, or the next requester inherits the last one's extensions.
+present under the same OID and overrides what the usage profile would otherwise have generated. The last
+call still wins after that: `AddExtension`, `SetCertificatePolicies` and `SetSubjectAlternativeNames` each
+displace an accepted extension under their own OID, so you can accept the requester's names and then pin the
+ones you actually verified. An accepted extension also stays on the builder that call returns, so issue each
+further request from your configured builder rather than from the result of the previous one, or the next
+requester inherits the last one's extensions.
 
 `FromPem` and `FromDer` verify the request's signature, which is how a PKCS#10 request proves the requester
 holds the private key. Passing `CertificateRequestLoadOptions.SkipSignatureValidation` gives that up.
@@ -377,6 +380,157 @@ also accepted, as a single value or a collection, for callers who would rather n
 `OrganizationValidatedCertPolicy`, `IndividualValidatedCertPolicy`, `ExtendedValidationCertPolicy`,
 `ExtendedValidationCodeSigningCertPolicy` and `CodeSigningRequirementsCertPolicy`. Each of the three
 helpers replaces any earlier value rather than adding a second extension under the same OID.
+
+All three extensions are non-critical by default, but the specifications back that differently for each.
+Authority Information Access has no `critical` option at all: RFC 5280 s4.2.2.1 says it MUST be
+non-critical. CRL Distribution Points only SHOULD be non-critical under RFC 5280 s4.2.1.13; the CA/Browser
+Forum Baseline Requirements certificate profiles (s7.1.2) go further and require it. Certificate Policies
+criticality is neither required nor recommended either way by RFC 5280, which only says what a validator
+must do when the extension is critical, but the same Baseline Requirements profiles require it non-critical
+too. `SetCrlDistributionPoints` and `SetCertificatePolicies` both accept `critical: true` for a profile that
+needs otherwise, alongside a collection rather than `params`.
+
+### Criticality conformance
+
+RFC 5280 states hard criticality rules for several extensions, and each is about the flag beside the
+extension rather than the value inside it. So an extension breaking one is written with the flag the RFC
+requires, and its value goes out exactly as supplied:
+
+|Extension|Required|Rule|
+|---|---|---|
+|Authority Key Identifier|non-critical|s4.2.1.1|
+|Subject Key Identifier|non-critical|s4.2.1.2|
+|Subject Directory Attributes|non-critical|s4.2.1.8|
+|Freshest CRL|non-critical|s4.2.1.15|
+|Authority Information Access|non-critical|s4.2.2.1|
+|Subject Information Access|non-critical|s4.2.2.2|
+|Name Constraints|critical|s4.2.1.10|
+|Policy Constraints|critical|s4.2.1.11|
+|Inhibit anyPolicy|critical|s4.2.1.14|
+|Basic Constraints, `cA=TRUE` with `keyCertSign`|critical|s4.2.1.9|
+|Subject Alternative Name, empty subject|critical|s4.2.1.6|
+
+This matters most for `UseCertificateSigningRequest`, where the extension came from the requester rather
+than from you. An `accept` predicate that whitelists by OID alone would otherwise issue whatever
+criticality was asked for:
+
+```csharp
+using var issued = new CertificateBuilder()
+    .SetIssuer(ca)
+    //The request asks for a critical Authority Information Access, which RFC 5280 s4.2.2.1 forbids
+    .UseCertificateSigningRequest(csr, ext => ext.Oid?.Value == Oids.AuthorityInformationAccess)
+    .Create();
+
+//...but it is issued non-critical, with the OCSP and CA Issuers URIs the request named
+Console.WriteLine(issued.Extensions
+    .First(x => x.Oid?.Value == Oids.AuthorityInformationAccess)
+    .Critical); //False
+```
+
+Every rule above keys off the extension's OID alone, except the last two. Basic Constraints is corrected
+only when its value decodes and says `cA=TRUE` *and* the certificate's key may validate signatures on
+certificates, since s4.2.1.9 attaches its requirement to that condition and leaves the choice open
+otherwise: a CA certificate whose key signs only revocation lists keeps whatever flag you gave it. A key
+usage extension that reads back and omits `keyCertSign` is the only thing that settles this, so a
+certificate with no key usage at all, or one this library cannot read, is treated as able to sign
+certificates. A Basic Constraints value that will not decode goes out with the flag as supplied. Subject
+Alternative Name is corrected only when the subject name is empty.
+
+### What this library is responsible for
+
+FluentCertificates builds the certificate you describe. It is not a certificate authority, and it does
+not own your issuance policy.
+
+Everything it consumes is yours except a signing request. When you configure a builder you are the
+trust authority for what you are making, and you could produce the same certificate from
+`CertificateRequest` directly. A signing request is the one input that comes from somebody else, and it
+contributes a subject name, a public key, and whichever extensions you explicitly accepted.
+
+So the library takes responsibility for encoding faithfully what you asked for, for correcting
+criticality where RFC 5280 requires it, for never letting a request quietly replace something you set
+yourself, and for refusing a certificate that contradicts the `Usage` you stated.
+
+It does not decide whether you *should* issue. Whether a requester is entitled to a name, which
+extensions your policy permits, what values those may carry, and what your CA may certify are all
+yours. A certificate this library agrees to build is not thereby safe to trust, because no such
+property exists independently of the policy you issue under.
+
+### What the builder refuses
+
+Criticality is a flag beside an extension, so a violation can be corrected. Other things cannot be corrected
+without deciding what the caller meant, and those are refused with an `InvalidOperationException`. The list
+is short, and follows the boundary above: a value contradicting the `Usage` you stated about whether this is
+a certificate authority, a certificate signed by a key other than the one it names, and the narrow case of a
+value this builder cannot read back, since it can neither correct nor vouch for that. Everything else is
+your policy to set:
+
+- **Basic Constraints disagreeing with the profile about whether this is a certificate authority.** A
+  requester slipping `cA=TRUE` past a permissive `accept` predicate on an end-entity profile walks away able
+  to issue certificates for anyone, and correcting the criticality does not stop that: a validator honours
+  `cA=TRUE` whichever way the flag is set. The mirror case, `cA=FALSE` on `CertificateUsage.CA`, strips the
+  authority you asked for.
+- **Key Usage asserting `keyCertSign` under an end-entity profile,** or not asserting it under
+  `CertificateUsage.CA`. `keyCertSign` is what makes a certificate able to mint others. `cRLSign` is left
+  alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
+- **Either of those two extensions carrying a value that does not read back as the bytes it was supplied
+  as.** .NET's decoder is stricter than the ones that read the certificate afterwards, so bytes it rejects —
+  a well-formed `cA=TRUE` followed by a trailing `NULL`, say — are read by OpenSSL and Windows CryptoAPI as
+  exactly what the well-formed part says. Issuing a value the builder could not read would let a requester
+  assert to a validator the very thing the check above failed to see, so both extensions must survive a
+  decode and re-encode unchanged. Most values this rejects are malformed, but not all: a `pathLenConstraint`
+  larger than an `Int32` conforms to RFC 5280 and is still refused, because .NET cannot represent it.
+- **A certificate whose `SignatureGenerator` holds a key other than the one it would name as having signed
+  it.** With no `Issuer`, that is the subject's own key: such a certificate names itself as its own issuer
+  while some other key vouches for it, so a relying party can build a path for it against whoever does own
+  that key. Java will then accept it as a certificate revocation list issuer for the name it bears,
+  `cA=FALSE` notwithstanding. Set an `Issuer` so the certificate names the authority that really signed it.
+  Where the subject *is* the `Issuer`'s own name, which is ordinary key rollover, that key is the issuer's
+  own instead: naming a real, trusted CA as `Issuer` while signing with an unrelated key mints a certificate
+  a relying party reads as that CA's own successor. The two names are compared as encoded rather than
+  folded, since whether some other name would also be read as your issuer's is a judgement about your own
+  naming policy. A generator over the key it should be signing with, which is how an unexportable key signs,
+  is unaffected either way.
+
+> **Set a `Usage` before accepting anything from a request.** A builder with no `Usage` has declared no
+> intent to measure an extension against, and makes none of these refusals. A request accepted onto such a
+> builder can carry `cA=TRUE` and `keyCertSign`, and the certificate issued from it will sign other
+> certificates that chain to your issuer.
+
+Almost nothing else in a request is screened. What an extension says is the `accept` predicate's decision,
+and every other field crosses over as the requester wrote it — **the subject name included**. Nothing here
+asks whether a requester is entitled to the name it wants, so call `SetSubject` afterwards if your CA issues
+only under names it has verified. RFC 5280 s6.3.3 accepts a revocation list from any certificate whose
+subject matches the target's issuer and whose key usage asserts `cRLSign`, without requiring `cA=TRUE`, so a
+leaf you issue under your own CA's name can revoke everything that CA ever issued; both OpenSSL and Java
+PKIX honour that. Comparing a requested name against your own is a judgement about how a relying party will
+read it, which depends on the validator and the Unicode tables it carries, so it stays with you.
+
+The one exception is an Authority Key Identifier. It is not the requester's to assert, because it names
+whoever signs the certificate, which the requester cannot know beforehand, so accepting one checks it against
+the issuer's real key immediately rather than waiting for issuance. RFC 5280 s4.2.1.2 states the rule as a
+MUST: the issuer's subject key identifier is the value that belongs in the key identifier field of the
+certificates it issues. Only that field is compared, so an extension also carrying `authorityCertIssuer` and
+`authorityCertSerialNumber`, which s4.2.1.1 permits alongside it, is not refused for carrying them. An
+extension with no readable key identifier at all is refused, because s4.2.1.1 requires that field in every
+certificate a conforming CA generates, and accepting one displaces the extension the builder would have
+written, leaving the certificate naming no signing key. Add such an extension yourself with `AddExtension`
+if you have a reason to; your own input is not screened. The check needs an issuer to compare against, so it
+is skipped until `SetIssuer` has been called.
+
+Where an issuer publishes no subject key identifier of its own, the value is derived from its public key
+rather than substituted with its name and serial number, both for the extension the builder writes and for
+the one it compares a request against. That follows s4.2.1.1's own advice that the key identifier "SHOULD be
+derived from the public key used to verify the certificate's signature".
+
+A requested Subject Key Identifier is *not* checked, which is worth saying because the symmetry invites the
+assumption that it is. It labels the requester's own key, so the requester knows the right answer. RFC 5280
+s4.2.1.2 only recommends deriving that label from the key: it describes two common derivations, the full
+SHA-1 hash and a truncated 8-byte form, and then allows that other methods of generating unique numbers are
+acceptable too. A label need not be a function of the key at all, so no comparison distinguishes a
+conforming one from a careless one, and refusing on a mismatch would assert a rule that section does not
+state. Which labels you honour is your policy, applied through the `accept` predicate.
+
+`Extensions` on the builder keeps reporting whatever it was handed.
 
 ---
 

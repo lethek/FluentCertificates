@@ -43,16 +43,19 @@ public class X509ExtensionOidEqualityComparerTests
 
 
     /// <summary>
-    /// Two extensions carrying the same OID but of different runtime types are not equal, so a strongly
-    /// typed extension never collapses onto the raw <see cref="X509Extension"/> holding the same OID.
+    /// A certificate carries at most one extension per OID, so a strongly typed extension and a raw
+    /// <see cref="X509Extension"/> under that OID are the same extension. Were they not, both would reach
+    /// <see cref="CertificateRequest"/> and it would throw on the duplicate.
     /// </summary>
     [Test]
-    public async Task Equals_SameOidDifferentTypes_IsFalse()
+    public async Task Equals_SameOidDifferentTypes_IsTrue()
     {
         var typed = BasicConstraints();
         var raw = new X509Extension(typed.Oid!, typed.RawData, typed.Critical);
 
-        await Assert.That(Comparer.Equals(typed, raw)).IsFalse();
+        await Assert.That(Comparer.Equals(typed, raw)).IsTrue();
+        await Assert.That(Comparer.Equals(raw, typed)).IsTrue();
+        await Assert.That(Comparer.GetHashCode(raw)).IsEqualTo(Comparer.GetHashCode(typed));
     }
 
 

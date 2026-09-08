@@ -31,6 +31,24 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
+    public async Task Create_WithANonCriticalHandSuppliedAuthorityInformationAccessExtension_IsIssuedNormally()
+    {
+        //Pins that criticality conformance leaves a conforming hand-supplied AIA extension alone -- without
+        //this test, an implementation mangling every AddExtension'd AIA would still pass the other tests
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(Create_WithANonCriticalHandSuppliedAuthorityInformationAccessExtension_IsIssuedNormally)))
+            .AddExtension(new X509AuthorityInformationAccessExtension([OcspUri], [CaIssuersUri], critical: false))
+            .Create();
+
+        var ext = FindExtension(cert, Oids.AuthorityInformationAccess);
+
+        await Assert.That(ext.Critical).IsFalse();
+        await Assert.That(ReadAccessLocations(ext, Oids.OcspEndpoint)).IsEquivalentTo([OcspUri]);
+        await Assert.That(ReadAccessLocations(ext, Oids.CertificateAuthorityIssuers)).IsEquivalentTo([CaIssuersUri]);
+    }
+
+
+    [Test]
     public async Task SetAuthorityInformationAccess_OcspOnly_OmitsCaIssuers()
     {
         using var cert = new CertificateBuilder()
@@ -104,6 +122,21 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
+    public async Task SetCrlDistributionPoints_MarkedCritical_CarriesTheCriticalFlag()
+    {
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(SetCrlDistributionPoints_MarkedCritical_CarriesTheCriticalFlag)))
+            .SetCrlDistributionPoints([CrlUri], critical: true)
+            .Create();
+
+        var ext = FindExtension(cert, Oids.CrlDistributionPoints);
+
+        await Assert.That(ext.Critical).IsTrue();
+        await Assert.That(ReadCrlDistributionPointUris(ext)).IsEquivalentTo([CrlUri]);
+    }
+
+
+    [Test]
     public async Task SetCrlDistributionPoints_ParamsAndEnumerable_ProduceTheSameExtension()
     {
         var fromParams = new CertificateBuilder().SetCrlDistributionPoints(CrlUri);
@@ -156,6 +189,30 @@ public class CertificateBuilderExtensionHelperTests
 
         await Assert.That(ext.Critical).IsFalse();
         await Assert.That(ReadPolicyIdentifiers(ext)).IsEquivalentTo([PolicyOid, Oids.AnyCertPolicy]);
+    }
+
+
+    [Test]
+    public async Task SetCertificatePolicies_MarkedCritical_CarriesTheCriticalFlag()
+    {
+        using var fromOids = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(SetCertificatePolicies_MarkedCritical_CarriesTheCriticalFlag)))
+            .SetCertificatePolicies([new Oid(PolicyOid)], critical: true)
+            .Create();
+
+        var oidsExt = FindExtension(fromOids, Oids.CertPolicies);
+        await Assert.That(oidsExt.Critical).IsTrue();
+        await Assert.That(ReadPolicyIdentifiers(oidsExt)).IsEquivalentTo([PolicyOid]);
+
+        using var fromStrings = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName(nameof(SetCertificatePolicies_MarkedCritical_CarriesTheCriticalFlag)))
+            .SetCertificatePolicies([PolicyOid], critical: true)
+            .Create();
+
+        var ext = FindExtension(fromStrings, Oids.CertPolicies);
+
+        await Assert.That(ext.Critical).IsTrue();
+        await Assert.That(ReadPolicyIdentifiers(ext)).IsEquivalentTo([PolicyOid]);
     }
 
 
@@ -238,8 +295,13 @@ public class CertificateBuilderExtensionHelperTests
             .SetCertificatePolicies(PolicyOid)
             .Create();
 
+        var ext = FindExtension(cert, Oids.CertPolicies);
+
         await Assert.That(CountExtensions(cert, Oids.CertPolicies)).IsEqualTo(1);
-        await Assert.That(ReadPolicyIdentifiers(FindExtension(cert, Oids.CertPolicies))).IsEquivalentTo([PolicyOid]);
+        await Assert.That(ReadPolicyIdentifiers(ext)).IsEquivalentTo([PolicyOid]);
+        //RawData comparisons elsewhere in this file don't carry the critical bit -- pin the string route's
+        //default here, since the Oid route's default is pinned by SetCertificatePolicies_Oids_CarriesEveryPolicy
+        await Assert.That(ext.Critical).IsFalse();
     }
 
 
