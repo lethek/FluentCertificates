@@ -171,12 +171,12 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
-    public async Task UseCertificateSigningRequest_WithAccept_AnAcceptedSanBeatsTheCasOwnInEitherOrder()
+    public async Task UseCertificateSigningRequest_WithAccept_TheLastSubjectAlternativeNameCallWins()
     {
-        //An accepted extension goes into the same set a manually added one does, and that set beats anything
-        //generated, so SetSubjectAlternativeNames loses even when it is called afterwards. SAN decides which
-        //hostnames the certificate is trusted for, so this is pinned rather than left to be discovered.
-        var csr = LoadWithExtensions(BuildAmbitiousRequest("CN=Requester San Wins"));
+        //SAN decides which hostnames the certificate is trusted for, so which of the two calls wins is worth
+        //pinning: whichever came last. A CA that accepts the requester's names and then pins the ones it
+        //actually verified gets its own, and one that pins first and then accepts has said yes to theirs.
+        var csr = LoadWithExtensions(BuildAmbitiousRequest("CN=San Precedence"));
 
         using var ca = BuildCa();
         using var acceptedLast = new CertificateBuilder()
@@ -192,7 +192,26 @@ public class CertificateBuilderSigningRequestTests
             .Create();
 
         await Assert.That(ReadDnsNames(acceptedLast)).IsEquivalentTo([RequestedDnsName]);
-        await Assert.That(ReadDnsNames(acceptedFirst)).IsEquivalentTo([RequestedDnsName]);
+        await Assert.That(ReadDnsNames(acceptedFirst)).IsEquivalentTo(["ca-pinned.example.com"]);
+        await Assert.That(CountExtensions(acceptedFirst, Oids.SubjectAltName)).IsEqualTo(1);
+    }
+
+
+    [Test]
+    public async Task UseCertificateSigningRequest_WithAccept_AnEmptySubjectAlternativeNameCallDiscardsTheAcceptedOne()
+    {
+        //Setting no names at all is still the caller's last word, so the accepted extension goes with it
+        //rather than surviving as the only SAN in the certificate.
+        var csr = LoadWithExtensions(BuildAmbitiousRequest("CN=San Discarded"));
+
+        using var ca = BuildCa();
+        using var issued = new CertificateBuilder()
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.SubjectAltName)
+            .SetSubjectAlternativeNames([])
+            .Create();
+
+        await Assert.That(CountExtensions(issued, Oids.SubjectAltName)).IsEqualTo(0);
     }
 
 

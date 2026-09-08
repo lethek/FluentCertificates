@@ -496,9 +496,9 @@ public record CertificateBuilder
     /// <para>
     /// An accepted extension counts as the CA's own: it replaces anything already present under the same
     /// OID and overrides what the <see cref="Usage"/> profile would have generated. Where a request carries
-    /// two under one OID, the last accepted is the one issued. Afterwards only a helper that writes its
-    /// extension directly, such as <see cref="SetCertificatePolicies(IEnumerable{string}, bool)"/>,
-    /// overrides it; a later <see cref="AddExtension"/> under the same OID replaces it in turn, and so does
+    /// two under one OID, the last accepted is the one issued. The last call still wins afterwards, so
+    /// <see cref="AddExtension"/> under the same OID replaces it, and so do
+    /// <see cref="SetCertificatePolicies(IEnumerable{string}, bool)"/> and
     /// <see cref="SetSubjectAlternativeNames(IEnumerable{GeneralName})"/>.
     /// </para>
     /// <para>
@@ -586,17 +586,23 @@ public record CertificateBuilder
 
 
     //Unlike AddExtension used to, this replaces any extension already present under the same OID,
-    //regardless of its concrete type. X509ExtensionOidEqualityComparer treats a same-OID extension of a
-    //different runtime type as unequal (by design -- see
-    //X509ExtensionOidEqualityComparerTests.Equals_SameOidDifferentTypes_IsFalse), so Remove(extension) alone
-    //would miss it and both would reach CertificateRequest, which throws. Filtering by Oid.Value directly
-    //finds it regardless of type.
+    //regardless of its concrete type.
     private CertificateBuilder SetExtension(X509Extension extension)
+    {
+        var builder = RemoveExtensions(extension.Oid?.Value);
+        return builder with { _extensions = builder._extensions.Add(extension) };
+    }
+
+
+    //X509ExtensionOidEqualityComparer treats a same-OID extension of a different runtime type as unequal (by
+    //design -- see X509ExtensionOidEqualityComparerTests.Equals_SameOidDifferentTypes_IsFalse), so
+    //Remove(extension) alone would miss it and both would reach CertificateRequest, which throws. Filtering
+    //by Oid.Value directly finds it regardless of type.
+    private CertificateBuilder RemoveExtensions(string? oid)
         => this with {
             _extensions = _extensions
-                .Where(x => !String.Equals(x.Oid?.Value, extension.Oid?.Value))
+                .Where(x => !String.Equals(x.Oid?.Value, oid))
                 .ToImmutableHashSet(X509ExtensionOidEqualityComparer)
-                .Add(extension)
         };
 
 
@@ -619,7 +625,8 @@ public record CertificateBuilder
 
 
     /// <summary>
-    /// Sets the subject alternative names using a builder function.
+    /// Sets the subject alternative names, discarding any Subject Alternative Name extension already on the
+    /// builder.
     /// </summary>
     /// <param name="configureSan">A function to configure the SAN builder.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified SANs.</returns>
@@ -628,12 +635,23 @@ public record CertificateBuilder
 
 
     /// <summary>
-    /// Sets the subject alternative names.
+    /// Sets the subject alternative names, discarding any Subject Alternative Name extension already on the
+    /// builder.
     /// </summary>
-    /// <param name="san">The subject alternative names.</param>
+    /// <remarks>
+    /// These names are encoded into their extension at issuance, alongside the ones the <see cref="Usage"/>
+    /// profile generates, and an extension added under that OID would otherwise take precedence over the
+    /// whole generated set. Discarding it here is what makes this call the last word on which names the
+    /// certificate carries, whether the extension it displaces came from <see cref="AddExtension"/> or was
+    /// accepted out of a signing request. Call it before
+    /// <see cref="UseCertificateSigningRequest(CertificateSigningRequest,Func{X509Extension,bool})"/> to let
+    /// an accepted Subject Alternative Name win instead.
+    /// </remarks>
+    /// <param name="san">The subject alternative names. An empty sequence leaves the certificate with no
+    /// Subject Alternative Name extension at all, discarding any already present.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified SANs.</returns>
     public CertificateBuilder SetSubjectAlternativeNames(IEnumerable<GeneralName> san)
-        => this with { _subjectAlternativeNames = [.. san]};
+        => RemoveExtensions(Oids.SubjectAltName) with { _subjectAlternativeNames = [.. san] };
 
 
     /// <summary>
