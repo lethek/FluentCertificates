@@ -1015,6 +1015,33 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Create_UnderAnIssuerWhoseSubjectKeyIdentifierDoesNotDecode_Throws()
+    {
+        //The authority key identifier naming the issuer is copied from what the issuer publishes, so a
+        //published value that will not decode leaves nothing to name it by. Deriving one from the issuer's
+        //public key instead would name a key identifier the issuer does not publish, which nothing chaining
+        //by key identifier could match, and no error would say why.
+        using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Ca With Undecodable Ski")
+            .SetKeyPair(caKeys)
+            .AddExtension(new X509Extension(Oids.SubjectKeyIdentifier, [0x05, 0x00], critical: false))
+            .Create();
+
+        using var subjectKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var builder = new CertificateBuilder()
+            .SetSubject("CN=Issued Under Undecodable Ski")
+            .SetKeyPair(subjectKeys)
+            .SetIssuer(ca);
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("cannot be decoded");
+    }
+
+
+    [Test]
     public async Task CreateCertificateSigningRequest_WithAnIssuerSet_IgnoresIt()
     {
         //Nothing signs a request but the key it certifies, so an Issuer set for later issuance has no
@@ -1057,33 +1084,6 @@ public class CertificateBuilderTests
 
         await Assert.That(withForeignAki.CertificateRequest.CertificateExtensions.Select(x => x.Oid?.Value))
             .Contains(Oids.AuthorityKeyIdentifier);
-    }
-
-
-    [Test]
-    public async Task Create_UnderAnIssuerWhoseSubjectKeyIdentifierDoesNotDecode_Throws()
-    {
-        //The authority key identifier naming the issuer is copied from what the issuer publishes, so a
-        //published value that will not decode leaves nothing to name it by. Deriving one from the issuer's
-        //public key instead would name a key identifier the issuer does not publish, which nothing chaining
-        //by key identifier could match, and no error would say why.
-        using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        using var ca = new CertificateBuilder()
-            .SetUsage(CertificateUsage.CA)
-            .SetSubject("CN=Ca With Undecodable Ski")
-            .SetKeyPair(caKeys)
-            .AddExtension(new X509Extension(Oids.SubjectKeyIdentifier, [0x05, 0x00], critical: false))
-            .Create();
-
-        using var subjectKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var builder = new CertificateBuilder()
-            .SetSubject("CN=Issued Under Undecodable Ski")
-            .SetKeyPair(subjectKeys)
-            .SetIssuer(ca);
-
-        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
-
-        await Assert.That(ex!.Message).Contains("cannot be decoded");
     }
 
 

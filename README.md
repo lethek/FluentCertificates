@@ -139,8 +139,9 @@ using var webCert = builder
     .Create();
 ```
 
-`SubjectAlternativeNames` and `Extensions` have no initializer: both are set through their methods, which
-discard what an earlier call put there, and an object initializer has no defined order to discard in.
+`SubjectAlternativeNames` and `Extensions` have no initializer. Both are set through methods that discard
+what an earlier call left, so the order of the calls decides the result. An initializer block would hide
+that order in which line you happened to write first, so those two stay methods.
 
 ### Build a certificate authority (CA)
 
