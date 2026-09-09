@@ -483,15 +483,15 @@ your policy to set:
 - **Key Usage asserting `keyCertSign` under an end-entity profile,** or not asserting it under
   `CertificateUsage.CA`. `keyCertSign` is what makes a certificate able to mint others. `cRLSign` is left
   alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
-- **Either of those two extensions carrying a value this framework's decoder will not read.** The decoders
-  that read the certificate afterwards are more forgiving, so bytes .NET rejects - a well-formed `cA=TRUE`
-  followed by a trailing `NULL`, say - are read by OpenSSL and Windows CryptoAPI as exactly what the
-  well-formed part says. Issuing a value the builder could not read would let a requester assert to a
-  validator the very thing the check above failed to see. How the value is spelled is not asked about: a
-  `cA` written out as `FALSE` rather than omitted at its DEFAULT is not canonical DER, but real certificates
-  carry it and every reader takes it for `FALSE`. Most values this rejects are malformed, but not all: a
-  `pathLenConstraint` larger than an `Int32` conforms to RFC 5280 and is still refused, because .NET cannot
-  represent it.
+- **Either of those two extensions carrying a value this builder cannot read.** The value has to decode, and
+  it has to be a single encoded value with nothing after it. Bytes past the end are what one reader skips
+  and another reads: an empty `SEQUENCE` followed by a stray `cA=TRUE` reads here as `cA=FALSE`, agreeing
+  with an end-entity profile, while OpenSSL and Windows CryptoAPI read the well-formed part and honour the
+  authority. Issuing such a value would let a requester assert to a validator the very thing the check above
+  failed to see. How the value is spelled is not asked about: a `cA` written out as `FALSE` rather than
+  omitted at its DEFAULT is not canonical DER, but real certificates carry it and every reader takes it for
+  `FALSE`. Most values this rejects are malformed, but not all: a `pathLenConstraint` larger than an `Int32`
+  conforms to RFC 5280 and is still refused, because .NET cannot represent it.
 - **A certificate whose `SignatureGenerator` holds a key other than the one it would name as having signed
   it.** With no `Issuer`, that is the subject's own key: such a certificate names itself as its own issuer
   while some other key vouches for it, so a relying party can build a path for it against whoever does own

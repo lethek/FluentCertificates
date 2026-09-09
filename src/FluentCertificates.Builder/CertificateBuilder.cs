@@ -1,6 +1,7 @@
 ﻿using System.Buffers.Binary;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -741,19 +742,31 @@ public record CertificateBuilder
 
 
     /// <summary>
-    /// What <paramref name="read"/> makes of the extension's value, or <see langword="null"/> where this
-    /// framework's decoder will not accept it.
+    /// What <paramref name="read"/> makes of the extension's value, or <see langword="null"/> where the
+    /// value is one this builder cannot answer for.
     /// </summary>
-    /// <remarks>Whether the bytes are canonical DER is not asked. Every non-canonical spelling the decoder
-    /// does accept, such as a DEFAULT written out or a bit string carrying a spare byte, denotes the same
-    /// value to any reader; refusing those would refuse values real certificates carry. Bytes that could be
-    /// read two ways, such as a truncated length or trailing data, the decoder rejects outright.</remarks>
+    /// <remarks>
+    /// Two things are asked, and canonical DER is not one of them. Every non-canonical spelling the decoder
+    /// accepts, such as a DEFAULT written out or a bit string carrying a spare byte, denotes the same value
+    /// to any reader, and real certificates carry them.
+    /// <para>The value must decode, and it must be a single encoded value with nothing after it. Bytes past
+    /// the first value are what one reader skips and another reads: an empty SEQUENCE followed by a stray
+    /// <c>cA=TRUE</c> is read here as cA=FALSE, while OpenSSL and CryptoAPI read the well-formed part and
+    /// honour the authority. .NET 10's decoder refuses those bytes itself, .NET 8 and 9 do not, so the
+    /// extent is measured here rather than left to the framework.</para>
+    /// </remarks>
     private static TValue? Decode<TExtension, TValue>(X509Extension extension, Func<X509Extension, TExtension> decode, Func<TExtension, TValue> read) where TValue : struct
     {
         try {
+            //BER, so that only the extent is judged here and the spelling is left to the decoder below
+            AsnDecoder.ReadEncodedValue(extension.RawData, AsnEncodingRules.BER, out _, out _, out int consumed);
+            if (consumed != extension.RawData.Length) {
+                return null;
+            }
+
             //Reading is also what forces the decode, since the BCL types parse lazily
             return read(decode(extension));
-        } catch (CryptographicException) {
+        } catch (Exception ex) when (ex is CryptographicException or AsnContentException) {
             return null;
         }
     }
@@ -764,7 +777,7 @@ public record CertificateBuilder
         //Truncated because a requester chooses how long the value is
         var quoted = Convert.ToHexString(extension.RawData.AsSpan(0, Math.Min(extension.RawData.Length, QuotedValueLimit)));
         var ellipsis = extension.RawData.Length > QuotedValueLimit ? "..." : "";
-        return new InvalidOperationException($"A {name} extension's value cannot be decoded, so what it asserts to a validator cannot be established here and may not agree with {nameof(CertificateUsage)}. Reject it, or supply one this builder can read. Value: {quoted}{ellipsis}");
+        return new InvalidOperationException($"A {name} extension's value cannot be read, so what it asserts to a validator cannot be established here and may not agree with {nameof(CertificateUsage)}. Reject it, or supply one this builder can read. Value: {quoted}{ellipsis}");
     }
 
 

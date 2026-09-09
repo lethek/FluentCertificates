@@ -251,15 +251,31 @@ public class CertificateBuilderUsageAgreementTests
         //The bypass a security review demonstrated end to end: OpenSSL and Windows CryptoAPI read the
         //well-formed part of both of these and honour cA=TRUE and Certificate Sign. Treating "I cannot read
         //it" as "it asserts nothing" issued a working certificate authority under an end-entity profile and
-        //chained a forged leaf through it. Which refusal fires depends on the framework, which is why the
-        //message is not asserted: .NET 10's decoder rejects the trailing data outright, while .NET 8 and 9
-        //read the well-formed part and the value they read is what contradicts the profile.
+        //chained a forged leaf through it.
         var builder = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Trailing Data")
             .AddExtension(new X509Extension(oid, rawData, critical: false));
 
         await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithAValueHidingASecondAssertionAfterIt_Throws()
+    {
+        //The sharp end of the same bypass, and the reason the extent is measured rather than left to the
+        //decoder: an empty SEQUENCE reads as cA=FALSE, which agrees with the Server profile, so the check
+        //above sees nothing wrong and only the trailing bytes carry cA=TRUE for a reader that skips the
+        //SEQUENCE length. .NET 10 refuses these bytes itself; .NET 8 and 9 decode them and report cA=FALSE.
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Hidden Assertion")
+            .AddExtension(new X509Extension(Oids.BasicConstraints2, [0x30, 0x00, 0x01, 0x01, 0xFF], critical: false));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("cannot be read");
     }
 
 
