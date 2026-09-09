@@ -132,11 +132,16 @@ var builder = new CertificateBuilder() {
     FriendlyName = "Example self-signed web-server certificate",
     Usage = CertificateUsage.Server,
     Subject = new X500NameBuilder().SetCommonName("*.fake.domain"),
-    SubjectAlternativeNames = new GeneralNameListBuilder().AddDnsNames("*.fake.domain", "fake.domain"),
     NotAfter = DateTimeOffset.UtcNow.AddMonths(1)
 };
-using var webCert = builder.Create();
+using var webCert = builder
+    .SetSubjectAlternativeNames(x => x.AddDnsNames("*.fake.domain", "fake.domain"))
+    .Create();
 ```
+
+`SubjectAlternativeNames` and `Extensions` have no initializer. Both are set through methods that discard
+what an earlier call left, so the order of the calls decides the result. An initializer block would hide
+that order in which line you happened to write first, so those two stay methods.
 
 ### Build a certificate authority (CA)
 

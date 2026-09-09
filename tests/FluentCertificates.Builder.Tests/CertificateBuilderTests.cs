@@ -1015,6 +1015,33 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Create_UnderAnIssuerWhoseSubjectKeyIdentifierDoesNotDecode_Throws()
+    {
+        //The authority key identifier naming the issuer is copied from what the issuer publishes, so a
+        //published value that will not decode leaves nothing to name it by. Deriving one from the issuer's
+        //public key instead would name a key identifier the issuer does not publish, which nothing chaining
+        //by key identifier could match, and no error would say why.
+        using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Ca With Undecodable Ski")
+            .SetKeyPair(caKeys)
+            .AddExtension(new X509Extension(Oids.SubjectKeyIdentifier, [0x05, 0x00], critical: false))
+            .Create();
+
+        using var subjectKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var builder = new CertificateBuilder()
+            .SetSubject("CN=Issued Under Undecodable Ski")
+            .SetKeyPair(subjectKeys)
+            .SetIssuer(ca);
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("cannot be decoded");
+    }
+
+
+    [Test]
     public async Task CreateCertificateSigningRequest_WithAnIssuerSet_IgnoresIt()
     {
         //Nothing signs a request but the key it certifies, so an Issuer set for later issuance has no
@@ -1417,6 +1444,42 @@ public class CertificateBuilderTests
             .Create();
 
         await Assert.That(cert.Extensions.Count(x => x.Oid?.Value == Oids.SubjectKeyIdentifier)).IsEqualTo(1);
+    }
+
+
+    [Test]
+    public async Task SetSubjectAlternativeNames_AgainstAnAddedSubjectAlternativeName_TheLastCallWins()
+    {
+        //The signing-request half of this is pinned in CertificateBuilderSigningRequestTests; this is the
+        //other half of the same documented rule, for a SAN the caller added directly.
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var added = new X509Extension(
+            Oids.SubjectAltName,
+            new GeneralNameListBuilder().AddDnsName("added.example.com").Create().Encode(),
+            critical: false);
+        var set = new GeneralNameListBuilder().AddDnsName("set.example.com").Create().Encode();
+
+        using var setLast = new CertificateBuilder()
+            .SetSubject("CN=San Set Last")
+            .SetKeyPair(keys)
+            .AddExtension(added)
+            .SetSubjectAlternativeNames(x => x.AddDnsName("set.example.com"))
+            .Create();
+
+        using var addedLast = new CertificateBuilder()
+            .SetSubject("CN=San Added Last")
+            .SetKeyPair(keys)
+            .SetSubjectAlternativeNames(x => x.AddDnsName("set.example.com"))
+            .AddExtension(added)
+            .Create();
+
+        await Assert.That(setLast.Extensions.Count(x => x.Oid?.Value == Oids.SubjectAltName)).IsEqualTo(1);
+        await Assert.That(setLast.Extensions.Single(x => x.Oid?.Value == Oids.SubjectAltName).RawData)
+            .IsEquivalentTo(set, CollectionOrdering.Matching);
+
+        await Assert.That(addedLast.Extensions.Count(x => x.Oid?.Value == Oids.SubjectAltName)).IsEqualTo(1);
+        await Assert.That(addedLast.Extensions.Single(x => x.Oid?.Value == Oids.SubjectAltName).RawData)
+            .IsEquivalentTo(added.RawData, CollectionOrdering.Matching);
     }
 
 

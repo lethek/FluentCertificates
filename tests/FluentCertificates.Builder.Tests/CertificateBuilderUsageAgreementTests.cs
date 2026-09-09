@@ -94,7 +94,7 @@ public class CertificateBuilderUsageAgreementTests
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Path Length Without Ca")
-            .AddExtension(Retype(Oids.BasicConstraints2, [0x30, 0x03, 0x02, 0x01, 0x03]))
+            .AddExtension(new X509Extension(Oids.BasicConstraints2, [0x30, 0x03, 0x02, 0x01, 0x03], critical: false))
             .Create();
 
         var ext = cert.Extensions.Single(x => x.Oid?.Value == Oids.BasicConstraints2);
@@ -255,7 +255,7 @@ public class CertificateBuilderUsageAgreementTests
         var builder = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Trailing Data")
-            .AddExtension(Retype(oid, rawData));
+            .AddExtension(new X509Extension(oid, rawData, critical: false));
 
         var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
 
@@ -276,7 +276,7 @@ public class CertificateBuilderUsageAgreementTests
         var builder = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
             .SetSubject("CN=Unrepresentable Path Length")
-            .AddExtension(Retype(Oids.BasicConstraints2, rawData));
+            .AddExtension(new X509Extension(Oids.BasicConstraints2, rawData, critical: false));
 
         await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
     }
@@ -287,7 +287,7 @@ public class CertificateBuilderUsageAgreementTests
     {
         //The basic constraints twin of this is above; without both, the no-profile path is pinned for one
         //extension only
-        var supplied = Retype(Oids.KeyUsage, [0x05, 0x00]);
+        var supplied = new X509Extension(Oids.KeyUsage, [0x05, 0x00], critical: false);
 
         using var cert = new CertificateBuilder()
             .SetSubject("CN=Undecodable Key Usage No Profile")
@@ -309,7 +309,7 @@ public class CertificateBuilderUsageAgreementTests
         var builder = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Undecodable")
-            .AddExtension(Retype(oid, rawData));
+            .AddExtension(new X509Extension(oid, rawData, critical: false));
 
         await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
     }
@@ -321,7 +321,7 @@ public class CertificateBuilderUsageAgreementTests
         //Nothing is compared when there is no profile, so nothing is refused either: the extension goes out
         //as supplied, exactly as it did before any of these checks existed. Without this test, refusing an
         //undecodable value unconditionally would still pass every case above.
-        var supplied = Retype(Oids.BasicConstraints2, [0x05, 0x00]);
+        var supplied = new X509Extension(Oids.BasicConstraints2, [0x05, 0x00], critical: false);
 
         using var cert = new CertificateBuilder()
             .SetSubject("CN=Undecodable No Profile")
@@ -342,7 +342,7 @@ public class CertificateBuilderUsageAgreementTests
         var builder = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Explicit Default")
-            .AddExtension(Retype(Oids.BasicConstraints2, [0x30, 0x03, 0x01, 0x01, 0x00]));
+            .AddExtension(new X509Extension(Oids.BasicConstraints2, [0x30, 0x03, 0x01, 0x01, 0x00], critical: false));
 
         await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
     }
@@ -784,19 +784,6 @@ public class CertificateBuilderUsageAgreementTests
 
 
     private const string CaCommonName = "Issuing CA";
-
-
-    //A plain X509Extension does not replace the profile's generated extension of the same OID -- the set
-    //matches on runtime type too -- so both would reach CertificateRequest and it would throw before any of
-    //this was reached. CopyFrom gives the right runtime type carrying the bytes under test.
-    private static X509Extension Retype(string oid, byte[] rawData)
-    {
-        X509Extension typed = oid == Oids.BasicConstraints2
-            ? new X509BasicConstraintsExtension()
-            : new X509KeyUsageExtension();
-        typed.CopyFrom(new X509Extension(oid, rawData, critical: false));
-        return typed;
-    }
 
 
     private static X509Certificate2 BuildCa()

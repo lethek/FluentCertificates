@@ -743,7 +743,8 @@ public record CertificateBuilder
     /// <exception cref="ArgumentNullException">Thrown if no key pair is set.</exception>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
     /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
-    /// names as its issuer, or when an Authority Key Identifier does not identify the issuer's own key.</exception>
+    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, or when
+    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
         if (PublicKey == null) {
@@ -779,18 +780,31 @@ public record CertificateBuilder
     /// The key identifier naming a certificate authority: the one it publishes in its own Subject Key
     /// Identifier, or one derived from its public key where it publishes none.
     /// </summary>
+    /// <remarks>A published identifier that will not decode is refused rather than replaced by a derived
+    /// one. Deriving would name a key identifier the authority does not publish, which nothing chaining by
+    /// key identifier could match, and no error would say why.</remarks>
+    /// <exception cref="InvalidOperationException">Thrown when the authority publishes a Subject Key
+    /// Identifier whose value does not decode.</exception>
     private static ReadOnlyMemory<byte> GetSubjectKeyIdentifier(X509Certificate2 ca)
-        => ca.Extensions.OfType<X509SubjectKeyIdentifierExtension>().FirstOrDefault() is { } published
-            ? published.SubjectKeyIdentifierBytes
-            : new X509SubjectKeyIdentifierExtension(ca.PublicKey, false).SubjectKeyIdentifierBytes;
+    {
+        if (ca.Extensions.OfType<X509SubjectKeyIdentifierExtension>().FirstOrDefault() is not { } published) {
+            return new X509SubjectKeyIdentifierExtension(ca.PublicKey, false).SubjectKeyIdentifierBytes;
+        }
+
+        try {
+            return published.SubjectKeyIdentifierBytes;
+        } catch (CryptographicException ex) {
+            throw new InvalidOperationException("The issuer publishes a subject key identifier whose value cannot be decoded, so there is nothing to name it by. Re-issue the issuer with a well-formed subject key identifier, or with none at all to have one derived from its public key", ex);
+        }
+    }
 
 
     /// <summary>Creates a <see cref="CertificateSigningRequest"/> based on the builder's parameters.</summary>
     /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
     /// <exception cref="NotSupportedException">Thrown when the key to certify cannot sign, so cannot produce the proof-of-possession signature.</exception>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
-    /// names as its issuer, or when an Authority Key Identifier does not identify the issuer's own key.</exception>
+    /// <see cref="Usage"/> profile, or when the request would be signed by a key that is not the one it
+    /// certifies. Nothing here depends on the <see cref="Issuer"/>, which this member discards.</exception>
     public CertificateSigningRequest CreateCertificateSigningRequest()
     {
         //PKCS#10 proves possession by signing the request with the very key being certified
@@ -810,7 +824,8 @@ public record CertificateBuilder
     /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
     /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
-    /// names as its issuer, or when an Authority Key Identifier does not identify the issuer's own key.</exception>
+    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, or when
+    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode.</exception>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Create()
     {
