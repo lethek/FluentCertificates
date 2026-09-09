@@ -248,37 +248,51 @@ public class CertificateBuilderUsageAgreementTests
     [Arguments(Oids.KeyUsage, new byte[] { 0x03, 0x02, 0x01, 0x04, 0x00 })]                      //keyCertSign, then a trailing octet
     public async Task Create_WithATrailingDataValueOnAnEndEntityProfile_Throws(string oid, byte[] rawData)
     {
-        //The bypass a security review demonstrated end to end: .NET's decoder rejects both of these, while
-        //OpenSSL and Windows CryptoAPI read the well-formed part and honour cA=TRUE and Certificate Sign.
-        //Treating "I cannot read it" as "it asserts nothing" issued a working certificate authority under an
-        //end-entity profile and chained a forged leaf through it. What this builder cannot read, it refuses.
+        //The bypass a security review demonstrated end to end: OpenSSL and Windows CryptoAPI read the
+        //well-formed part of both of these and honour cA=TRUE and Certificate Sign. Treating "I cannot read
+        //it" as "it asserts nothing" issued a working certificate authority under an end-entity profile and
+        //chained a forged leaf through it. Which refusal fires depends on the framework, which is why the
+        //message is not asserted: .NET 10's decoder rejects the trailing data outright, while .NET 8 and 9
+        //read the well-formed part and the value they read is what contradicts the profile.
         var builder = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Trailing Data")
             .AddExtension(new X509Extension(oid, rawData, critical: false));
 
-        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
-
-        await Assert.That(ex!.Message).Contains("does not read back");
+        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
     }
 
 
     [Test]
-    [Arguments(new byte[] { 0x30, 0x06, 0x01, 0x01, 0xFF, 0x02, 0x01, 0xFF })]                   //pathLenConstraint = -1
-    [Arguments(new byte[] { 0x30, 0x0A, 0x01, 0x01, 0xFF, 0x02, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00 })] //pathLenConstraint > Int32.MaxValue
-    public async Task Create_WithAPathLengthDotNetCannotRepresent_ThrowsInvalidOperationException(byte[] rawData)
+    public async Task Create_WithAPathLengthDotNetCannotRepresent_ThrowsInvalidOperationException()
     {
-        //The two fail in different halves of the round trip, which is the point of testing both: -1 decodes
-        //and then trips the re-encoding constructor, which rejects a negative path length, while a value
-        //above Int32.MaxValue throws at decode and never reaches the re-encode. Only the first exercises the
-        //widened catch. Either way the refusal has to arrive as InvalidOperationException like every other
-        //one, not as whatever the BCL happened to throw.
+        //A pathLenConstraint above Int32.MaxValue is conforming DER that this framework's decoder will not
+        //read, so the refusal has to arrive as InvalidOperationException like every other one, not as
+        //whatever the BCL happened to throw.
         var builder = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
             .SetSubject("CN=Unrepresentable Path Length")
-            .AddExtension(new X509Extension(Oids.BasicConstraints2, rawData, critical: false));
+            .AddExtension(new X509Extension(Oids.BasicConstraints2, [0x30, 0x0A, 0x01, 0x01, 0xFF, 0x02, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00], critical: false));
 
         await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithANegativePathLength_IsIssuedUnchanged()
+    {
+        //It decodes, and what it decodes to agrees with the profile: cA=TRUE. Whether a path length below
+        //zero is one this authority should sign is the caller's policy, and the bytes go out as written.
+        var supplied = new X509Extension(Oids.BasicConstraints2, [0x30, 0x06, 0x01, 0x01, 0xFF, 0x02, 0x01, 0xFF], critical: false);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Negative Path Length")
+            .AddExtension(supplied)
+            .Create();
+
+        await Assert.That(cert.Extensions.Single(x => x.Oid?.Value == Oids.BasicConstraints2).RawData)
+            .IsEquivalentTo(supplied.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
 
@@ -334,24 +348,46 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
-    public async Task Create_WithAnExplicitDefaultInBasicConstraints_Throws()
+    public async Task Create_WithAnExplicitDefaultInBasicConstraints_IsIssuedUnchanged()
     {
-        //DER omits a field at its default, so cA spelled out as FALSE re-encodes to different bytes. It
-        //asserts nothing dangerous, but the builder cannot promise every validator reads it the way .NET
-        //does, and RFC 5280 s4.1 requires DER in the first place.
-        var builder = new CertificateBuilder()
+        //DER omits a field at its default, so cA spelled out as FALSE re-encodes to different bytes. Real
+        //certificates carry it and every reader takes it for FALSE, which is what the Server profile wants,
+        //so the spelling is no reason to refuse the caller's own bytes.
+        var supplied = new X509Extension(Oids.BasicConstraints2, [0x30, 0x03, 0x01, 0x01, 0x00], critical: false);
+
+        using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Explicit Default")
-            .AddExtension(new X509Extension(Oids.BasicConstraints2, [0x30, 0x03, 0x01, 0x01, 0x00], critical: false));
+            .AddExtension(supplied)
+            .Create();
 
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+        await Assert.That(cert.Extensions.Single(x => x.Oid?.Value == Oids.BasicConstraints2).RawData)
+            .IsEquivalentTo(supplied.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Create_WithANonMinimalKeyUsageBitString_IsIssuedUnchanged()
+    {
+        //The key usage twin: a bit string carrying a spare zero byte decodes to DigitalSignature for every
+        //reader, and re-encodes shorter. Without this the same rule is pinned for one extension only.
+        var supplied = new X509Extension(Oids.KeyUsage, [0x03, 0x03, 0x07, 0x80, 0x00], critical: true);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Non Minimal Key Usage")
+            .AddExtension(supplied)
+            .Create();
+
+        await Assert.That(cert.Extensions.Single(x => x.Oid?.Value == Oids.KeyUsage).RawData)
+            .IsEquivalentTo(supplied.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
 
 
     [Test]
     public async Task Create_WithACanonicalBasicConstraintsOnAnEndEntityProfile_IsIssuedNormally()
     {
-        //Pins that the round trip accepts what it should. Without this, refusing every basic constraints
+        //Pins that the check accepts what it should. Without this, refusing every basic constraints
         //extension would still pass every refusal case above.
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)

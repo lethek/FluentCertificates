@@ -472,7 +472,7 @@ Criticality is a flag beside an extension, so a violation can be corrected. Othe
 without deciding what the caller meant, and those are refused with an `InvalidOperationException`. The list
 is short, and follows the boundary above: a value contradicting the `Usage` you stated about whether this is
 a certificate authority, a certificate signed by a key other than the one it names, and the narrow case of a
-value this builder cannot read back, since it can neither correct nor vouch for that. Everything else is
+value this builder cannot read, since it can neither correct nor vouch for that. Everything else is
 your policy to set:
 
 - **Basic Constraints disagreeing with the profile about whether this is a certificate authority.** A
@@ -483,13 +483,15 @@ your policy to set:
 - **Key Usage asserting `keyCertSign` under an end-entity profile,** or not asserting it under
   `CertificateUsage.CA`. `keyCertSign` is what makes a certificate able to mint others. `cRLSign` is left
   alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
-- **Either of those two extensions carrying a value that does not read back as the bytes it was supplied
-  as.** .NET's decoder is stricter than the ones that read the certificate afterwards, so bytes it rejects —
-  a well-formed `cA=TRUE` followed by a trailing `NULL`, say — are read by OpenSSL and Windows CryptoAPI as
-  exactly what the well-formed part says. Issuing a value the builder could not read would let a requester
-  assert to a validator the very thing the check above failed to see, so both extensions must survive a
-  decode and re-encode unchanged. Most values this rejects are malformed, but not all: a `pathLenConstraint`
-  larger than an `Int32` conforms to RFC 5280 and is still refused, because .NET cannot represent it.
+- **Either of those two extensions carrying a value this framework's decoder will not read.** The decoders
+  that read the certificate afterwards are more forgiving, so bytes .NET rejects - a well-formed `cA=TRUE`
+  followed by a trailing `NULL`, say - are read by OpenSSL and Windows CryptoAPI as exactly what the
+  well-formed part says. Issuing a value the builder could not read would let a requester assert to a
+  validator the very thing the check above failed to see. How the value is spelled is not asked about: a
+  `cA` written out as `FALSE` rather than omitted at its DEFAULT is not canonical DER, but real certificates
+  carry it and every reader takes it for `FALSE`. Most values this rejects are malformed, but not all: a
+  `pathLenConstraint` larger than an `Int32` conforms to RFC 5280 and is still refused, because .NET cannot
+  represent it.
 - **A certificate whose `SignatureGenerator` holds a key other than the one it would name as having signed
   it.** With no `Issuer`, that is the subject's own key: such a certificate names itself as its own issuer
   while some other key vouches for it, so a relying party can build a path for it against whoever does own

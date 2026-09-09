@@ -677,10 +677,10 @@ public record CertificateBuilder
         foreach (var extension in extensions) {
             switch (extension.Oid?.Value) {
                 case Oids.BasicConstraints2:
-                    var constraints = Decode(extension, x => new X509BasicConstraintsExtension(x, x.Critical), x => new X509BasicConstraintsExtension(x.CertificateAuthority, x.HasPathLengthConstraint, x.PathLengthConstraint, extension.Critical))
+                    var isCa = Decode(extension, x => new X509BasicConstraintsExtension(x, x.Critical), x => x.CertificateAuthority)
                         ?? throw UnreadableValue(extension, "basic constraints");
-                    if (constraints.CertificateAuthority != profileIsCa) {
-                        throw new InvalidOperationException(constraints.CertificateAuthority
+                    if (isCa != profileIsCa) {
+                        throw new InvalidOperationException(isCa
                             ? $"A basic constraints extension asserting cA=TRUE contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}"
                             : $"A basic constraints extension asserting cA=FALSE contradicts {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}. Reject it, or choose an end-entity {nameof(CertificateUsage)}");
                     }
@@ -689,8 +689,8 @@ public record CertificateBuilder
                 //cRLSign is deliberately not checked: an indirect CRL issuer is conventionally an end-entity
                 //certificate asserting exactly that.
                 case Oids.KeyUsage:
-                    var usages = Decode(extension, x => new X509KeyUsageExtension(x, x.Critical), x => new X509KeyUsageExtension(x.KeyUsages, extension.Critical))
-                        ?.KeyUsages ?? throw UnreadableValue(extension, "key usage");
+                    var usages = Decode(extension, x => new X509KeyUsageExtension(x, x.Critical), x => x.KeyUsages)
+                        ?? throw UnreadableValue(extension, "key usage");
                     if (!profileIsCa && usages.HasFlag(X509KeyUsageFlags.KeyCertSign)) {
                         throw new InvalidOperationException($"A key usage extension asserting {nameof(X509KeyUsageFlags.KeyCertSign)} contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
                     }
@@ -740,19 +740,20 @@ public record CertificateBuilder
             .AsSpan().SequenceEqual(builder.Issuer!.PublicKey.ExportSubjectPublicKeyInfo());
 
 
-    private static T? Decode<T>(X509Extension extension, Func<X509Extension, T> decode, Func<T, X509Extension> encode) where T : class
+    /// <summary>
+    /// What <paramref name="read"/> makes of the extension's value, or <see langword="null"/> where this
+    /// framework's decoder will not accept it.
+    /// </summary>
+    /// <remarks>Whether the bytes are canonical DER is not asked. Every non-canonical spelling the decoder
+    /// does accept, such as a DEFAULT written out or a bit string carrying a spare byte, denotes the same
+    /// value to any reader; refusing those would refuse values real certificates carry. Bytes that could be
+    /// read two ways, such as a truncated length or trailing data, the decoder rejects outright.</remarks>
+    private static TValue? Decode<TExtension, TValue>(X509Extension extension, Func<X509Extension, TExtension> decode, Func<TExtension, TValue> read) where TValue : struct
     {
-        //Answers only if the value re-encodes to the very bytes it came from: .NET's decoder is stricter than
-        //OpenSSL's and CryptoAPI's, which read the well-formed part of bytes it rejects.
         try {
-            var decoded = decode(extension);
-
-            //Re-encoding is also what forces the decode, since the BCL types parse lazily. The decoder throws
-            //CryptographicException; the constructor throws ArgumentException for a field it cannot represent.
-            return encode(decoded).RawData.AsSpan().SequenceEqual(extension.RawData)
-                ? decoded
-                : null;
-        } catch (Exception ex) when (ex is CryptographicException or ArgumentException) {
+            //Reading is also what forces the decode, since the BCL types parse lazily
+            return read(decode(extension));
+        } catch (CryptographicException) {
             return null;
         }
     }
@@ -763,7 +764,7 @@ public record CertificateBuilder
         //Truncated because a requester chooses how long the value is
         var quoted = Convert.ToHexString(extension.RawData.AsSpan(0, Math.Min(extension.RawData.Length, QuotedValueLimit)));
         var ellipsis = extension.RawData.Length > QuotedValueLimit ? "..." : "";
-        return new InvalidOperationException($"A {name} extension's value does not read back as the bytes it was supplied as, so what it asserts to a validator cannot be established here and may not agree with {nameof(CertificateUsage)}. Reject it, or supply one this builder can read. Value: {quoted}{ellipsis}");
+        return new InvalidOperationException($"A {name} extension's value cannot be decoded, so what it asserts to a validator cannot be established here and may not agree with {nameof(CertificateUsage)}. Reject it, or supply one this builder can read. Value: {quoted}{ellipsis}");
     }
 
 
