@@ -1460,6 +1460,52 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task AddExtension_WithNull_ThrowsNamingTheOffendingParameter()
+    {
+        //ImmutableHashSet null-guards its own hashing, so a null element never reaches the OID comparer and
+        //sits in the set until Create dereferences it. Refuse it at the call that supplied it instead.
+        await Assert.That(() => new CertificateBuilder().AddExtension(null!))
+            .Throws<ArgumentNullException>().WithParameterName("extension");
+    }
+
+
+    [Test]
+    public async Task AddExtensionsAndSetExtensions_WithANullSequence_ThrowNamingTheOffendingParameter()
+    {
+        await Assert.That(() => new CertificateBuilder().AddExtensions((IEnumerable<X509Extension>)null!))
+            .Throws<ArgumentNullException>().WithParameterName("values");
+        await Assert.That(() => new CertificateBuilder().SetExtensions((IEnumerable<X509Extension>)null!))
+            .Throws<ArgumentNullException>().WithParameterName("values");
+    }
+
+
+    [Test]
+    public async Task AddExtensionsAndSetExtensions_WithANullElement_ThrowNamingTheSequence()
+    {
+        //The sequence itself is not null, so this is ArgumentException naming it rather than
+        //ArgumentNullException, matching how a duplicate policy identifier is reported.
+        await Assert.That(() => new CertificateBuilder().AddExtensions(TestExtension(TestExtensionOid1), null!))
+            .Throws<ArgumentException>().WithParameterName("values");
+        await Assert.That(() => new CertificateBuilder().SetExtensions(TestExtension(TestExtensionOid1), null!))
+            .Throws<ArgumentException>().WithParameterName("values");
+    }
+
+
+    [Test]
+    public async Task SetExtensions_WithANullElement_LeavesTheBuilderItWasCalledOnAlone()
+    {
+        //Refusing partway through must not be mistaken for having replaced anything: the builder is
+        //immutable, so the caller still holds the one they started with.
+        var original = new CertificateBuilder().AddExtension(TestExtension(TestExtensionOid1));
+
+        await Assert.That(() => original.SetExtensions(TestExtension(TestExtensionOid2), null!))
+            .Throws<ArgumentException>();
+
+        await Assert.That(original.Extensions.Select(x => x.Oid!.Value!)).IsEquivalentTo([TestExtensionOid1]);
+    }
+
+
+    [Test]
     public async Task SetKeyPair_CertificateKey_CertifiesThatKeyAndFollowsItsAlgorithm()
     {
         using var key = new CertificateKey(ECDsa.Create(ECCurve.NamedCurves.nistP384));
