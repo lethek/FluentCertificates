@@ -101,8 +101,10 @@ present under the same OID and overrides what the usage profile would otherwise 
 call still wins after that: `AddExtension`, `SetCertificatePolicies` and `SetSubjectAlternativeNames` each
 displace an accepted extension under their own OID, so you can accept the requester's names and then pin the
 ones you actually verified. `SetUsage` does the same for the basic constraints, key usage and extended key
-usage its profile generates, and `SetPathLength` for basic constraints under `CertificateUsage.CA`, so
-setting the profile after accepting hands those three back to it. An accepted extension also stays on the
+usage its profile generates, `SetPathLength` for basic constraints under `CertificateUsage.CA`, and
+`SetKeyPair`, `SetPublicKey` and `SetKeyAlgorithm` for the Subject Key Identifier, so setting any of them
+after accepting hands that OID back. The key generated for you when you name no key is the one exception:
+it leaves a Subject Key Identifier you added alone. An accepted extension also stays on the
 builder that call returns, so issue each
 further request from your configured builder rather than from the result of the previous one, or the next
 requester inherits the last one's extensions.

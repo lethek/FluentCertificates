@@ -153,35 +153,49 @@ public record CertificateBuilder
         => (Usage == CertificateUsage.CA ? RemoveExtensionsByOidValue(Oids.BasicConstraints2) : this)
             with { PathLength = value };
 
-    /// <summary>Sets the key pair to use for certificate creation or certificate-requests.</summary>
-    /// <remarks>Keys supplied here are never disposed by the builder; their lifetime stays the caller's.</remarks>
+    /// <summary>Sets the key pair to use for certificate creation or certificate-requests, discarding any
+    /// Subject Key Identifier extension already on the builder.</summary>
+    /// <remarks>Keys supplied here are never disposed by the builder; their lifetime stays the caller's.
+    /// Discarding that extension keeps the certificate from naming a key other than the one it certifies;
+    /// add or accept a Subject Key Identifier afterwards to carry a different value.</remarks>
     /// <param name="value">The asymmetric key pair, or <see langword="null" /> to remove. Supported algorithms currently include RSA, ECDsa and the deprecated DSA.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified key pair.</returns>
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
+        => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier).WithKeyPair(value);
+
+
+    private CertificateBuilder WithKeyPair(AsymmetricAlgorithm? value)
         => this with {
             KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
             PublicKey = value != null ? new PublicKey(value) : null,
             KeyPair = value == null ? null : new CertificateKey(value)
         };
 
-    /// <summary>Sets the key pair to use for certificate creation or certificate-requests, from a key of any supported kind including the post-quantum ones.</summary>
+    /// <summary>Sets the key pair to use for certificate creation or certificate-requests, from a key of any supported kind including the post-quantum ones, discarding any Subject Key Identifier extension already on the builder.</summary>
     /// <param name="value">The key pair, or <see langword="null" /> to remove.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified key pair.</returns>
     public CertificateBuilder SetKeyPair(CertificateKey? value)
+        => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier).WithKeyPair(value);
+
+
+    //Assigns the key without discarding a Subject Key Identifier, which is what GenerateKeyPair needs:
+    //filling in a key the caller never named is not a caller's call and must not outrank one.
+    private CertificateBuilder WithKeyPair(CertificateKey? value)
         => this with {
             KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
             PublicKey = CreatePublicKey(value),
             KeyPair = value
         };
 
-    /// <summary>Sets the public key to certify, without supplying the matching private key.</summary>
+    /// <summary>Sets the public key to certify, without supplying the matching private key, discarding any
+    /// Subject Key Identifier extension already on the builder.</summary>
     /// <remarks>Clears any key pair and suppresses the automatic key generation <see cref="Create"/> would do,
     /// so the certificate has no private key attached. Self-signing this way also needs
     /// <see cref="SetSignatureGenerator"/>, and nothing checks that the generator matches this public key.</remarks>
     /// <param name="value">The public key to certify, or <see langword="null"/> to remove it.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified public key.</returns>
     public CertificateBuilder SetPublicKey(PublicKey? value)
-        => this with {
+        => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier) with {
             KeyAlgorithm = KeepEcChoice(GetKeyAlgorithm(value)) ?? KeyAlgorithm,
             PublicKey = value,
             KeyPair = null
@@ -197,12 +211,13 @@ public record CertificateBuilder
             ? KeyAlgorithm
             : derived;
 
-    /// <summary>Sets the key algorithm for automatic key generation, removing any key pair previously set.</summary>
+    /// <summary>Sets the key algorithm for automatic key generation, removing any key pair previously set and
+    /// discarding any Subject Key Identifier extension already on the builder.</summary>
     /// <remarks>Each <see cref="Create"/> call generates a key pair and disposes it on return.</remarks>
     /// <param name="value">The key algorithm to use. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. If unspecified, the default is RSA.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified key algorithm.</returns>
     public CertificateBuilder SetKeyAlgorithm(KeyAlgorithm value)
-        => this with {
+        => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier) with {
             KeyAlgorithm = value,
             PublicKey = null,
             KeyPair = null
@@ -873,19 +888,19 @@ public record CertificateBuilder
 #pragma warning disable FLUENTCERT001
         switch (KeyAlgorithm.Family) {
             case KeyAlgorithmFamily.MLDsa:
-                return SetKeyPair(new CertificateKey(MLDsa.GenerateKey(PostQuantumSupport.MLDsaAlgorithmFor(KeyAlgorithm))));
+                return WithKeyPair(new CertificateKey(MLDsa.GenerateKey(PostQuantumSupport.MLDsaAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.SlhDsa:
-                return SetKeyPair(new CertificateKey(SlhDsa.GenerateKey(PostQuantumSupport.SlhDsaAlgorithmFor(KeyAlgorithm))));
+                return WithKeyPair(new CertificateKey(SlhDsa.GenerateKey(PostQuantumSupport.SlhDsaAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.CompositeMLDsa:
-                return SetKeyPair(new CertificateKey(CompositeMLDsa.GenerateKey(PostQuantumSupport.CompositeAlgorithmFor(KeyAlgorithm))));
+                return WithKeyPair(new CertificateKey(CompositeMLDsa.GenerateKey(PostQuantumSupport.CompositeAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.MLKem:
-                return SetKeyPair(new CertificateKey(MLKem.GenerateKey(PostQuantumSupport.MLKemAlgorithmFor(KeyAlgorithm))));
+                return WithKeyPair(new CertificateKey(MLKem.GenerateKey(PostQuantumSupport.MLKemAlgorithmFor(KeyAlgorithm))));
         }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
 #endif
 
-        return SetKeyPair(
+        return WithKeyPair(
             KeyAlgorithm.Family switch {
                 KeyAlgorithmFamily.ECDsa => ECDsa.Create(KeyAlgorithm.Curve!.Value),
                 KeyAlgorithmFamily.ECDiffieHellman => ECDiffieHellman.Create(KeyAlgorithm.Curve!.Value),

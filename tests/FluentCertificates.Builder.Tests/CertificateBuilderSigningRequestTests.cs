@@ -286,6 +286,70 @@ public class CertificateBuilderSigningRequestTests
     }
 
 
+    [Test]
+    public async Task UseCertificateSigningRequest_WithAccept_TheLastKeyCallWins()
+    {
+        //The subject key identifier names the key being certified, so a key set after an accepted one has
+        //to take it back. Otherwise the certificate names a key it does not contain.
+        var csr = LoadWithExtensions(BuildAmbitiousRequest("CN=Key Precedence"));
+
+        using var ca = BuildCa();
+        using var ownKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var template = new CertificateBuilder().SetIssuer(ca);
+
+        using var keyLast = template
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.SubjectKeyIdentifier)
+            .SetKeyPair(ownKeys)
+            .Create();
+
+        using var acceptedLast = template
+            .SetKeyPair(ownKeys)
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.SubjectKeyIdentifier)
+            .Create();
+
+        await Assert.That(CountExtensions(keyLast, Oids.SubjectKeyIdentifier)).IsEqualTo(1);
+        await Assert.That(SubjectKeyIdentifierOf(keyLast)).IsEqualTo(DerivedKeyIdentifier(new PublicKey(ownKeys)));
+
+        //Accepting last means accepting the requester's own identifier, and its key with it
+        await Assert.That(SubjectKeyIdentifierOf(acceptedLast)).IsEqualTo(DerivedKeyIdentifier(csr.CertificateRequest.PublicKey));
+    }
+
+
+    [Test]
+    public async Task Create_WithAKeySetAfterASubjectKeyIdentifierWasAdded_NamesTheKeyItCertifies()
+    {
+        //Same rule off the signing-request path: AddExtension then a key means the key had the last word.
+        using var stale = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var actual = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Key Set Last")
+            .AddExtension(new X509SubjectKeyIdentifierExtension(new PublicKey(stale), false))
+            .SetKeyPair(actual)
+            .Create();
+
+        await Assert.That(CountExtensions(cert, Oids.SubjectKeyIdentifier)).IsEqualTo(1);
+        await Assert.That(SubjectKeyIdentifierOf(cert)).IsEqualTo(DerivedKeyIdentifier(new PublicKey(actual)));
+    }
+
+
+    [Test]
+    public async Task Create_WithNoKeySetAndASubjectKeyIdentifierAdded_KeepsTheAddedOne()
+    {
+        //Create generates a key pair when the caller named none, and that fill-in must not outrank a
+        //Subject Key Identifier the caller did add. It routes around the public setter for that reason.
+        var supplied = new X509SubjectKeyIdentifierExtension("0102030405060708090A", critical: false);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Generated Key")
+            .AddExtension(supplied)
+            .Create();
+
+        await Assert.That(FindExtension(cert, Oids.SubjectKeyIdentifier).RawData)
+            .IsEquivalentTo(supplied.RawData, CollectionOrdering.Matching);
+    }
+
+
     public static IEnumerable<CertificateUsage> AllUsages()
         => Enum.GetValues<CertificateUsage>();
 
@@ -990,4 +1054,12 @@ public class CertificateBuilderSigningRequestTests
 
     private static X509BasicConstraintsExtension BasicConstraintsOf(X509Certificate2 cert)
         => cert.Extensions.OfType<X509BasicConstraintsExtension>().Single();
+
+
+    private static string SubjectKeyIdentifierOf(X509Certificate2 cert)
+        => cert.Extensions.OfType<X509SubjectKeyIdentifierExtension>().Single().SubjectKeyIdentifier!;
+
+
+    private static string DerivedKeyIdentifier(PublicKey publicKey)
+        => new X509SubjectKeyIdentifierExtension(publicKey, false).SubjectKeyIdentifier!;
 }
