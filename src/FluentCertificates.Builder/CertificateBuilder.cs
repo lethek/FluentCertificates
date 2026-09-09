@@ -464,7 +464,7 @@ public record CertificateBuilder
     /// </summary>
     private static void CheckKeyIdentifierIsGenuine(CertificateBuilder builder, IEnumerable<X509Extension> extensions)
     {
-        var extension = extensions.FirstOrDefault(x => x.Oid?.Value == Oids.AuthorityKeyIdentifier);
+        var extension = extensions.FirstOrDefault(x => Oids.AuthorityKeyIdentifierOid.ValueEquals(x.Oid));
         if (extension == null || builder.Issuer == null) {
             return;
         }
@@ -618,7 +618,7 @@ public record CertificateBuilder
     /// given an empty sequence adds no extension at all.</remarks>
     private bool HasSubjectAlternativeName()
         => _subjectAlternativeNames?.Count > 0
-            || _extensions.Any(x => String.Equals(x.Oid?.Value, Oids.SubjectAltName));
+           || _extensions.Any(x => Oids.SubjectAltNameOid.ValueEquals(x.Oid));
 
 
     /// <summary>
@@ -662,7 +662,7 @@ public record CertificateBuilder
     /// </summary>
     private static bool MayValidateCertificateSignatures(IEnumerable<X509Extension> extensions)
     {
-        var keyUsage = extensions.FirstOrDefault(x => String.Equals(x.Oid?.Value, Oids.KeyUsage));
+        var keyUsage = extensions.FirstOrDefault(x => Oids.KeyUsageOid.ValueEquals(x.Oid));
         if (keyUsage == null) {
             return true;
         }
@@ -836,7 +836,7 @@ public record CertificateBuilder
 
         //Added straight to the request rather than through BuildExtensions, so adding both would make
         //CertificateRequest throw: hence the guard. It is already non-critical per RFC 5280 s4.2.1.1.
-        if (Issuer != null && !extensions.Any(x => String.Equals(x.Oid?.Value, Oids.AuthorityKeyIdentifier))) {
+        if (Issuer != null && !extensions.Any(x => Oids.AuthorityKeyIdentifierOid.ValueEquals(x.Oid))) {
             request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(GetSubjectKeyIdentifier(Issuer).Span));
         }
 
