@@ -13,7 +13,20 @@ namespace FluentCertificates;
 public record CertificateBuilder
 {
     /// <summary>Gets the primary usage of the certificate, which determines default extensions.</summary>
-    public CertificateUsage? Usage { get; init; }
+    /// <remarks>Setting this discards any extension already on the builder that the profile generates
+    /// itself. The rule lives here rather than in <see cref="SetUsage"/> so that a <c>with</c> expression,
+    /// which writes the property directly, cannot state a usage the setter would have stated differently.</remarks>
+    public CertificateUsage? Usage {
+        get => _usage;
+        init {
+            _usage = value;
+            //No profile applies when the usage is cleared, so there is nothing that profile owns to discard
+            if (value != null) {
+                _extensions = GetExtensionsWithoutOids(_extensions, GetOidsGeneratedByProfile(value.Value));
+            }
+        }
+    }
+    private readonly CertificateUsage? _usage;
 
     /// <summary>Gets the start time for certificate validity. Defaults to 1 hour ago (UTC).</summary>
     public DateTimeOffset NotBefore { get; init; } = DateTimeOffset.UtcNow.AddHours(-1);
@@ -31,10 +44,28 @@ public record CertificateBuilder
     public string? FriendlyName { get; init; }
     
     /// <summary>Gets the path length constraint for CA certificates.</summary>
-    public int? PathLength { get; init; }
+    /// <remarks>Setting this discards any basic constraints extension already on the builder when the
+    /// <see cref="Usage"/> is <see cref="CertificateUsage.CA"/>, for the reason given on <see cref="Usage"/>.
+    /// Where it is anything else the value reaches no generated extension, so discarding would delete one and
+    /// put nothing in its place. Setting both in one <c>with</c> expression gives the same result whichever
+    /// order they are written in, since every profile discards basic constraints anyway.</remarks>
+    public int? PathLength {
+        get => _pathLength;
+        init {
+            _pathLength = value;
+            if (Usage == CertificateUsage.CA) {
+                _extensions = GetExtensionsWithoutOid(_extensions, Oids.BasicConstraints2);
+            }
+        }
+    }
+    private readonly int? _pathLength;
     
     /// <summary>Gets the algorithm used for automatic key generation, including its key length, curve or parameter set. Defaults to RSA-4096.</summary>
-    public KeyAlgorithm KeyAlgorithm { get; init; } = KeyAlgorithm.RSA();
+    /// <remarks>Set through <see cref="SetKeyAlgorithm"/> rather than an initializer. That call also clears
+    /// any key already set and discards a Subject Key Identifier describing it, which an <c>init</c> accessor
+    /// cannot do without also firing on the key <see cref="Create"/> generates for itself.</remarks>
+    public KeyAlgorithm KeyAlgorithm => _keyAlgorithm;
+    private KeyAlgorithm _keyAlgorithm { get; init; } = KeyAlgorithm.RSA();
 
     /// <summary>Gets the hash algorithm for signing.</summary>
     public HashAlgorithmName HashAlgorithm { get; init; } = HashAlgorithmName.SHA256;
@@ -71,7 +102,7 @@ public record CertificateBuilder
     /// <param name="value">The intended usage of the certificate.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified usage.</returns>
     public CertificateBuilder SetUsage(CertificateUsage value)
-        => RemoveExtensionsByOidValues(ProfileExtensionOids(value)) with { Usage = value };
+        => this with { Usage = value };
 
     /// <summary>Sets the certificate's validity period start time.</summary>
     /// <param name="value">The start time for certificate validity. If unspecified, the default is 1 hour ago.</param>
@@ -150,8 +181,7 @@ public record CertificateBuilder
     /// <param name="value">The path length constraint.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified path length.</returns>
     public CertificateBuilder SetPathLength(int? value)
-        => (Usage == CertificateUsage.CA ? RemoveExtensionsByOidValue(Oids.BasicConstraints2) : this)
-            with { PathLength = value };
+        => this with { PathLength = value };
 
     /// <summary>Sets the key pair to use for certificate creation or certificate-requests, discarding any
     /// Subject Key Identifier extension already on the builder.</summary>
@@ -172,7 +202,7 @@ public record CertificateBuilder
     /// one compiles. Nothing but the name says which is which.</remarks>
     private CertificateBuilder WithKeyPair(AsymmetricAlgorithm? value)
         => this with {
-            KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
+            _keyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
             PublicKey = value != null ? new PublicKey(value) : null,
             KeyPair = value == null ? null : new CertificateKey(value)
         };
@@ -187,7 +217,7 @@ public record CertificateBuilder
     /// <inheritdoc cref="WithKeyPair(AsymmetricAlgorithm)"/>
     private CertificateBuilder WithKeyPair(CertificateKey? value)
         => this with {
-            KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
+            _keyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
             PublicKey = CreatePublicKey(value),
             KeyPair = value
         };
@@ -201,7 +231,7 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified public key.</returns>
     public CertificateBuilder SetPublicKey(PublicKey? value)
         => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier) with {
-            KeyAlgorithm = KeepEcChoice(GetKeyAlgorithm(value)) ?? KeyAlgorithm,
+            _keyAlgorithm = KeepEcChoice(GetKeyAlgorithm(value)) ?? KeyAlgorithm,
             PublicKey = value,
             KeyPair = null
         };
@@ -223,7 +253,7 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified key algorithm.</returns>
     public CertificateBuilder SetKeyAlgorithm(KeyAlgorithm value)
         => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier) with {
-            KeyAlgorithm = value,
+            _keyAlgorithm = value,
             PublicKey = null,
             KeyPair = null
         };
@@ -474,30 +504,35 @@ public record CertificateBuilder
 
 
     private CertificateBuilder RemoveExtensionsByOidValue(string? oid)
-        => this with {
-            _extensions = _extensions
-                .Where(x => !String.Equals(x.Oid?.Value, oid))
-                .ToImmutableHashSet(X509ExtensionOidEqualityComparer)
-        };
+        => this with { _extensions = GetExtensionsWithoutOid(_extensions, oid) };
 
 
-    private CertificateBuilder RemoveExtensionsByOidValues(ImmutableHashSet<string> oids)
-        => this with {
-            _extensions = _extensions
-                .Where(x => x.Oid?.Value is not { } oid || !oids.Contains(oid))
-                .ToImmutableHashSet(X509ExtensionOidEqualityComparer)
-        };
+    /// <summary>
+    /// The set with any extension under <paramref name="oid"/> removed. Static so an <c>init</c> accessor,
+    /// which has no whole builder to return, can share the rule with the setter that calls it.
+    /// </summary>
+    private static ImmutableHashSet<X509Extension> GetExtensionsWithoutOid(ImmutableHashSet<X509Extension> extensions, string? oid)
+        => extensions
+            .Where(x => !String.Equals(x.Oid?.Value, oid))
+            .ToImmutableHashSet(X509ExtensionOidEqualityComparer);
+
+
+    /// <summary>The set with every extension under any of <paramref name="oids"/> removed.</summary>
+    private static ImmutableHashSet<X509Extension> GetExtensionsWithoutOids(ImmutableHashSet<X509Extension> extensions, ImmutableHashSet<string> oids)
+        => extensions
+            .Where(x => x.Oid?.Value is not { } oid || !oids.Contains(oid))
+            .ToImmutableHashSet(X509ExtensionOidEqualityComparer);
 
 
     /// <summary>
     /// The OIDs each <see cref="CertificateUsage"/> profile generates in <see cref="BuildExtensions"/>, which
-    /// <see cref="SetUsage"/> discards so that setting a profile is the last word on them.
+    /// <see cref="Usage"/> discards so that setting a profile is the last word on them.
     /// </summary>
     /// <remarks>Listed rather than derived from the generators, which need a public key
-    /// <see cref="SetUsage"/> may not have yet. The test
+    /// <see cref="Usage"/> may not have been given yet. The test
     /// <c>SetUsage_DiscardsEveryExtensionItsOwnProfileGenerates</c> pins the two together. The subject key
     /// identifier is common to every profile and owned by none, so it is not here.</remarks>
-    private static ImmutableHashSet<string> ProfileExtensionOids(CertificateUsage usage)
+    private static ImmutableHashSet<string> GetOidsGeneratedByProfile(CertificateUsage usage)
         => usage switch {
             CertificateUsage.CA => [Oids.BasicConstraints2, Oids.KeyUsage],
             _ => [Oids.BasicConstraints2, Oids.KeyUsage, Oids.EnhancedKeyUsage]
