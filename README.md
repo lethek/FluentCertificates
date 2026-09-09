@@ -490,8 +490,10 @@ your policy to set:
   authority. Issuing such a value would let a requester assert to a validator the very thing the check above
   failed to see. How the value is spelled is not asked about: a `cA` written out as `FALSE` rather than
   omitted at its DEFAULT is not canonical DER, but real certificates carry it and every reader takes it for
-  `FALSE`. Most values this rejects are malformed, but not all: a `pathLenConstraint` larger than an `Int32`
-  conforms to RFC 5280 and is still refused, because .NET cannot represent it.
+  `FALSE`. What counts as readable is the framework's answer, not this library's, and on .NET 8 and 9 basic
+  constraints are decoded through the platform: a `pathLenConstraint` larger than an `Int32` conforms to
+  RFC 5280, and those two frameworks refuse it on Windows while reading it as `0` on Linux. Only `cA` is
+  consulted and the value is written out as you supplied it, so nothing here turns on the path length.
 - **A certificate whose `SignatureGenerator` holds a key other than the one it would name as having signed
   it.** With no `Issuer`, that is the subject's own key: such a certificate names itself as its own issuer
   while some other key vouches for it, so a relying party can build a path for it against whoever does own
