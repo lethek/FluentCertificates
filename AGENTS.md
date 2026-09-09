@@ -128,6 +128,10 @@ to the config.
 
 - Public APIs require XML documentation. Contracts a caller or implementer must honour belong there, on
   the member, not in this file.
+- **Method names start with a verb**, without exception: `GetOidsGeneratedByProfile`, not
+  `ProfileExtensionOids`; `GetExtensionsWithoutOid`, not `WithoutOid`. This covers private helpers and
+  ones that only return a value, not just the public API. A bare noun phrase reads as a property, and
+  one whose first word is also a verb reads as a command.
 - Builders are immutable records with init-only properties and immutable collections. Methods return a
   new instance.
 - Several projects expose internals via `InternalsVisibleTo` to test projects and LINQPad. Check the

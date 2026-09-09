@@ -22,7 +22,7 @@ public record CertificateBuilder
             _usage = value;
             //No profile applies when the usage is cleared, so there is nothing that profile owns to discard
             if (value != null) {
-                _extensions = WithoutOids(_extensions, ProfileExtensionOids(value.Value));
+                _extensions = GetExtensionsWithoutOids(_extensions, GetOidsGeneratedByProfile(value.Value));
             }
         }
     }
@@ -47,14 +47,14 @@ public record CertificateBuilder
     /// <remarks>Setting this discards any basic constraints extension already on the builder when the
     /// <see cref="Usage"/> is <see cref="CertificateUsage.CA"/>, for the reason given on <see cref="Usage"/>.
     /// Where it is anything else the value reaches no generated extension, so discarding would delete one and
-    /// put nothing in its place. Setting both in a single <c>with</c> expression reads whichever
-    /// <see cref="Usage"/> is in effect at this point, which is the one written earlier in the block.</remarks>
+    /// put nothing in its place. Setting both in one <c>with</c> expression gives the same result whichever
+    /// order they are written in, since every profile discards basic constraints anyway.</remarks>
     public int? PathLength {
         get => _pathLength;
         init {
             _pathLength = value;
             if (Usage == CertificateUsage.CA) {
-                _extensions = WithoutOid(_extensions, Oids.BasicConstraints2);
+                _extensions = GetExtensionsWithoutOid(_extensions, Oids.BasicConstraints2);
             }
         }
     }
@@ -504,21 +504,21 @@ public record CertificateBuilder
 
 
     private CertificateBuilder RemoveExtensionsByOidValue(string? oid)
-        => this with { _extensions = WithoutOid(_extensions, oid) };
+        => this with { _extensions = GetExtensionsWithoutOid(_extensions, oid) };
 
 
     /// <summary>
     /// The set with any extension under <paramref name="oid"/> removed. Static so an <c>init</c> accessor,
     /// which has no whole builder to return, can share the rule with the setter that calls it.
     /// </summary>
-    private static ImmutableHashSet<X509Extension> WithoutOid(ImmutableHashSet<X509Extension> extensions, string? oid)
+    private static ImmutableHashSet<X509Extension> GetExtensionsWithoutOid(ImmutableHashSet<X509Extension> extensions, string? oid)
         => extensions
             .Where(x => !String.Equals(x.Oid?.Value, oid))
             .ToImmutableHashSet(X509ExtensionOidEqualityComparer);
 
 
-    /// <inheritdoc cref="WithoutOid"/>
-    private static ImmutableHashSet<X509Extension> WithoutOids(ImmutableHashSet<X509Extension> extensions, ImmutableHashSet<string> oids)
+    /// <summary>The set with every extension under any of <paramref name="oids"/> removed.</summary>
+    private static ImmutableHashSet<X509Extension> GetExtensionsWithoutOids(ImmutableHashSet<X509Extension> extensions, ImmutableHashSet<string> oids)
         => extensions
             .Where(x => x.Oid?.Value is not { } oid || !oids.Contains(oid))
             .ToImmutableHashSet(X509ExtensionOidEqualityComparer);
@@ -532,7 +532,7 @@ public record CertificateBuilder
     /// <see cref="Usage"/> may not have been given yet. The test
     /// <c>SetUsage_DiscardsEveryExtensionItsOwnProfileGenerates</c> pins the two together. The subject key
     /// identifier is common to every profile and owned by none, so it is not here.</remarks>
-    private static ImmutableHashSet<string> ProfileExtensionOids(CertificateUsage usage)
+    private static ImmutableHashSet<string> GetOidsGeneratedByProfile(CertificateUsage usage)
         => usage switch {
             CertificateUsage.CA => [Oids.BasicConstraints2, Oids.KeyUsage],
             _ => [Oids.BasicConstraints2, Oids.KeyUsage, Oids.EnhancedKeyUsage]

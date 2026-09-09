@@ -1447,10 +1447,6 @@ public class CertificateBuilderTests
     }
 
 
-    //cA=TRUE, pathLenConstraint=5, which no profile generates, so whichever survives is unambiguous
-    private static readonly byte[] CaPathLength5 = [0x30, 0x06, 0x01, 0x01, 0xFF, 0x02, 0x01, 0x05];
-
-
     [Test]
     public async Task Usage_SetThroughAWithExpression_DiscardsWhatSetUsageWould()
     {
@@ -1491,6 +1487,8 @@ public class CertificateBuilderTests
         await Assert.That(underCa.Extensions.OfType<X509BasicConstraintsExtension>().Single().PathLengthConstraint)
             .IsEqualTo(2);
 
+        //Asserted on the builder, not an issued certificate: cA=TRUE contradicts the Server profile, so
+        //Create would refuse this before it could show whether the extension survived
         var underServer = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Path Length Through With No Ca")
@@ -1737,6 +1735,10 @@ public class CertificateBuilderTests
     private const string TestExtensionOid1 = "1.3.6.1.4.1.99999.1";
     private const string TestExtensionOid2 = "1.3.6.1.4.1.99999.2";
     private const string TestExtensionOid3 = "1.3.6.1.4.1.99999.3";
+
+
+    //cA=TRUE, pathLenConstraint=5, which no profile generates, so whichever survives is unambiguous
+    private static readonly byte[] CaPathLength5 = [0x30, 0x06, 0x01, 0x01, 0xFF, 0x02, 0x01, 0x05];
 
 
     //DER NULL as the payload: an arbitrary OID carries no meaning to the platform, so any well-formed value does
