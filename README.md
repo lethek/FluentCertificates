@@ -132,11 +132,15 @@ var builder = new CertificateBuilder() {
     FriendlyName = "Example self-signed web-server certificate",
     Usage = CertificateUsage.Server,
     Subject = new X500NameBuilder().SetCommonName("*.fake.domain"),
-    SubjectAlternativeNames = new GeneralNameListBuilder().AddDnsNames("*.fake.domain", "fake.domain"),
     NotAfter = DateTimeOffset.UtcNow.AddMonths(1)
 };
-using var webCert = builder.Create();
+using var webCert = builder
+    .SetSubjectAlternativeNames(x => x.AddDnsNames("*.fake.domain", "fake.domain"))
+    .Create();
 ```
+
+`SubjectAlternativeNames` and `Extensions` have no initializer: both are set through their methods, which
+discard what an earlier call put there, and an object initializer has no defined order to discard in.
 
 ### Build a certificate authority (CA)
 

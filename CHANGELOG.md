@@ -31,6 +31,7 @@ release rather than record it as it happened.
 - **Breaking:** A certificate with a `CertificateUsage` set is refused when it is signed by a `SignatureGenerator` whose key is not the key it names as having signed it: the subject's own key when there is no `Issuer`, or the `Issuer`'s own key when the subject is the `Issuer`'s own encoded name.
 - **Breaking:** A certificate or signing request with an `Issuer` set is refused when an Authority Key Identifier extension names a key other than the `Issuer`'s, or carries no readable key identifier, whether it was added directly or accepted out of a signing request.
 - **Breaking:** `CertificateBuilder.AddExtension`, `AddExtensions` and `SetExtensions` now replace any extension already present under the same OID, regardless of its runtime type, and the `Usage` profile's own generated extensions are replaced the same way.
+- **Breaking:** `CertificateBuilder.AddExtensions` and `SetExtensions` take `params IEnumerable<X509Extension>` in place of their `params X509Extension[]` and `IEnumerable<X509Extension>` overload pairs.
 - **Breaking:** `CertificateBuilder.SetSubjectAlternativeNames` discards any Subject Alternative Name extension already on the builder, so the last call to name the certificate's alternative names is the one issued.
 - **Breaking:** `CertificateBuilder.SetUsage` discards any basic constraints, key usage or extended key usage extension already on the builder, `SetPathLength` discards any basic constraints extension when the `Usage` is `CertificateUsage.CA`, and `SetKeyPair`, `SetPublicKey` and `SetKeyAlgorithm` each discard any Subject Key Identifier extension, so the last call to state any of them is the one issued.
 - **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
@@ -42,6 +43,7 @@ release rather than record it as it happened.
 - `CertificateBuilder.CreateCertificateSigningRequest` ignores any `Issuer` on the builder, rather than writing that issuer's Authority Key Identifier into a request nothing has agreed to sign yet.
 - `CertificateBuilder` no longer throws when an Authority Key Identifier extension is supplied alongside an `Issuer`.
 - A certificate issued under a certificate authority that carries no Subject Key Identifier names that authority by a key identifier derived from its public key, instead of carrying an empty sequence.
+- `CertificateBuilder` refuses an `Issuer` publishing a Subject Key Identifier whose value does not decode, with an `InvalidOperationException` naming the problem, rather than letting a `CryptographicException` escape.
 
 ## [0.22.0] - 2026-09-01
 
