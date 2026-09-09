@@ -63,11 +63,15 @@ public record CertificateBuilder
     private CertificateKey? KeyPair { get; init; }
 
 
-    /// <summary>Sets the primary usage of the certificate, which determines default extensions.</summary>
+    /// <summary>Sets the primary usage of the certificate, which determines default extensions, discarding
+    /// any extension already on the builder that the profile generates itself.</summary>
+    /// <remarks>Discarding those is what makes this call the last word on the profile; call it before
+    /// <see cref="UseCertificateSigningRequest(CertificateSigningRequest,Func{X509Extension,bool})"/>
+    /// to let an accepted basic constraints, key usage or extended key usage win instead.</remarks>
     /// <param name="value">The intended usage of the certificate.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified usage.</returns>
     public CertificateBuilder SetUsage(CertificateUsage value)
-        => this with { Usage = value };
+        => RemoveExtensionsByOidValues(ProfileExtensionOids(value)) with { Usage = value };
 
     /// <summary>Sets the certificate's validity period start time.</summary>
     /// <param name="value">The start time for certificate validity. If unspecified, the default is 1 hour ago.</param>
@@ -136,11 +140,18 @@ public record CertificateBuilder
     public CertificateBuilder SetFriendlyName(string value)
         => this with { FriendlyName = value };
 
-    /// <summary>Sets the path length constraint for CA certificates.</summary>
+    /// <summary>Sets the path length constraint for CA certificates, discarding any basic constraints
+    /// extension already on the builder.</summary>
+    /// <remarks>Under <see cref="CertificateUsage.CA"/> this value reaches the generated basic constraints,
+    /// so discarding that extension is what makes this call the last word; call it before
+    /// <see cref="UseCertificateSigningRequest(CertificateSigningRequest,Func{X509Extension,bool})"/>
+    /// to let an accepted basic constraints win instead. Under any other profile the value reaches nothing,
+    /// so nothing is discarded either.</remarks>
     /// <param name="value">The path length constraint.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified path length.</returns>
     public CertificateBuilder SetPathLength(int? value)
-        => this with { PathLength = value };
+        => (Usage == CertificateUsage.CA ? RemoveExtensionsByOidValue(Oids.BasicConstraints2) : this)
+            with { PathLength = value };
 
     /// <summary>Sets the key pair to use for certificate creation or certificate-requests.</summary>
     /// <remarks>Keys supplied here are never disposed by the builder; their lifetime stays the caller's.</remarks>
@@ -411,6 +422,25 @@ public record CertificateBuilder
             _extensions = _extensions
                 .Where(x => !String.Equals(x.Oid?.Value, oid))
                 .ToImmutableHashSet(X509ExtensionOidEqualityComparer)
+        };
+
+
+    private CertificateBuilder RemoveExtensionsByOidValues(ImmutableHashSet<string> oids)
+        => this with {
+            _extensions = _extensions
+                .Where(x => x.Oid?.Value is not { } oid || !oids.Contains(oid))
+                .ToImmutableHashSet(X509ExtensionOidEqualityComparer)
+        };
+
+
+    //The OIDs each Usage profile generates in BuildExtensions. Listed rather than derived from the
+    //generators, which need a public key SetUsage may not have yet; SetUsage_DiscardsEveryExtensionItsOwn
+    //ProfileGenerates pins the two together. The subject key identifier is common to every profile and
+    //owned by none, so it is not here.
+    private static ImmutableHashSet<string> ProfileExtensionOids(CertificateUsage usage)
+        => usage switch {
+            CertificateUsage.CA => [Oids.BasicConstraints2, Oids.KeyUsage],
+            _ => [Oids.BasicConstraints2, Oids.KeyUsage, Oids.EnhancedKeyUsage]
         };
 
 

@@ -32,6 +32,7 @@ release rather than record it as it happened.
 - **Breaking:** A certificate or signing request with an `Issuer` set is refused when an Authority Key Identifier extension names a key other than the `Issuer`'s, or carries no readable key identifier, whether it was added directly or accepted out of a signing request.
 - **Breaking:** `CertificateBuilder.AddExtension`, `AddExtensions` and `SetExtensions` now replace any extension already present under the same OID, regardless of its runtime type, and the `Usage` profile's own generated extensions are replaced the same way.
 - **Breaking:** `CertificateBuilder.SetSubjectAlternativeNames` discards any Subject Alternative Name extension already on the builder, so the last call to name the certificate's alternative names is the one issued.
+- **Breaking:** `CertificateBuilder.SetUsage` discards any basic constraints, key usage or extended key usage extension already on the builder, and `SetPathLength` discards any basic constraints extension when the `Usage` is `CertificateUsage.CA`, so the last call to state either is the one issued.
 - **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
 
 ### Fixed

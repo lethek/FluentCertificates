@@ -100,7 +100,10 @@ An accepted extension is applied as though you had added it yourself, so it repl
 present under the same OID and overrides what the usage profile would otherwise have generated. The last
 call still wins after that: `AddExtension`, `SetCertificatePolicies` and `SetSubjectAlternativeNames` each
 displace an accepted extension under their own OID, so you can accept the requester's names and then pin the
-ones you actually verified. An accepted extension also stays on the builder that call returns, so issue each
+ones you actually verified. `SetUsage` does the same for the basic constraints, key usage and extended key
+usage its profile generates, and `SetPathLength` for basic constraints under `CertificateUsage.CA`, so
+setting the profile after accepting hands those three back to it. An accepted extension also stays on the
+builder that call returns, so issue each
 further request from your configured builder rather than from the result of the previous one, or the next
 requester inherits the last one's extensions.
 
