@@ -139,9 +139,10 @@ using var webCert = builder
     .Create();
 ```
 
-`SubjectAlternativeNames` and `Extensions` have no initializer. Both are set through methods that discard
-what an earlier call left, so the order of the calls decides the result. An initializer block would hide
-that order in which line you happened to write first, so those two stay methods.
+`SubjectAlternativeNames`, `Extensions` and `KeyAlgorithm` have no initializer, because setting each of them
+also clears something else and that only happens through the method. Every other property can be set either
+way, and the two that discard extensions do so whichever route you take: `Usage` drops the ones its profile
+generates, and `PathLength` drops a basic constraints extension under `CertificateUsage.CA`.
 
 ### Build a certificate authority (CA)
 

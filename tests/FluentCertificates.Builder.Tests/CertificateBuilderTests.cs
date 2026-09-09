@@ -1447,6 +1447,61 @@ public class CertificateBuilderTests
     }
 
 
+    //cA=TRUE, pathLenConstraint=5, which no profile generates, so whichever survives is unambiguous
+    private static readonly byte[] CaPathLength5 = [0x30, 0x06, 0x01, 0x01, 0xFF, 0x02, 0x01, 0x05];
+
+
+    [Test]
+    public async Task Usage_SetThroughAWithExpression_DiscardsWhatSetUsageWould()
+    {
+        //`with` writes the init property directly, so unless the discard lives in the accessor it skips the
+        //one SetUsage performs, and the same intent stated two ways issues two different certificates.
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var builder = new CertificateBuilder()
+            .SetSubject("CN=Usage Through With")
+            .SetKeyPair(keys)
+            .AddExtension(new X509Extension(Oids.BasicConstraints2, CaPathLength5, critical: true));
+
+        var viaWith = builder with { Usage = CertificateUsage.CA };
+
+        await Assert.That(viaWith.Extensions.Any(x => x.Oid?.Value == Oids.BasicConstraints2)).IsFalse();
+
+        using var issued = viaWith.Create();
+
+        await Assert.That(issued.Extensions.OfType<X509BasicConstraintsExtension>().Single().PathLengthConstraint)
+            .IsEqualTo(0);
+    }
+
+
+    [Test]
+    public async Task PathLength_SetThroughAWithExpression_DiscardsBasicConstraintsOnTheCaProfileOnly()
+    {
+        //The same for SetPathLength, including its condition: the value reaches no profile but the CA one,
+        //so discarding elsewhere would delete an extension and put nothing in its place.
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var supplied = new X509Extension(Oids.BasicConstraints2, CaPathLength5, critical: true);
+
+        using var underCa = (new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Path Length Through With")
+            .SetKeyPair(keys)
+            .AddExtension(supplied) with { PathLength = 2 })
+            .Create();
+
+        await Assert.That(underCa.Extensions.OfType<X509BasicConstraintsExtension>().Single().PathLengthConstraint)
+            .IsEqualTo(2);
+
+        var underServer = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Path Length Through With No Ca")
+            .SetKeyPair(keys)
+            .AddExtension(supplied) with { PathLength = 2 };
+
+        await Assert.That(underServer.Extensions.Single(x => x.Oid?.Value == Oids.BasicConstraints2).RawData)
+            .IsEquivalentTo(CaPathLength5, CollectionOrdering.Matching);
+    }
+
+
     [Test]
     public async Task SetSubjectAlternativeNames_AgainstAnAddedSubjectAlternativeName_TheLastCallWins()
     {
