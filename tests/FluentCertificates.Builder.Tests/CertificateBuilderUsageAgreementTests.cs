@@ -280,6 +280,23 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
+    public async Task Create_WithAKeyUsageHidingASecondAssertionAfterIt_Throws()
+    {
+        //The key usage twin, and it needs its own case: an empty bit string asserts no usages at all, which
+        //an end-entity profile is content with, so the trailing bytes asserting keyCertSign are again what
+        //only the extent measurement catches. .NET 8 and 9 read the first value and report no usages.
+        var builder = new CertificateBuilder()
+            .SetUsage(CertificateUsage.Server)
+            .SetSubject("CN=Hidden Key Usage")
+            .AddExtension(new X509Extension(Oids.KeyUsage, [0x03, 0x01, 0x00, 0x03, 0x02, 0x01, 0x04], critical: true));
+
+        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("cannot be read");
+    }
+
+
+    [Test]
     public async Task Create_WithAPathLengthDotNetCannotRepresent_ThrowsInvalidOperationException()
     {
         //A pathLenConstraint above Int32.MaxValue is conforming DER that this framework's decoder will not
@@ -374,6 +391,24 @@ public class CertificateBuilderUsageAgreementTests
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.Server)
             .SetSubject("CN=Explicit Default")
+            .AddExtension(supplied)
+            .Create();
+
+        await Assert.That(cert.Extensions.Single(x => x.Oid?.Value == Oids.BasicConstraints2).RawData)
+            .IsEquivalentTo(supplied.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Create_WithABerBooleanInBasicConstraints_IsIssuedUnchanged()
+    {
+        //DER spells TRUE as 0xFF, BER as any non-zero octet. Both say cA=TRUE to every reader, so the
+        //spelling is no reason to refuse a value that agrees with the CA profile.
+        var supplied = new X509Extension(Oids.BasicConstraints2, [0x30, 0x03, 0x01, 0x01, 0x01], critical: false);
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=Ber Boolean")
             .AddExtension(supplied)
             .Create();
 
