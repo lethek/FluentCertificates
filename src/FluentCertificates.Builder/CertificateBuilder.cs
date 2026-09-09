@@ -256,22 +256,49 @@ public record CertificateBuilder
     /// <summary>Adds an extension, replacing any already present under the same OID regardless of its runtime type.</summary>
     /// <param name="extension">The extension to add.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the extension added.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="extension"/> is <see langword="null"/>.</exception>
     public CertificateBuilder AddExtension(X509Extension extension)
-        => SetExtension(extension);
+    {
+        ArgumentNullException.ThrowIfNull(extension);
+
+        return SetExtension(extension);
+    }
 
     /// <summary>Adds multiple extensions, replacing any already present under the same OID. Where
     /// <paramref name="values"/> repeats an OID, the last one wins.</summary>
     /// <param name="values">The extensions to add.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the extensions added.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="values"/> holds a <see langword="null"/>.</exception>
     public CertificateBuilder AddExtensions(params IEnumerable<X509Extension> values)
-        => values.Aggregate(this, (builder, extension) => builder.SetExtension(extension));
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        return values.Aggregate(this, (builder, extension) => builder.SetExtension(NotNull(extension, nameof(values))));
+    }
 
     /// <summary>Sets the certificate extensions, replacing any already on the builder. Where
     /// <paramref name="values"/> repeats an OID, the last one wins.</summary>
     /// <param name="values">The extensions to set.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified extensions.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="values"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="values"/> holds a <see langword="null"/>.</exception>
     public CertificateBuilder SetExtensions(params IEnumerable<X509Extension> values)
-        => values.Aggregate(this with { _extensions = EmptyExtensions }, (builder, extension) => builder.SetExtension(extension));
+    {
+        ArgumentNullException.ThrowIfNull(values);
+
+        return values.Aggregate(this with { _extensions = EmptyExtensions }, (builder, extension) => builder.SetExtension(NotNull(extension, nameof(values))));
+    }
+
+    /// <summary>
+    /// Refuses a null inside a sequence of extensions, which is an <see cref="ArgumentException"/> against
+    /// the sequence rather than an <see cref="ArgumentNullException"/>, since the sequence itself is not null.
+    /// </summary>
+    /// <remarks><see cref="ImmutableHashSet{T}"/> null-guards its own hashing, so a null never reaches
+    /// <see cref="X509ExtensionOidEqualityComparer"/> and would otherwise sit in the set until
+    /// <see cref="Create"/> dereferenced it, far from the call that supplied it.</remarks>
+    private static X509Extension NotNull(X509Extension extension, string paramName)
+        => extension ?? throw new ArgumentException("An extension in the sequence is null", paramName);
 
 
     /// <summary>Sets the Authority Information Access extension, naming a single OCSP responder and a single CA Issuers location.</summary>
@@ -379,6 +406,7 @@ public record CertificateBuilder
     /// <param name="accept">Decides, per requested extension, whether the CA honours it.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the request's subject, public key and accepted extensions.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="csr"/> or <paramref name="accept"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="csr"/>'s extension collection holds a <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the request's subject contains a multi-valued
     /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent.</exception>
     public CertificateBuilder UseCertificateSigningRequest(CertificateSigningRequest csr, Func<X509Extension, bool> accept)
@@ -387,8 +415,12 @@ public record CertificateBuilder
         ArgumentNullException.ThrowIfNull(accept);
 
         var builder = UseCertificateSigningRequest(csr);
-        foreach (var extension in csr.CertificateRequest.CertificateExtensions.Where(accept)) {
-            builder = builder.SetExtension(extension);
+        foreach (var extension in csr.CertificateRequest.CertificateExtensions) {
+            //Refused before accept sees it, so the predicate is never handed a null either. Only a caller
+            //who has added one to the parsed request's own collection can get here.
+            if (accept(NotNull(extension, nameof(csr)))) {
+                builder = builder.SetExtension(extension);
+            }
         }
         return builder;
     }

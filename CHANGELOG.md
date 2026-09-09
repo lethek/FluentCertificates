@@ -37,6 +37,7 @@ release rather than record it as it happened.
 
 ### Fixed
 
+- `CertificateBuilder.AddExtension`, `AddExtensions` and `SetExtensions` refuse a `null` extension at the call that supplied it, rather than accepting it and throwing `NullReferenceException` from `Create`.
 - `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
 - `CertificateBuilder.CreateCertificateSigningRequest` ignores any `Issuer` on the builder, rather than writing that issuer's Authority Key Identifier into a request nothing has agreed to sign yet.
 - `CertificateBuilder` no longer throws when an Authority Key Identifier extension is supplied alongside an `Issuer`.

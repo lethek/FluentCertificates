@@ -287,6 +287,26 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
+    public async Task UseCertificateSigningRequest_WithAccept_ANullInTheRequestsExtensions_ThrowsBeforeAcceptSeesIt()
+    {
+        //Only reachable by adding one to the parsed request's own collection, but it is the same defect as
+        //a null passed to AddExtension: it would sit in the set until Create dereferenced it.
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var csr = LoadWithExtensions(BuildRequest("CN=Null Extension", keys));
+        //First, so that reaching the predicate at all would mean the guard ran too late
+        csr.CertificateRequest.CertificateExtensions.Insert(0, null!);
+
+        var sawExtension = false;
+
+        await Assert.That(() => new CertificateBuilder().UseCertificateSigningRequest(csr, _ => { sawExtension = true; return true; }))
+            .Throws<ArgumentException>().WithParameterName("csr");
+
+        //The predicate is the caller's own code, so handing it a null would only move the fault
+        await Assert.That(sawExtension).IsFalse();
+    }
+
+
+    [Test]
     public async Task UseCertificateSigningRequest_WithAccept_TheLastKeyCallWins()
     {
         //The subject key identifier names the key being certified, so a key set after an accepted one has
