@@ -310,7 +310,7 @@ public class CertificateBuilderExtensionHelperTests
     {
         //A certificate policies extension read back off a real certificate decodes as a plain X509Extension,
         //not X509CertificatePolicyExtension -- the ordinary re-issue/copy-extensions path
-        using var existing = new CertificateBuilder().SetCertificatePolicies("1.3.6.1.4.1.99999.9.9").Create();
+        using var existing = new CertificateBuilder().SetSubject("CN=Prior Policy").SetCertificatePolicies("1.3.6.1.4.1.99999.9.9").Create();
         var priorPolicyExtension = existing.Extensions[Oids.CertPolicies]!;
 
         using var cert = new CertificateBuilder()

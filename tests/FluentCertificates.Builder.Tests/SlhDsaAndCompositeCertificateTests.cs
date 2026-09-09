@@ -194,7 +194,7 @@ public class SlhDsaAndCompositeCertificateTests
 
         await Assert
             .That(() => {
-                using var cert = new CertificateBuilder().SetKeyAlgorithm(unsupported).Create();
+                using var cert = new CertificateBuilder().SetSubject("CN=Unsupported Algorithm").SetKeyAlgorithm(unsupported).Create();
             })
             .ThrowsExactly<PlatformNotSupportedException>();
     }

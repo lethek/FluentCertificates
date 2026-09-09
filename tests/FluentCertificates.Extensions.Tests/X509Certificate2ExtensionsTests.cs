@@ -24,7 +24,7 @@ public class X509Certificate2ExtensionsTests
         using var faker = builder.SetKeyAlgorithm(alg).Create();
         using var issuer = builder.SetKeyAlgorithm(alg).Create();
 
-        using var cert = new CertificateBuilder().SetIssuer(issuer).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Issued Leaf").SetIssuer(issuer).Create();
 
         //The fake issuer has the same subject-name as the real issuer
         await Assert.That(cert.IsIssuedBy(faker, verifySignature: false)).IsTrue();
@@ -52,7 +52,7 @@ public class X509Certificate2ExtensionsTests
         using var faker = builder.Create();
         using var issuer = builder.Create();
 
-        using var cert = new CertificateBuilder().SetIssuer(issuer).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Issued Leaf").SetIssuer(issuer).Create();
 
         await Assert.That(cert.IsIssuedBy(faker, verifySignature: false)).IsTrue();
         await Assert.That(cert.IsIssuedBy(faker, verifySignature: true)).IsFalse();
@@ -145,7 +145,7 @@ public class X509Certificate2ExtensionsTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportAsCert_ToWriter_RawDataIsEqual(KeyAlgorithm alg)
     {
-        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
+        using var expected = new CertificateBuilder().SetSubject("CN=Export Round Trip").SetKeyAlgorithm(alg).Create();
 
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream)) {
@@ -168,7 +168,7 @@ public class X509Certificate2ExtensionsTests
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "crt");
         try {
-            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
+            using var expected = new CertificateBuilder().SetSubject("CN=Export Round Trip").SetKeyAlgorithm(alg).Create();
 
             expected.Export().AsCert().ToFile(tmpFile);
             using var actual = CertTools.LoadCertificateFromFile(tmpFile);
@@ -188,7 +188,7 @@ public class X509Certificate2ExtensionsTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportAsPkcs7_ToWriter_RawDataIsEqual(KeyAlgorithm alg)
     {
-        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
+        using var expected = new CertificateBuilder().SetSubject("CN=Export Round Trip").SetKeyAlgorithm(alg).Create();
 
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream)) {
@@ -213,7 +213,7 @@ public class X509Certificate2ExtensionsTests
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "p7b");
         try {
-            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
+            using var expected = new CertificateBuilder().SetSubject("CN=Export Round Trip").SetKeyAlgorithm(alg).Create();
 
             expected.Export().AsPkcs7().ToFile(tmpFile);
             var cms = new SignedCms();
@@ -235,7 +235,7 @@ public class X509Certificate2ExtensionsTests
     [MethodDataSource(nameof(KeyAlgorithmsAndExportKeysTestData))]
     public async Task ExportAsPkcs12_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)
     {
-        using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
+        using var expected = new CertificateBuilder().SetSubject("CN=Export Round Trip").SetKeyAlgorithm(alg).Create();
 
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream)) {
@@ -263,7 +263,7 @@ public class X509Certificate2ExtensionsTests
     {
         var tmpFile = Path.ChangeExtension(Path.GetTempFileName(), "pfx");
         try {
-            using var expected = new CertificateBuilder().SetKeyAlgorithm(alg).Create();
+            using var expected = new CertificateBuilder().SetSubject("CN=Export Round Trip").SetKeyAlgorithm(alg).Create();
 
             expected.Export().WithKeys(include).WithPassword(password).AsPkcs12().ToFile(tmpFile);
             using var actual = CertTools.LoadPkcs12FromFile(tmpFile, password);

@@ -18,16 +18,15 @@ public record CertificateBuilder
     /// itself. The rule lives here rather than in <see cref="SetUsage"/> so that a <c>with</c> expression,
     /// which writes the property directly, cannot state a usage the setter would have stated differently.</remarks>
     public CertificateUsage? Usage {
-        get => _usage;
+        get;
         init {
-            _usage = value;
+            field = value;
             //No profile applies when the usage is cleared, so there is nothing that profile owns to discard
             if (value != null) {
                 _extensions = GetExtensionsWithoutOids(_extensions, GetOidsGeneratedByProfile(value.Value));
             }
         }
     }
-    private readonly CertificateUsage? _usage;
 
     /// <summary>Gets the start time for certificate validity. Defaults to 1 hour ago (UTC).</summary>
     public DateTimeOffset NotBefore { get; init; } = DateTimeOffset.UtcNow.AddHours(-1);
@@ -43,7 +42,7 @@ public record CertificateBuilder
     
     /// <summary>Gets the friendly name for the certificate (Windows only; this property is ignored on other platforms).</summary>
     public string? FriendlyName { get; init; }
-    
+
     /// <summary>Gets the path length constraint for CA certificates.</summary>
     /// <remarks>Setting this discards any basic constraints extension already on the builder when the
     /// <see cref="Usage"/> is <see cref="CertificateUsage.CA"/>, for the reason given on <see cref="Usage"/>.
@@ -51,16 +50,15 @@ public record CertificateBuilder
     /// put nothing in its place. Setting both in one <c>with</c> expression gives the same result whichever
     /// order they are written in, since every profile discards basic constraints anyway.</remarks>
     public int? PathLength {
-        get => _pathLength;
+        get;
         init {
-            _pathLength = value;
+            field = value;
             if (Usage == CertificateUsage.CA) {
                 _extensions = GetExtensionsWithoutOid(_extensions, Oids.BasicConstraints2);
             }
         }
     }
-    private readonly int? _pathLength;
-    
+
     /// <summary>Gets the algorithm used for automatic key generation, including its key length, curve or parameter set. Defaults to RSA-4096.</summary>
     /// <remarks>Set through <see cref="SetKeyAlgorithm"/> rather than an initializer. That call also clears
     /// any key already set and discards a Subject Key Identifier describing it, which an <c>init</c> accessor
@@ -195,6 +193,13 @@ public record CertificateBuilder
         => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier).WithKeyPair(value);
 
 
+    /// <summary>Sets the key pair to use for certificate creation or certificate-requests, from a key of any supported kind including the post-quantum ones, discarding any Subject Key Identifier extension already on the builder.</summary>
+    /// <param name="value">The key pair, or <see langword="null" /> to remove.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified key pair.</returns>
+    public CertificateBuilder SetKeyPair(CertificateKey? value)
+        => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier).WithKeyPair(value);
+
+
     /// <summary>
     /// Assigns the key without discarding a Subject Key Identifier, which is what <see cref="GenerateKeyPair"/>
     /// needs: filling in a key the caller never named is not a caller's call and must not outrank one.
@@ -207,12 +212,6 @@ public record CertificateBuilder
             PublicKey = value != null ? new PublicKey(value) : null,
             KeyPair = value == null ? null : new CertificateKey(value)
         };
-
-    /// <summary>Sets the key pair to use for certificate creation or certificate-requests, from a key of any supported kind including the post-quantum ones, discarding any Subject Key Identifier extension already on the builder.</summary>
-    /// <param name="value">The key pair, or <see langword="null" /> to remove.</param>
-    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified key pair.</returns>
-    public CertificateBuilder SetKeyPair(CertificateKey? value)
-        => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier).WithKeyPair(value);
 
 
     /// <inheritdoc cref="WithKeyPair(AsymmetricAlgorithm)"/>
@@ -320,17 +319,6 @@ public record CertificateBuilder
 
         return values.Aggregate(this with { _extensions = EmptyExtensions }, (builder, extension) => builder.SetExtension(NotNull(extension, nameof(values))));
     }
-
-    /// <summary>
-    /// Refuses a null inside a sequence of extensions, which is an <see cref="ArgumentException"/> against
-    /// the sequence rather than an <see cref="ArgumentNullException"/>, since the sequence itself is not null.
-    /// </summary>
-    /// <remarks><see cref="ImmutableHashSet{T}"/> null-guards its own hashing, so a null never reaches
-    /// <see cref="X509ExtensionOidEqualityComparer"/> and would otherwise sit in the set until
-    /// <see cref="Create"/> dereferenced it, far from the call that supplied it.</remarks>
-    private static X509Extension NotNull(X509Extension extension, string paramName)
-        => extension ?? throw new ArgumentException("An extension in the sequence is null", paramName);
-
 
     /// <summary>Sets the Authority Information Access extension, naming a single OCSP responder and a single CA Issuers location.</summary>
     /// <param name="ocspUri">The URI of the OCSP responder, or <see langword="null"/> to omit it.</param>
@@ -458,43 +446,6 @@ public record CertificateBuilder
 
 
     /// <summary>
-    /// Refuses an Authority Key Identifier naming a key other than the issuer's: RFC 5280 s4.2.1.2 makes the
-    /// issuer's Subject Key Identifier the value that MUST appear there. A Subject Key Identifier is
-    /// deliberately not checked, since s4.2.1.2 permits "other methods of generating unique numbers".
-    /// </summary>
-    private static void CheckKeyIdentifierIsGenuine(CertificateBuilder builder, IEnumerable<X509Extension> extensions)
-    {
-        var extension = extensions.FirstOrDefault(x => x.Oid?.Value == Oids.AuthorityKeyIdentifier);
-        if (extension == null || builder.Issuer == null) {
-            return;
-        }
-
-        //Comparing whole encodings would refuse a conforming extension for also carrying authorityCertIssuer
-        //and authorityCertSerialNumber, which s4.2.1.1 permits alongside the keyIdentifier.
-        var supplied = ReadKeyIdentifier(extension);
-
-        //s4.2.1.1 requires the keyIdentifier field in every certificate a conforming CA generates
-        if (supplied == null) {
-            throw new InvalidOperationException("An authority key identifier carries no readable key identifier, so it names no signing key and would replace the one generated for the issuer. Remove it to have the correct one generated, or leave the certificate no issuer to identify");
-        }
-
-        if (!supplied.Value.Span.SequenceEqual(GetSubjectKeyIdentifier(builder.Issuer).Span)) {
-            throw new InvalidOperationException("An authority key identifier does not identify the issuer's own key, which describes a signer that did not sign this certificate. Remove it; the correct value is generated automatically");
-        }
-    }
-
-
-    private static ReadOnlyMemory<byte>? ReadKeyIdentifier(X509Extension extension)
-    {
-        try {
-            return new X509AuthorityKeyIdentifierExtension(extension.RawData, extension.Critical).KeyIdentifier;
-        } catch (CryptographicException) {
-            return null;
-        }
-    }
-
-
-    /// <summary>
     /// Adds an extension, replacing any already present under the same OID.
     /// </summary>
     /// <remarks><see cref="ImmutableHashSet{T}"/> keeps the entry already there on a collision, so removing
@@ -506,6 +457,17 @@ public record CertificateBuilder
 
     private CertificateBuilder RemoveExtensionsByOidValue(string? oid)
         => this with { _extensions = GetExtensionsWithoutOid(_extensions, oid) };
+
+
+    /// <summary>
+    /// Refuses a null inside a sequence of extensions, which is an <see cref="ArgumentException"/> against
+    /// the sequence rather than an <see cref="ArgumentNullException"/>, since the sequence itself is not null.
+    /// </summary>
+    /// <remarks><see cref="ImmutableHashSet{T}"/> null-guards its own hashing, so a null never reaches
+    /// <see cref="X509ExtensionOidEqualityComparer"/> and would otherwise sit in the set until
+    /// <see cref="Create"/> dereferenced it, far from the call that supplied it.</remarks>
+    private static X509Extension NotNull(X509Extension extension, string paramName)
+        => extension ?? throw new ArgumentException("An extension in the sequence is null", paramName);
 
 
     /// <summary>
@@ -572,6 +534,9 @@ public record CertificateBuilder
 
 
     /// <summary>Validates the current builder configuration and throws if invalid.</summary>
+    /// <remarks><see cref="CreateCertificateSigningRequest"/> deliberately does not call this: a requester
+    /// leaving its name to the authority is a normal thing to ask for, and the empty-subject rule applied
+    /// here binds whoever issues the certificate.</remarks>
     public void Validate()
     {
         if (NotBefore >= NotAfter) {
@@ -599,6 +564,241 @@ public record CertificateBuilder
                 throw new ArgumentException($"{nameof(SetPublicKey)} supplies no private key, so a self-signed certificate also needs a {nameof(SignatureGenerator)} to sign with, or an {nameof(Issuer)} to sign it", nameof(SignatureGenerator));
             }
         }
+
+        //RFC 5280 s4.2.1.6: a certificate whose subject is an empty sequence MUST carry a subject
+        //alternative name, that extension being the only name it then has. Refusing is the only answer
+        //available, since a name is not something the builder can invent.
+        if (Subject.RelativeDistinguishedNames.IsEmpty && !HasSubjectAlternativeName()) {
+            throw new ArgumentException($"A certificate with an empty {nameof(Subject)} carries no name at all unless it has a subject alternative name, which RFC 5280 s4.2.1.6 requires of it. Set a {nameof(Subject)}, or call {nameof(SetSubjectAlternativeNames)}", nameof(Subject));
+        }
+    }
+
+
+    /// <summary>Creates a <see cref="CertificateRequest"/> based on the builder's parameters.</summary>
+    /// <remarks>An <see cref="Issuer"/> contributes an Authority Key Identifier unless one was already
+    /// supplied. Where RFC 5280 states a criticality MUST, the extension is written with that criticality;
+    /// its value is untouched and <see cref="Extensions"/> still reports what it was given.</remarks>
+    /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if no key pair is set.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
+    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
+    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, or when
+    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode.</exception>
+    public CertificateRequest CreateCertificateRequest()
+    {
+        if (PublicKey == null) {
+            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) first to provide an asymmetric public/private keypair");
+        }
+
+        var dn = Subject.Create();
+
+        CheckSubjectAgreesWithUsage(this, dn);
+
+        var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
+
+        var extensions = BuildExtensions(this);
+
+        CheckExtensionsAgreeWithUsage(this, extensions);
+        CheckKeyIdentifierIsGenuine(this, extensions);
+
+        foreach (var extension in extensions) {
+            request.CertificateExtensions.Add(ConformCriticality(extension, this, extensions));
+        }
+
+        //Added straight to the request rather than through BuildExtensions, so adding both would make
+        //CertificateRequest throw: hence the guard. It is already non-critical per RFC 5280 s4.2.1.1.
+        if (Issuer != null && !extensions.Any(x => Oids.AuthorityKeyIdentifierOid.ValueEquals(x.Oid))) {
+            request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(GetSubjectKeyIdentifier(Issuer).Span));
+        }
+
+        return request;
+    }
+
+
+    /// <summary>Creates a <see cref="CertificateSigningRequest"/> based on the builder's parameters.</summary>
+    /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
+    /// <exception cref="NotSupportedException">Thrown when the key to certify cannot sign, so cannot produce the proof-of-possession signature.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
+    /// <see cref="Usage"/> profile, or when the request would be signed by a key that is not the one it
+    /// certifies. Nothing here depends on the <see cref="Issuer"/>, which this member discards.</exception>
+    public CertificateSigningRequest CreateCertificateSigningRequest()
+    {
+        //PKCS#10 proves possession by signing the request with the very key being certified
+        if (!KeyAlgorithm.CanSign || KeyPair?.CanSign == false) {
+            throw new NotSupportedException($"A {KeyAlgorithm.Name} key cannot sign, so it cannot sign the request that asks for it to be certified");
+        }
+
+        //Nothing signs a request but the key it certifies, so an Issuer set for later issuance has no
+        //bearing here and must not contribute an Authority Key Identifier the requester cannot know.
+        var builder = Issuer != null ? this with { Issuer = null } : this;
+
+        return new(builder.CreateCertificateRequest(), SignatureGenerator ?? CreateSignatureGenerator(KeyPair));
+    }
+
+
+    /// <summary>Builds an <see cref="X509Certificate2"/> instance based on the builder's parameters.</summary>
+    /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
+    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
+    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, or when
+    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode.</exception>
+    /// <exception cref="ArgumentException">Thrown by <see cref="Validate"/>, which this member calls: among
+    /// its checks, a certificate with an empty <see cref="Subject"/> and no subject alternative name is
+    /// refused.</exception>
+    [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
+    public X509Certificate2 Create()
+    {
+        Validate();
+
+        bool generateKeys = KeyPair == null && PublicKey == null;
+
+        var builder = generateKeys
+            ? GenerateKeyPair()
+            : this;
+
+        try {
+            if (builder.PublicKey == null) {
+                throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...), {nameof(SetPublicKey)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a key to certify");
+            }
+
+            var request = builder.CreateCertificateRequest();
+
+            //GetPrivateKey hands back a fresh instance which is ours to release, unlike KeyPair
+            using var issuerKey = builder.SignatureGenerator == null && builder.Issuer != null
+                ? builder.Issuer.GetPrivateKey()
+                : null;
+
+            var generator = builder.SignatureGenerator
+                            ?? builder.CreateSignatureGenerator(issuerKey ?? builder.KeyPair);
+
+            var cert = request.Create(
+                builder.Issuer?.SubjectName ?? builder.Subject.Create(),
+                generator,
+                builder.NotBefore,
+                builder.NotAfter,
+                builder.GenerateSerialNumber()
+            );
+
+            //CopyToCertificate returns a separate certificate, leaving the keyless original ours to release
+            if (builder.KeyPair != null) {
+                var certWithKey = builder.KeyPair.CopyToCertificate(cert);
+                cert.Dispose();
+                cert = certWithKey;
+            }
+
+            if (!String.IsNullOrEmpty(builder.FriendlyName) && OperatingSystem.IsWindows()) {
+                //CopyWithPrivateKey doesn't copy FriendlyName so it needs to be set here after the copy is made
+                cert.FriendlyName = builder.FriendlyName;
+            }
+
+            if (builder.KeyStorageFlags != X509KeyStorageFlags.DefaultKeySet) {
+                using (cert) {
+                    return CertTools.LoadPkcs12(cert.Export(X509ContentType.Pkcs12), (string?)null, builder.KeyStorageFlags);
+                }
+            } else {
+                return cert;
+            }
+
+        } finally {
+            //Only keys this method generated are ours to release; a caller-supplied key stays the caller's
+            if (generateKeys) {
+                builder.KeyPair?.Dispose();
+            }
+        }
+    }
+
+
+    /// <summary>Whether a subject alternative name will reach the certificate, from either source.</summary>
+    /// <remarks>Presence is all that is asked. An extension holding an empty <c>GeneralNames</c> passes,
+    /// which only hand-written bytes can produce: <see cref="SetSubjectAlternativeNames(IEnumerable{GeneralName})"/>
+    /// given an empty sequence adds no extension at all.</remarks>
+    private bool HasSubjectAlternativeName()
+        => _subjectAlternativeNames?.Count > 0
+           || _extensions.Any(x => Oids.SubjectAltNameOid.ValueEquals(x.Oid));
+
+
+    private byte[] GenerateSerialNumber()
+        => SerialNumberGenerator?.Invoke() ?? DefaultGenerateSerialNumber();
+
+
+    private static byte[] DefaultGenerateSerialNumber()
+    {
+        Span<byte> span = stackalloc byte[18];
+        BinaryPrimitives.WriteInt16BigEndian(span[0..2], 0x4D58);
+        BinaryPrimitives.WriteInt64BigEndian(span[2..10], DateTime.UtcNow.Ticks);
+        RandomNumberGenerator.Fill(span[10..18]);
+        return [.. span];
+    }
+
+
+    private X509SignatureGenerator CreateSignatureGenerator(CertificateKey? keys)
+    {
+        if (keys == null) {
+            throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
+        }
+
+#if NET10_0_OR_GREATER
+#pragma warning disable SYSLIB5006
+#pragma warning disable FLUENTCERT001
+        if (keys.AsMLDsa is { } mldsa) {
+            return X509SignatureGenerator.CreateForMLDsa(mldsa);
+        }
+
+        if (keys.AsSlhDsa is { } slhdsa) {
+            return X509SignatureGenerator.CreateForSlhDsa(slhdsa);
+        }
+
+        if (keys.AsCompositeMLDsa is { } composite) {
+            return X509SignatureGenerator.CreateForCompositeMLDsa(composite);
+        }
+#pragma warning restore FLUENTCERT001
+#pragma warning restore SYSLIB5006
+#endif
+
+        return keys.AsAsymmetricAlgorithm switch {
+#pragma warning disable CS0618 // Type or member is obsolete
+            DSA dsa => new DSAX509SignatureGenerator(dsa),
+#pragma warning restore CS0618 // Type or member is obsolete
+            RSA rsa => X509SignatureGenerator.CreateForRSA(rsa, RSASignaturePadding),
+            ECDsa ecdsa => X509SignatureGenerator.CreateForECDsa(ecdsa),
+            ECDiffieHellman => throw new NotSupportedException($"An {nameof(ECDiffieHellman)} key agrees on a shared secret and cannot sign. Set an {nameof(Issuer)} so the certificate is signed by a CA, or supply a {nameof(SignatureGenerator)}"),
+            _ => throw new NotSupportedException($"Unsupported algorithm: {keys.Family}")
+        };
+    }
+
+
+    private CertificateBuilder GenerateKeyPair()
+    {
+        PostQuantumSupport.ThrowIfUnsupported(KeyAlgorithm);
+
+#if NET10_0_OR_GREATER
+#pragma warning disable SYSLIB5006
+#pragma warning disable FLUENTCERT001
+        switch (KeyAlgorithm.Family) {
+            case KeyAlgorithmFamily.MLDsa:
+                return WithKeyPair(new CertificateKey(MLDsa.GenerateKey(PostQuantumSupport.MLDsaAlgorithmFor(KeyAlgorithm))));
+            case KeyAlgorithmFamily.SlhDsa:
+                return WithKeyPair(new CertificateKey(SlhDsa.GenerateKey(PostQuantumSupport.SlhDsaAlgorithmFor(KeyAlgorithm))));
+            case KeyAlgorithmFamily.CompositeMLDsa:
+                return WithKeyPair(new CertificateKey(CompositeMLDsa.GenerateKey(PostQuantumSupport.CompositeAlgorithmFor(KeyAlgorithm))));
+            case KeyAlgorithmFamily.MLKem:
+                return WithKeyPair(new CertificateKey(MLKem.GenerateKey(PostQuantumSupport.MLKemAlgorithmFor(KeyAlgorithm))));
+        }
+#pragma warning restore FLUENTCERT001
+#pragma warning restore SYSLIB5006
+#endif
+
+        return WithKeyPair(
+            KeyAlgorithm.Family switch {
+                KeyAlgorithmFamily.ECDsa => ECDsa.Create(KeyAlgorithm.Curve!.Value),
+                KeyAlgorithmFamily.ECDiffieHellman => ECDiffieHellman.Create(KeyAlgorithm.Curve!.Value),
+                KeyAlgorithmFamily.Rsa => RSA.Create(KeyAlgorithm.KeyLength!.Value),
+#pragma warning disable CS0618 // Type or member is obsolete
+                KeyAlgorithmFamily.Dsa => DSA.Create(KeyAlgorithm.KeyLength!.Value),
+#pragma warning restore CS0618 // Type or member is obsolete
+                _ => throw new ArgumentOutOfRangeException(nameof(KeyAlgorithm), KeyAlgorithm, $"Unsupported {nameof(KeyAlgorithm)}")
+            }
+        );
     }
 
 
@@ -637,13 +837,50 @@ public record CertificateBuilder
 
 
     /// <summary>
+    /// Refuses an Authority Key Identifier naming a key other than the issuer's: RFC 5280 s4.2.1.2 makes the
+    /// issuer's Subject Key Identifier the value that MUST appear there. A Subject Key Identifier is
+    /// deliberately not checked, since s4.2.1.2 permits "other methods of generating unique numbers".
+    /// </summary>
+    private static void CheckKeyIdentifierIsGenuine(CertificateBuilder builder, IEnumerable<X509Extension> extensions)
+    {
+        var extension = extensions.FirstOrDefault(x => Oids.AuthorityKeyIdentifierOid.ValueEquals(x.Oid));
+        if (extension == null || builder.Issuer == null) {
+            return;
+        }
+
+        //Comparing whole encodings would refuse a conforming extension for also carrying authorityCertIssuer
+        //and authorityCertSerialNumber, which s4.2.1.1 permits alongside the keyIdentifier.
+        var supplied = ReadKeyIdentifier(extension);
+
+        //s4.2.1.1 requires the keyIdentifier field in every certificate a conforming CA generates
+        if (supplied == null) {
+            throw new InvalidOperationException("An authority key identifier carries no readable key identifier, so it names no signing key and would replace the one generated for the issuer. Remove it to have the correct one generated, or leave the certificate no issuer to identify");
+        }
+
+        if (!supplied.Value.Span.SequenceEqual(GetSubjectKeyIdentifier(builder.Issuer).Span)) {
+            throw new InvalidOperationException("An authority key identifier does not identify the issuer's own key, which describes a signer that did not sign this certificate. Remove it; the correct value is generated automatically");
+        }
+    }
+
+
+    private static ReadOnlyMemory<byte>? ReadKeyIdentifier(X509Extension extension)
+    {
+        try {
+            return new X509AuthorityKeyIdentifierExtension(extension.RawData, extension.Critical).KeyIdentifier;
+        } catch (CryptographicException) {
+            return null;
+        }
+    }
+
+
+    /// <summary>
     /// Whether the certified key may validate signatures on certificates, the condition RFC 5280 s4.2.1.9
     /// attaches to its criticality MUST. Only a key usage extension that reads back and omits
     /// <see cref="X509KeyUsageFlags.KeyCertSign"/> settles that it may not.
     /// </summary>
     private static bool MayValidateCertificateSignatures(IEnumerable<X509Extension> extensions)
     {
-        var keyUsage = extensions.FirstOrDefault(x => String.Equals(x.Oid?.Value, Oids.KeyUsage));
+        var keyUsage = extensions.FirstOrDefault(x => Oids.KeyUsageOid.ValueEquals(x.Oid));
         if (keyUsage == null) {
             return true;
         }
@@ -774,54 +1011,12 @@ public record CertificateBuilder
 
     private static InvalidOperationException UnreadableValue(X509Extension extension, string name)
     {
+        const int quotedValueLimit = 128;
+
         //Truncated because a requester chooses how long the value is
-        var quoted = Convert.ToHexString(extension.RawData.AsSpan(0, Math.Min(extension.RawData.Length, QuotedValueLimit)));
-        var ellipsis = extension.RawData.Length > QuotedValueLimit ? "..." : "";
+        var quoted = Convert.ToHexString(extension.RawData.AsSpan(0, Math.Min(extension.RawData.Length, quotedValueLimit)));
+        var ellipsis = extension.RawData.Length > quotedValueLimit ? "..." : "";
         return new InvalidOperationException($"A {name} extension's value cannot be read, so what it asserts to a validator cannot be established here and may not agree with {nameof(CertificateUsage)}. Reject it, or supply one this builder can read. Value: {quoted}{ellipsis}");
-    }
-
-
-    private const int QuotedValueLimit = 128;
-
-
-    /// <summary>Creates a <see cref="CertificateRequest"/> based on the builder's parameters.</summary>
-    /// <remarks>An <see cref="Issuer"/> contributes an Authority Key Identifier unless one was already
-    /// supplied. Where RFC 5280 states a criticality MUST, the extension is written with that criticality;
-    /// its value is untouched and <see cref="Extensions"/> still reports what it was given.</remarks>
-    /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if no key pair is set.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
-    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, or when
-    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode.</exception>
-    public CertificateRequest CreateCertificateRequest()
-    {
-        if (PublicKey == null) {
-            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) first to provide an asymmetric public/private keypair");
-        }
-
-        var dn = Subject.Create();
-
-        CheckSubjectAgreesWithUsage(this, dn);
-
-        var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
-
-        var extensions = BuildExtensions(this);
-
-        CheckExtensionsAgreeWithUsage(this, extensions);
-        CheckKeyIdentifierIsGenuine(this, extensions);
-
-        foreach (var extension in extensions) {
-            request.CertificateExtensions.Add(ConformCriticality(extension, this, extensions));
-        }
-
-        //Added straight to the request rather than through BuildExtensions, so adding both would make
-        //CertificateRequest throw: hence the guard. It is already non-critical per RFC 5280 s4.2.1.1.
-        if (Issuer != null && !extensions.Any(x => String.Equals(x.Oid?.Value, Oids.AuthorityKeyIdentifier))) {
-            request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(GetSubjectKeyIdentifier(Issuer).Span));
-        }
-
-        return request;
     }
 
 
@@ -846,183 +1041,6 @@ public record CertificateBuilder
             throw new InvalidOperationException("The issuer publishes a subject key identifier whose value cannot be decoded, so there is nothing to name it by. Re-issue the issuer with a well-formed subject key identifier, or with none at all to have one derived from its public key", ex);
         }
     }
-
-
-    /// <summary>Creates a <see cref="CertificateSigningRequest"/> based on the builder's parameters.</summary>
-    /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
-    /// <exception cref="NotSupportedException">Thrown when the key to certify cannot sign, so cannot produce the proof-of-possession signature.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, or when the request would be signed by a key that is not the one it
-    /// certifies. Nothing here depends on the <see cref="Issuer"/>, which this member discards.</exception>
-    public CertificateSigningRequest CreateCertificateSigningRequest()
-    {
-        //PKCS#10 proves possession by signing the request with the very key being certified
-        if (!KeyAlgorithm.CanSign || KeyPair?.CanSign == false) {
-            throw new NotSupportedException($"A {KeyAlgorithm.Name} key cannot sign, so it cannot sign the request that asks for it to be certified");
-        }
-
-        //Nothing signs a request but the key it certifies, so an Issuer set for later issuance has no
-        //bearing here and must not contribute an Authority Key Identifier the requester cannot know.
-        var builder = Issuer != null ? this with { Issuer = null } : this;
-
-        return new(builder.CreateCertificateRequest(), SignatureGenerator ?? CreateSignatureGenerator(KeyPair));
-    }
-
-
-    /// <summary>Builds an <see cref="X509Certificate2"/> instance based on the builder's parameters.</summary>
-    /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
-    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, or when
-    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode.</exception>
-    [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
-    public X509Certificate2 Create()
-    {
-        Validate();
-
-        bool generateKeys = KeyPair == null && PublicKey == null;
-
-        var builder = generateKeys
-            ? GenerateKeyPair()
-            : this;
-
-        try {
-            if (builder.PublicKey == null) {
-                throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...), {nameof(SetPublicKey)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a key to certify");
-            }
-
-            var request = builder.CreateCertificateRequest();
-
-            //GetPrivateKey hands back a fresh instance which is ours to release, unlike KeyPair
-            using var issuerKey = builder.SignatureGenerator == null && builder.Issuer != null
-                ? builder.Issuer.GetPrivateKey()
-                : null;
-
-            var generator = builder.SignatureGenerator
-                ?? builder.CreateSignatureGenerator(issuerKey ?? builder.KeyPair);
-
-            var cert = request.Create(
-                builder.Issuer?.SubjectName ?? builder.Subject.Create(),
-                generator,
-                builder.NotBefore,
-                builder.NotAfter,
-                builder.GenerateSerialNumber()
-            );
-
-            //CopyToCertificate returns a separate certificate, leaving the keyless original ours to release
-            if (builder.KeyPair != null) {
-                var certWithKey = builder.KeyPair.CopyToCertificate(cert);
-                cert.Dispose();
-                cert = certWithKey;
-            }
-
-            if (!String.IsNullOrEmpty(builder.FriendlyName) && OperatingSystem.IsWindows()) {
-                //CopyWithPrivateKey doesn't copy FriendlyName so it needs to be set here after the copy is made
-                cert.FriendlyName = builder.FriendlyName;
-            }
-
-            if (builder.KeyStorageFlags != X509KeyStorageFlags.DefaultKeySet) {
-                using (cert) {
-                    return CertTools.LoadPkcs12(cert.Export(X509ContentType.Pkcs12), (string?)null, builder.KeyStorageFlags);
-                }
-            } else {
-                return cert;
-            }
-
-        } finally {
-            //Only keys this method generated are ours to release; a caller-supplied key stays the caller's
-            if (generateKeys) {
-                builder.KeyPair?.Dispose();
-            }
-        }
-    }
-
-
-    private byte[] GenerateSerialNumber()
-        => SerialNumberGenerator?.Invoke() ?? DefaultGenerateSerialNumber();
-
-    
-    private static byte[] DefaultGenerateSerialNumber()
-    {
-        Span<byte> span = stackalloc byte[18];
-        BinaryPrimitives.WriteInt16BigEndian(span[0..2], 0x4D58);
-        BinaryPrimitives.WriteInt64BigEndian(span[2..10], DateTime.UtcNow.Ticks);
-        RandomNumberGenerator.Fill(span[10..18]);
-        return [.. span];
-    }
-
-
-    private X509SignatureGenerator CreateSignatureGenerator(CertificateKey? keys)
-    {
-        if (keys == null) {
-            throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
-        }
-
-#if NET10_0_OR_GREATER
-#pragma warning disable SYSLIB5006
-#pragma warning disable FLUENTCERT001
-        if (keys.AsMLDsa is { } mldsa) {
-            return X509SignatureGenerator.CreateForMLDsa(mldsa);
-        }
-
-        if (keys.AsSlhDsa is { } slhdsa) {
-            return X509SignatureGenerator.CreateForSlhDsa(slhdsa);
-        }
-
-        if (keys.AsCompositeMLDsa is { } composite) {
-            return X509SignatureGenerator.CreateForCompositeMLDsa(composite);
-        }
-#pragma warning restore FLUENTCERT001
-#pragma warning restore SYSLIB5006
-#endif
-
-        return keys.AsAsymmetricAlgorithm switch {
-#pragma warning disable CS0618 // Type or member is obsolete
-            DSA dsa => new DSAX509SignatureGenerator(dsa),
-#pragma warning restore CS0618 // Type or member is obsolete
-            RSA rsa => X509SignatureGenerator.CreateForRSA(rsa, RSASignaturePadding),
-            ECDsa ecdsa => X509SignatureGenerator.CreateForECDsa(ecdsa),
-            ECDiffieHellman => throw new NotSupportedException($"An {nameof(ECDiffieHellman)} key agrees on a shared secret and cannot sign. Set an {nameof(Issuer)} so the certificate is signed by a CA, or supply a {nameof(SignatureGenerator)}"),
-            _ => throw new NotSupportedException($"Unsupported algorithm: {keys.Family}")
-        };
-    }
-
-
-    private CertificateBuilder GenerateKeyPair()
-    {
-        PostQuantumSupport.ThrowIfUnsupported(KeyAlgorithm);
-
-#if NET10_0_OR_GREATER
-#pragma warning disable SYSLIB5006
-#pragma warning disable FLUENTCERT001
-        switch (KeyAlgorithm.Family) {
-            case KeyAlgorithmFamily.MLDsa:
-                return WithKeyPair(new CertificateKey(MLDsa.GenerateKey(PostQuantumSupport.MLDsaAlgorithmFor(KeyAlgorithm))));
-            case KeyAlgorithmFamily.SlhDsa:
-                return WithKeyPair(new CertificateKey(SlhDsa.GenerateKey(PostQuantumSupport.SlhDsaAlgorithmFor(KeyAlgorithm))));
-            case KeyAlgorithmFamily.CompositeMLDsa:
-                return WithKeyPair(new CertificateKey(CompositeMLDsa.GenerateKey(PostQuantumSupport.CompositeAlgorithmFor(KeyAlgorithm))));
-            case KeyAlgorithmFamily.MLKem:
-                return WithKeyPair(new CertificateKey(MLKem.GenerateKey(PostQuantumSupport.MLKemAlgorithmFor(KeyAlgorithm))));
-        }
-#pragma warning restore FLUENTCERT001
-#pragma warning restore SYSLIB5006
-#endif
-
-        return WithKeyPair(
-            KeyAlgorithm.Family switch {
-                KeyAlgorithmFamily.ECDsa => ECDsa.Create(KeyAlgorithm.Curve!.Value),
-                KeyAlgorithmFamily.ECDiffieHellman => ECDiffieHellman.Create(KeyAlgorithm.Curve!.Value),
-                KeyAlgorithmFamily.Rsa => RSA.Create(KeyAlgorithm.KeyLength!.Value),
-#pragma warning disable CS0618 // Type or member is obsolete
-                KeyAlgorithmFamily.Dsa => DSA.Create(KeyAlgorithm.KeyLength!.Value),
-#pragma warning restore CS0618 // Type or member is obsolete
-                _ => throw new ArgumentOutOfRangeException(nameof(KeyAlgorithm), KeyAlgorithm, $"Unsupported {nameof(KeyAlgorithm)}")
-            }
-        );
-    }
-
-
 
 
     private static ImmutableHashSet<X509Extension> BuildExtensions(CertificateBuilder builder)
@@ -1134,13 +1152,13 @@ public record CertificateBuilder
             : X509KeyUsageFlags.None;
 
 
+#pragma warning disable FLUENTCERT001 // Classifying a family is not use of the experimental surface
     /// <summary>
     /// Returns <see cref="X509KeyUsageFlags.KeyAgreement"/> for an ECDH key and
     /// <see cref="X509KeyUsageFlags.DigitalSignature"/> otherwise; RFC 5480 s3 permits keyAgreement for
     /// id-ecPublicKey. It must read <see cref="KeyAlgorithm"/> rather than the public key, because an ECDH
     /// and an ECDsa public key are byte-identical in SubjectPublicKeyInfo.
     /// </summary>
-#pragma warning disable FLUENTCERT001 // Classifying a family is not use of the experimental surface
     private static X509KeyUsageFlags SigningOrKeyAgreement(CertificateBuilder builder)
         => builder.KeyAlgorithm.Family switch {
             KeyAlgorithmFamily.ECDiffieHellman => X509KeyUsageFlags.KeyAgreement,
@@ -1165,15 +1183,14 @@ public record CertificateBuilder
         };
 
 
+#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable FLUENTCERT001 // Post-quantum support is experimental
     /// <summary>
     /// Maps a public key's algorithm OID onto a <see cref="KeyAlgorithm"/>, or <see langword="null"/> when it
     /// is not one the builder knows how to generate, which is not an error here.
     /// </summary>
     private static KeyAlgorithm? GetKeyAlgorithm(PublicKey? key)
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-#pragma warning disable FLUENTCERT001 // Post-quantum support is experimental
-        return key?.Oid.Value switch {
+        => key?.Oid.Value switch {
             Oids.Rsa => KeyAlgorithm.RSA(),
             Oids.EcPublicKey => KeyAlgorithm.ECDsa(),
             Oids.Dsa => KeyAlgorithm.DSA(),
@@ -1182,14 +1199,12 @@ public record CertificateBuilder
         };
 #pragma warning restore FLUENTCERT001
 #pragma warning restore CS0618 // Type or member is obsolete
-    }
 
 
+#pragma warning disable CS0618 // Type or member is obsolete
     /// <summary>Derives a <see cref="KeyAlgorithm"/> from a supplied key, whose own parameters win over anything previously configured.</summary>
     private static KeyAlgorithm? GetKeyAlgorithm(AsymmetricAlgorithm? keys)
-    {
-#pragma warning disable CS0618 // Type or member is obsolete
-        return keys switch {
+        => keys switch {
             ECDsa ecdsa => KeyAlgorithm.ECDsa(ecdsa.ExportParameters(false).Curve),
             ECDiffieHellman ecdh => KeyAlgorithm.ECDiffieHellman(ecdh.ExportParameters(false).Curve),
             RSA rsa => KeyAlgorithm.RSA(rsa.KeySize),
@@ -1198,7 +1213,6 @@ public record CertificateBuilder
             _ => throw new NotSupportedException($"Unsupported AsymmetricAlgorithm: {keys.GetType()}")
         };
 #pragma warning restore CS0618 // Type or member is obsolete
-    }
 
 
     private static KeyAlgorithm? GetKeyAlgorithm(CertificateKey? keys)
