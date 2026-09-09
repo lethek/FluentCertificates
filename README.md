@@ -28,8 +28,12 @@ Documentation is incomplete. More examples can be found in the project's [unit t
 _The absolute minimum needed to create a certificate, whether it's useful or not._
 
 ```csharp
-using var cert = new CertificateBuilder().Create();
+using var cert = new CertificateBuilder().SetSubject("CN=Example").Create();
 ```
+
+A name is the one thing you have to supply. A certificate with an empty subject and no Subject
+Alternative Name identifies nobody, which RFC 5280 s4.2.1.6 forbids, so the builder refuses it. Naming
+the certificate through `SetSubjectAlternativeNames` instead satisfies the rule just as well.
 
 ### Create a certificate signing request
 
@@ -469,7 +473,8 @@ property exists independently of the policy you issue under.
 ### What the builder refuses
 
 Criticality is a flag beside an extension, so a violation can be corrected. Other things cannot be corrected
-without deciding what the caller meant, and those are refused with an `InvalidOperationException`. The list
+without deciding what the caller meant, and those are refused. All but the last below throw an
+`InvalidOperationException`. The list
 is short, and follows the boundary above: a value contradicting the `Usage` you stated about whether this is
 a certificate authority, a certificate signed by a key other than the one it names, and the narrow case of a
 value this builder cannot read, since it can neither correct nor vouch for that. Everything else is
@@ -509,6 +514,13 @@ your policy to set:
   identifier at all. This one turns on `Issuer` rather than `Usage`: RFC 5280 s4.2.1.2 makes the issuer's
   subject key identifier the value that MUST appear there, so naming an issuer settles what belongs in it
   and anything else contradicts the certificate's own account of who signed it. Detailed below.
+- **A certificate with an empty subject and no Subject Alternative Name.** RFC 5280 s4.2.1.6 requires that
+  extension of a certificate whose subject is empty, because it is then the only name the certificate has,
+  and one without either identifies nobody at all. This is the only refusal on the list settled from the
+  builder's own configuration rather than from an extension's value, so it comes from `Validate` as an
+  `ArgumentException` alongside the other configuration checks. A signing request is exempt:
+  `CreateCertificateSigningRequest` does not call `Validate`, and leaving your name to the authority is a
+  normal thing to ask of one.
 
 > **Set a `Usage` before accepting anything from a request.** A builder with no `Usage` has declared no
 > intent to measure an extension against, and makes none of these refusals bar the Authority Key Identifier

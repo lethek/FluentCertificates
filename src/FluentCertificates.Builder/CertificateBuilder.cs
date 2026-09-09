@@ -572,6 +572,9 @@ public record CertificateBuilder
 
 
     /// <summary>Validates the current builder configuration and throws if invalid.</summary>
+    /// <remarks><see cref="CreateCertificateSigningRequest"/> deliberately does not call this: a requester
+    /// leaving its name to the authority is a normal thing to ask for, and the empty-subject rule applied
+    /// here binds whoever issues the certificate.</remarks>
     public void Validate()
     {
         if (NotBefore >= NotAfter) {
@@ -599,7 +602,23 @@ public record CertificateBuilder
                 throw new ArgumentException($"{nameof(SetPublicKey)} supplies no private key, so a self-signed certificate also needs a {nameof(SignatureGenerator)} to sign with, or an {nameof(Issuer)} to sign it", nameof(SignatureGenerator));
             }
         }
+
+        //RFC 5280 s4.2.1.6: a certificate whose subject is an empty sequence MUST carry a subject
+        //alternative name, that extension being the only name it then has. Refusing is the only answer
+        //available, since a name is not something the builder can invent.
+        if (Subject.RelativeDistinguishedNames.IsEmpty && !HasSubjectAlternativeName()) {
+            throw new ArgumentException($"A certificate with an empty {nameof(Subject)} carries no name at all unless it has a subject alternative name, which RFC 5280 s4.2.1.6 requires of it. Set a {nameof(Subject)}, or call {nameof(SetSubjectAlternativeNames)}", nameof(Subject));
+        }
     }
+
+
+    /// <summary>Whether a subject alternative name will reach the certificate, from either source.</summary>
+    /// <remarks>Presence is all that is asked. An extension holding an empty <c>GeneralNames</c> passes,
+    /// which only hand-written bytes can produce: <see cref="SetSubjectAlternativeNames(IEnumerable{GeneralName})"/>
+    /// given an empty sequence adds no extension at all.</remarks>
+    private bool HasSubjectAlternativeName()
+        => _subjectAlternativeNames?.Count > 0
+            || _extensions.Any(x => String.Equals(x.Oid?.Value, Oids.SubjectAltName));
 
 
     /// <summary>
@@ -875,6 +894,9 @@ public record CertificateBuilder
     /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
     /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, or when
     /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode.</exception>
+    /// <exception cref="ArgumentException">Thrown by <see cref="Validate"/>, which this member calls: among
+    /// its checks, a certificate with an empty <see cref="Subject"/> and no subject alternative name is
+    /// refused.</exception>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Create()
     {

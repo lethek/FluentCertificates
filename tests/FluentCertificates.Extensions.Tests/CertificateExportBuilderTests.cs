@@ -16,7 +16,7 @@ public class CertificateExportBuilderTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportBuilder_Pkcs12_RoundTrip(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
         var bytes = cert.Export().AsPkcs12().ToByteArray();
         using var loaded = CertTools.LoadPkcs12(bytes, null);
         await Assert.That(loaded.Thumbprint).IsEqualTo(cert.Thumbprint);
@@ -26,7 +26,7 @@ public class CertificateExportBuilderTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportBuilder_Pkcs12_WithPrivateKey_IncludesKey(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
         await Assert.That(cert.HasPrivateKey).IsTrue();
 
         var bytes = cert.Export().WithPrivateKey().AsPkcs12().ToByteArray();
@@ -38,7 +38,7 @@ public class CertificateExportBuilderTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportBuilder_Pkcs12_WithoutPrivateKeys_StripsKey(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
         await Assert.That(cert.HasPrivateKey).IsTrue();
 
         var bytes = cert.Export().WithoutPrivateKeys().AsPkcs12().ToByteArray();
@@ -50,7 +50,7 @@ public class CertificateExportBuilderTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportBuilder_Pem_ToPemString_ContainsCertBlock(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
         var result = cert.Export().WithoutPrivateKeys().AsPem().ToPemString();
 
         await Assert.That(result).Contains("-----BEGIN CERTIFICATE-----");
@@ -66,7 +66,7 @@ public class CertificateExportBuilderTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportBuilder_Pem_WithPrivateKey_ContainsKeyAndCertBlocks(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
         var result = cert.Export().WithPrivateKey().AsPem().ToPemString();
 
         await Assert.That(
@@ -88,7 +88,7 @@ public class CertificateExportBuilderTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportBuilder_Cert_ToByteArray_MatchesRawData(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
         var result = cert.Export().AsCert().ToByteArray();
         await Assert.That(result).IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
     }
@@ -97,7 +97,7 @@ public class CertificateExportBuilderTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportBuilder_Pkcs7_ToByteArray_RoundTrips(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
         var bytes = cert.Export().AsPkcs7().ToByteArray();
 
         var coll = new X509Certificate2Collection();
@@ -111,8 +111,8 @@ public class CertificateExportBuilderTests
     [Test]
     public async Task ExportBuilder_Pkcs7Pem_WrapsTheSameDerInAPkcs7Block()
     {
-        using var root = new CertificateBuilder().SetUsage(CertificateUsage.CA).Create();
-        using var leaf = new CertificateBuilder().SetIssuer(root).Create();
+        using var root = new CertificateBuilder().SetSubject("CN=Pkcs7 Root").SetUsage(CertificateUsage.CA).Create();
+        using var leaf = new CertificateBuilder().SetSubject("CN=Pkcs7 Leaf").SetIssuer(root).Create();
         var certs = new[] { leaf, root };
 
         var pem = Encoding.UTF8.GetString(certs.Export().AsPkcs7Pem().ToByteArray());
@@ -128,7 +128,7 @@ public class CertificateExportBuilderTests
     [Test]
     public async Task ExportBuilder_Pkcs7Pem_ToPemString_MatchesTheBytesItWrites()
     {
-        using var cert = new CertificateBuilder().Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Pkcs7 Pem").Create();
         var exporter = cert.Export().AsPkcs7Pem();
 
         await Assert
@@ -141,10 +141,12 @@ public class CertificateExportBuilderTests
     public async Task ExportBuilder_Chain_Pkcs12_ContainsAllCerts(KeyAlgorithm algorithm)
     {
         using var rootCert = new CertificateBuilder()
+            .SetSubject("CN=Chain Root")
             .SetKeyAlgorithm(algorithm)
             .SetUsage(CertificateUsage.CA)
             .Create();
         using var leafCert = new CertificateBuilder()
+            .SetSubject("CN=Chain Leaf")
             .SetKeyAlgorithm(algorithm)
             .SetIssuer(rootCert)
             .Create();
@@ -167,10 +169,12 @@ public class CertificateExportBuilderTests
     public async Task ExportBuilder_AddChain_DeduplicatesByThumbprint(KeyAlgorithm algorithm)
     {
         using var rootCert = new CertificateBuilder()
+            .SetSubject("CN=Chain Root")
             .SetKeyAlgorithm(algorithm)
             .SetUsage(CertificateUsage.CA)
             .Create();
         using var leafCert = new CertificateBuilder()
+            .SetSubject("CN=Chain Leaf")
             .SetKeyAlgorithm(algorithm)
             .SetIssuer(rootCert)
             .Create();
@@ -200,7 +204,7 @@ public class CertificateExportBuilderTests
     {
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".cer");
         try {
-            using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+            using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
             cert.Export().AsCert().ToFile(path);
             await Assert.That(File.ReadAllBytes(path)).IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
         } finally {
@@ -215,7 +219,7 @@ public class CertificateExportBuilderTests
         var path1 = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".cer");
         var path2 = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".cer");
         try {
-            using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+            using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
             cert.Export().AsCert().ToFile(path1).ToFile(path2);
             await Assert.That(File.ReadAllBytes(path1)).IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
             await Assert.That(File.ReadAllBytes(path2)).IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
@@ -229,7 +233,7 @@ public class CertificateExportBuilderTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportBuilder_ToStream_WritesBytes(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
         var ms = new MemoryStream();
         cert.Export().AsCert().ToStream(ms);
         await Assert.That(ms.ToArray()).IsEquivalentTo(cert.RawData, CollectionOrdering.Matching);
@@ -239,8 +243,8 @@ public class CertificateExportBuilderTests
     [MethodDataSource(nameof(KeyAlgorithmsTestData))]
     public async Task ExportBuilder_Collection_EntryPoint_Works(KeyAlgorithm algorithm)
     {
-        using var cert = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
-        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(algorithm).Create();
+        using var cert = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
+        using var cert2 = new CertificateBuilder().SetSubject("CN=Export Test").SetKeyAlgorithm(algorithm).Create();
         var coll = new X509Certificate2Collection(new[] { cert, cert2 });
         var pem = coll.Export().WithoutPrivateKeys().AsPem().ToPemString();
 

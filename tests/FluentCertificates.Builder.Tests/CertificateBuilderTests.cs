@@ -19,10 +19,10 @@ public class CertificateBuilderTests
     [Test]
     public async Task Build_Certificate_HasPrivateKey()
     {
-        using var cert1 = new CertificateBuilder().Create();
+        using var cert1 = new CertificateBuilder().SetSubject("CN=Has Private Key").Create();
         await Assert.That(cert1.HasPrivateKey).IsTrue();
 
-        using var cert2 = new CertificateBuilder().SetKeyStorageFlags(X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable).Create();
+        using var cert2 = new CertificateBuilder().SetSubject("CN=Has Private Key").SetKeyStorageFlags(X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable).Create();
         await Assert.That(cert2.HasPrivateKey).IsTrue();
     }
 
@@ -56,10 +56,10 @@ public class CertificateBuilderTests
     public async Task Build_Certificate_WithRSAKeys()
     {
         using var keys = RSA.Create();
-        using var cert1 = new CertificateBuilder().SetKeyPair(keys).Create();
+        using var cert1 = new CertificateBuilder().SetSubject("CN=RSA Keys").SetKeyPair(keys).Create();
         await Assert.That(cert1.GetKeyAlgorithm()).IsEqualTo(PkcsObjectIdentifiers.RsaEncryption.Id);
 
-        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.RSA()).Create();
+        using var cert2 = new CertificateBuilder().SetSubject("CN=RSA Keys").SetKeyAlgorithm(KeyAlgorithm.RSA()).Create();
         await Assert.That(cert2.GetKeyAlgorithm()).IsEqualTo(PkcsObjectIdentifiers.RsaEncryption.Id);
     }
 
@@ -68,10 +68,10 @@ public class CertificateBuilderTests
     public async Task Build_Certificate_WithECDsaKeys()
     {
         using var keys = ECDsa.Create();
-        using var cert1 = new CertificateBuilder().SetKeyPair(keys).Create();
+        using var cert1 = new CertificateBuilder().SetSubject("CN=ECDsa Keys").SetKeyPair(keys).Create();
         await Assert.That(cert1.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdECPublicKey.Id);
 
-        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
+        using var cert2 = new CertificateBuilder().SetSubject("CN=ECDsa Keys").SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
         await Assert.That(cert2.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdECPublicKey.Id);
     }
 
@@ -82,11 +82,11 @@ public class CertificateBuilderTests
     public async Task Build_Certificate_WithDSAKeys()
     {
         using var keys = DSA.Create(1024);
-        using var cert1 = new CertificateBuilder().SetKeyPair(keys).Create();
+        using var cert1 = new CertificateBuilder().SetSubject("CN=DSA Keys").SetKeyPair(keys).Create();
         await Assert.That(cert1.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdDsa.Id);
 
 #pragma warning disable CS0618 // Type or member is obsolete
-        using var cert2 = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.DSA()).Create();
+        using var cert2 = new CertificateBuilder().SetSubject("CN=DSA Keys").SetKeyAlgorithm(KeyAlgorithm.DSA()).Create();
 #pragma warning restore CS0618 // Type or member is obsolete
         await Assert.That(cert2.GetKeyAlgorithm()).IsEqualTo(X9ObjectIdentifiers.IdDsa.Id);
     }
@@ -106,6 +106,7 @@ public class CertificateBuilderTests
 
         using var cert = new CertificateBuilder()
             .SetIssuer(rootCA)
+            .SetSubject("CN=RSA Leaf")
             .SetKeyAlgorithm(KeyAlgorithm.RSA())
             .Create();
 
@@ -127,6 +128,7 @@ public class CertificateBuilderTests
 
         using var cert = new CertificateBuilder()
             .SetIssuer(rootCA)
+            .SetSubject("CN=ECDsa Leaf")
             .SetKeyAlgorithm(KeyAlgorithm.ECDsa())
             .Create();
 
@@ -140,10 +142,10 @@ public class CertificateBuilderTests
     {
         const string friendlyName = "A FriendlyName can be set on Windows";
 
-        using var cert1 = new CertificateBuilder().SetFriendlyName(friendlyName).Create();
+        using var cert1 = new CertificateBuilder().SetSubject("CN=Friendly Name").SetFriendlyName(friendlyName).Create();
         await Assert.That(cert1.FriendlyName).IsEqualTo(friendlyName);
 
-        using var cert2 = new CertificateBuilder().SetFriendlyName(friendlyName).SetKeyStorageFlags(X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable).Create();
+        using var cert2 = new CertificateBuilder().SetSubject("CN=Friendly Name").SetFriendlyName(friendlyName).SetKeyStorageFlags(X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable).Create();
         await Assert.That(cert2.FriendlyName).IsEqualTo(friendlyName);
     }
 
@@ -158,7 +160,7 @@ public class CertificateBuilderTests
 
         //A positive but unusably small length is still the platform's to reject, not ours
         await Assert.That(() => {
-            using var cert = new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.RSA(10)).Create();
+            using var cert = new CertificateBuilder().SetSubject("CN=Tiny Key").SetKeyAlgorithm(KeyAlgorithm.RSA(10)).Create();
         }).Throws<Exception>();
     }
 
@@ -166,9 +168,10 @@ public class CertificateBuilderTests
     [Test]
     public async Task Build_MinimalCertificate_IsValid()
     {
-        using var cert = new CertificateBuilder().Create();
+        //A subject is the whole of the minimum: nothing else has to be said for a certificate to name someone
+        using var cert = new CertificateBuilder().SetSubject("CN=Minimal").Create();
 
-        await Assert.That(cert.Subject).IsEmpty();
+        await Assert.That(cert.Subject).IsEqualTo("CN=Minimal");
         await Assert.That(cert.SerialNumberBytes.Length).IsEqualTo(18);
         await Assert.That(cert.IsValidNow()).IsTrue();
     }
@@ -502,6 +505,60 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Create_WithAnEmptySubjectAndNoSubjectAlternativeName_Throws()
+    {
+        //RFC 5280 s4.2.1.6: the certificate would name nobody at all. The builder cannot invent a name, so
+        //refusing is the only answer left to it.
+        await Assert
+            .That(() => {
+                using var cert = new CertificateBuilder().Create();
+            })
+            .ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithAnEmptySubjectAndAnEmptySubjectAlternativeNameCall_Throws()
+    {
+        //SetSubjectAlternativeNames given nothing adds no extension, so it does not satisfy the rule either
+        await Assert
+            .That(() => {
+                using var cert = new CertificateBuilder().SetSubjectAlternativeNames([]).Create();
+            })
+            .ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithAnEmptySubjectAndAHandBuiltSubjectAlternativeName_IsIssued()
+    {
+        //The rule asks whether a subject alternative name reaches the certificate, not which call put it
+        //there: one added as an extension answers it as well as SetSubjectAlternativeNames does
+        var san = new SubjectAlternativeNameBuilder();
+        san.AddDnsName("hand.built.example.com");
+
+        using var cert = new CertificateBuilder()
+            .AddExtension(san.Build())
+            .Create();
+
+        await Assert.That(cert.SubjectName.Name).IsEqualTo(String.Empty);
+        await Assert.That(GetSanExtension(cert).Critical).IsTrue();
+    }
+
+
+    [Test]
+    public async Task CreateCertificateSigningRequest_WithAnEmptySubjectAndNoSubjectAlternativeName_IsProduced()
+    {
+        //Leaving the name to the authority is a normal thing for a requester to ask, and s4.2.1.6 binds
+        //whoever issues the certificate rather than whoever asks for one
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var csr = new CertificateBuilder().SetKeyPair(keys).CreateCertificateSigningRequest();
+
+        await Assert.That(csr.CertificateRequest.SubjectName.Name).IsEqualTo(String.Empty);
+    }
+
+
+    [Test]
     public async Task Validate_NotBeforeNotEarlierThanNotAfter_Throws()
     {
         var now = DateTimeOffset.UtcNow;
@@ -516,7 +573,7 @@ public class CertificateBuilderTests
             .ThrowsExactly<ArgumentException>();
 
         await Assert
-            .That(() => new CertificateBuilder().SetNotBefore(now).SetNotAfter(now.AddSeconds(1)).Validate())
+            .That(() => new CertificateBuilder().SetSubject("CN=Validity").SetNotBefore(now).SetNotAfter(now.AddSeconds(1)).Validate())
             .ThrowsNothing();
     }
 
@@ -627,6 +684,7 @@ public class CertificateBuilderTests
         //A supplied key overrides generation settings rather than conflicting with them
         using var keys = RSA.Create(2048);
         var builder = new CertificateBuilder()
+            .SetSubject("CN=Superseded Algorithm")
             .SetKeyAlgorithm(KeyAlgorithm.ECDsa(ECCurve.NamedCurves.nistP384))
             .SetKeyPair(keys);
 
@@ -734,12 +792,12 @@ public class CertificateBuilderTests
 
         //Nothing ties the generated key to the generator, so the self-signature could not verify
         await Assert
-            .That(() => new CertificateBuilder().SetSignatureGenerator(generator).Validate())
+            .That(() => new CertificateBuilder().SetSubject("CN=Generator").SetSignatureGenerator(generator).Validate())
             .ThrowsExactly<ArgumentException>();
 
         //Either an issuer or a supplied key pair resolves it
         await Assert
-            .That(() => new CertificateBuilder().SetSignatureGenerator(generator).SetKeyPair(keys).Validate())
+            .That(() => new CertificateBuilder().SetSubject("CN=Generator").SetSignatureGenerator(generator).SetKeyPair(keys).Validate())
             .ThrowsNothing();
     }
 
@@ -926,12 +984,12 @@ public class CertificateBuilderTests
     {
         //Nothing in a self-signed build could produce the signature
         await Assert
-            .That(() => new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman()).Validate())
+            .That(() => new CertificateBuilder().SetSubject("CN=ECDH").SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman()).Validate())
             .ThrowsExactly<ArgumentException>();
 
         using var issuer = BuildEcdhIssuer();
         await Assert
-            .That(() => new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman()).SetIssuer(issuer).Validate())
+            .That(() => new CertificateBuilder().SetSubject("CN=ECDH").SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman()).SetIssuer(issuer).Validate())
             .ThrowsNothing();
     }
 
@@ -1727,7 +1785,7 @@ public class CertificateBuilderTests
     public async Task Build_UnrecognisedUsage_Throws()
     {
         await Assert.That(() => {
-            using var cert = new CertificateBuilder().SetUsage((CertificateUsage)999).Create();
+            using var cert = new CertificateBuilder().SetSubject("CN=Unrecognised Usage").SetUsage((CertificateUsage)999).Create();
         }).ThrowsExactly<NotImplementedException>();
     }
 
