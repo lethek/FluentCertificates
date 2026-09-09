@@ -121,7 +121,9 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     }
 
 
-    //An unopenable root needs no guard here: IgnoreInaccessible covers the root of the scan too
+    /// <summary>Lists the files to read, or nothing at all when the directory cannot be listed.</summary>
+    /// <remarks>An unopenable root needs no guard here: IgnoreInaccessible covers the root of the scan
+    /// too.</remarks>
     private IEnumerable<string> ListFiles()
     {
         try {

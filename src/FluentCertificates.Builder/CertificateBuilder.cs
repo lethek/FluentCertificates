@@ -431,8 +431,12 @@ public record CertificateBuilder
     }
 
 
-    //ImmutableHashSet keeps the entry already there on a collision, so removing first is what makes this a
-    //replacement. Remove reads the set's own comparer, which matches on the OID alone.
+    /// <summary>
+    /// Adds an extension, replacing any already present under the same OID.
+    /// </summary>
+    /// <remarks><see cref="ImmutableHashSet{T}"/> keeps the entry already there on a collision, so removing
+    /// first is what makes this a replacement. Remove reads the set's own comparer, which matches on the OID
+    /// alone.</remarks>
     private CertificateBuilder SetExtension(X509Extension extension)
         => this with { _extensions = _extensions.Remove(extension).Add(extension) };
 

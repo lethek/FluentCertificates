@@ -77,8 +77,13 @@ internal static class X500NameComparer
     }
 
 
-    //'#' is here because Java renders an unprintable attribute value as '#' plus the hex of its encoding,
-    //so a character folding into a leading '#' lets a value spell out another name's encoding.
+    /// <summary>
+    /// The characters a folded value must not turn into, since each separates one part of a name from
+    /// another.
+    /// </summary>
+    /// <remarks>'#' is here because Java renders an unprintable attribute value as '#' plus the hex of its
+    /// encoding, so a character folding into a leading '#' lets a value spell out another name's
+    /// encoding.</remarks>
     private const string Separators = ",+=;<>\"\\#";
 
 
