@@ -216,6 +216,190 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
+    public async Task UseCertificateSigningRequest_WithAccept_TheLastPathLengthCallWins()
+    {
+        //SetPathLength feeds the basic constraints the CA profile generates rather than being an extension
+        //itself, so without a clear it loses to an accepted one however late it is called.
+        var csr = LoadWithExtensions(BuildAmbitiousRequest("CN=Path Length Precedence"));
+
+        using var ca = BuildCa();
+        var template = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetIssuer(ca);
+
+        using var pathLengthLast = template
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.BasicConstraints2)
+            .SetPathLength(2)
+            .Create();
+
+        using var acceptedLast = template
+            .SetPathLength(2)
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.BasicConstraints2)
+            .Create();
+
+        await Assert.That(CountExtensions(pathLengthLast, Oids.BasicConstraints2)).IsEqualTo(1);
+        await Assert.That(BasicConstraintsOf(pathLengthLast).HasPathLengthConstraint).IsTrue();
+        await Assert.That(BasicConstraintsOf(pathLengthLast).PathLengthConstraint).IsEqualTo(2);
+
+        //The request's own basic constraints assert no path length, and saying yes to them last means
+        //saying yes to that too
+        await Assert.That(BasicConstraintsOf(acceptedLast).HasPathLengthConstraint).IsFalse();
+    }
+
+
+    [Test]
+    public async Task UseCertificateSigningRequest_WithAccept_TheLastUsageCallWins()
+    {
+        //A profile generates the extended key usage rather than storing one, so an accepted extension
+        //displaces it. Setting the profile afterwards has to be the CA's last word.
+        var csr = LoadWithExtensions(BuildAmbitiousRequest("CN=Usage Precedence"));
+
+        using var ca = BuildCa();
+        using var usageLast = new CertificateBuilder()
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.EnhancedKeyUsage)
+            .SetUsage(CertificateUsage.Server)
+            .Create();
+
+        await Assert.That(CountExtensions(usageLast, Oids.EnhancedKeyUsage)).IsEqualTo(1);
+        await Assert.That(ReadEnhancedKeyUsages(usageLast)).IsEquivalentTo([Oids.ServerAuthPurpose]);
+    }
+
+
+    [Test]
+    public async Task UseCertificateSigningRequest_WithAccept_ASucceedingUsageAlsoReclaimsBasicConstraintsAndKeyUsage()
+    {
+        //The profile owns every extension it generates, not just the one under test above, so all of them
+        //go back to the profile when it is set last. cA=TRUE would otherwise contradict Server and throw.
+        var csr = LoadWithExtensions(BuildAmbitiousRequest("CN=Whole Profile Reclaimed"));
+
+        using var ca = BuildCa();
+        using var issued = new CertificateBuilder()
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(csr, _ => true)
+            .SetUsage(CertificateUsage.Server)
+            .Create();
+
+        await Assert.That(BasicConstraintsOf(issued).CertificateAuthority).IsFalse();
+        await Assert.That(KeyUsagesOf(issued).HasFlag(X509KeyUsageFlags.KeyCertSign)).IsFalse();
+
+        //The subject alternative name is not part of any profile, so accepting it still stands
+        await Assert.That(ReadDnsNames(issued)).IsEquivalentTo([RequestedDnsName]);
+    }
+
+
+    [Test]
+    public async Task UseCertificateSigningRequest_WithAccept_TheLastKeyCallWins()
+    {
+        //The subject key identifier names the key being certified, so a key set after an accepted one has
+        //to take it back. Otherwise the certificate names a key it does not contain.
+        var csr = LoadWithExtensions(BuildAmbitiousRequest("CN=Key Precedence"));
+
+        using var ca = BuildCa();
+        using var ownKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var template = new CertificateBuilder().SetIssuer(ca);
+
+        using var keyLast = template
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.SubjectKeyIdentifier)
+            .SetKeyPair(ownKeys)
+            .Create();
+
+        using var acceptedLast = template
+            .SetKeyPair(ownKeys)
+            .UseCertificateSigningRequest(csr, x => x.Oid?.Value == Oids.SubjectKeyIdentifier)
+            .Create();
+
+        await Assert.That(CountExtensions(keyLast, Oids.SubjectKeyIdentifier)).IsEqualTo(1);
+        await Assert.That(SubjectKeyIdentifierOf(keyLast)).IsEqualTo(DerivedKeyIdentifier(new PublicKey(ownKeys)));
+
+        //Accepting last means accepting the requester's own identifier, and its key with it
+        await Assert.That(SubjectKeyIdentifierOf(acceptedLast)).IsEqualTo(DerivedKeyIdentifier(csr.CertificateRequest.PublicKey));
+    }
+
+
+    [Test]
+    public async Task Create_WithAKeySetAfterASubjectKeyIdentifierWasAdded_NamesTheKeyItCertifies()
+    {
+        //Same rule off the signing-request path: AddExtension then a key means the key had the last word.
+        using var stale = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var actual = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Key Set Last")
+            .AddExtension(new X509SubjectKeyIdentifierExtension(new PublicKey(stale), false))
+            .SetKeyPair(actual)
+            .Create();
+
+        await Assert.That(CountExtensions(cert, Oids.SubjectKeyIdentifier)).IsEqualTo(1);
+        await Assert.That(SubjectKeyIdentifierOf(cert)).IsEqualTo(DerivedKeyIdentifier(new PublicKey(actual)));
+    }
+
+
+    [Test]
+    public async Task Create_WithNoKeySetAndASubjectKeyIdentifierAdded_KeepsTheAddedOne()
+    {
+        //Create generates a key pair when the caller named none, and that fill-in must not outrank a
+        //Subject Key Identifier the caller did add. It routes around the public setter for that reason.
+        var supplied = new X509SubjectKeyIdentifierExtension("0102030405060708090A", critical: false);
+
+        using var cert = new CertificateBuilder()
+            .SetSubject("CN=Generated Key")
+            .AddExtension(supplied)
+            .Create();
+
+        await Assert.That(FindExtension(cert, Oids.SubjectKeyIdentifier).RawData)
+            .IsEquivalentTo(supplied.RawData, CollectionOrdering.Matching);
+    }
+
+
+    public static IEnumerable<CertificateUsage> AllUsages()
+        => Enum.GetValues<CertificateUsage>();
+
+
+    [Test]
+    [MethodDataSource(nameof(AllUsages))]
+    public async Task SetUsage_DiscardsEveryExtensionItsOwnProfileGenerates(CertificateUsage usage)
+    {
+        //SetUsage clears a listed set of OIDs, which has to stay in step with what the profiles actually
+        //generate. Rather than restate that list, this builds the profile's certificate first and feeds
+        //every extension it produced back through a request, so a profile gaining an OID the list does not
+        //cover fails here instead of silently letting a requester keep that extension.
+        using var ca = BuildCa();
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        using var fromProfileAlone = new CertificateBuilder()
+            .SetUsage(usage)
+            .SetIssuer(ca)
+            .SetSubject($"CN={usage} Profile")
+            .SetKeyPair(keys)
+            .Create();
+
+        //The subject and authority key identifiers come from the keys rather than the profile, so no
+        //profile owns them and neither is expected to be reclaimed
+        var generated = fromProfileAlone.Extensions
+            .Where(x => x.Oid?.Value is not (Oids.SubjectKeyIdentifier or Oids.AuthorityKeyIdentifier))
+            .ToList();
+
+        var request = new CertificateRequest(new X500DistinguishedName($"CN={usage} Profile"), keys, HashAlgorithmName.SHA256);
+        foreach (var extension in generated) {
+            request.CertificateExtensions.Add(extension);
+        }
+        var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest(), CertificateRequestLoadOptions.UnsafeLoadCertificateExtensions);
+
+        var profileSetLast = new CertificateBuilder()
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(csr, _ => true)
+            .SetUsage(usage);
+
+        //Asserted on the builder rather than the issued certificate on purpose. A requester's copy of a
+        //generated extension can be byte-identical to the profile's, so comparing the certificate cannot
+        //tell which one won: the CA profile's basic constraints are exactly that case, since RFC 5280
+        //s4.2.1.9 makes them critical either way. Only the builder's own set shows the OID was reclaimed.
+        foreach (var extension in generated) {
+            await Assert.That(profileSetLast.Extensions.Any(x => x.Oid?.Value == extension.Oid?.Value)).IsFalse();
+        }
+    }
+
+
+    [Test]
     public async Task UseCertificateSigningRequest_WithAccept_AnAcceptedExtensionOverridesTheUsageProfile()
     {
         //Accepting an extension means accepting it over the profile's own: the CA said yes to this OID
@@ -865,4 +1049,16 @@ public class CertificateBuilderSigningRequestTests
 
     private static X509KeyUsageFlags KeyUsagesOf(X509Certificate2 cert)
         => cert.Extensions.OfType<X509KeyUsageExtension>().Single().KeyUsages;
+
+
+    private static X509BasicConstraintsExtension BasicConstraintsOf(X509Certificate2 cert)
+        => cert.Extensions.OfType<X509BasicConstraintsExtension>().Single();
+
+
+    private static string SubjectKeyIdentifierOf(X509Certificate2 cert)
+        => cert.Extensions.OfType<X509SubjectKeyIdentifierExtension>().Single().SubjectKeyIdentifier!;
+
+
+    private static string DerivedKeyIdentifier(PublicKey publicKey)
+        => new X509SubjectKeyIdentifierExtension(publicKey, false).SubjectKeyIdentifier!;
 }
