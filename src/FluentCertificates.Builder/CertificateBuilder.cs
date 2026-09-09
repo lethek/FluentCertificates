@@ -164,6 +164,12 @@ public record CertificateBuilder
         => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier).WithKeyPair(value);
 
 
+    /// <summary>
+    /// Assigns the key without discarding a Subject Key Identifier, which is what <see cref="GenerateKeyPair"/>
+    /// needs: filling in a key the caller never named is not a caller's call and must not outrank one.
+    /// </summary>
+    /// <remarks>Identical in signature to <see cref="SetKeyPair(AsymmetricAlgorithm)"/>, so calling the wrong
+    /// one compiles. Nothing but the name says which is which.</remarks>
     private CertificateBuilder WithKeyPair(AsymmetricAlgorithm? value)
         => this with {
             KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
@@ -178,8 +184,7 @@ public record CertificateBuilder
         => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier).WithKeyPair(value);
 
 
-    //Assigns the key without discarding a Subject Key Identifier, which is what GenerateKeyPair needs:
-    //filling in a key the caller never named is not a caller's call and must not outrank one.
+    /// <inheritdoc cref="WithKeyPair(AsymmetricAlgorithm)"/>
     private CertificateBuilder WithKeyPair(CertificateKey? value)
         => this with {
             KeyAlgorithm = GetKeyAlgorithm(value) ?? KeyAlgorithm,
@@ -448,10 +453,14 @@ public record CertificateBuilder
         };
 
 
-    //The OIDs each Usage profile generates in BuildExtensions. Listed rather than derived from the
-    //generators, which need a public key SetUsage may not have yet; SetUsage_DiscardsEveryExtensionItsOwn
-    //ProfileGenerates pins the two together. The subject key identifier is common to every profile and
-    //owned by none, so it is not here.
+    /// <summary>
+    /// The OIDs each <see cref="CertificateUsage"/> profile generates in <see cref="BuildExtensions"/>, which
+    /// <see cref="SetUsage"/> discards so that setting a profile is the last word on them.
+    /// </summary>
+    /// <remarks>Listed rather than derived from the generators, which need a public key
+    /// <see cref="SetUsage"/> may not have yet. The test
+    /// <c>SetUsage_DiscardsEveryExtensionItsOwnProfileGenerates</c> pins the two together. The subject key
+    /// identifier is common to every profile and owned by none, so it is not here.</remarks>
     private static ImmutableHashSet<string> ProfileExtensionOids(CertificateUsage usage)
         => usage switch {
             CertificateUsage.CA => [Oids.BasicConstraints2, Oids.KeyUsage],
