@@ -420,6 +420,20 @@ public record CertificateBuilder
     /// thereafter. <b>Nothing in the request is screened here</b>: apply your policy in
     /// <paramref name="accept"/>, and set a <see cref="Usage"/> first, or none of
     /// <see cref="CreateCertificateRequest"/>'s refusals apply to what an accepted extension asserts.
+    /// <para>
+    /// Two hazards a permissive <paramref name="accept"/> would not think to screen for:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>A requested <c>certificatePolicies</c> extension asserting anyPolicy
+    /// (<c>2.5.29.32.0</c>) inherits every policy the issuing CA holds (RFC 5280 s6.1.5(g)). Accepting it
+    /// on a permissive predicate hands the requester every policy the CA asserts, whether or not the CA
+    /// intended that.</description></item>
+    /// <item><description>A requested CRL Distribution Points extension names where revocation is checked
+    /// for the certificate the CA is about to issue. The requester chooses that location, and RFC 5280
+    /// does not require the extension at all, so its absence is equally the requester's choice. The
+    /// issuing CA certificate's own CRLDP and AIA values describe its parent's endpoints, not the ones an
+    /// issued certificate should carry, so they are not a value to screen a requested one against.</description></item>
+    /// </list>
     /// </remarks>
     /// <param name="csr">The received certificate signing request.</param>
     /// <param name="accept">Decides, per requested extension, whether the CA honours it.</param>
