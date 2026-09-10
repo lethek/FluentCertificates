@@ -706,8 +706,8 @@ public class CertificateExportBuilderTests
         //targets a certificate it does not contain is rejected rather than silently emitting it.
         var orphaned = leaf.Export() with { Certificates = [root, stranger] };
 
-        await Assert.That(() => orphaned.AsCert().ToByteArray()).ThrowsExactly<ArgumentException>();
-        await Assert.That(() => orphaned.WithAllPrivateKeys().AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => orphaned.AsCert().ToByteArray()).ThrowsExactly<InvalidOperationException>();
+        await Assert.That(() => orphaned.WithAllPrivateKeys().AsPem().ToPemString()).ThrowsExactly<InvalidOperationException>();
     }
 
 

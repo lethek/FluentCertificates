@@ -50,16 +50,18 @@ public class CertificateExporter
     /// <param name="password">Plain-text password (ignored when <paramref name="securePassword"/> is non-null).</param>
     /// <param name="securePassword">SecureString password; takes precedence over <paramref name="password"/>.</param>
     /// <param name="keys">Which private keys to include.</param>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="certs"/> is empty.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when <paramref name="certs"/> is empty, or when
+    /// <paramref name="anchor"/> is not among them. Both describe the state of the
+    /// <see cref="CertificateExportBuilder"/> that reached here, not an argument any caller passed.</exception>
     internal CertificateExporter(ImmutableList<X509Certificate2> certs, X509Certificate2? anchor, ExportFormat format, string? password, SecureString? securePassword, ExportKeys keys)
     {
         if (certs.Count == 0) {
-            throw new ArgumentException("No certificates to export.", nameof(certs));
+            throw new InvalidOperationException("No certificates to export.");
         }
         if (anchor != null && !certs.Any(x => String.Equals(x.Thumbprint, anchor.Thumbprint, StringComparison.OrdinalIgnoreCase))) {
-            throw new ArgumentException(
+            throw new InvalidOperationException(
                 "The anchor certificate is not among the certificates being exported. An export cannot "
-                + "target a certificate it does not contain.", nameof(anchor));
+                + "target a certificate it does not contain.");
         }
 
         //The list is written as given. A chain was sorted when AddChain declared it one; a collection

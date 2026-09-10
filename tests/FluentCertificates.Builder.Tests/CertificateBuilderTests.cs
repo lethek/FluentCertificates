@@ -1368,6 +1368,27 @@ public class CertificateBuilderTests
             .ThrowsExactly<InvalidOperationException>();
 
 
+    /// <summary>
+    /// A signing key supplied as a public key alone passes the proof-of-possession guard, which only asks
+    /// whether the algorithm can sign, and then reaches the signature generator with no private key behind
+    /// it. The complaint is about the builder's state rather than any argument, so it reads as one.
+    /// </summary>
+    [Test]
+    public async Task CreateCertificateSigningRequest_WithAPublicKeyAndNothingToSignWith_Throws()
+    {
+        using var keys = RSA.Create(2048);
+
+        var ex = await Assert
+            .That(() => new CertificateBuilder()
+                .SetSubject("CN=Public Key Only")
+                .SetPublicKey(new PublicKey(keys))
+                .CreateCertificateSigningRequest())
+            .ThrowsExactly<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains(nameof(CertificateBuilder.SetKeyPair));
+    }
+
+
     [Test]
     public async Task Default_ForFamilyWithNoDefault_Throws()
         //An unknown algorithm can no longer be forged by casting an out-of-range value, so the remaining

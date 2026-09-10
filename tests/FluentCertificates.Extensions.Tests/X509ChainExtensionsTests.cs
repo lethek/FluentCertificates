@@ -183,7 +183,7 @@ public class X509ChainExtensionsTests
 
         await Assert.That(builder.Certificates).IsEmpty();
         await Assert.That(builder.Anchor).IsNull();
-        await Assert.That(() => builder.AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => builder.AsPem().ToPemString()).ThrowsExactly<InvalidOperationException>();
     }
 
 
