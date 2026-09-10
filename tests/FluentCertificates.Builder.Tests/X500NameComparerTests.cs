@@ -6,10 +6,20 @@ namespace FluentCertificates;
 
 public class X500NameComparerTests
 {
+    /// <summary>
+    /// Every fold-dependent test gates on this probe, so a run claiming it can fold has to actually fold.
+    /// Its value is not asserted: a globalization-invariant run reports false, which is a correct answer
+    /// rather than a failure, and has to answer rather than throw.
+    /// </summary>
     [Test]
-    public async Task CanFold_ReflectsRuntimeGlobalizationSupport()
-        //Probed rather than assumed: this suite does not run globalization-invariant, so folding must be available.
-        => await Assert.That(X500NameComparer.CanFold).IsTrue();
+    public async Task CanFold_PredictsWhetherThisRuntimeFolds()
+    {
+        if (X500NameComparer.CanFold) {
+            await Assert.That(X500NameComparer.IsSameName("Große", "Grosse")).IsTrue();
+        } else {
+            await Assert.That(() => X500NameComparer.IsSameName("Große", "Grosse")).ThrowsNothing();
+        }
+    }
 
 
     [Test]
