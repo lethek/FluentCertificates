@@ -420,6 +420,22 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
+    [Arguments(CertificateUsage.CA)]
+    [Arguments(CertificateUsage.CrlSigning)]
+    public async Task SetUsage_KeepsAnExtendedKeyUsageWhenItsProfileGeneratesNone(CertificateUsage usage)
+    {
+        //The converse of the test above, which only pins that everything generated is discarded. A profile
+        //generating no extended key usage has no word on that OID, so discarding one the caller set would
+        //delete it with nothing put back.
+        var builder = new CertificateBuilder()
+            .AddExtension(new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.OcspSigningPurpose) }, false))
+            .SetUsage(usage);
+
+        await Assert.That(builder.Extensions.Any(x => x.Oid?.Value == Oids.EnhancedKeyUsage)).IsTrue();
+    }
+
+
+    [Test]
     public async Task UseCertificateSigningRequest_WithAccept_AnAcceptedExtensionOverridesTheUsageProfile()
     {
         //Accepting an extension means accepting it over the profile's own: the CA said yes to this OID

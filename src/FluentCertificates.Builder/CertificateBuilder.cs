@@ -506,12 +506,15 @@ public record CertificateBuilder
     /// <see cref="Usage"/> discards so that setting a profile is the last word on them.
     /// </summary>
     /// <remarks>Listed rather than derived from the generators, which need a public key
-    /// <see cref="Usage"/> may not have been given yet. The test
-    /// <c>SetUsage_DiscardsEveryExtensionItsOwnProfileGenerates</c> pins the two together. The subject key
-    /// identifier is common to every profile and owned by none, so it is not here.</remarks>
+    /// <see cref="Usage"/> may not have been given yet. The tests
+    /// <c>SetUsage_DiscardsEveryExtensionItsOwnProfileGenerates</c> and
+    /// <c>SetUsage_KeepsAnExtendedKeyUsageWhenItsProfileGeneratesNone</c> pin the two together in both
+    /// directions: listing an OID the profile does not generate would delete the caller's extension with
+    /// nothing put back. The subject key identifier is common to every profile and owned by none, so it is
+    /// not here.</remarks>
     private static ImmutableHashSet<string> GetOidsGeneratedByProfile(CertificateUsage usage)
         => usage switch {
-            CertificateUsage.CA => [Oids.BasicConstraints2, Oids.KeyUsage],
+            CertificateUsage.CA or CertificateUsage.CrlSigning => [Oids.BasicConstraints2, Oids.KeyUsage],
             _ => [Oids.BasicConstraints2, Oids.KeyUsage, Oids.EnhancedKeyUsage]
         };
 

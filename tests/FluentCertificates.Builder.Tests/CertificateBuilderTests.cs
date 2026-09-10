@@ -365,15 +365,27 @@ public class CertificateBuilderTests
     [Test]
     public async Task Build_CrlSigningCertificate_HasCriticalCrlSignKeyUsageAndNoEku()
     {
+        //Issued by a CA rather than self-signed: RFC 5280 s5.2.5 makes an indirect CRL issuer someone the
+        //authority delegates to, and a certificate withholding keyCertSign cannot have signed itself
+        using var ca = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=CRL Signer Test CA")
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
+            .Create();
+
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.CrlSigning)
+            .SetIssuer(ca)
             .SetSubject(x => x.SetCommonName("CRL Signer Test"))
             .Create();
 
         await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.CrlSign);
         await Assert.That(cert.Extensions.OfType<X509KeyUsageExtension>().Single().Critical).IsTrue();
         await Assert.That(cert.Extensions.OfType<X509EnhancedKeyUsageExtension>()).IsEmpty();
-        await Assert.That(cert.Extensions.OfType<X509BasicConstraintsExtension>().Single().CertificateAuthority).IsFalse();
+
+        var basicConstraints = cert.Extensions.OfType<X509BasicConstraintsExtension>().Single();
+        await Assert.That(basicConstraints.CertificateAuthority).IsFalse();
+        await Assert.That(basicConstraints.Critical).IsTrue();
     }
 
 
@@ -1075,6 +1087,7 @@ public class CertificateBuilderTests
     [Arguments(CertificateUsage.CodeSign)]
     [Arguments(CertificateUsage.OcspSigning)]
     [Arguments(CertificateUsage.TimeStamping)]
+    [Arguments(CertificateUsage.CrlSigning)]
     public async Task Build_ECDiffieHellmanWithASigningUsage_Throws(CertificateUsage usage)
     {
         using var issuer = BuildEcdhIssuer();

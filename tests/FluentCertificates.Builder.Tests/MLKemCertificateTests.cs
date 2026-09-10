@@ -104,6 +104,7 @@ public class MLKemCertificateTests
     [Arguments(CertificateUsage.CodeSign)]
     [Arguments(CertificateUsage.OcspSigning)]
     [Arguments(CertificateUsage.TimeStamping)]
+    [Arguments(CertificateUsage.CrlSigning)]
     public async Task SigningUsages_Throw(CertificateUsage usage)
     {
         using var issuer = IssuerBuilder().Create();

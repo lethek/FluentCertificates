@@ -216,7 +216,7 @@ using var cert = new CertificateBuilder()
 A key supplied through `SetKeyPair` already carries its own parameters and takes precedence over
 anything set here.
 
-### Build an OCSP responder or time-stamping certificate
+### Build an OCSP responder, time-stamping or CRL signing certificate
 
 ```csharp
 using var ocspResponder = new CertificateBuilder()
@@ -229,6 +229,14 @@ using var ocspResponder = new CertificateBuilder()
 using var timeStampingAuthority = new CertificateBuilder()
     .SetUsage(CertificateUsage.TimeStamping)
     .SetSubject(b => b.SetCommonName("Example TSA"))
+    .SetIssuer(issuer)
+    .Create();
+
+//RFC 5280 defines no extended key usage for CRL signing, so this profile emits none and asserts cRLSign
+//alone. An indirect CRL issuer is conventionally issued under the authority's own name.
+using var crlIssuer = new CertificateBuilder()
+    .SetUsage(CertificateUsage.CrlSigning)
+    .SetSubject(issuer.SubjectName)
     .SetIssuer(issuer)
     .Create();
 ```
@@ -487,7 +495,8 @@ your policy to set:
   authority you asked for.
 - **Key Usage asserting `keyCertSign` under an end-entity profile,** or not asserting it under
   `CertificateUsage.CA`. `keyCertSign` is what makes a certificate able to mint others. `cRLSign` is left
-  alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
+  alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that;
+  `CertificateUsage.CrlSigning` is the profile for one.
 - **Either of those two extensions carrying a value this builder cannot read.** The value has to decode, and
   it has to be a single encoded value with nothing after it. Bytes past the end are what one reader skips
   and another reads: an empty `SEQUENCE` followed by a stray `cA=TRUE` reads here as `cA=FALSE`, agreeing
