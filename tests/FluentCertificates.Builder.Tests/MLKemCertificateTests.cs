@@ -95,7 +95,7 @@ public class MLKemCertificateTests
     {
         await Assert
             .That(() => new CertificateBuilder().SetKeyAlgorithm(KeyAlgorithm.MLKem768).Validate())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
     }
 
 
@@ -115,7 +115,42 @@ public class MLKemCertificateTests
                 .SetIssuer(issuer)
                 .SetUsage(usage)
                 .Validate())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
+    }
+
+
+    /// <summary>
+    /// The same refusal on the request path. <see cref="CertificateBuilder.CreateCertificateRequest"/> does
+    /// not call <see cref="CertificateBuilder.Validate"/>, so a caller taking the request and signing it
+    /// themselves would otherwise obtain a certificate asserting a signing key usage on a key that cannot
+    /// sign, which RFC 9935 s5 forbids outright for ML-KEM.
+    /// </summary>
+    [Test]
+    [Arguments(CertificateUsage.CA)]
+    [Arguments(CertificateUsage.CodeSign)]
+    [Arguments(CertificateUsage.OcspSigning)]
+    [Arguments(CertificateUsage.TimeStamping)]
+    [Arguments(CertificateUsage.CrlSigning)]
+    public async Task SigningUsages_ThrowFromTheRequestPathToo(CertificateUsage usage)
+    {
+        using var issuer = IssuerBuilder().Create();
+
+        //Harvested from a built certificate because ML-KEM is not an AsymmetricAlgorithm; this is also the
+        //shape the hazard takes, a public key arriving on its own with no private key behind it
+        using var certified = new CertificateBuilder()
+            .SetIssuer(issuer)
+            .SetKeyAlgorithm(KeyAlgorithm.MLKem768)
+            .SetSubject(x => x.SetCommonName("ML-KEM Request Key"))
+            .Create();
+
+        await Assert
+            .That(() => new CertificateBuilder()
+                .SetPublicKey(certified.PublicKey)
+                .SetIssuer(issuer)
+                .SetUsage(usage)
+                .SetSubject(x => x.SetCommonName($"ML-KEM {usage}"))
+                .CreateCertificateRequest())
+            .ThrowsExactly<InvalidOperationException>();
     }
 
 
