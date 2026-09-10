@@ -138,7 +138,7 @@ public class GetPrivateKeyAndSignatureAlgorithmTests
     public async Task ForPostQuantum_ClassicalAlgorithm_Throws(KeyAlgorithmFamily family)
     {
 #pragma warning disable FLUENTCERT001 // Exercising the experimental post-quantum surface is the point here
-        var ex = await Assert.That(() => SignatureAlgorithm.ForPostQuantum(KeyAlgorithm.Default(family)))
+        var ex = await Assert.That(() => SignatureAlgorithm.CreateForPostQuantum(KeyAlgorithm.Default(family)))
             .ThrowsExactly<ArgumentException>();
 #pragma warning restore FLUENTCERT001
 
@@ -155,7 +155,7 @@ public class GetPrivateKeyAndSignatureAlgorithmTests
     public async Task ForPostQuantum_KeyEncapsulation_Throws()
     {
 #pragma warning disable FLUENTCERT001 // Exercising the experimental post-quantum surface is the point here
-        await Assert.That(() => SignatureAlgorithm.ForPostQuantum(KeyAlgorithm.MLKem768))
+        await Assert.That(() => SignatureAlgorithm.CreateForPostQuantum(KeyAlgorithm.MLKem768))
             .ThrowsExactly<ArgumentException>();
 #pragma warning restore FLUENTCERT001
     }
@@ -165,7 +165,7 @@ public class GetPrivateKeyAndSignatureAlgorithmTests
     public async Task ForPostQuantum_Null_Throws()
     {
 #pragma warning disable FLUENTCERT001 // Exercising the experimental post-quantum surface is the point here
-        await Assert.That(() => SignatureAlgorithm.ForPostQuantum(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => SignatureAlgorithm.CreateForPostQuantum(null!)).ThrowsExactly<ArgumentNullException>();
 #pragma warning restore FLUENTCERT001
     }
 
@@ -174,7 +174,7 @@ public class GetPrivateKeyAndSignatureAlgorithmTests
     public async Task ForPostQuantum_SigningParameterSet_CarriesNoHashAlgorithm()
     {
 #pragma warning disable FLUENTCERT001 // Exercising the experimental post-quantum surface is the point here
-        var algorithm = SignatureAlgorithm.ForPostQuantum(KeyAlgorithm.MLDsa65);
+        var algorithm = SignatureAlgorithm.CreateForPostQuantum(KeyAlgorithm.MLDsa65);
 
         //A post-quantum parameter set fixes both key and signature algorithm, so there is no separate hash
         await Assert.That(algorithm.HashAlgorithm).IsNull();
