@@ -906,6 +906,28 @@ var cert = new CertificateFinder()
     .FirstOrDefault();
 ```
 
+### Find certificates by subject or issuer name
+
+`WhereSubjectMatches` and `WhereIssuerMatches` narrow the search by name, using any
+`IEqualityComparer<X500DistinguishedName>`. See [Comparing names](#comparing-names) for the built-in
+comparers and what each of them disregards.
+
+```csharp
+var issued = new CertificateFinder()
+    .AddCommonStores()
+    .WhereIssuerMatches(ca.SubjectName)
+    .ToList();
+
+//Loosen it to match names that differ only in case, spacing or Unicode spelling
+var alsoMisspelled = new CertificateFinder()
+    .AddCommonStores()
+    .WhereIssuerMatches(ca.SubjectName, X500NameComparer.Folded)
+    .ToList();
+```
+
+Both default to `X500NameComparer.Values`, which disregards how the characters were encoded but nothing
+else, and answers the same on every runtime.
+
 ### Find a certificate whose private key can actually sign
 
 `HasPrivateKey` only reports that the certificate carries metadata naming a key. Picking an issuer on
@@ -1058,22 +1080,61 @@ var custom = new X500NameBuilder()
 
 ### Comparing names
 
-`EquivalentTo` compares the attributes themselves and ignores ordering by default, which is usually
-what you want when asking whether two names describe the same entity.
+`X500NameComparer` answers "are these the same name?", and is an
+`IEqualityComparer<X500DistinguishedName>`, so it can key a dictionary or be handed to any API that
+takes one. Five members, loosest last:
+
+|Comparer|Disregards|
+|---|---|
+|`Exact`|Nothing. Compares the encoded bytes.|
+|`Values`|How the characters were encoded.|
+|`ValuesAnyOrder`|That, plus the order of the relative distinguished names.|
+|`Folded`|Encoding, letter case, whitespace runs and Unicode spelling.|
+|`FoldedAnyOrder`|That, plus the order of the relative distinguished names.|
+
+```csharp
+var bySubject = new Dictionary<X500DistinguishedName, X509Certificate2>(X500NameComparer.Values);
+bySubject[cert.SubjectName] = cert;
+
+X500NameComparer.Values.Equals(cert.IssuerName, ca.SubjectName);   //name chaining
+```
+
+`Values` is the usual choice. It finds names that differ only in ASN.1 string type, which is a real
+difference rather than a hypothetical one: RFC 5280 s4.1.2.4 lets a conforming CA use either
+`PrintableString` or `UTF8String`, and the RFC's own notes cite comparing the bytes across such a
+transition as a cause of name chaining failures. It is also the only decoding member that answers the
+same on every runtime.
+
+`Folded` approximates how RFC 5280 s7.1 asks a relying party to compare names, and errs deliberately
+towards matching. That bias is safe when looking something up and risky when deciding whether to trust
+something. It also depends on the runtime's globalization support: under
+`DOTNET_SYSTEM_GLOBALIZATION_INVARIANT` it silently stops folding and matches fewer names, so check
+`X500NameComparer.CanFold` before relying on it.
+
+The `AnyOrder` members depart from RFC 5280 s7.1, which matches two names only when the matching parts
+appear in the same sequence. Prefer the ordered members wherever the answer decides whether something is
+trusted.
+
+#### From an X500NameBuilder
+
+`EquivalentTo` takes any of them, defaulting to `ValuesAnyOrder`:
 
 ```csharp
 var a = new X500NameBuilder().SetCommonName("example.com").SetCountry("AU");
 var b = new X500NameBuilder().SetCountry("AU").SetCommonName("example.com");
 
-a.EquivalentTo(b);                          //true: same attributes, different order
-a.EquivalentTo(b, orderMatters: true);      //false
-a.EquivalentTo("CN=example.com, C=AU");     //true
+a.EquivalentTo(b);                                      //true: same attributes, different order
+a.EquivalentTo(b, X500NameComparer.Values);             //false: order differs
+a.EquivalentTo("CN=example.com, C=AU");                 //true
 ```
 
-`Equals` is a different question: it compares the **encoded bytes**. Two names that render as the
-same string can still differ, because the ASN.1 string encoding is part of the encoding. The
-`Set*` methods use `UTF8String`, whereas parsing a string into an `X500DistinguishedName` yields
-`PrintableString` for values that fit it:
+The order-agnostic default is deliberate: this builder emits its attributes in the order the setters were
+called, and `Set` moves an attribute it replaces to the end, so the order is not something you can state.
+
+`Equals` is a different question: it compares the **encoded bytes**, as `X500NameComparer.Exact` does.
+Two names that render as the same string can still differ, because the ASN.1 string type is part of the
+encoding. The `Set*` methods use `UTF8String`, whereas parsing a string into an `X500DistinguishedName`
+yields `PrintableString` for values that fit it:
 
 ```csharp
 var built = new X500NameBuilder().SetCommonName("example.com").SetCountry("AU");
@@ -1097,7 +1158,7 @@ encoding to match, set it explicitly with `Set(oid, UniversalTagNumber.Printable
 |`Remove(oid)`, `Clear()`|Remove attributes by OID, or all of them.|
 |`GetCommonName`, `GetCountry`, ... `GetOrganizationalUnits`, `GetDomainComponents`|Read attribute values back.|
 |`Create()`|Build the `X500DistinguishedName`. Also available as an implicit conversion.|
-|`EquivalentTo(other, orderMatters = false)`|Compare attributes against another builder, an `X500DistinguishedName` or a string.|
+|`EquivalentTo(other, comparer = null)`|Compare against another builder, an `X500DistinguishedName` or a string, under any `IEqualityComparer<X500DistinguishedName>`. Defaults to `X500NameComparer.ValuesAnyOrder`.|
 |`Equals(other)`|Compare encoded bytes against an `X500DistinguishedName` or a string.|
 |`RelativeDistinguishedNames`|The attributes as `(Oid, UniversalTagNumber, string)` tuples.|
 
@@ -1112,8 +1173,8 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`BuildChain()`|Starts a fluent `X509ChainBuilder` for building and verifying a chain for this certificate. See [Building a certificate chain](#building-a-certificate-chain).|
 |`IsValidNow()`|Whether the current UTC time falls within the certificate's validity period.|
 |`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. There is no `DateTime` overload, because a `DateTime` carries no offset and its `DateTimeKind` would change the result.|
-|`IsSelfSigned(bool verifySignature = false)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key.|
-|`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name.|
+|`IsSelfSigned(bool verifySignature = false, IEqualityComparer<X500DistinguishedName>? comparer = null)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
+|`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false, IEqualityComparer<X500DistinguishedName>? comparer = null)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
 |`CanSign()`|Whether the private key can actually be used for signing, as opposed to merely being associated with the certificate. Every "cannot sign" outcome returns `false` rather than throwing. Costs a key-store lookup. See [Find a certificate whose private key can actually sign](#find-a-certificate-whose-private-key-can-actually-sign).|
 |`GetPrivateKey()`|Returns the private key as a `CertificateKey`, whatever its algorithm, classical or post-quantum. Reach a classical key through `.AsAsymmetricAlgorithm`. Every call returns a **new instance which you own and should dispose**; see [Key ownership](#key-ownership-and-disposal).|
 |`GetSignatureAlgorithm()`|Returns the `SignatureAlgorithm` the certificate was signed with, combining key algorithm, hash and padding.|

@@ -167,8 +167,8 @@ public class X500NameBuilderTests
             .SetCountry("AU");
 
         var name = new X500DistinguishedName(dn);
-        await Assert.That(rightOrder.EquivalentTo(name, true)).IsTrue();
-        await Assert.That(wrongOrder.EquivalentTo(name, false)).IsTrue();
+        await Assert.That(rightOrder.EquivalentTo(name, X500NameComparer.Values)).IsTrue();
+        await Assert.That(wrongOrder.EquivalentTo(name, X500NameComparer.ValuesAnyOrder)).IsTrue();
     }
 
 
@@ -183,7 +183,7 @@ public class X500NameBuilderTests
             .SetCountry("AU");
 
         var name = new X500DistinguishedName(dn);
-        await Assert.That(wrongOrder.EquivalentTo(name, true)).IsFalse();
+        await Assert.That(wrongOrder.EquivalentTo(name, X500NameComparer.Values)).IsFalse();
     }
 
 
@@ -202,8 +202,8 @@ public class X500NameBuilderTests
             .SetCommonName(nameof(Equality_With_String))
             .SetCountry("AU");
 
-        await Assert.That(rightOrder.EquivalentTo(dn, true)).IsTrue();
-        await Assert.That(wrongOrder.EquivalentTo(dn, false)).IsTrue();
+        await Assert.That(rightOrder.EquivalentTo(dn, X500NameComparer.Values)).IsTrue();
+        await Assert.That(wrongOrder.EquivalentTo(dn, X500NameComparer.ValuesAnyOrder)).IsTrue();
     }
 
 
@@ -217,7 +217,7 @@ public class X500NameBuilderTests
             .SetCommonName(nameof(Inequality_With_String))
             .SetCountry("AU");
 
-        await Assert.That(wrongOrder.EquivalentTo(dn, true)).IsFalse();
+        await Assert.That(wrongOrder.EquivalentTo(dn, X500NameComparer.Values)).IsFalse();
     }
 
 
@@ -228,6 +228,51 @@ public class X500NameBuilderTests
 
         await Assert.That(builder.Equals((X500DistinguishedName?)null)).IsFalse();
         await Assert.That(builder.Equals((string?)null)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Equals_ItsOwnEncodedName_ReturnsTrue()
+    {
+        var builder = new X500NameBuilder().SetCommonName("Example").SetCountry("AU");
+
+        await Assert.That(builder.Equals(builder.Create())).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Equals_ADifferentName_ReturnsFalse()
+    {
+        var builder = new X500NameBuilder().SetCommonName("Example");
+
+        await Assert.That(builder.Equals(new X500NameBuilder().SetCommonName("Other").Create())).IsFalse();
+    }
+
+
+    /// <summary>Round-tripping a string preserves each value's encoding, so a builder read from one equals
+    /// it. Contrast <see cref="Equals_SameCharactersDifferentStringType_ReturnsFalse"/>.</summary>
+    [Test]
+    public async Task Equals_TheStringItWasBuiltFrom_ReturnsTrue()
+    {
+        var builder = new X500NameBuilder("CN=Example, C=AU");
+
+        await Assert.That(builder.Equals("CN=Example, C=AU")).IsTrue();
+    }
+
+
+    /// <summary>
+    /// Equals compares the encoded bytes, and the ASN.1 string type is part of them: the setters emit
+    /// UTF8String, while parsing a string yields PrintableString for a value that fits it. EquivalentTo is
+    /// the question that disregards this.
+    /// </summary>
+    [Test]
+    public async Task Equals_SameCharactersDifferentStringType_ReturnsFalse()
+    {
+        var builder = new X500NameBuilder().SetCommonName("Example");
+
+        await Assert.That(builder.Equals("CN=Example")).IsFalse();
+        await Assert.That(builder.Equals(new X500DistinguishedName("CN=Example"))).IsFalse();
+        await Assert.That(builder.EquivalentTo("CN=Example")).IsTrue();
     }
 
 

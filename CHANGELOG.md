@@ -21,6 +21,8 @@ release rather than record it as it happened.
 - `Oids.SubjectInformationAccess`, `Oids.SubjectDirectoryAttributes` and `Oids.FreshestCrl`.
 - `Oids` has a cached `Oid` property for every OID constant, not just a subset.
 - `CertificateBuilder.UseCertificateSigningRequest` issues a certificate from a received CSR, taking its subject and public key. An overload takes a predicate deciding which requested extensions the CA honours.
+- `X500NameComparer`, an `IEqualityComparer<X500DistinguishedName>` with the members `Exact`, `Values`, `ValuesAnyOrder`, `Folded` and `FoldedAnyOrder`, and a `CanFold` property.
+- `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches` narrow a search to certificates whose subject or issuer matches a given name, taking any `IEqualityComparer<X500DistinguishedName>`.
 
 ### Changed
 
@@ -39,6 +41,8 @@ release rather than record it as it happened.
 - **Breaking:** Setting `CertificateBuilder.Usage` discards any basic constraints, key usage or extended key usage extension already on the builder, and setting `PathLength` discards any basic constraints extension when the `Usage` is `CertificateUsage.CA`, whether set through `SetUsage`/`SetPathLength`, an object initializer or a `with` expression. `SetKeyPair`, `SetPublicKey` and `SetKeyAlgorithm` each discard any Subject Key Identifier extension. The last call to state any of them is the one issued.
 - **Breaking:** `CertificateBuilder.KeyAlgorithm` is get-only; set it through `SetKeyAlgorithm`, which also clears any key already set.
 - **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
+- **Breaking:** `X500NameBuilder.EquivalentTo` takes an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.ValuesAnyOrder`, in place of its `bool orderMatters` parameter.
+- **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` take an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.Values`, in place of comparing the encoded names byte for byte.
 
 ### Fixed
 

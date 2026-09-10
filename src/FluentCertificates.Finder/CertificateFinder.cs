@@ -41,6 +41,40 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
         => this with { Filter = Filter.Add(predicate) };
 
 
+    /// <summary>Narrows the search to certificates whose subject is the same name as <paramref name="name"/>.
+    /// Combines with other predicates by AND, like <see cref="Where"/>.</summary>
+    /// <param name="name">The name a result's subject must match.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>,
+    /// which disregards how the characters were encoded and answers the same on every runtime.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
+    public CertificateFinder WhereSubjectMatches(
+        X500DistinguishedName name,
+        IEqualityComparer<X500DistinguishedName>? comparer = null)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        var matches = comparer ?? X500NameComparer.Values;
+        return Where(r => matches.Equals(name, r.Certificate.SubjectName));
+    }
+
+
+    /// <summary>Narrows the search to certificates whose issuer is the same name as <paramref name="name"/>.
+    /// Combines with other predicates by AND, like <see cref="Where"/>.</summary>
+    /// <param name="name">The name a result's issuer must match.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>,
+    /// which disregards how the characters were encoded and answers the same on every runtime.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
+    public CertificateFinder WhereIssuerMatches(
+        X500DistinguishedName name,
+        IEqualityComparer<X500DistinguishedName>? comparer = null)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        var matches = comparer ?? X500NameComparer.Values;
+        return Where(r => matches.Equals(name, r.Certificate.IssuerName));
+    }
+
+
     /// <summary>Whether any certificate matches <paramref name="predicate"/>.</summary>
     /// <param name="predicate">The predicate a result must satisfy.</param>
     /// <returns><see langword="true"/> if at least one matches.</returns>
