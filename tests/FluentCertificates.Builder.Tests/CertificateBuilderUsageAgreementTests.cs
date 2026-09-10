@@ -20,6 +20,7 @@ public class CertificateBuilderUsageAgreementTests
     [Arguments(CertificateUsage.CodeSign)]
     [Arguments(CertificateUsage.OcspSigning)]
     [Arguments(CertificateUsage.TimeStamping)]
+    [Arguments(CertificateUsage.CrlSigning)]
     public async Task Create_WithCertificateAuthorityBasicConstraintsOnAnEndEntityProfile_Throws(CertificateUsage usage)
     {
         //The attack this refusal exists for: a requester slips cA=TRUE past an accept predicate that
@@ -832,6 +833,7 @@ public class CertificateBuilderUsageAgreementTests
     [Test]
     [Arguments(CertificateUsage.Server)]
     [Arguments(CertificateUsage.Client)]
+    [Arguments(CertificateUsage.CrlSigning)]
     public async Task Create_WithASubjectMatchingTheIssuersOnAnEndEntityProfile_IsIssuedNormally(CertificateUsage usage)
     {
         //An end-entity certificate under its issuer's own name is how an indirect CRL issuer is conventionally

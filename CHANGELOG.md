@@ -23,6 +23,7 @@ release rather than record it as it happened.
 - `CertificateBuilder.UseCertificateSigningRequest` issues a certificate from a received CSR, taking its subject and public key. An overload takes a predicate deciding which requested extensions the CA honours.
 - `X500NameComparer`, an `IEqualityComparer<X500DistinguishedName>` with the members `Exact`, `Values`, `ValuesAnyOrder`, `Folded` and `FoldedAnyOrder`, and a `CanFold` property.
 - `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches` narrow a search to certificates whose subject or issuer matches a given name, taking any `IEqualityComparer<X500DistinguishedName>`.
+- `CertificateUsage.CrlSigning`, a dedicated CRL issuer profile asserting only `cRLSign`.
 
 ### Changed
 
@@ -44,6 +45,8 @@ release rather than record it as it happened.
 - **Breaking:** `X500NameBuilder.EquivalentTo` takes an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.ValuesAnyOrder`, in place of its `bool orderMatters` parameter.
 - **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` take an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.Values`, in place of comparing the encoded names byte for byte.
 - **Breaking:** `SignatureAlgorithm.ForPostQuantum` renamed to `CreateForPostQuantum`.
+- **Breaking:** `CertificateBuilder.Validate`, `Create` and `CreateCertificateRequest` throw `InvalidOperationException` for a builder configuration that cannot produce a certificate, in place of `ArgumentException` and `ArgumentNullException`.
+- **Breaking:** A certificate or certificate request is refused when the `CertificateUsage` profile asserts a signing key usage and the certified key cannot sign, `CertificateBuilder.CreateCertificateRequest` included.
 
 ### Fixed
 

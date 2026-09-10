@@ -363,6 +363,33 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Build_CrlSigningCertificate_HasCriticalCrlSignKeyUsageAndNoEku()
+    {
+        //Issued by a CA rather than self-signed: RFC 5280 s5.2.5 makes an indirect CRL issuer someone the
+        //authority delegates to, and a certificate withholding keyCertSign cannot have signed itself
+        using var ca = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CA)
+            .SetSubject("CN=CRL Signer Test CA")
+            .SetNotAfter(DateTimeOffset.UtcNow.AddDays(1))
+            .Create();
+
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CrlSigning)
+            .SetIssuer(ca)
+            .SetSubject(x => x.SetCommonName("CRL Signer Test"))
+            .Create();
+
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.CrlSign);
+        await Assert.That(cert.Extensions.OfType<X509KeyUsageExtension>().Single().Critical).IsTrue();
+        await Assert.That(cert.Extensions.OfType<X509EnhancedKeyUsageExtension>()).IsEmpty();
+
+        var basicConstraints = cert.Extensions.OfType<X509BasicConstraintsExtension>().Single();
+        await Assert.That(basicConstraints.CertificateAuthority).IsFalse();
+        await Assert.That(basicConstraints.Critical).IsTrue();
+    }
+
+
+    [Test]
     public async Task Build_TimeStampingCertificate_HasCriticalTimeStampingEKU()
     {
         using var cert = new CertificateBuilder()
@@ -513,7 +540,7 @@ public class CertificateBuilderTests
             .That(() => {
                 using var cert = new CertificateBuilder().Create();
             })
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
     }
 
 
@@ -525,7 +552,7 @@ public class CertificateBuilderTests
             .That(() => {
                 using var cert = new CertificateBuilder().SetSubjectAlternativeNames([]).Create();
             })
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
     }
 
 
@@ -626,12 +653,12 @@ public class CertificateBuilderTests
 
         await Assert
             .That(() => new CertificateBuilder().SetNotBefore(now).SetNotAfter(now.AddHours(-1)).Validate())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
 
         //The bound is exclusive: equal timestamps are rejected too
         await Assert
             .That(() => new CertificateBuilder().SetNotBefore(now).SetNotAfter(now).Validate())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
 
         await Assert
             .That(() => new CertificateBuilder().SetSubject("CN=Validity").SetNotBefore(now).SetNotAfter(now.AddSeconds(1)).Validate())
@@ -854,7 +881,7 @@ public class CertificateBuilderTests
         //Nothing ties the generated key to the generator, so the self-signature could not verify
         await Assert
             .That(() => new CertificateBuilder().SetSubject("CN=Generator").SetSignatureGenerator(generator).Validate())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
 
         //Either an issuer or a supplied key pair resolves it
         await Assert
@@ -916,7 +943,7 @@ public class CertificateBuilderTests
         await Assert.That(builder.KeyAlgorithm).IsEqualTo(KeyAlgorithm.ECDsa());
 
         //With the key pair cleared there is nothing left to self-sign with
-        await Assert.That(() => builder.Validate()).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => builder.Validate()).ThrowsExactly<InvalidOperationException>();
     }
 
 
@@ -949,7 +976,7 @@ public class CertificateBuilderTests
         //Nothing here can produce a signature
         await Assert
             .That(() => new CertificateBuilder().SetPublicKey(new PublicKey(remoteKeys)).Validate())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
     }
 
 
@@ -1046,7 +1073,7 @@ public class CertificateBuilderTests
         //Nothing in a self-signed build could produce the signature
         await Assert
             .That(() => new CertificateBuilder().SetSubject("CN=ECDH").SetKeyAlgorithm(KeyAlgorithm.ECDiffieHellman()).Validate())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
 
         using var issuer = BuildEcdhIssuer();
         await Assert
@@ -1060,6 +1087,7 @@ public class CertificateBuilderTests
     [Arguments(CertificateUsage.CodeSign)]
     [Arguments(CertificateUsage.OcspSigning)]
     [Arguments(CertificateUsage.TimeStamping)]
+    [Arguments(CertificateUsage.CrlSigning)]
     public async Task Build_ECDiffieHellmanWithASigningUsage_Throws(CertificateUsage usage)
     {
         using var issuer = BuildEcdhIssuer();
@@ -1070,7 +1098,34 @@ public class CertificateBuilderTests
                 .SetUsage(usage)
                 .SetIssuer(issuer)
                 .Validate())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
+    }
+
+
+    /// <summary>
+    /// The same refusal on the request path, which <see cref="CertificateBuilder.Validate"/> does not guard:
+    /// <see cref="CertificateBuilder.CreateCertificateRequest"/> hands back a request the caller can sign
+    /// themselves, so letting one through would put a signing key usage on a key that cannot sign.
+    /// </summary>
+    [Test]
+    [Arguments(CertificateUsage.CA)]
+    [Arguments(CertificateUsage.CodeSign)]
+    [Arguments(CertificateUsage.OcspSigning)]
+    [Arguments(CertificateUsage.TimeStamping)]
+    [Arguments(CertificateUsage.CrlSigning)]
+    public async Task CreateCertificateRequest_ECDiffieHellmanWithASigningUsage_Throws(CertificateUsage usage)
+    {
+        using var issuer = BuildEcdhIssuer();
+        using var keys = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
+
+        await Assert
+            .That(() => new CertificateBuilder()
+                .SetSubject("CN=ECDH Request")
+                .SetKeyPair(keys)
+                .SetUsage(usage)
+                .SetIssuer(issuer)
+                .CreateCertificateRequest())
+            .ThrowsExactly<InvalidOperationException>();
     }
 
 
@@ -1272,7 +1327,7 @@ public class CertificateBuilderTests
                 .SetKeyPair(keys)
                 .SetSignatureGenerator(generator)
                 .Validate())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
     }
 
 
@@ -1310,7 +1365,7 @@ public class CertificateBuilderTests
     public async Task CreateCertificateRequest_WithoutKeyPair_Throws()
         => await Assert
             .That(() => new CertificateBuilder().CreateCertificateRequest())
-            .ThrowsExactly<ArgumentNullException>();
+            .ThrowsExactly<InvalidOperationException>();
 
 
     [Test]

@@ -216,7 +216,7 @@ using var cert = new CertificateBuilder()
 A key supplied through `SetKeyPair` already carries its own parameters and takes precedence over
 anything set here.
 
-### Build an OCSP responder or time-stamping certificate
+### Build an OCSP responder, time-stamping or CRL signing certificate
 
 ```csharp
 using var ocspResponder = new CertificateBuilder()
@@ -229,6 +229,14 @@ using var ocspResponder = new CertificateBuilder()
 using var timeStampingAuthority = new CertificateBuilder()
     .SetUsage(CertificateUsage.TimeStamping)
     .SetSubject(b => b.SetCommonName("Example TSA"))
+    .SetIssuer(issuer)
+    .Create();
+
+//RFC 5280 defines no extended key usage for CRL signing, so this profile emits none and asserts cRLSign
+//alone. An indirect CRL issuer is conventionally issued under the authority's own name.
+using var crlIssuer = new CertificateBuilder()
+    .SetUsage(CertificateUsage.CrlSigning)
+    .SetSubject(issuer.SubjectName)
     .SetIssuer(issuer)
     .Create();
 ```
@@ -473,7 +481,7 @@ property exists independently of the policy you issue under.
 ### What the builder refuses
 
 Criticality is a flag beside an extension, so a violation can be corrected. Other things cannot be corrected
-without deciding what the caller meant, and those are refused. All but the last below throw an
+without deciding what the caller meant, and those are refused. They all throw an
 `InvalidOperationException`. The list
 is short, and follows the boundary above: a value contradicting the `Usage` you stated about whether this is
 a certificate authority, a certificate signed by a key other than the one it names, and the narrow case of a
@@ -487,7 +495,14 @@ your policy to set:
   authority you asked for.
 - **Key Usage asserting `keyCertSign` under an end-entity profile,** or not asserting it under
   `CertificateUsage.CA`. `keyCertSign` is what makes a certificate able to mint others. `cRLSign` is left
-  alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that.
+  alone, since an indirect CRL issuer is conventionally an end-entity certificate asserting exactly that;
+  `CertificateUsage.CrlSigning` is the profile for one.
+- **A `Usage` profile whose certificate exists to sign, on a key that cannot sign.** `CertificateUsage.CA`,
+  `CodeSign`, `OcspSigning`, `TimeStamping` and `CrlSigning` all assert a key usage describing an operation
+  an ML-KEM or ECDH key can never perform, and RFC 9935 s5 permits an ML-KEM certificate no key usage but
+  `keyEncipherment`. Substituting that bit instead would hand you a certificate you did not ask for, so this
+  refuses. It is checked on the request path as well as on `Validate`, since `CreateCertificateRequest`
+  hands back something you can sign yourself.
 - **Either of those two extensions carrying a value this builder cannot read.** The value has to decode, and
   it has to be a single encoded value with nothing after it. Bytes past the end are what one reader skips
   and another reads: an empty `SEQUENCE` followed by a stray `cA=TRUE` reads here as `cA=FALSE`, agreeing
@@ -517,8 +532,8 @@ your policy to set:
 - **A certificate with an empty subject and no Subject Alternative Name.** RFC 5280 s4.2.1.6 requires that
   extension of a certificate whose subject is empty, because it is then the only name the certificate has,
   and one without either identifies nobody at all. This is the only refusal on the list settled from the
-  builder's own configuration rather than from an extension's value, so it comes from `Validate` as an
-  `ArgumentException` alongside the other configuration checks. A signing request is exempt:
+  builder's own configuration rather than from an extension's value, so it comes from `Validate` alongside
+  the other configuration checks. A signing request is exempt:
   `CreateCertificateSigningRequest` does not call `Validate`, and leaving your name to the authority is a
   normal thing to ask of one.
 - **A Subject Alternative Name extension carrying no entries, or one this builder cannot read.** RFC 5280

@@ -506,12 +506,15 @@ public record CertificateBuilder
     /// <see cref="Usage"/> discards so that setting a profile is the last word on them.
     /// </summary>
     /// <remarks>Listed rather than derived from the generators, which need a public key
-    /// <see cref="Usage"/> may not have been given yet. The test
-    /// <c>SetUsage_DiscardsEveryExtensionItsOwnProfileGenerates</c> pins the two together. The subject key
-    /// identifier is common to every profile and owned by none, so it is not here.</remarks>
+    /// <see cref="Usage"/> may not have been given yet. The tests
+    /// <c>SetUsage_DiscardsEveryExtensionItsOwnProfileGenerates</c> and
+    /// <c>SetUsage_KeepsAnExtendedKeyUsageWhenItsProfileGeneratesNone</c> pin the two together in both
+    /// directions: listing an OID the profile does not generate would delete the caller's extension with
+    /// nothing put back. The subject key identifier is common to every profile and owned by none, so it is
+    /// not here.</remarks>
     private static ImmutableHashSet<string> GetOidsGeneratedByProfile(CertificateUsage usage)
         => usage switch {
-            CertificateUsage.CA => [Oids.BasicConstraints2, Oids.KeyUsage],
+            CertificateUsage.CA or CertificateUsage.CrlSigning => [Oids.BasicConstraints2, Oids.KeyUsage],
             _ => [Oids.BasicConstraints2, Oids.KeyUsage, Oids.EnhancedKeyUsage]
         };
 
@@ -551,31 +554,31 @@ public record CertificateBuilder
     /// <remarks><see cref="CreateCertificateSigningRequest"/> deliberately does not call this: a requester
     /// leaving its name to the authority is a normal thing to ask for, and the empty-subject rule applied
     /// here binds whoever issues the certificate.</remarks>
+    /// <exception cref="InvalidOperationException">Thrown when the builder describes a certificate that
+    /// cannot be built: an inverted validity period, a key that cannot sign and no <see cref="Issuer"/> to
+    /// sign for it, a <see cref="Usage"/> profile that signs on a key that cannot, a self-signed certificate
+    /// with no key to sign it, or an empty <see cref="Subject"/> with no subject alternative name.</exception>
     public void Validate()
     {
         if (NotBefore >= NotAfter) {
-            throw new ArgumentException($"{nameof(NotBefore)} cannot be later than or equal to {nameof(NotAfter)}", nameof(NotAfter));
+            throw new InvalidOperationException($"{nameof(NotBefore)} cannot be later than or equal to {nameof(NotAfter)}");
         }
 
-        if (!KeyAlgorithm.CanSign) {
-            //A SignatureGenerator is no substitute: with no Issuer the certificate is self-issued, so it
-            //would be signed by a key unrelated to the subject key and could never verify against it.
-            if (Issuer == null) {
-                throw new ArgumentException($"{KeyAlgorithm.Name} cannot sign, so the certificate must be signed by someone else. Set an {nameof(Issuer)}", nameof(Issuer));
-            }
-
-            if (Usage is CertificateUsage.CA or CertificateUsage.CodeSign or CertificateUsage.OcspSigning or CertificateUsage.TimeStamping) {
-                throw new ArgumentException($"{nameof(CertificateUsage)}.{Usage} needs a key that can sign, which {KeyAlgorithm.Name} cannot", nameof(Usage));
-            }
+        //A SignatureGenerator is no substitute: with no Issuer the certificate is self-issued, so it
+        //would be signed by a key unrelated to the subject key and could never verify against it.
+        if (!KeyAlgorithm.CanSign && Issuer == null) {
+            throw new InvalidOperationException($"{KeyAlgorithm.Name} cannot sign, so the certificate must be signed by someone else. Set an {nameof(Issuer)}");
         }
+
+        CheckKeyAgreesWithUsage(this);
 
         if (Issuer == null && KeyPair == null) {
             if (PublicKey == null && SignatureGenerator != null) {
-                throw new ArgumentException($"{nameof(SignatureGenerator)} without an {nameof(Issuer)} signs the certificate with itself, so the key it signs with must also be supplied through {nameof(SetKeyPair)} or {nameof(SetPublicKey)}", nameof(SignatureGenerator));
+                throw new InvalidOperationException($"{nameof(SignatureGenerator)} without an {nameof(Issuer)} signs the certificate with itself, so the key it signs with must also be supplied through {nameof(SetKeyPair)} or {nameof(SetPublicKey)}");
             }
 
             if (PublicKey != null && SignatureGenerator == null) {
-                throw new ArgumentException($"{nameof(SetPublicKey)} supplies no private key, so a self-signed certificate also needs a {nameof(SignatureGenerator)} to sign with, or an {nameof(Issuer)} to sign it", nameof(SignatureGenerator));
+                throw new InvalidOperationException($"{nameof(SetPublicKey)} supplies no private key, so a self-signed certificate also needs a {nameof(SignatureGenerator)} to sign with, or an {nameof(Issuer)} to sign it");
             }
         }
 
@@ -583,7 +586,7 @@ public record CertificateBuilder
         //alternative name, that extension being the only name it then has. Refusing is the only answer
         //available, since a name is not something the builder can invent.
         if (Subject.RelativeDistinguishedNames.IsEmpty && !HasSubjectAlternativeName()) {
-            throw new ArgumentException($"A certificate with an empty {nameof(Subject)} carries no name at all unless it has a subject alternative name, which RFC 5280 s4.2.1.6 requires of it. Set a {nameof(Subject)}, or call {nameof(SetSubjectAlternativeNames)}", nameof(Subject));
+            throw new InvalidOperationException($"A certificate with an empty {nameof(Subject)} carries no name at all unless it has a subject alternative name, which RFC 5280 s4.2.1.6 requires of it. Set a {nameof(Subject)}, or call {nameof(SetSubjectAlternativeNames)}");
         }
     }
 
@@ -593,20 +596,21 @@ public record CertificateBuilder
     /// supplied. Where RFC 5280 states a criticality MUST, the extension is written with that criticality;
     /// its value is untouched and <see cref="Extensions"/> still reports what it was given.</remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if no key pair is set.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
-    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, when
-    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode, or when a
+    /// <exception cref="InvalidOperationException">Thrown when no key pair is set, when an extension's value
+    /// contradicts the <see cref="Usage"/> profile, when the <see cref="Usage"/> profile signs but the
+    /// certified key cannot, when the certificate would be signed by a key that is not the one it names as
+    /// its issuer, when an Authority Key Identifier does not identify the issuer's own key, when the
+    /// <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode, or when a
     /// subject alternative name extension carries no entries or does not decode.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
         if (PublicKey == null) {
-            throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...) first to provide an asymmetric public/private keypair");
+            throw new InvalidOperationException($"Call {nameof(SetKeyPair)}(...) first to provide an asymmetric public/private keypair");
         }
 
         var dn = Subject.Create();
 
+        CheckKeyAgreesWithUsage(this);
         CheckSubjectAgreesWithUsage(this, dn);
 
         var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
@@ -659,10 +663,9 @@ public record CertificateBuilder
     /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
     /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, when
     /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode, or when a
-    /// subject alternative name extension carries no entries or does not decode.</exception>
-    /// <exception cref="ArgumentException">Thrown by <see cref="Validate"/>, which this member calls: among
-    /// its checks, a certificate with an empty <see cref="Subject"/> and no subject alternative name is
-    /// refused.</exception>
+    /// subject alternative name extension carries no entries or does not decode. <see cref="Validate"/>,
+    /// which this member calls, adds its own: among those, a certificate with an empty
+    /// <see cref="Subject"/> and no subject alternative name is refused.</exception>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Create()
     {
@@ -676,7 +679,7 @@ public record CertificateBuilder
 
         try {
             if (builder.PublicKey == null) {
-                throw new ArgumentNullException($"Call {nameof(SetKeyPair)}(...), {nameof(SetPublicKey)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a key to certify");
+                throw new InvalidOperationException($"Call {nameof(SetKeyPair)}(...), {nameof(SetPublicKey)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a key to certify");
             }
 
             var request = builder.CreateCertificateRequest();
@@ -953,6 +956,25 @@ public record CertificateBuilder
     }
 
 
+    /// <summary>
+    /// Refuses a profile whose certificate exists to sign, on a key that cannot sign. Those profiles assert
+    /// a key usage describing an operation the certified key can never perform, and for ML-KEM specifically
+    /// RFC 9935 s5 permits no bit but <see cref="X509KeyUsageFlags.KeyEncipherment"/>.
+    /// </summary>
+    /// <remarks>Checked here rather than in each profile's extensions, so that it refuses rather than
+    /// silently substituting a key usage the caller did not ask for.</remarks>
+    private static void CheckKeyAgreesWithUsage(CertificateBuilder builder)
+    {
+        if (builder.KeyAlgorithm.CanSign) {
+            return;
+        }
+
+        if (builder.Usage is CertificateUsage.CA or CertificateUsage.CodeSign or CertificateUsage.OcspSigning or CertificateUsage.TimeStamping or CertificateUsage.CrlSigning) {
+            throw new InvalidOperationException($"{nameof(CertificateUsage)}.{builder.Usage} asserts a key usage the certified key can never perform, since a {builder.KeyAlgorithm.Name} key cannot sign. Choose a {nameof(CertificateUsage)} whose key does not sign, or certify a signing key");
+        }
+    }
+
+
     private static void CheckExtensionsAgreeWithUsage(CertificateBuilder builder, IEnumerable<X509Extension> extensions)
     {
         if (builder.Usage == null) {
@@ -1104,6 +1126,7 @@ public record CertificateBuilder
             CertificateUsage.SMime => GetSMimeExtensions(builder),
             CertificateUsage.OcspSigning => GetOcspSigningExtensions(builder),
             CertificateUsage.TimeStamping => GetTimeStampingExtensions(builder),
+            CertificateUsage.CrlSigning => GetCrlSigningExtensions(builder),
             _ => throw new NotImplementedException($"{builder.Usage} {nameof(Usage)} not yet implemented")
         });
 
@@ -1177,6 +1200,14 @@ public record CertificateBuilder
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true),
             //RFC 3161 s2.3: id-kp-timeStamping must be a TSA certificate's only EKU, marked critical
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.TimeStampingPurpose) }, true)
+        ];
+
+
+    //RFC 5280 defines no extended key usage for CRL signing, so this profile has no EKU
+    private static List<X509Extension> GetCrlSigningExtensions(CertificateBuilder builder)
+        => [
+            new X509BasicConstraintsExtension(false, false, 0, true),
+            new X509KeyUsageExtension(X509KeyUsageFlags.CrlSign, true)
         ];
 
 
