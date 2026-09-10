@@ -236,7 +236,14 @@ public abstract class X500NameComparer : IEqualityComparer<X500DistinguishedName
         {
             try {
                 var relativeNames = new List<List<X500Attribute>>();
-                var rdns = new AsnReader(name.RawData, AsnEncodingRules.DER).ReadSequence();
+                var outer = new AsnReader(name.RawData, AsnEncodingRules.DER);
+                var rdns = outer.ReadSequence();
+
+                //Nothing may trail the name, or the attribute it ends with. Bytes the comparison never
+                //reads are bytes anyone is free to choose, and this comparer would then call two names the
+                //same where Exact calls them different.
+                outer.ThrowIfNotEmpty();
+
                 while (rdns.HasData) {
                     var attributes = rdns.ReadSetOf();
                     var read = new List<X500Attribute>();
@@ -244,6 +251,7 @@ public abstract class X500NameComparer : IEqualityComparer<X500DistinguishedName
                         var attribute = attributes.ReadSequence();
                         var oid = attribute.ReadObjectIdentifier();
                         read.Add(ReadAttribute(oid, attribute, fold));
+                        attribute.ThrowIfNotEmpty();
                     }
                     relativeNames.Add(read);
                 }
@@ -262,20 +270,40 @@ public abstract class X500NameComparer : IEqualityComparer<X500DistinguishedName
     private static X500Attribute ReadAttribute(string oid, AsnReader attribute, bool fold)
     {
         var tag = attribute.PeekTag();
-
-        var text = tag.TagClass != TagClass.Universal
-            ? null
-            : (UniversalTagNumber)tag.TagValue switch {
-                //System.Formats.Asn1 reads UCS-4 under no typed method, so it is taken apart by hand. Without
-                //this arm a UniversalString name could never match the UTF8String spelling of that same name.
-                UniversalTagNumber.UniversalString => Ucs4.GetString(GetContentOctets(attribute.PeekEncodedValue().Span)),
-                var known when Array.IndexOf(DirectoryStringTags, known) >= 0 => attribute.ReadCharacterString(known),
-                _ => null
-            };
+        var encoded = attribute.ReadEncodedValue();
+        var text = ReadText(tag, encoded);
 
         return text is null
-            ? new X500Attribute(oid, null, attribute.ReadEncodedValue().ToArray())
+            ? new X500Attribute(oid, null, encoded.ToArray())
             : new X500Attribute(oid, fold ? Fold(text) : text, []);
+    }
+
+
+    /// <summary>The characters <paramref name="encoded"/> spells, or <see langword="null"/> when it carries
+    /// none this comparer reads.</summary>
+    /// <remarks>A value that will not decode returns null so the caller compares its bytes, rather than a
+    /// guess at its characters: two values that decode to nothing are not thereby the same value.</remarks>
+    private static string? ReadText(Asn1Tag tag, ReadOnlyMemory<byte> encoded)
+    {
+        //A constructed string is not DER, and its content octets are nested tags rather than characters
+        if (tag.TagClass != TagClass.Universal || tag.IsConstructed) {
+            return null;
+        }
+
+        try {
+            return (UniversalTagNumber)tag.TagValue switch {
+                //System.Formats.Asn1 reads UCS-4 under no typed method, so it is taken apart by hand. Without
+                //this arm a UniversalString name could never match the UTF8String spelling of that same name.
+                UniversalTagNumber.UniversalString => Ucs4.GetString(GetContentOctets(encoded.Span)),
+                var known when Array.IndexOf(TextValueTags, known) >= 0
+                    => new AsnReader(encoded, AsnEncodingRules.DER).ReadCharacterString(known),
+                _ => null
+            };
+        } catch (Exception ex) when (ex is AsnContentException or ArgumentException) {
+            //Only this value is unreadable, so only this value falls back to its bytes; the rest of the
+            //name still compares as text. DecoderFallbackException arrives here as an ArgumentException.
+            return null;
+        }
     }
 
 
@@ -307,6 +335,12 @@ public abstract class X500NameComparer : IEqualityComparer<X500DistinguishedName
     }
 
 
+    /// <summary>Whether every member of <paramref name="x"/> can be paired off against a member of
+    /// <paramref name="y"/>, no member of <paramref name="y"/> serving twice.</summary>
+    /// <remarks>First fit, which decides this correctly only where <paramref name="matches"/> is transitive:
+    /// otherwise taking one partner can strand a later member that had no other, and the answer turns on the
+    /// order the two lists arrived in. Ordinal equality is transitive; the folding comparison is believed to
+    /// be and is not proven to be.</remarks>
     private static bool MatchesAsMultiset<T>(List<T> x, List<T> y, Func<T, T, bool> matches)
     {
         var taken = new bool[y.Count];
@@ -363,12 +397,18 @@ public abstract class X500NameComparer : IEqualityComparer<X500DistinguishedName
     }
 
 
-    /// <summary>The DirectoryString choices a typed reader will accept.</summary>
-    private static readonly UniversalTagNumber[] DirectoryStringTags = [
+    /// <summary>The string types an attribute value carries text in, as far as a typed reader will read one.</summary>
+    /// <remarks>Wider than RFC 5280's DirectoryString, which is the choice most attributes are declared as:
+    /// an emailAddress is an IA5String and an x121Address a NumericString, and both hold characters that
+    /// have to compare as characters. UniversalString is absent because no typed reader accepts it; it is
+    /// read by hand in <see cref="ReadText"/>.</remarks>
+    private static readonly UniversalTagNumber[] TextValueTags = [
         UniversalTagNumber.UTF8String, UniversalTagNumber.NumericString, UniversalTagNumber.PrintableString,
         UniversalTagNumber.T61String, UniversalTagNumber.IA5String, UniversalTagNumber.VisibleString,
         UniversalTagNumber.BMPString
     ];
 
-    private static readonly UTF32Encoding Ucs4 = new(bigEndian: true, byteOrderMark: false);
+    //Strict, so bytes that are not UCS-4 fall back to a byte comparison instead of decoding to a run of
+    //replacement characters that any other undecodable value would also decode to
+    private static readonly UTF32Encoding Ucs4 = new(bigEndian: true, byteOrderMark: false, throwOnInvalidCharacters: true);
 }

@@ -60,6 +60,72 @@ public class X509Certificate2ExtensionsTests
     }
 
 
+    /// <summary>
+    /// The default disregards how the names were encoded, which RFC 5280 s4.1.2.4 makes reachable by
+    /// letting a conforming CA choose either PrintableString or UTF8String for the same characters.
+    /// </summary>
+    [Test]
+    public async Task IsIssuedBy_NamesDifferingOnlyInStringType_ChainByDefaultAndNotUnderExact()
+    {
+        var utf8 = new X500NameBuilder().SetCommonName("Acme Root").Create();
+        var printable = new X500DistinguishedName("CN=Acme Root");
+
+        //Guards the test: the two spell the same name and encode differently
+        await Assert.That(utf8.RawData).IsNotEquivalentTo(printable.RawData);
+
+        using var ca = CreateCertificate(subject: utf8, issuer: utf8);
+        using var leaf = CreateCertificate(subject: new X500DistinguishedName("CN=Leaf"), issuer: printable);
+
+        await Assert.That(leaf.IsIssuedBy(ca)).IsTrue();
+        await Assert.That(leaf.IsIssuedBy(ca, comparer: X500NameComparer.Exact)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task IsSelfSigned_SubjectAndIssuerDifferingOnlyInStringType_IsSelfSignedByDefaultAndNotUnderExact()
+    {
+        var utf8 = new X500NameBuilder().SetCommonName("Acme Root").Create();
+        var printable = new X500DistinguishedName("CN=Acme Root");
+
+        using var cert = CreateCertificate(subject: utf8, issuer: printable);
+
+        await Assert.That(cert.IsSelfSigned()).IsTrue();
+        await Assert.That(cert.IsSelfSigned(comparer: X500NameComparer.Exact)).IsFalse();
+    }
+
+
+    /// <summary>A supplied comparer decides the answer, including one looser than the default.</summary>
+    [Test]
+    public async Task IsIssuedBy_WithASuppliedComparer_UsesIt()
+    {
+        using var ca = CreateCertificate(
+            subject: new X500DistinguishedName("CN=ACME ROOT"),
+            issuer: new X500DistinguishedName("CN=ACME ROOT"));
+
+        using var leaf = CreateCertificate(
+            subject: new X500DistinguishedName("CN=Leaf"),
+            issuer: new X500DistinguishedName("CN=Acme Root"));
+
+        await Assert.That(leaf.IsIssuedBy(ca)).IsFalse();
+        await Assert.That(leaf.IsIssuedBy(ca, comparer: X500NameComparer.Folded)).IsTrue();
+    }
+
+
+    /// <summary>A certificate carrying the given subject and issuer names, signed with its own key: it
+    /// proves nothing about signatures, and serves only to compare the names it asserts.</summary>
+    private static X509Certificate2 CreateCertificate(X500DistinguishedName subject, X500DistinguishedName issuer)
+    {
+        using var key = ECDsa.Create();
+        return new CertificateRequest(subject, key, HashAlgorithmName.SHA256)
+            .Create(
+                issuer,
+                X509SignatureGenerator.CreateForECDsa(key),
+                DateTimeOffset.UtcNow.AddMinutes(-5),
+                DateTimeOffset.UtcNow.AddHours(1),
+                Guid.NewGuid().ToByteArray());
+    }
+
+
     [Test]
     [MethodDataSource(nameof(KeyAlgorithmsAndExportKeysTestData))]
     public async Task ExportAsPem_ToWriter_RawDataIsEqual(KeyAlgorithm alg, ExportKeys include, string? password)

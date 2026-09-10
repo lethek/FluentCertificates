@@ -232,6 +232,51 @@ public class X500NameBuilderTests
 
 
     [Test]
+    public async Task Equals_ItsOwnEncodedName_ReturnsTrue()
+    {
+        var builder = new X500NameBuilder().SetCommonName("Example").SetCountry("AU");
+
+        await Assert.That(builder.Equals(builder.Create())).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Equals_ADifferentName_ReturnsFalse()
+    {
+        var builder = new X500NameBuilder().SetCommonName("Example");
+
+        await Assert.That(builder.Equals(new X500NameBuilder().SetCommonName("Other").Create())).IsFalse();
+    }
+
+
+    /// <summary>Round-tripping a string preserves each value's encoding, so a builder read from one equals
+    /// it. Contrast <see cref="Equals_SameCharactersDifferentStringType_ReturnsFalse"/>.</summary>
+    [Test]
+    public async Task Equals_TheStringItWasBuiltFrom_ReturnsTrue()
+    {
+        var builder = new X500NameBuilder("CN=Example, C=AU");
+
+        await Assert.That(builder.Equals("CN=Example, C=AU")).IsTrue();
+    }
+
+
+    /// <summary>
+    /// Equals compares the encoded bytes, and the ASN.1 string type is part of them: the setters emit
+    /// UTF8String, while parsing a string yields PrintableString for a value that fits it. EquivalentTo is
+    /// the question that disregards this.
+    /// </summary>
+    [Test]
+    public async Task Equals_SameCharactersDifferentStringType_ReturnsFalse()
+    {
+        var builder = new X500NameBuilder().SetCommonName("Example");
+
+        await Assert.That(builder.Equals("CN=Example")).IsFalse();
+        await Assert.That(builder.Equals(new X500DistinguishedName("CN=Example"))).IsFalse();
+        await Assert.That(builder.EquivalentTo("CN=Example")).IsTrue();
+    }
+
+
+    [Test]
     public async Task EquivalentTo_RepeatedRelativeDistinguishedNames_ComparesMultiplicity()
     {
         var twice = new X500NameBuilder().AddOrganizationalUnits("Eng", "Eng");

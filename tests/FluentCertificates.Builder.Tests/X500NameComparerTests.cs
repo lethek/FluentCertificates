@@ -266,6 +266,99 @@ public class X500NameComparerTests
     }
 
 
+    /// <summary>Bytes the comparison never reads are bytes anyone is free to choose, so a name carrying
+    /// them is not the name without them.</summary>
+    [Test]
+    [MethodDataSource(nameof(DecodingComparers))]
+    public async Task Decoding_TrailingBytesAfterTheName_IsFalse(X500NameComparer comparer)
+    {
+        var clean = Utf8Name(("2.5.4.3", "Example"));
+        var padded = new X500DistinguishedName([.. clean.RawData, 0x05, 0x00]);
+
+        await Assert.That(comparer.Equals(clean, padded)).IsFalse();
+    }
+
+
+    [Test]
+    [MethodDataSource(nameof(DecodingComparers))]
+    public async Task Decoding_TrailingBytesInsideAnAttribute_IsFalse(X500NameComparer comparer)
+    {
+        var value = TextValue(UniversalTagNumber.UTF8String, "Example");
+        var clean = HandBuiltName(("2.5.4.3", value));
+        var padded = HandBuiltName(("2.5.4.3", [.. value, 0x05, 0x00]));
+
+        await Assert.That(comparer.Equals(clean, padded)).IsFalse();
+    }
+
+
+    /// <summary>A UniversalString matches the UTF8String spelling of the same characters, which is the only
+    /// reason the UCS-4 arm exists. Reading it strictly must not cost this.</summary>
+    [Test]
+    [MethodDataSource(nameof(DecodingComparers))]
+    public async Task Decoding_UniversalStringAgainstUtf8_IsTrue(X500NameComparer comparer)
+    {
+        var universal = HandBuiltName(("2.5.4.3", [0x1C, 0x08, 0x00, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00, 0x42]));
+        var utf8 = Utf8Name(("2.5.4.3", "AB"));
+
+        await Assert.That(comparer.Equals(universal, utf8)).IsTrue();
+        await Assert.That(comparer.GetHashCode(universal)).IsEqualTo(comparer.GetHashCode(utf8));
+    }
+
+
+    /// <summary>Two UniversalString values that are not UCS-4 are compared as the different bytes they are,
+    /// rather than both decoding to replacement characters and so matching each other.</summary>
+    [Test]
+    [MethodDataSource(nameof(DecodingComparers))]
+    public async Task Decoding_DifferentMalformedUniversalStrings_IsFalse(X500NameComparer comparer)
+    {
+        var first = HandBuiltName(("2.5.4.3", [0x1C, 0x03, 0xD8, 0x00, 0x00]));
+        var second = HandBuiltName(("2.5.4.3", [0x1C, 0x03, 0xFF, 0x11, 0x22]));
+
+        await Assert.That(comparer.Equals(first, second)).IsFalse();
+    }
+
+
+    [Test]
+    [MethodDataSource(nameof(DecodingComparers))]
+    public async Task Decoding_MalformedUniversalStringAgainstAReplacementCharacter_IsFalse(X500NameComparer comparer)
+    {
+        var malformed = HandBuiltName(("2.5.4.3", [0x1C, 0x03, 0xD8, 0x00, 0x00]));
+        var replacement = Utf8Name(("2.5.4.3", "�"));
+
+        await Assert.That(comparer.Equals(malformed, replacement)).IsFalse();
+    }
+
+
+    /// <summary>DER admits no constructed string, and a constructed value's content octets are nested tags
+    /// rather than characters. Reading them as characters would let an encoding impersonate text.</summary>
+    [Test]
+    [MethodDataSource(nameof(DecodingComparers))]
+    public async Task Decoding_ConstructedUniversalString_DoesNotMatchWhatItsContentSpells(X500NameComparer comparer)
+    {
+        //Constructed UniversalString whose content octets are nonetheless well-formed UCS-4 for "AB"
+        var constructed = HandBuiltName(("2.5.4.3", [0x3C, 0x08, 0x00, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00, 0x42]));
+
+        await Assert.That(comparer.Equals(constructed, Utf8Name(("2.5.4.3", "AB")))).IsFalse();
+    }
+
+
+    /// <summary>A value that will not decode costs only itself: every other attribute still compares as
+    /// characters rather than the whole name dropping to a byte comparison.</summary>
+    [Test]
+    [MethodDataSource(nameof(DecodingComparers))]
+    public async Task Decoding_OneUnreadableValue_StillComparesTheRestAsText(X500NameComparer comparer)
+    {
+        byte[] unreadable = [0x1C, 0x03, 0xD8, 0x00, 0x00];
+
+        var utf8 = HandBuiltName(("2.5.4.11", unreadable), ("2.5.4.3", TextValue(UniversalTagNumber.UTF8String, "Example")));
+        var printable = HandBuiltName(("2.5.4.11", unreadable), ("2.5.4.3", TextValue(UniversalTagNumber.PrintableString, "Example")));
+        var different = HandBuiltName(("2.5.4.11", unreadable), ("2.5.4.3", TextValue(UniversalTagNumber.UTF8String, "Other")));
+
+        await Assert.That(comparer.Equals(utf8, printable)).IsTrue();
+        await Assert.That(comparer.Equals(utf8, different)).IsFalse();
+    }
+
+
     [Test]
     public async Task Comparer_IsSubclassable()
     {
@@ -388,4 +481,35 @@ public class X500NameComparerTests
     //A SEQUENCE containing an INTEGER: valid DER, but not shaped like a sequence of relative distinguished names
     private static X500DistinguishedName UndecodableName(byte value = 0x00)
         => new([0x30, 0x03, 0x02, 0x01, value]);
+
+
+    /// <summary>A name of single-attribute relative distinguished names carrying the given encoded values
+    /// verbatim, assembled by hand so encodings no writer would emit can still be tested. Every length here
+    /// is short-form, which holds while the values stay under 128 bytes.</summary>
+    private static X500DistinguishedName HandBuiltName(params (string Oid, byte[] Value)[] rdns)
+    {
+        var name = new List<byte>();
+        foreach (var (oid, value) in rdns) {
+            var oidBytes = EncodeOid(oid);
+            byte[] attribute = [0x30, (byte)(oidBytes.Length + value.Length), .. oidBytes, .. value];
+            name.AddRange([(byte)0x31, (byte)attribute.Length, .. attribute]);
+        }
+        return new X500DistinguishedName([(byte)0x30, (byte)name.Count, .. name]);
+    }
+
+
+    private static byte[] EncodeOid(string oid)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        writer.WriteObjectIdentifier(oid);
+        return writer.Encode();
+    }
+
+
+    private static byte[] TextValue(UniversalTagNumber encoding, string value)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        writer.WriteCharacterString(encoding, value);
+        return writer.Encode();
+    }
 }
