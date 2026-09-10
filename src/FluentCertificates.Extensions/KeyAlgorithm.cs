@@ -368,11 +368,11 @@ public sealed record KeyAlgorithm
             && Name == other.Name
             && Oid == other.Oid
             && KeyLength == other.KeyLength
-            && CurveKey(Curve) == CurveKey(other.Curve);
+            && GetCurveKey(Curve) == GetCurveKey(other.Curve);
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => HashCode.Combine(Family, Name, Oid, KeyLength, CurveKey(Curve));
+        => HashCode.Combine(Family, Name, Oid, KeyLength, GetCurveKey(Curve));
 
 
     private KeyAlgorithm(KeyAlgorithmFamily family, string name, string oid, bool canSign)
@@ -398,7 +398,7 @@ public sealed record KeyAlgorithm
     /// The value is preferred because it identifies the curve, while a friendly name does not: two different
     /// curves can carry the same one.
     /// </remarks>
-    private static string? CurveKey(ECCurveType? curve)
+    private static string? GetCurveKey(ECCurveType? curve)
     {
         if (curve == null) {
             return null;
@@ -432,7 +432,7 @@ public sealed record KeyAlgorithm
 
 
     /// <summary>
-    /// A short label for <see cref="Name"/>. Unlike <see cref="CurveKey"/> this need not be unique: it is for
+    /// A short label for <see cref="Name"/>. Unlike <see cref="GetCurveKey"/> this need not be unique: it is for
     /// humans, and equality never consults it for an explicit curve.
     /// </summary>
     private static string DescribeCurve(ECCurveType curve)
@@ -450,7 +450,7 @@ public sealed record KeyAlgorithm
     /// carrying neither. So a named curve reaching here has at least one of the two.
     /// The exception is an object initialiser, which leaves <c>Oid</c> null: without this, that curve would
     /// fail with a <see cref="NullReferenceException"/> from inside the library rather than saying what is
-    /// wrong with it. This is why <see cref="DescribeCurve"/> and <see cref="CurveKey"/> can then assume at
+    /// wrong with it. This is why <see cref="DescribeCurve"/> and <see cref="GetCurveKey"/> can then assume at
     /// least one half is present.
     /// </remarks>
     /// <exception cref="ArgumentException">Thrown if the curve is named but carries no OID.</exception>

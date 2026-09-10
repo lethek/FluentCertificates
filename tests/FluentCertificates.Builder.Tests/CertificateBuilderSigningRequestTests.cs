@@ -845,7 +845,7 @@ public class CertificateBuilderSigningRequestTests
     [Test]
     public async Task UseCertificateSigningRequest_TheRequestsKeyDecidesTheProfilesKeyUsage()
     {
-        //KeyEnciphermentIfSupported reads the public key's algorithm OID: the bit is emitted for an RSA key
+        //GetKeyEnciphermentIfSupported reads the public key's algorithm OID: the bit is emitted for an RSA key
         //and withheld for an EC one, so it shows the request's key, not the builder's default, reached the
         //profile. The builder's default is RSA, so it is the EC half that could not pass by accident.
         using var rsaKeys = RSA.Create(2048);

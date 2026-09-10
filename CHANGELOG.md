@@ -43,6 +43,7 @@ release rather than record it as it happened.
 - **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
 - **Breaking:** `X500NameBuilder.EquivalentTo` takes an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.ValuesAnyOrder`, in place of its `bool orderMatters` parameter.
 - **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` take an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.Values`, in place of comparing the encoded names byte for byte.
+- **Breaking:** `SignatureAlgorithm.ForPostQuantum` renamed to `CreateForPostQuantum`.
 
 ### Fixed
 

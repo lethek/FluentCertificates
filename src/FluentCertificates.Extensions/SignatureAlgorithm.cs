@@ -106,7 +106,7 @@ public sealed record SignatureAlgorithm
     /// <param name="algorithm">A post-quantum signing algorithm.</param>
     /// <exception cref="ArgumentException">Thrown if the algorithm is not a post-quantum signing one.</exception>
     [Experimental(Experiments.PostQuantumCryptography)]
-    public static SignatureAlgorithm ForPostQuantum(KeyAlgorithm algorithm)
+    public static SignatureAlgorithm CreateForPostQuantum(KeyAlgorithm algorithm)
     {
         ArgumentNullException.ThrowIfNull(algorithm);
 
@@ -178,7 +178,7 @@ public sealed record SignatureAlgorithm
     /// <param name="signatureOid">The signature OID.</param>
     /// <param name="hashOid">The hash algorithm OID.</param>
     /// <returns>A new <see cref="SignatureAlgorithm"/> instance for RSA-PSS.</returns>
-    internal static SignatureAlgorithm ForRsaSsaPss(string signatureOid, string hashOid)
+    internal static SignatureAlgorithm CreateForRsaSsaPss(string signatureOid, string hashOid)
         => new(KeyAlgorithmFamily.Rsa, HashAlgorithmName.FromOid(hashOid), RSASignaturePadding.Pss, Oids.RsaPss);
 
 
@@ -233,7 +233,7 @@ public sealed record SignatureAlgorithm
         //Every post-quantum signing parameter set resolves through its own OID. Derived from the one
         //list on KeyAlgorithm so a new parameter set cannot be added there and forgotten here.
         foreach (var algorithm in KeyAlgorithm.PostQuantumAlgorithms.Where(x => x.CanSign)) {
-            classical[algorithm.Oid] = ForPostQuantum(algorithm);
+            classical[algorithm.Oid] = CreateForPostQuantum(algorithm);
         }
 
         return classical.ToImmutableDictionary();

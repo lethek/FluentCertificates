@@ -39,7 +39,7 @@ internal static class PostQuantumSupport
             //several individual sets are not implemented. Both must hold, plus certificate signing.
             KeyAlgorithmFamily.CompositeMLDsa =>
                 CompositeMLDsa.IsSupported
-                && CompositeMLDsa.IsAlgorithmSupported(CompositeAlgorithmFor(algorithm))
+                && CompositeMLDsa.IsAlgorithmSupported(GetCompositeAlgorithmFor(algorithm))
                 && CanSignCertificatesWithComposite(algorithm),
             //An ML-KEM certificate builds anywhere, but attaching the private key to it is Windows's gap
             KeyAlgorithmFamily.MLKem => MLKem.IsSupported && MLKemCertificateKeys.Value,
@@ -89,7 +89,7 @@ internal static class PostQuantumSupport
 
         //The API is present, so availability really can differ per set from here on.
         return algorithm.Oid == CheapestCompositeOid
-            || Probe(algorithm.Oid, CompositeAlgorithmFor(algorithm));
+            || Probe(algorithm.Oid, GetCompositeAlgorithmFor(algorithm));
     }
 
 
@@ -204,7 +204,7 @@ internal static class PostQuantumSupport
     /// Keyed on <see cref="KeyAlgorithm.Oid"/>, which identifies a post-quantum parameter set exactly.
     /// Written out rather than reflected over so the mapping survives trimming and AOT.
     /// </remarks>
-    internal static MLDsaAlgorithm MLDsaAlgorithmFor(KeyAlgorithm algorithm)
+    internal static MLDsaAlgorithm GetMLDsaAlgorithmFor(KeyAlgorithm algorithm)
         => algorithm.Oid switch {
             Oids.MLDsa44 => MLDsaAlgorithm.MLDsa44,
             Oids.MLDsa65 => MLDsaAlgorithm.MLDsa65,
@@ -233,7 +233,7 @@ internal static class PostQuantumSupport
 
 
     /// <summary>Maps a Composite ML-DSA algorithm onto its BCL counterpart.</summary>
-    internal static CompositeMLDsaAlgorithm CompositeAlgorithmFor(KeyAlgorithm algorithm)
+    internal static CompositeMLDsaAlgorithm GetCompositeAlgorithmFor(KeyAlgorithm algorithm)
         => algorithm.Oid switch {
             Oids.MLDsa44WithRSA2048Pss => CompositeMLDsaAlgorithm.MLDsa44WithRSA2048Pss,
             Oids.MLDsa44WithRSA2048Pkcs15 => CompositeMLDsaAlgorithm.MLDsa44WithRSA2048Pkcs15,
@@ -258,7 +258,7 @@ internal static class PostQuantumSupport
 
 
     /// <summary>Maps an ML-KEM algorithm onto its BCL counterpart.</summary>
-    internal static MLKemAlgorithm MLKemAlgorithmFor(KeyAlgorithm algorithm)
+    internal static MLKemAlgorithm GetMLKemAlgorithmFor(KeyAlgorithm algorithm)
         => algorithm.Oid switch {
             Oids.MLKem512 => MLKemAlgorithm.MLKem512,
             Oids.MLKem768 => MLKemAlgorithm.MLKem768,

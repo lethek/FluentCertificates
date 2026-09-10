@@ -304,7 +304,7 @@ public record CertificateBuilder
     {
         ArgumentNullException.ThrowIfNull(values);
 
-        return values.Aggregate(this, (builder, extension) => builder.SetExtension(NotNull(extension, nameof(values))));
+        return values.Aggregate(this, (builder, extension) => builder.SetExtension(EnsureNotNull(extension, nameof(values))));
     }
 
     /// <summary>Sets the certificate extensions, replacing any already on the builder. Where
@@ -317,7 +317,7 @@ public record CertificateBuilder
     {
         ArgumentNullException.ThrowIfNull(values);
 
-        return values.Aggregate(this with { _extensions = EmptyExtensions }, (builder, extension) => builder.SetExtension(NotNull(extension, nameof(values))));
+        return values.Aggregate(this with { _extensions = EmptyExtensions }, (builder, extension) => builder.SetExtension(EnsureNotNull(extension, nameof(values))));
     }
 
     /// <summary>Sets the Authority Information Access extension, naming a single OCSP responder and a single CA Issuers location.</summary>
@@ -437,7 +437,7 @@ public record CertificateBuilder
         foreach (var extension in csr.CertificateRequest.CertificateExtensions) {
             //Refused before accept sees it, so the predicate is never handed a null either. Only a caller
             //who has added one to the parsed request's own collection can get here.
-            if (accept(NotNull(extension, nameof(csr)))) {
+            if (accept(EnsureNotNull(extension, nameof(csr)))) {
                 builder = builder.SetExtension(extension);
             }
         }
@@ -466,7 +466,7 @@ public record CertificateBuilder
     /// <remarks><see cref="ImmutableHashSet{T}"/> null-guards its own hashing, so a null never reaches
     /// <see cref="X509ExtensionOidEqualityComparer"/> and would otherwise sit in the set until
     /// <see cref="Create"/> dereferenced it, far from the call that supplied it.</remarks>
-    private static X509Extension NotNull(X509Extension extension, string paramName)
+    private static X509Extension EnsureNotNull(X509Extension extension, string paramName)
         => extension ?? throw new ArgumentException("An extension in the sequence is null", paramName);
 
 
@@ -722,10 +722,10 @@ public record CertificateBuilder
 
 
     private byte[] GenerateSerialNumber()
-        => SerialNumberGenerator?.Invoke() ?? DefaultGenerateSerialNumber();
+        => SerialNumberGenerator?.Invoke() ?? GenerateDefaultSerialNumber();
 
 
-    private static byte[] DefaultGenerateSerialNumber()
+    private static byte[] GenerateDefaultSerialNumber()
     {
         Span<byte> span = stackalloc byte[18];
         BinaryPrimitives.WriteInt16BigEndian(span[0..2], 0x4D58);
@@ -780,13 +780,13 @@ public record CertificateBuilder
 #pragma warning disable FLUENTCERT001
         switch (KeyAlgorithm.Family) {
             case KeyAlgorithmFamily.MLDsa:
-                return WithKeyPair(new CertificateKey(MLDsa.GenerateKey(PostQuantumSupport.MLDsaAlgorithmFor(KeyAlgorithm))));
+                return WithKeyPair(new CertificateKey(MLDsa.GenerateKey(PostQuantumSupport.GetMLDsaAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.SlhDsa:
                 return WithKeyPair(new CertificateKey(SlhDsa.GenerateKey(PostQuantumSupport.SlhDsaAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.CompositeMLDsa:
-                return WithKeyPair(new CertificateKey(CompositeMLDsa.GenerateKey(PostQuantumSupport.CompositeAlgorithmFor(KeyAlgorithm))));
+                return WithKeyPair(new CertificateKey(CompositeMLDsa.GenerateKey(PostQuantumSupport.GetCompositeAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.MLKem:
-                return WithKeyPair(new CertificateKey(MLKem.GenerateKey(PostQuantumSupport.MLKemAlgorithmFor(KeyAlgorithm))));
+                return WithKeyPair(new CertificateKey(MLKem.GenerateKey(PostQuantumSupport.GetMLKemAlgorithmFor(KeyAlgorithm))));
         }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore SYSLIB5006
@@ -896,14 +896,14 @@ public record CertificateBuilder
         try {
             AsnDecoder.ReadSequence(san.RawData, AsnEncodingRules.BER, out _, out int contentLength, out int consumed);
             if (consumed != san.RawData.Length) {
-                throw UnreadableValue(san, "subject alternative name");
+                throw CreateUnreadableValueException(san, "subject alternative name");
             }
 
             if (contentLength == 0) {
                 throw new InvalidOperationException("A subject alternative name extension carries no entries, so it names nobody. RFC 5280 s4.2.1.6 requires at least one. Reject it, or supply one naming somebody");
             }
         } catch (AsnContentException) {
-            throw UnreadableValue(san, "subject alternative name");
+            throw CreateUnreadableValueException(san, "subject alternative name");
         }
     }
 
@@ -951,7 +951,7 @@ public record CertificateBuilder
             switch (extension.Oid?.Value) {
                 case Oids.BasicConstraints2:
                     var isCa = Decode(extension, x => new X509BasicConstraintsExtension(x, x.Critical), x => x.CertificateAuthority)
-                        ?? throw UnreadableValue(extension, "basic constraints");
+                        ?? throw CreateUnreadableValueException(extension, "basic constraints");
                     if (isCa != profileIsCa) {
                         throw new InvalidOperationException(isCa
                             ? $"A basic constraints extension asserting cA=TRUE contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}"
@@ -963,7 +963,7 @@ public record CertificateBuilder
                 //certificate asserting exactly that.
                 case Oids.KeyUsage:
                     var usages = Decode(extension, x => new X509KeyUsageExtension(x, x.Critical), x => x.KeyUsages)
-                        ?? throw UnreadableValue(extension, "key usage");
+                        ?? throw CreateUnreadableValueException(extension, "key usage");
                     if (!profileIsCa && usages.HasFlag(X509KeyUsageFlags.KeyCertSign)) {
                         throw new InvalidOperationException($"A key usage extension asserting {nameof(X509KeyUsageFlags.KeyCertSign)} contradicts {nameof(CertificateUsage)}.{builder.Usage}, which issues end-entity certificates. Reject it, or set {nameof(CertificateUsage)}.{nameof(CertificateUsage.CA)}");
                     }
@@ -1044,7 +1044,7 @@ public record CertificateBuilder
     }
 
 
-    private static InvalidOperationException UnreadableValue(X509Extension extension, string name)
+    private static InvalidOperationException CreateUnreadableValueException(X509Extension extension, string name)
     {
         const int quotedValueLimit = 128;
 
@@ -1120,7 +1120,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetServerExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(EndEntityKeyUsage(builder, SigningOrKeyAgreement(builder) | KeyEnciphermentIfSupported(builder)), true),
+            new X509KeyUsageExtension(GetEndEntityKeyUsage(builder, GetSigningOrKeyAgreement(builder) | GetKeyEnciphermentIfSupported(builder)), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ServerAuthPurpose) }, false)
         ];
 
@@ -1128,7 +1128,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetClientExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(EndEntityKeyUsage(builder, SigningOrKeyAgreement(builder)), true),
+            new X509KeyUsageExtension(GetEndEntityKeyUsage(builder, GetSigningOrKeyAgreement(builder)), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.ClientAuthPurpose) }, false)
         ];
 
@@ -1144,7 +1144,7 @@ public record CertificateBuilder
     private static List<X509Extension> GetSMimeExtensions(CertificateBuilder builder)
         => [
             new X509BasicConstraintsExtension(false, false, 0, true),
-            new X509KeyUsageExtension(EndEntityKeyUsage(builder, SigningOrKeyAgreement(builder) | NonRepudiationIfSigning(builder) | KeyEnciphermentIfSupported(builder)), true),
+            new X509KeyUsageExtension(GetEndEntityKeyUsage(builder, GetSigningOrKeyAgreement(builder) | GetNonRepudiationIfSigning(builder) | GetKeyEnciphermentIfSupported(builder)), true),
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.EmailProtectionPurpose) }, false)
         ];
 
@@ -1171,7 +1171,7 @@ public record CertificateBuilder
     /// else. Applied here rather than in each profile because it is a prohibition: omitting the bit would
     /// emit an empty keyUsage, which RFC 5280 s4.2.1.3 forbids, and adding a second breaks the "only".
     /// </summary>
-    private static X509KeyUsageFlags EndEntityKeyUsage(CertificateBuilder builder, X509KeyUsageFlags flags)
+    private static X509KeyUsageFlags GetEndEntityKeyUsage(CertificateBuilder builder, X509KeyUsageFlags flags)
         => builder.PublicKey?.Oid.Value is Oids.MLKem512 or Oids.MLKem768 or Oids.MLKem1024
             ? X509KeyUsageFlags.KeyEncipherment
             : flags;
@@ -1181,7 +1181,7 @@ public record CertificateBuilder
     /// Returns <see cref="X509KeyUsageFlags.NonRepudiation"/> only for a key that can sign, since the bit
     /// means nothing for a key-agreement or key-encapsulation key.
     /// </summary>
-    private static X509KeyUsageFlags NonRepudiationIfSigning(CertificateBuilder builder)
+    private static X509KeyUsageFlags GetNonRepudiationIfSigning(CertificateBuilder builder)
         => builder.KeyAlgorithm.CanSign
             ? X509KeyUsageFlags.NonRepudiation
             : X509KeyUsageFlags.None;
@@ -1194,11 +1194,11 @@ public record CertificateBuilder
     /// id-ecPublicKey. It must read <see cref="KeyAlgorithm"/> rather than the public key, because an ECDH
     /// and an ECDsa public key are byte-identical in SubjectPublicKeyInfo.
     /// </summary>
-    private static X509KeyUsageFlags SigningOrKeyAgreement(CertificateBuilder builder)
+    private static X509KeyUsageFlags GetSigningOrKeyAgreement(CertificateBuilder builder)
         => builder.KeyAlgorithm.Family switch {
             KeyAlgorithmFamily.ECDiffieHellman => X509KeyUsageFlags.KeyAgreement,
             //ML-KEM encapsulation is key transport, so its bit is keyEncipherment, asserted by
-            //KeyEnciphermentIfSupported; keyAgreement would name an operation the key has no equivalent of.
+            //GetKeyEnciphermentIfSupported; keyAgreement would name an operation the key has no equivalent of.
             KeyAlgorithmFamily.MLKem => X509KeyUsageFlags.None,
             _ => X509KeyUsageFlags.DigitalSignature
         };
@@ -1209,7 +1209,7 @@ public record CertificateBuilder
     /// Returns <see cref="X509KeyUsageFlags.KeyEncipherment"/> only for a public key that can perform key
     /// transport. RFC 8813 s3 makes it a MUST NOT for id-ecPublicKey keys, and DSA is signature-only.
     /// </summary>
-    private static X509KeyUsageFlags KeyEnciphermentIfSupported(CertificateBuilder builder)
+    private static X509KeyUsageFlags GetKeyEnciphermentIfSupported(CertificateBuilder builder)
         => builder.PublicKey?.Oid.Value switch {
             Oids.Rsa => X509KeyUsageFlags.KeyEncipherment,
             //RFC 9629 s3 and RFC 9935 s5 put ML-KEM encapsulation here rather than under keyAgreement

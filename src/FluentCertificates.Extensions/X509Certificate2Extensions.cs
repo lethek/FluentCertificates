@@ -185,7 +185,7 @@ public static class X509Certificate2Extensions
                 .ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0))
                 .ReadSequence(Asn1Tag.Sequence)
                 .ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-            return SignatureAlgorithm.ForRsaSsaPss(algorithm, hashAlgorithm);
+            return SignatureAlgorithm.CreateForRsaSsaPss(algorithm, hashAlgorithm);
         }
         return SignatureAlgorithm.FromOidValue(algorithm);
     }
