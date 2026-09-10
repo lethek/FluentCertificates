@@ -363,6 +363,21 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Build_CrlSigningCertificate_HasCriticalCrlSignKeyUsageAndNoEku()
+    {
+        using var cert = new CertificateBuilder()
+            .SetUsage(CertificateUsage.CrlSigning)
+            .SetSubject(x => x.SetCommonName("CRL Signer Test"))
+            .Create();
+
+        await Assert.That(GetKeyUsages(cert)).IsEqualTo(X509KeyUsageFlags.CrlSign);
+        await Assert.That(cert.Extensions.OfType<X509KeyUsageExtension>().Single().Critical).IsTrue();
+        await Assert.That(cert.Extensions.OfType<X509EnhancedKeyUsageExtension>()).IsEmpty();
+        await Assert.That(cert.Extensions.OfType<X509BasicConstraintsExtension>().Single().CertificateAuthority).IsFalse();
+    }
+
+
+    [Test]
     public async Task Build_TimeStampingCertificate_HasCriticalTimeStampingEKU()
     {
         using var cert = new CertificateBuilder()

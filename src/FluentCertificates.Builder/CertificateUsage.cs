@@ -38,5 +38,11 @@ public enum CertificateUsage
     /// <summary>
     /// Time-Stamping Authority (TSA) usage, as described by RFC 3161 §2.3.
     /// </summary>
-    TimeStamping
+    TimeStamping,
+
+    /// <summary>
+    /// CRL signing usage: a dedicated (typically indirect) CRL issuer's own certificate, as described by
+    /// RFC 5280 §5.2.5 and §6.3.3.
+    /// </summary>
+    CrlSigning
 }

@@ -23,6 +23,7 @@ release rather than record it as it happened.
 - `CertificateBuilder.UseCertificateSigningRequest` issues a certificate from a received CSR, taking its subject and public key. An overload takes a predicate deciding which requested extensions the CA honours.
 - `X500NameComparer`, an `IEqualityComparer<X500DistinguishedName>` with the members `Exact`, `Values`, `ValuesAnyOrder`, `Folded` and `FoldedAnyOrder`, and a `CanFold` property.
 - `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches` narrow a search to certificates whose subject or issuer matches a given name, taking any `IEqualityComparer<X500DistinguishedName>`.
+- `CertificateUsage.CrlSigning`, a dedicated CRL issuer profile asserting only `cRLSign`.
 
 ### Changed
 

@@ -564,7 +564,7 @@ public record CertificateBuilder
                 throw new ArgumentException($"{KeyAlgorithm.Name} cannot sign, so the certificate must be signed by someone else. Set an {nameof(Issuer)}", nameof(Issuer));
             }
 
-            if (Usage is CertificateUsage.CA or CertificateUsage.CodeSign or CertificateUsage.OcspSigning or CertificateUsage.TimeStamping) {
+            if (Usage is CertificateUsage.CA or CertificateUsage.CodeSign or CertificateUsage.OcspSigning or CertificateUsage.TimeStamping or CertificateUsage.CrlSigning) {
                 throw new ArgumentException($"{nameof(CertificateUsage)}.{Usage} needs a key that can sign, which {KeyAlgorithm.Name} cannot", nameof(Usage));
             }
         }
@@ -1104,6 +1104,7 @@ public record CertificateBuilder
             CertificateUsage.SMime => GetSMimeExtensions(builder),
             CertificateUsage.OcspSigning => GetOcspSigningExtensions(builder),
             CertificateUsage.TimeStamping => GetTimeStampingExtensions(builder),
+            CertificateUsage.CrlSigning => GetCrlSigningExtensions(builder),
             _ => throw new NotImplementedException($"{builder.Usage} {nameof(Usage)} not yet implemented")
         });
 
@@ -1177,6 +1178,14 @@ public record CertificateBuilder
             new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true),
             //RFC 3161 s2.3: id-kp-timeStamping must be a TSA certificate's only EKU, marked critical
             new X509EnhancedKeyUsageExtension(new OidCollection { new(Oids.TimeStampingPurpose) }, true)
+        ];
+
+
+    //RFC 5280 defines no extended key usage for CRL signing, so this profile has no EKU
+    private static List<X509Extension> GetCrlSigningExtensions(CertificateBuilder builder)
+        => [
+            new X509BasicConstraintsExtension(false, false, 0, true),
+            new X509KeyUsageExtension(X509KeyUsageFlags.CrlSign, true)
         ];
 
 
