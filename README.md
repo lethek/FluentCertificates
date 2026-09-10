@@ -906,6 +906,24 @@ var cert = new CertificateFinder()
     .FirstOrDefault();
 ```
 
+### Find certificates by relying-party name equivalence
+
+`EquivalentTo` above compares attribute values exactly. `WhereSubjectMatches` and `WhereIssuerMatches`
+instead compare the way RFC 5280 s7.1 says a relying party should: folding case, collapsing whitespace
+and disregarding which ASN.1 string type carried the characters, so a re-encoded or re-cased spelling of
+the same name still matches.
+
+```csharp
+var issued = new CertificateFinder()
+    .AddCommonStores()
+    .WhereIssuerMatches(ca.SubjectName)
+    .ToList();
+```
+
+`CertificateFinderResult.IsIssuedBy` compares the same way for a single pair: `result.IsIssuedBy(ca)` is
+true when `result`'s issuer name is `ca`'s subject name. It is a name match only, and says nothing about
+whether `ca`'s key actually signed the certificate.
+
 ### Find a certificate whose private key can actually sign
 
 `HasPrivateKey` only reports that the certificate carries metadata naming a key. Picking an issuer on

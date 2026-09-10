@@ -21,6 +21,7 @@ release rather than record it as it happened.
 - `Oids.SubjectInformationAccess`, `Oids.SubjectDirectoryAttributes` and `Oids.FreshestCrl`.
 - `Oids` has a cached `Oid` property for every OID constant, not just a subset.
 - `CertificateBuilder.UseCertificateSigningRequest` issues a certificate from a received CSR, taking its subject and public key. An overload takes a predicate deciding which requested extensions the CA honours.
+- `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches` narrow a search by RFC 5280 s7.1 name comparison rather than an exact string match. `CertificateFinderResult.IsIssuedBy` compares a result's issuer name against another certificate's subject the same way.
 
 ### Changed
 

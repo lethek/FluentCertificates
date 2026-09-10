@@ -21,8 +21,8 @@ internal static class X500NameComparer
         && !String.Equals("ﬁ".Normalize(NormalizationForm.FormKD), "ﬁ", StringComparison.Ordinal);
 
 
-    /// <summary>A name read into the form <see cref="IsSameName"/> compares, and whether folding turned one
-    /// of its attribute values into something readable as more than one attribute.</summary>
+    /// <summary>A name read into the form <see cref="IsSameName(string,string)"/> compares, and whether
+    /// folding turned one of its attribute values into something readable as more than one attribute.</summary>
     public readonly record struct CanonicalName(string Value, bool FoldsIntoSeparator);
 
 
@@ -97,6 +97,17 @@ internal static class X500NameComparer
         => CultureInfo.InvariantCulture.CompareInfo.Compare(subject, issuer, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0
         || String.Equals(FoldAsJavaDoes(subject), FoldAsJavaDoes(issuer), StringComparison.Ordinal)
         || CultureInfo.InvariantCulture.CompareInfo.Compare(FoldAsJavaDoes(subject), FoldAsJavaDoes(issuer), CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0;
+
+
+    /// <summary>Whether two X.500 names are the same name to a relying party. <see langword="false"/> if
+    /// either does not parse as valid DER, since bytes that will not decode match nothing rather than
+    /// everything.</summary>
+    public static bool IsSameName(X500DistinguishedName subject, X500DistinguishedName issuer)
+    {
+        var subjectName = Read(subject);
+        var issuerName = Read(issuer);
+        return subjectName is not null && issuerName is not null && IsSameName(subjectName.Value.Value, issuerName.Value.Value);
+    }
 
 
     private static string FoldAsJavaDoes(string name)

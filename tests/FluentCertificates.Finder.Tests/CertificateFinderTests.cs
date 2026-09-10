@@ -660,11 +660,96 @@ public class CertificateFinderTests
 
         await Assert.That(() => new CertificateFinder().Where(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => new CertificateFinder().All(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => new CertificateFinder().WhereSubjectMatches(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => new CertificateFinder().WhereIssuerMatches(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => CertificateFilter.Empty.Add((Expression<Func<CertificateFinderResult, bool>>)null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => CertificateFilter.Empty.Add((CertificateFinderPredicate)null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => new CertificateFinderPredicate(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => source.Find(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => source.FindDescending(null!)).ThrowsExactly<ArgumentNullException>();
+
+        var result = new CertificateFinderResult { Source = source, Location = "one", Certificate = cert };
+        await Assert.That(() => result.IsIssuedBy(null!)).ThrowsExactly<ArgumentNullException>();
+    }
+
+
+    [Test]
+    public async Task WhereSubjectMatches_SameNameByRfc5280Comparison_Matches()
+    {
+        using var cert = CreateSelfSignedCertificate("Exam  ple");
+
+        var results = new CertificateFinder(MockFileSystem)
+            .AddCertificates(cert)
+            .WhereSubjectMatches(new X500DistinguishedName("CN=Exam ple"))
+            .ToList();
+
+        await Assert.That(results).HasSingleItem();
+    }
+
+
+    [Test]
+    public async Task WhereSubjectMatches_DifferentName_DoesNotMatch()
+    {
+        using var cert = CreateSelfSignedCertificate("Example");
+
+        var results = new CertificateFinder(MockFileSystem)
+            .AddCertificates(cert)
+            .WhereSubjectMatches(new X500DistinguishedName("CN=Other"))
+            .ToList();
+
+        await Assert.That(results).IsEmpty();
+    }
+
+
+    [Test]
+    public async Task WhereIssuerMatches_SameNameByRfc5280Comparison_Matches()
+    {
+        using var cert = CreateIssuedCertificate("Leaf", "Exam  ple");
+
+        var results = new CertificateFinder(MockFileSystem)
+            .AddCertificates(cert)
+            .WhereIssuerMatches(new X500DistinguishedName("CN=Exam ple"))
+            .ToList();
+
+        await Assert.That(results).HasSingleItem();
+    }
+
+
+    [Test]
+    public async Task WhereIssuerMatches_DifferentName_DoesNotMatch()
+    {
+        using var cert = CreateIssuedCertificate("Leaf", "Example");
+
+        var results = new CertificateFinder(MockFileSystem)
+            .AddCertificates(cert)
+            .WhereIssuerMatches(new X500DistinguishedName("CN=Other"))
+            .ToList();
+
+        await Assert.That(results).IsEmpty();
+    }
+
+
+    [Test]
+    public async Task IsIssuedBy_SameNameByRfc5280Comparison_IsTrue()
+    {
+        using var issuer = CreateSelfSignedCertificate("Exam  ple");
+        using var leaf = CreateIssuedCertificate("Leaf", "Exam ple");
+        var result = new CertificateFinderResult { Source = new StubSource("Stub", "one", leaf), Location = "one", Certificate = leaf };
+
+        await Assert.That(result.IsIssuedBy(issuer)).IsTrue();
+    }
+
+
+    /// <summary>A name match only: <see cref="CreateIssuedCertificate"/> never signs with the candidate
+    /// issuer's key, so a true result here says nothing about signature validity.</summary>
+    [Test]
+    public async Task IsIssuedBy_DifferentName_IsFalse()
+    {
+        using var issuer = CreateSelfSignedCertificate("Other");
+        using var leaf = CreateIssuedCertificate("Leaf", "Example");
+        var result = new CertificateFinderResult { Source = new StubSource("Stub", "one", leaf), Location = "one", Certificate = leaf };
+
+        await Assert.That(result.IsIssuedBy(issuer)).IsFalse();
     }
 
 
@@ -2757,6 +2842,23 @@ public class CertificateFinderTests
         using var key = ECDsa.Create();
         var request = new CertificateRequest($"CN={commonName}", key, HashAlgorithmName.SHA256);
         return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddHours(1));
+    }
+
+
+    /// <summary>A certificate whose issuer field names <paramref name="issuerCommonName"/>, without an
+    /// actual issuing certificate: signed with its own key, so it proves nothing about signatures - only
+    /// useful for testing name comparisons against the asserted issuer name.</summary>
+    private static X509Certificate2 CreateIssuedCertificate(string subjectCommonName, string issuerCommonName)
+    {
+        using var key = ECDsa.Create();
+        var request = new CertificateRequest($"CN={subjectCommonName}", key, HashAlgorithmName.SHA256);
+        var generator = X509SignatureGenerator.CreateForECDsa(key);
+        return request.Create(
+            new X500DistinguishedName($"CN={issuerCommonName}"),
+            generator,
+            DateTimeOffset.UtcNow.AddMinutes(-5),
+            DateTimeOffset.UtcNow.AddHours(1),
+            Guid.NewGuid().ToByteArray());
     }
 
 
