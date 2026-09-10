@@ -45,8 +45,9 @@ release rather than record it as it happened.
 - **Breaking:** `X500NameBuilder.EquivalentTo` takes an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.ValuesAnyOrder`, in place of its `bool orderMatters` parameter.
 - **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` take an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.Values`, in place of comparing the encoded names byte for byte.
 - **Breaking:** `SignatureAlgorithm.ForPostQuantum` renamed to `CreateForPostQuantum`.
-- **Breaking:** `CertificateBuilder.Validate`, `Create` and `CreateCertificateRequest` throw `InvalidOperationException` for a builder configuration that cannot produce a certificate, in place of `ArgumentException` and `ArgumentNullException`.
+- **Breaking:** `CertificateBuilder.Validate`, `Create`, `CreateCertificateRequest` and `CreateCertificateSigningRequest` throw `InvalidOperationException` for a builder configuration that cannot produce a certificate, in place of `ArgumentException`, `ArgumentNullException` and `ArgumentOutOfRangeException`.
 - **Breaking:** A certificate or certificate request is refused when the `CertificateUsage` profile asserts a signing key usage and the certified key cannot sign, `CertificateBuilder.CreateCertificateRequest` included.
+- **Breaking:** `CertificateExportBuilder.AsPkcs12`, `AsPem`, `AsPkcs7`, `AsPkcs7Pem` and `AsCert` throw `InvalidOperationException` when there is nothing to export or the `Anchor` is not among the certificates, in place of `ArgumentException`.
 
 ### Fixed
 

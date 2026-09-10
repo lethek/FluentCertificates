@@ -755,7 +755,7 @@ public record CertificateBuilder
     private X509SignatureGenerator CreateSignatureGenerator(CertificateKey? keys)
     {
         if (keys == null) {
-            throw new ArgumentNullException(nameof(keys), $"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
+            throw new InvalidOperationException($"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
         }
 
 #if NET10_0_OR_GREATER
@@ -817,7 +817,9 @@ public record CertificateBuilder
 #pragma warning disable CS0618 // Type or member is obsolete
                 KeyAlgorithmFamily.Dsa => DSA.Create(KeyAlgorithm.KeyLength!.Value),
 #pragma warning restore CS0618 // Type or member is obsolete
-                _ => throw new ArgumentOutOfRangeException(nameof(KeyAlgorithm), KeyAlgorithm, $"Unsupported {nameof(KeyAlgorithm)}")
+                //Unreachable, so no test kills this: ThrowIfUnsupported rejects a post-quantum family the
+                //target framework cannot generate, and the switch above takes the ones it can
+                _ => throw new InvalidOperationException($"Unsupported {nameof(KeyAlgorithm)}: {KeyAlgorithm.Name}")
             }
         );
     }

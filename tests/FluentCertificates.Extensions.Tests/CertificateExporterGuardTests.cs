@@ -15,7 +15,7 @@ public class CertificateExporterGuardTests
     public async Task Export_NoCertificates_Throws()
     {
         var ex = await Assert.That(() => Array.Empty<X509Certificate2>().Export().AsPem().ToPemString())
-            .ThrowsExactly<ArgumentException>();
+            .ThrowsExactly<InvalidOperationException>();
 
         await Assert.That(ex!.Message).Contains("No certificates to export");
     }
@@ -33,7 +33,7 @@ public class CertificateExporterGuardTests
 
         var dangling = anchor.Export() with { Certificates = [other] };
 
-        var ex = await Assert.That(() => dangling.AsPem().ToPemString()).ThrowsExactly<ArgumentException>();
+        var ex = await Assert.That(() => dangling.AsPem().ToPemString()).ThrowsExactly<InvalidOperationException>();
 
         await Assert.That(ex!.Message).Contains("anchor certificate is not among the certificates");
     }
