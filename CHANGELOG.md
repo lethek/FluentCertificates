@@ -21,7 +21,8 @@ release rather than record it as it happened.
 - `Oids.SubjectInformationAccess`, `Oids.SubjectDirectoryAttributes` and `Oids.FreshestCrl`.
 - `Oids` has a cached `Oid` property for every OID constant, not just a subset.
 - `CertificateBuilder.UseCertificateSigningRequest` issues a certificate from a received CSR, taking its subject and public key. An overload takes a predicate deciding which requested extensions the CA honours.
-- `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches` narrow a search by RFC 5280 s7.1 name comparison rather than an exact string match. `CertificateFinderResult.IsIssuedBy` compares a result's issuer name against another certificate's subject the same way.
+- `X500NameComparer` compares and hashes `X500DistinguishedName`s as an `IEqualityComparer<X500DistinguishedName>`, so a name can key a dictionary. `Exact` compares encoded bytes, `Values` compares decoded characters, and `Folded` folds case, whitespace runs and Unicode spelling; `ValuesAnyOrder` and `FoldedAnyOrder` also disregard the order of the relative distinguished names. `X500NameComparer.CanFold` reports whether this runtime can perform the folding.
+- `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches` narrow a search to certificates whose subject or issuer matches a given name, taking any `IEqualityComparer<X500DistinguishedName>`.
 
 ### Changed
 
@@ -40,6 +41,8 @@ release rather than record it as it happened.
 - **Breaking:** Setting `CertificateBuilder.Usage` discards any basic constraints, key usage or extended key usage extension already on the builder, and setting `PathLength` discards any basic constraints extension when the `Usage` is `CertificateUsage.CA`, whether set through `SetUsage`/`SetPathLength`, an object initializer or a `with` expression. `SetKeyPair`, `SetPublicKey` and `SetKeyAlgorithm` each discard any Subject Key Identifier extension. The last call to state any of them is the one issued.
 - **Breaking:** `CertificateBuilder.KeyAlgorithm` is get-only; set it through `SetKeyAlgorithm`, which also clears any key already set.
 - **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
+- **Breaking:** `X500NameBuilder.EquivalentTo` takes an `IEqualityComparer<X500DistinguishedName>` in place of its `bool orderMatters` parameter, defaulting to `X500NameComparer.ValuesAnyOrder`, which is what the parameter defaulted to before.
+- **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` take an `IEqualityComparer<X500DistinguishedName>` deciding how the subject and issuer names are compared. It defaults to `X500NameComparer.Values`, so names differing only in ASN.1 string type now chain, where comparing the encoded bytes refused them.
 
 ### Fixed
 

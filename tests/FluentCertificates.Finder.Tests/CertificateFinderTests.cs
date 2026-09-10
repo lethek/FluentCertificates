@@ -667,20 +667,22 @@ public class CertificateFinderTests
         await Assert.That(() => new CertificateFinderPredicate(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => source.Find(null!)).ThrowsExactly<ArgumentNullException>();
         await Assert.That(() => source.FindDescending(null!)).ThrowsExactly<ArgumentNullException>();
-
-        var result = new CertificateFinderResult { Source = source, Location = "one", Certificate = cert };
-        await Assert.That(() => result.IsIssuedBy(null!)).ThrowsExactly<ArgumentNullException>();
     }
 
 
+    /// <summary>
+    /// The default comparer disregards how the characters were encoded, which matters here: the certificate
+    /// carries whatever its request produced, while <see cref="X500DistinguishedName"/>'s string constructor
+    /// picks PrintableString.
+    /// </summary>
     [Test]
-    public async Task WhereSubjectMatches_SameNameByRfc5280Comparison_Matches()
+    public async Task WhereSubjectMatches_SameName_Matches()
     {
-        using var cert = CreateSelfSignedCertificate("Exam  ple");
+        using var cert = CreateSelfSignedCertificate("Example");
 
         var results = new CertificateFinder(MockFileSystem)
             .AddCertificates(cert)
-            .WhereSubjectMatches(new X500DistinguishedName("CN=Exam ple"))
+            .WhereSubjectMatches(new X500DistinguishedName("CN=Example"))
             .ToList();
 
         await Assert.That(results).HasSingleItem();
@@ -701,14 +703,33 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>The default is <see cref="X500NameComparer.Values"/>, so a difference the folding comparer
+    /// would disregard still has to exclude the certificate here.</summary>
     [Test]
-    public async Task WhereIssuerMatches_SameNameByRfc5280Comparison_Matches()
+    public async Task WhereSubjectMatches_DefaultsToValues_NotFolded()
     {
-        using var cert = CreateIssuedCertificate("Leaf", "Exam  ple");
+        using var cert = CreateSelfSignedCertificate("Exam  ple");
+        var searched = new X500DistinguishedName("CN=Exam ple");
+
+        var byDefault = new CertificateFinder(MockFileSystem).AddCertificates(cert).WhereSubjectMatches(searched).ToList();
+        var folded = new CertificateFinder(MockFileSystem)
+            .AddCertificates(cert)
+            .WhereSubjectMatches(searched, X500NameComparer.Folded)
+            .ToList();
+
+        await Assert.That(byDefault).IsEmpty();
+        await Assert.That(folded).HasSingleItem();
+    }
+
+
+    [Test]
+    public async Task WhereIssuerMatches_SameName_Matches()
+    {
+        using var cert = CreateIssuedCertificate("Leaf", "Example");
 
         var results = new CertificateFinder(MockFileSystem)
             .AddCertificates(cert)
-            .WhereIssuerMatches(new X500DistinguishedName("CN=Exam ple"))
+            .WhereIssuerMatches(new X500DistinguishedName("CN=Example"))
             .ToList();
 
         await Assert.That(results).HasSingleItem();
@@ -730,26 +751,16 @@ public class CertificateFinderTests
 
 
     [Test]
-    public async Task IsIssuedBy_SameNameByRfc5280Comparison_IsTrue()
+    public async Task WhereSubjectMatches_WithASuppliedComparer_UsesIt()
     {
-        using var issuer = CreateSelfSignedCertificate("Exam  ple");
-        using var leaf = CreateIssuedCertificate("Leaf", "Exam ple");
-        var result = new CertificateFinderResult { Source = new StubSource("Stub", "one", leaf), Location = "one", Certificate = leaf };
+        using var cert = CreateSelfSignedCertificate("Example");
 
-        await Assert.That(result.IsIssuedBy(issuer)).IsTrue();
-    }
+        var results = new CertificateFinder(MockFileSystem)
+            .AddCertificates(cert)
+            .WhereSubjectMatches(new X500DistinguishedName("CN=EXAMPLE"), X500NameComparer.Folded)
+            .ToList();
 
-
-    /// <summary>A name match only: <see cref="CreateIssuedCertificate"/> never signs with the candidate
-    /// issuer's key, so a true result here says nothing about signature validity.</summary>
-    [Test]
-    public async Task IsIssuedBy_DifferentName_IsFalse()
-    {
-        using var issuer = CreateSelfSignedCertificate("Other");
-        using var leaf = CreateIssuedCertificate("Leaf", "Example");
-        var result = new CertificateFinderResult { Source = new StubSource("Stub", "one", leaf), Location = "one", Certificate = leaf };
-
-        await Assert.That(result.IsIssuedBy(issuer)).IsFalse();
+        await Assert.That(results).HasSingleItem();
     }
 
 

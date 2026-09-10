@@ -167,8 +167,8 @@ public class X500NameBuilderTests
             .SetCountry("AU");
 
         var name = new X500DistinguishedName(dn);
-        await Assert.That(rightOrder.EquivalentTo(name, true)).IsTrue();
-        await Assert.That(wrongOrder.EquivalentTo(name, false)).IsTrue();
+        await Assert.That(rightOrder.EquivalentTo(name, X500NameComparer.Values)).IsTrue();
+        await Assert.That(wrongOrder.EquivalentTo(name, X500NameComparer.ValuesAnyOrder)).IsTrue();
     }
 
 
@@ -183,7 +183,7 @@ public class X500NameBuilderTests
             .SetCountry("AU");
 
         var name = new X500DistinguishedName(dn);
-        await Assert.That(wrongOrder.EquivalentTo(name, true)).IsFalse();
+        await Assert.That(wrongOrder.EquivalentTo(name, X500NameComparer.Values)).IsFalse();
     }
 
 
@@ -202,8 +202,8 @@ public class X500NameBuilderTests
             .SetCommonName(nameof(Equality_With_String))
             .SetCountry("AU");
 
-        await Assert.That(rightOrder.EquivalentTo(dn, true)).IsTrue();
-        await Assert.That(wrongOrder.EquivalentTo(dn, false)).IsTrue();
+        await Assert.That(rightOrder.EquivalentTo(dn, X500NameComparer.Values)).IsTrue();
+        await Assert.That(wrongOrder.EquivalentTo(dn, X500NameComparer.ValuesAnyOrder)).IsTrue();
     }
 
 
@@ -217,7 +217,7 @@ public class X500NameBuilderTests
             .SetCommonName(nameof(Inequality_With_String))
             .SetCountry("AU");
 
-        await Assert.That(wrongOrder.EquivalentTo(dn, true)).IsFalse();
+        await Assert.That(wrongOrder.EquivalentTo(dn, X500NameComparer.Values)).IsFalse();
     }
 
 

@@ -495,53 +495,60 @@ public record X500NameBuilder
 
 
     /// <summary>
-    /// Determines whether the current builder is equal to the specified <see cref="X500DistinguishedName"/>.
+    /// Determines whether the current builder encodes to exactly the specified <see cref="X500DistinguishedName"/>.
     /// </summary>
     /// <param name="other">The distinguished name to compare.</param>
     /// <returns>True if equal; otherwise, false.</returns>
+    /// <remarks>Compares the encoded bytes, as <see cref="X500NameComparer.Exact"/> does, so a name spelled
+    /// with a different ASN.1 string type is a different name. Use <see cref="EquivalentTo(X500DistinguishedName,IEqualityComparer{X500DistinguishedName})"/>
+    /// to compare by anything looser.</remarks>
     public bool Equals(X500DistinguishedName? other)
-        => other != null && Create().RawData.SequenceEqual(other.RawData);
+        => other != null && X500NameComparer.Exact.Equals(Create(), other);
 
-    
+
     /// <summary>
-    /// Determines whether the current builder is equal to the specified distinguished name string.
+    /// Determines whether the current builder encodes to exactly the specified distinguished name string.
     /// </summary>
     /// <param name="other">The distinguished name string to compare.</param>
     /// <returns>True if equal; otherwise, false.</returns>
+    /// <remarks>Compares the encoded bytes, as <see cref="X500NameComparer.Exact"/> does. Note that this
+    /// builder encodes as UTF8String by default while <see cref="X500DistinguishedName"/>'s own string
+    /// constructor prefers PrintableString, so two names that display identically can differ here.</remarks>
     public bool Equals(string? other)
-        => other != null && Create().RawData.SequenceEqual(new X500DistinguishedName(other).RawData);
+        => other != null && X500NameComparer.Exact.Equals(Create(), new X500DistinguishedName(other));
 
 
     /// <summary>
-    /// Determines whether the current builder is equivalent to another builder, optionally considering order.
+    /// Determines whether the current builder describes the same name as another builder.
     /// </summary>
     /// <param name="other">The other builder to compare.</param>
-    /// <param name="orderMatters">Whether order of RDNs matters.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.ValuesAnyOrder"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
-    public bool EquivalentTo(X500NameBuilder other, bool orderMatters = false)
-        => orderMatters
-            ? CheckOrderedEquivalence(RelativeDistinguishedNames, other.RelativeDistinguishedNames, x => (x.OID.Value, x.Value))
-            : CheckUnorderedEquivalence(RelativeDistinguishedNames, other.RelativeDistinguishedNames, x => (x.OID.Value, x.Value));
+    /// <remarks>The default disregards the order of the relative distinguished names because this builder
+    /// does not let a caller state that order: it follows the sequence the setters were called in, and
+    /// <c>Set</c> moves an attribute it replaces to the end.</remarks>
+    public bool EquivalentTo(X500NameBuilder other, IEqualityComparer<X500DistinguishedName>? comparer = null)
+        => (comparer ?? X500NameComparer.ValuesAnyOrder).Equals(Create(), other.Create());
 
 
     /// <summary>
-    /// Determines whether the current builder is equivalent to the specified distinguished name string, optionally considering order.
+    /// Determines whether the current builder describes the same name as the specified distinguished name string.
     /// </summary>
     /// <param name="other">The distinguished name string to compare.</param>
-    /// <param name="orderMatters">Whether order of RDNs matters.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.ValuesAnyOrder"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
-    public bool EquivalentTo(string other, bool orderMatters = false)
-        => EquivalentTo(new X500NameBuilder(other), orderMatters);
+    public bool EquivalentTo(string other, IEqualityComparer<X500DistinguishedName>? comparer = null)
+        => EquivalentTo(new X500DistinguishedName(other), comparer);
 
 
     /// <summary>
-    /// Determines whether the current builder is equivalent to the specified <see cref="X500DistinguishedName"/>, optionally considering order.
+    /// Determines whether the current builder describes the same name as the specified <see cref="X500DistinguishedName"/>.
     /// </summary>
     /// <param name="other">The distinguished name to compare.</param>
-    /// <param name="orderMatters">Whether order of RDNs matters.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.ValuesAnyOrder"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
-    public bool EquivalentTo(X500DistinguishedName other, bool orderMatters = false)
-        => EquivalentTo(new X500NameBuilder(other), orderMatters);
+    public bool EquivalentTo(X500DistinguishedName other, IEqualityComparer<X500DistinguishedName>? comparer = null)
+        => (comparer ?? X500NameComparer.ValuesAnyOrder).Equals(Create(), other);
 
 
     /// <summary>
@@ -556,50 +563,4 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="builder">The builder to convert.</param>    
     public static explicit operator string(X500NameBuilder builder) => builder.ToString();
-
-
-    /// <summary>
-    /// Checks for ordered equivalence between two lists using a key selector.
-    /// </summary>
-    /// <typeparam name="T">The element type.</typeparam>
-    /// <typeparam name="TK">The key type.</typeparam>
-    /// <param name="list1">The first list.</param>
-    /// <param name="list2">The second list.</param>
-    /// <param name="keySelector">The key selector function.</param>
-    /// <returns>True if the lists are equivalent in order; otherwise, false.</returns>
-    private static bool CheckOrderedEquivalence<T, TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T, TK> keySelector)
-        where TK : notnull
-    {
-        var list1Keys = list1.Select(keySelector);
-        var list2Keys = list2.Select(keySelector);
-        return list1Keys.SequenceEqual(list2Keys);
-    }
-    
-
-    /// <summary>
-    /// Checks for unordered equivalence between two lists using a key selector.
-    /// </summary>
-    /// <typeparam name="T">The element type.</typeparam>
-    /// <typeparam name="TK">The key type.</typeparam>
-    /// <param name="list1">The first list.</param>
-    /// <param name="list2">The second list.</param>
-    /// <param name="keySelector">The key selector function.</param>
-    /// <returns>True if the lists are equivalent regardless of order; otherwise, false.</returns>
-    private static bool CheckUnorderedEquivalence<T, TK>(IEnumerable<T> list1, IEnumerable<T> list2, Func<T, TK> keySelector)
-        where TK : notnull
-    {
-        var cnt = new Dictionary<TK, int>();
-        foreach (T s in list1) {
-            var k = keySelector(s);
-            cnt[k] = cnt.TryGetValue(k, out var seen) ? seen + 1 : 1;
-        }
-        foreach (T s in list2) {
-            var k = keySelector(s);
-            if (!cnt.TryGetValue(k, out var seen)) {
-                return false;
-            }
-            cnt[k] = seen - 1;
-        }
-        return cnt.Values.All(c => c == 0);
-    }
 }

@@ -5,8 +5,6 @@ using System.Linq.Expressions;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 
-using FluentCertificates.Internals;
-
 namespace FluentCertificates;
 
 /// <summary>
@@ -43,33 +41,37 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
         => this with { Filter = Filter.Add(predicate) };
 
 
-    /// <summary>Narrows the search to certificates whose subject is the same name as <paramref name="name"/>,
-    /// per RFC 5280 s7.1 rather than an exact string match. Combines with other predicates by AND, like
-    /// <see cref="Where"/>. A <paramref name="name"/> that does not parse as valid DER matches nothing,
-    /// rather than throwing.</summary>
+    /// <summary>Narrows the search to certificates whose subject is the same name as <paramref name="name"/>.
+    /// Combines with other predicates by AND, like <see cref="Where"/>.</summary>
     /// <param name="name">The name a result's subject must match.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>,
+    /// which disregards how the characters were encoded and answers the same on every runtime.</param>
     /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
-    public CertificateFinder WhereSubjectMatches(X500DistinguishedName name)
+    public CertificateFinder WhereSubjectMatches(
+        X500DistinguishedName name,
+        IEqualityComparer<X500DistinguishedName>? comparer = null)
     {
         ArgumentNullException.ThrowIfNull(name);
-        var canonical = X500NameComparer.Read(name);
-        return Where(r => MatchesCanonicalName(canonical, r.Certificate.SubjectName));
+        var matches = comparer ?? X500NameComparer.Values;
+        return Where(r => matches.Equals(name, r.Certificate.SubjectName));
     }
 
 
-    /// <summary>Narrows the search to certificates whose issuer is the same name as <paramref name="name"/>,
-    /// per RFC 5280 s7.1 rather than an exact string match. Combines with other predicates by AND, like
-    /// <see cref="Where"/>. A <paramref name="name"/> that does not parse as valid DER matches nothing,
-    /// rather than throwing.</summary>
+    /// <summary>Narrows the search to certificates whose issuer is the same name as <paramref name="name"/>.
+    /// Combines with other predicates by AND, like <see cref="Where"/>.</summary>
     /// <param name="name">The name a result's issuer must match.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>,
+    /// which disregards how the characters were encoded and answers the same on every runtime.</param>
     /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
-    public CertificateFinder WhereIssuerMatches(X500DistinguishedName name)
+    public CertificateFinder WhereIssuerMatches(
+        X500DistinguishedName name,
+        IEqualityComparer<X500DistinguishedName>? comparer = null)
     {
         ArgumentNullException.ThrowIfNull(name);
-        var canonical = X500NameComparer.Read(name);
-        return Where(r => MatchesCanonicalName(canonical, r.Certificate.IssuerName));
+        var matches = comparer ?? X500NameComparer.Values;
+        return Where(r => matches.Equals(name, r.Certificate.IssuerName));
     }
 
 
@@ -510,16 +512,6 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
                 yield return result;
             }
         }
-    }
-
-
-    /// <summary>Whether <paramref name="other"/> is the same name as the already-canonicalised
-    /// <paramref name="canonical"/>. <see langword="false"/> if either side does not parse as valid DER.</summary>
-    private static bool MatchesCanonicalName(X500NameComparer.CanonicalName? canonical, X500DistinguishedName other)
-    {
-        var otherCanonical = X500NameComparer.Read(other);
-        return canonical is not null && otherCanonical is not null
-            && X500NameComparer.IsSameName(canonical.Value.Value, otherCanonical.Value.Value);
     }
 
 

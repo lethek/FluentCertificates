@@ -215,9 +215,13 @@ public static class X509Certificate2Extensions
     /// </summary>
     /// <param name="cert">The certificate.</param>
     /// <param name="verifySignature">Whether to verify the signature.</param>
+    /// <param name="comparer">How to compare the subject and issuer names, or null for <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if self-signed; otherwise, false.</returns>
-    public static bool IsSelfSigned(this X509Certificate2 cert, bool verifySignature = false)
-        => cert.IsIssuedBy(cert, verifySignature);
+    public static bool IsSelfSigned(
+        this X509Certificate2 cert,
+        bool verifySignature = false,
+        IEqualityComparer<X500DistinguishedName>? comparer = null)
+        => cert.IsIssuedBy(cert, verifySignature, comparer);
 
 
     /// <summary>
@@ -226,9 +230,20 @@ public static class X509Certificate2Extensions
     /// <param name="cert">The certificate.</param>
     /// <param name="issuer">The issuer certificate.</param>
     /// <param name="verifySignature">Whether to verify the signature.</param>
+    /// <param name="comparer">How to compare this certificate's issuer name against <paramref name="issuer"/>'s
+    /// subject name, or null for <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if issued by the specified issuer; otherwise, false.</returns>
-    public static bool IsIssuedBy(this X509Certificate2 cert, X509Certificate2 issuer, bool verifySignature = false)
-        => AreByteSpansEqual(cert.IssuerName.RawData, issuer.SubjectName.RawData) && (!verifySignature || VerifySignature(cert, issuer));
+    /// <remarks>The default disregards how the names were encoded, which RFC 5280 s4.1.2.4 makes necessary:
+    /// a conforming authority may encode a name as either PrintableString or UTF8String, and the RFC's own
+    /// notes cite comparing the bytes across such a transition as a cause of name chaining failures. Pass
+    /// <see cref="X500NameComparer.Exact"/> to require identical encodings.</remarks>
+    public static bool IsIssuedBy(
+        this X509Certificate2 cert,
+        X509Certificate2 issuer,
+        bool verifySignature = false,
+        IEqualityComparer<X500DistinguishedName>? comparer = null)
+        => (comparer ?? X500NameComparer.Values).Equals(cert.IssuerName, issuer.SubjectName)
+        && (!verifySignature || VerifySignature(cert, issuer));
 
 
     /// <summary>
