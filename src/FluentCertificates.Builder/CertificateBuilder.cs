@@ -582,8 +582,9 @@ public record CertificateBuilder
     /// <exception cref="ArgumentNullException">Thrown if no key pair is set.</exception>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
     /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
-    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, or when
-    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode.</exception>
+    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, when
+    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode, or when a
+    /// subject alternative name extension carries no entries or does not decode.</exception>
     public CertificateRequest CreateCertificateRequest()
     {
         if (PublicKey == null) {
@@ -600,6 +601,7 @@ public record CertificateBuilder
 
         CheckExtensionsAgreeWithUsage(this, extensions);
         CheckKeyIdentifierIsGenuine(this, extensions);
+        CheckSubjectAlternativeNameIsPopulated(extensions);
 
         foreach (var extension in extensions) {
             request.CertificateExtensions.Add(ConformCriticality(extension, this, extensions));
@@ -619,8 +621,9 @@ public record CertificateBuilder
     /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
     /// <exception cref="NotSupportedException">Thrown when the key to certify cannot sign, so cannot produce the proof-of-possession signature.</exception>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, or when the request would be signed by a key that is not the one it
-    /// certifies. Nothing here depends on the <see cref="Issuer"/>, which this member discards.</exception>
+    /// <see cref="Usage"/> profile, when the request would be signed by a key that is not the one it
+    /// certifies, or when a subject alternative name extension carries no entries or does not decode.
+    /// Nothing here depends on the <see cref="Issuer"/>, which this member discards.</exception>
     public CertificateSigningRequest CreateCertificateSigningRequest()
     {
         //PKCS#10 proves possession by signing the request with the very key being certified
@@ -640,8 +643,9 @@ public record CertificateBuilder
     /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
     /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
-    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, or when
-    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode.</exception>
+    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, when
+    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode, or when a
+    /// subject alternative name extension carries no entries or does not decode.</exception>
     /// <exception cref="ArgumentException">Thrown by <see cref="Validate"/>, which this member calls: among
     /// its checks, a certificate with an empty <see cref="Subject"/> and no subject alternative name is
     /// refused.</exception>
@@ -869,6 +873,37 @@ public record CertificateBuilder
             return new X509AuthorityKeyIdentifierExtension(extension.RawData, extension.Critical).KeyIdentifier;
         } catch (CryptographicException) {
             return null;
+        }
+    }
+
+
+    /// <summary>
+    /// Refuses a subject alternative name extension that carries no entries. RFC 5280 s4.2.1.6 requires at
+    /// least one when the extension is present, and a validator has nothing else to name the certificate by
+    /// when it is also the one <see cref="ConformCriticality"/> marks critical over an empty subject.
+    /// </summary>
+    /// <remarks>Read with the same extent rule FC-86 applies elsewhere: bytes after the SAN's single encoded
+    /// value are what one reader skips and another might not, so a value that does not decode cleanly to its
+    /// own end is refused the same as one that decodes to zero entries, rather than left for whatever reads
+    /// it next to disagree about.</remarks>
+    private static void CheckSubjectAlternativeNameIsPopulated(IEnumerable<X509Extension> extensions)
+    {
+        var san = extensions.FirstOrDefault(x => Oids.SubjectAltNameOid.ValueEquals(x.Oid));
+        if (san == null) {
+            return;
+        }
+
+        try {
+            AsnDecoder.ReadSequence(san.RawData, AsnEncodingRules.BER, out _, out int contentLength, out int consumed);
+            if (consumed != san.RawData.Length) {
+                throw UnreadableValue(san, "subject alternative name");
+            }
+
+            if (contentLength == 0) {
+                throw new InvalidOperationException("A subject alternative name extension carries no entries, so it names nobody. RFC 5280 s4.2.1.6 requires at least one. Reject it, or supply one naming somebody");
+            }
+        } catch (AsnContentException) {
+            throw UnreadableValue(san, "subject alternative name");
         }
     }
 
