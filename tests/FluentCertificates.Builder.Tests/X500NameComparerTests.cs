@@ -20,6 +20,13 @@ public class X500NameComparerTests
 
         if (X500NameComparer.CanFold) {
             await Assert.That(X500NameComparer.Folded.Equals(esszett, doubleS)).IsTrue();
+
+            //Every other folded pair the suite hashes reduces to one string before the collator sees it, so
+            //this is the only place the collator's hash is held to agreeing with its comparison, which is
+            //what lets Folded key a dictionary
+            await Assert
+                .That(X500NameComparer.Folded.GetHashCode(esszett))
+                .IsEqualTo(X500NameComparer.Folded.GetHashCode(doubleS));
         } else {
             await Assert.That(() => X500NameComparer.Folded.Equals(esszett, doubleS)).ThrowsNothing();
         }
@@ -484,18 +491,28 @@ public class X500NameComparerTests
 
 
     /// <summary>A name of single-attribute relative distinguished names carrying the given encoded values
-    /// verbatim, assembled by hand so encodings no writer would emit can still be tested. Every length here
-    /// is short-form, which holds while the values stay under 128 bytes.</summary>
+    /// verbatim, assembled by hand so encodings no writer would emit can still be tested.</summary>
     private static X500DistinguishedName HandBuiltName(params (string Oid, byte[] Value)[] rdns)
     {
         var name = new List<byte>();
         foreach (var (oid, value) in rdns) {
             var oidBytes = EncodeOid(oid);
-            byte[] attribute = [0x30, (byte)(oidBytes.Length + value.Length), .. oidBytes, .. value];
-            name.AddRange([(byte)0x31, (byte)attribute.Length, .. attribute]);
+            byte[] attribute = [0x30, ShortFormLength(oidBytes.Length + value.Length), .. oidBytes, .. value];
+            name.AddRange([(byte)0x31, ShortFormLength(attribute.Length), .. attribute]);
         }
-        return new X500DistinguishedName([(byte)0x30, (byte)name.Count, .. name]);
+        return new X500DistinguishedName([(byte)0x30, ShortFormLength(name.Count), .. name]);
     }
+
+
+    /// <summary>An ASN.1 length as the single byte DER writes it below 128.</summary>
+    /// <remarks>Throws rather than truncating, so a value long enough to need the long form fails here
+    /// instead of producing a name whose declared lengths disagree with its content, which every decoding
+    /// comparer would reject for the wrong reason.</remarks>
+    private static byte ShortFormLength(int length)
+        => length < 128
+            ? (byte)length
+            : throw new ArgumentOutOfRangeException(
+                nameof(length), length, $"{nameof(HandBuiltName)} writes short-form lengths only.");
 
 
     private static byte[] EncodeOid(string oid)

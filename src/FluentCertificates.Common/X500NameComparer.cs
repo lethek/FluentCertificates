@@ -22,8 +22,9 @@ namespace FluentCertificates;
 /// lookup rather than a decision about trust.
 /// </para>
 /// <para>
-/// A name whose bytes do not decode is compared by those bytes under every member, so it still equals
-/// itself.
+/// A name whose bytes will not parse is compared by those bytes under every member, so it still equals
+/// itself. A single attribute value that will not decode costs only itself: that value is compared by its
+/// bytes while every other attribute in the name still compares as characters.
 /// </para>
 /// </remarks>
 public abstract class X500NameComparer : IEqualityComparer<X500DistinguishedName>
