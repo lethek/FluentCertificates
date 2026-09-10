@@ -338,10 +338,13 @@ public abstract class X500NameComparer : IEqualityComparer<X500DistinguishedName
 
     /// <summary>Whether every member of <paramref name="x"/> can be paired off against a member of
     /// <paramref name="y"/>, no member of <paramref name="y"/> serving twice.</summary>
-    /// <remarks>First fit, which decides this correctly only where <paramref name="matches"/> is transitive:
-    /// otherwise taking one partner can strand a later member that had no other, and the answer turns on the
-    /// order the two lists arrived in. Ordinal equality is transitive; the folding comparison is believed to
-    /// be and is not proven to be.</remarks>
+    /// <remarks>First fit, which decides this correctly only where <paramref name="matches"/> is an
+    /// equivalence relation: otherwise taking one partner can strand a later member that had no other, and
+    /// the answer turns on the order the two lists arrived in. Both relations passed here qualify. Ordinal
+    /// equality is one outright, and collation equality is equality of the sort key the collation derives, so
+    /// it is one for the same reason any "same value of some function" relation is. <c>Folded</c> composes
+    /// that with a fold applied before either value arrives, which does not change the argument.
+    /// <c>X500NameComparerFoldRelationTests</c> holds both to it.</remarks>
     private static bool MatchesAsMultiset<T>(List<T> x, List<T> y, Func<T, T, bool> matches)
     {
         var taken = new bool[y.Count];
