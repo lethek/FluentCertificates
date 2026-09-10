@@ -45,7 +45,8 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
 
     /// <summary>Narrows the search to certificates whose subject is the same name as <paramref name="name"/>,
     /// per RFC 5280 s7.1 rather than an exact string match. Combines with other predicates by AND, like
-    /// <see cref="Where"/>.</summary>
+    /// <see cref="Where"/>. A <paramref name="name"/> that does not parse as valid DER matches nothing,
+    /// rather than throwing.</summary>
     /// <param name="name">The name a result's subject must match.</param>
     /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
@@ -59,7 +60,8 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
 
     /// <summary>Narrows the search to certificates whose issuer is the same name as <paramref name="name"/>,
     /// per RFC 5280 s7.1 rather than an exact string match. Combines with other predicates by AND, like
-    /// <see cref="Where"/>.</summary>
+    /// <see cref="Where"/>. A <paramref name="name"/> that does not parse as valid DER matches nothing,
+    /// rather than throwing.</summary>
     /// <param name="name">The name a result's issuer must match.</param>
     /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>

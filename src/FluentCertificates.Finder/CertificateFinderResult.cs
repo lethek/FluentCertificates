@@ -29,7 +29,8 @@ public record CertificateFinderResult
     /// name="candidateIssuer"/>'s subject, per RFC 5280 s7.1. A name match only: it says nothing about
     /// whether <paramref name="candidateIssuer"/>'s key actually signed <see cref="Certificate"/>.</summary>
     /// <param name="candidateIssuer">The certificate to test as the issuer.</param>
-    /// <returns><see langword="true"/> if the names match.</returns>
+    /// <returns><see langword="true"/> if the names match. <see langword="false"/> if either name does not
+    /// parse as valid DER.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="candidateIssuer"/> is null.</exception>
     public bool IsIssuedBy(X509Certificate2 candidateIssuer)
     {
