@@ -521,6 +521,13 @@ your policy to set:
   `ArgumentException` alongside the other configuration checks. A signing request is exempt:
   `CreateCertificateSigningRequest` does not call `Validate`, and leaving your name to the authority is a
   normal thing to ask of one.
+- **A Subject Alternative Name extension carrying no entries, or one this builder cannot read.** RFC 5280
+  s4.2.1.6 requires at least one entry when the extension is present; an empty one identifies nobody, and
+  the criticality rule above would still mark it critical over an empty subject, asserting to every
+  validator that a value carrying no names must be understood and honoured. Unlike the empty-subject
+  refusal, this one has nothing to do with the subject, so it applies to a signing request too. Bytes past
+  the SAN's own encoded value are refused the same way an unreadable basic constraints or key usage value
+  is: read the extent, not the spelling.
 
 > **Set a `Usage` before accepting anything from a request.** A builder with no `Usage` has declared no
 > intent to measure an extension against, and makes none of these refusals bar the Authority Key Identifier

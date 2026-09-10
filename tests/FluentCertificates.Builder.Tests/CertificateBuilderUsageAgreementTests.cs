@@ -744,17 +744,21 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
-    public async Task Create_WithASubjectAlternativeNameCarryingNoEntries_IsIssuedNormally()
+    public async Task Create_WithASubjectAlternativeNameCarryingNoEntries_Throws()
     {
         //RFC 5280 s4.2.1.6 says the sequence MUST contain at least one entry if present. An empty one
-        //asserts nothing to any validator, and conforming to that profile is the caller's to decide.
-        using var cert = new CertificateBuilder()
-            .SetUsage(CertificateUsage.Server)
-            .SetSubject("CN=Empty San")
-            .AddExtension(new X509Extension(Oids.SubjectAltName, [0x30, 0x00], critical: false))
-            .Create();
+        //asserts nothing to any validator, which the builder now refuses rather than issues (FC-100).
+        var ex = await Assert
+            .That(() => {
+                using var cert = new CertificateBuilder()
+                    .SetUsage(CertificateUsage.Server)
+                    .SetSubject("CN=Empty San")
+                    .AddExtension(new X509Extension(Oids.SubjectAltName, [0x30, 0x00], critical: false))
+                    .Create();
+            })
+            .ThrowsExactly<InvalidOperationException>();
 
-        await Assert.That(cert.Extensions[Oids.SubjectAltName]!.RawData).IsEquivalentTo(new byte[] { 0x30, 0x00 });
+        await Assert.That(ex!.Message).Contains("no entries");
     }
 
 

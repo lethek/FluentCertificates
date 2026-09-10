@@ -559,6 +559,67 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task Create_WithASubjectAlternativeNameCarryingNoEntries_Throws()
+    {
+        //RFC 5280 s4.2.1.6: "If the subjectAltName extension is present, the sequence MUST contain at least
+        //one entry." Reachable only through AddExtension: SetSubjectAlternativeNames given nothing adds no
+        //extension at all, so it cannot produce this shape.
+        var empty = new X509Extension(Oids.SubjectAltName, Array.Empty<GeneralName>().Encode(), critical: false);
+
+        await Assert
+            .That(() => {
+                using var cert = new CertificateBuilder().SetSubject("CN=Empty SAN").AddExtension(empty).Create();
+            })
+            .ThrowsExactly<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task CreateCertificateSigningRequest_WithASubjectAlternativeNameCarryingNoEntries_Throws()
+    {
+        //Unlike the empty-subject rule, this one has nothing to do with the subject: an empty SAN is
+        //non-conforming whatever the subject holds, so the signing-request path is not exempt from it
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var empty = new X509Extension(Oids.SubjectAltName, Array.Empty<GeneralName>().Encode(), critical: false);
+
+        await Assert
+            .That(() => new CertificateBuilder().SetKeyPair(keys).AddExtension(empty).CreateCertificateSigningRequest())
+            .ThrowsExactly<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithASubjectAlternativeNameThatIsNotASequence_Throws()
+    {
+        //A NULL where a SEQUENCE was expected: not just empty, but not the right shape to hold entries at all
+        var extension = new X509Extension(Oids.SubjectAltName, [0x05, 0x00], critical: false);
+
+        await Assert
+            .That(() => {
+                using var cert = new CertificateBuilder().SetSubject("CN=Not A Sequence").AddExtension(extension).Create();
+            })
+            .ThrowsExactly<InvalidOperationException>();
+    }
+
+
+    [Test]
+    public async Task Create_WithASubjectAlternativeNameCarryingBytesAfterItsOwnValue_Throws()
+    {
+        //SEQUENCE { [2] IMPLICIT IA5String "a" }, one populated dNSName entry, followed by a stray DER NULL.
+        //Non-empty on its own terms, so this exercises the extent rule rather than the emptiness one:
+        //bytes after the SAN's single encoded value are refused the same way FC-86 refuses them elsewhere.
+        byte[] raw = [0x30, 0x03, 0x82, 0x01, 0x61, 0x05, 0x00];
+        var extension = new X509Extension(Oids.SubjectAltName, raw, critical: false);
+
+        await Assert
+            .That(() => {
+                using var cert = new CertificateBuilder().SetSubject("CN=Trailing Bytes").AddExtension(extension).Create();
+            })
+            .ThrowsExactly<InvalidOperationException>();
+    }
+
+
+    [Test]
     public async Task Validate_NotBeforeNotEarlierThanNotAfter_Throws()
     {
         var now = DateTimeOffset.UtcNow;
