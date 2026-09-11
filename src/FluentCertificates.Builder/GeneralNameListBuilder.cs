@@ -1,5 +1,8 @@
 ﻿using System.Collections.Immutable;
+using System.Formats.Asn1;
 using System.Net;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using FluentCertificates.Internals.GeneralNames;
 
 namespace FluentCertificates;
@@ -32,7 +35,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="emailAddresses">The email addresses to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the email addresses added.</returns>
-    public GeneralNameListBuilder AddEmailAddresses(params string[] emailAddresses)
+    public GeneralNameListBuilder AddEmailAddresses(params IEnumerable<string> emailAddresses)
         => AddRange(emailAddresses.Select(x => new Rfc822NameAsn(x)));
     
     
@@ -50,7 +53,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="dnsNames">The DNS names to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the DNS names added.</returns>
-    public GeneralNameListBuilder AddDnsNames(params string[] dnsNames)
+    public GeneralNameListBuilder AddDnsNames(params IEnumerable<string> dnsNames)
         => AddRange(dnsNames.Select(x => new DnsNameAsn(x)));
 
     
@@ -68,7 +71,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="uris">The URIs to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the URIs added.</returns>
-    public GeneralNameListBuilder AddUris(params Uri[] uris)
+    public GeneralNameListBuilder AddUris(params IEnumerable<Uri> uris)
         => AddRange(uris.Select(x => new UriNameAsn(x)));
     
     
@@ -97,7 +100,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="ipAddresses">The IP addresses to add, each in string format.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP addresses added.</returns>
-    public GeneralNameListBuilder AddIPAddresses(params string[] ipAddresses)
+    public GeneralNameListBuilder AddIPAddresses(params IEnumerable<string> ipAddresses)
         => AddRange(ipAddresses.Select(x => new IPAddressNameAsn(IPAddress.Parse(x))));
 
 
@@ -106,8 +109,154 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="ipAddresses">The IP addresses to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP addresses added.</returns>
-    public GeneralNameListBuilder AddIPAddresses(params IPAddress[] ipAddresses)
+    public GeneralNameListBuilder AddIPAddresses(params IEnumerable<IPAddress> ipAddresses)
         => AddRange(ipAddresses.Select(x => new IPAddressNameAsn(x)));
+
+
+    /// <summary>
+    /// Adds an <c>otherName</c> to the list, whose value is supplied already encoded.
+    /// </summary>
+    /// <param name="typeId">The OID naming the kind of name being added.</param>
+    /// <param name="derEncodedValue">The DER encoding of the value, including its own tag and length.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    /// <remarks>An <c>otherName</c>'s value may be any ASN.1 type, chosen by <paramref name="typeId"/>, so the
+    /// caller owns its encoding and its correctness. <see cref="AddUserPrincipalName"/> covers the one case
+    /// where the OID fixes the value to a string.</remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="typeId"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="typeId"/> has no value, or
+    /// <paramref name="derEncodedValue"/> is empty.</exception>
+    public GeneralNameListBuilder AddOtherName(Oid typeId, ReadOnlySpan<byte> derEncodedValue)
+    {
+        var oidValue = GetOidValue(typeId, nameof(typeId));
+        if (derEncodedValue.IsEmpty) {
+            throw new ArgumentException("An otherName's value cannot be empty; it must be a complete DER encoding.", nameof(derEncodedValue));
+        }
+        return Add(new OtherNameAsn(oidValue, derEncodedValue));
+    }
+
+
+    /// <summary>
+    /// Adds multiple <c>otherName</c> entries to the list, each value supplied already encoded.
+    /// </summary>
+    /// <param name="otherNames">The names to add, each an OID paired with the DER encoding of its value.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
+    /// <exception cref="ArgumentNullException">An OID is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">An OID has no value, or a value is null or empty.</exception>
+    public GeneralNameListBuilder AddOtherNames(params IEnumerable<(Oid TypeId, byte[] Value)> otherNames)
+        => AddRange(otherNames.Select(x => {
+            var oidValue = GetOidValue(x.TypeId, nameof(otherNames));
+            if (x.Value is not { Length: > 0 }) {
+                throw new ArgumentException("An otherName's value cannot be empty; it must be a complete DER encoding.", nameof(otherNames));
+            }
+            return new OtherNameAsn(oidValue, x.Value);
+        }));
+
+
+    /// <summary>
+    /// Adds a User Principal Name to the list, as the <c>otherName</c> form Active Directory reads.
+    /// </summary>
+    /// <param name="upn">The user principal name, such as <c>user@corp.example</c>.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    /// <remarks>The name is encoded under OID <c>1.3.6.1.4.1.311.20.2.3</c> with a UTF8String value, which is
+    /// the pairing Windows expects.</remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="upn"/> is <see langword="null"/>.</exception>
+    public GeneralNameListBuilder AddUserPrincipalName(string upn)
+        => Add(new OtherNameAsn(Oids.UserPrincipalName, EncodeUtf8String(upn, nameof(upn))));
+
+
+    /// <summary>
+    /// Adds multiple User Principal Names to the list.
+    /// </summary>
+    /// <param name="upns">The user principal names to add.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
+    /// <exception cref="ArgumentNullException">A name is <see langword="null"/>.</exception>
+    public GeneralNameListBuilder AddUserPrincipalNames(params IEnumerable<string> upns)
+        => AddRange(upns.Select(x => new OtherNameAsn(Oids.UserPrincipalName, EncodeUtf8String(x, nameof(upns)))));
+
+
+    /// <summary>
+    /// Adds a <c>directoryName</c> to the list.
+    /// </summary>
+    /// <param name="name">The X.500 name to add.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    public GeneralNameListBuilder AddDirectoryName(X500DistinguishedName name)
+        => Add(new DirectoryNameAsn(name));
+
+
+    /// <summary>
+    /// Adds a <c>directoryName</c> to the list.
+    /// </summary>
+    /// <param name="name">A builder for the X.500 name to add.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    public GeneralNameListBuilder AddDirectoryName(X500NameBuilder name)
+        => AddDirectoryName(name.Create());
+
+
+    /// <summary>
+    /// Adds a <c>directoryName</c> to the list, parsed from its string form.
+    /// </summary>
+    /// <param name="name">The X.500 name to add, such as <c>CN=Example, O=Example Org</c>.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    public GeneralNameListBuilder AddDirectoryName(string name)
+        => AddDirectoryName(new X500DistinguishedName(name));
+
+
+    /// <summary>
+    /// Adds a <c>directoryName</c> to the list, built by the supplied function.
+    /// </summary>
+    /// <param name="configureName">A function to configure the X.500 name.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    public GeneralNameListBuilder AddDirectoryName(Func<X500NameBuilder, X500NameBuilder> configureName)
+        => AddDirectoryName(configureName(new X500NameBuilder()));
+
+
+    /// <summary>
+    /// Adds multiple <c>directoryName</c> entries to the list.
+    /// </summary>
+    /// <param name="names">The X.500 names to add.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
+    public GeneralNameListBuilder AddDirectoryNames(params IEnumerable<X500DistinguishedName> names)
+        => AddRange(names.Select(x => new DirectoryNameAsn(x)));
+
+
+    /// <summary>
+    /// Adds multiple <c>directoryName</c> entries to the list.
+    /// </summary>
+    /// <param name="names">Builders for the X.500 names to add.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
+    public GeneralNameListBuilder AddDirectoryNames(params IEnumerable<X500NameBuilder> names)
+        => AddRange(names.Select(x => new DirectoryNameAsn(x.Create())));
+
+
+    /// <summary>
+    /// Adds multiple <c>directoryName</c> entries to the list, each parsed from its string form.
+    /// </summary>
+    /// <param name="names">The X.500 names to add.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
+    public GeneralNameListBuilder AddDirectoryNames(params IEnumerable<string> names)
+        => AddRange(names.Select(x => new DirectoryNameAsn(new X500DistinguishedName(x))));
+
+
+    /// <summary>
+    /// Adds a <c>registeredID</c> to the list.
+    /// </summary>
+    /// <param name="oid">The OID to add.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="oid"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="oid"/> has no value.</exception>
+    public GeneralNameListBuilder AddRegisteredId(Oid oid)
+        => Add(new RegisteredIdNameAsn(GetOidValue(oid, nameof(oid))));
+
+
+    /// <summary>
+    /// Adds multiple <c>registeredID</c> entries to the list.
+    /// </summary>
+    /// <param name="oids">The OIDs to add.</param>
+    /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
+    /// <exception cref="ArgumentNullException">An OID is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">An OID has no value.</exception>
+    public GeneralNameListBuilder AddRegisteredIds(params IEnumerable<Oid> oids)
+        => AddRange(oids.Select(x => new RegisteredIdNameAsn(GetOidValue(x, nameof(oids)))));
 
 
     /// <summary>
@@ -141,6 +290,32 @@ public record GeneralNameListBuilder
         => this with {
             NameConstraints = NameConstraints.AddRange(generalNameConstraints)
         };
+
+
+    /// <summary>Returns an OID's dotted-decimal value, which is the only part of it that can be encoded.</summary>
+    /// <param name="oid">The OID to read.</param>
+    /// <param name="paramName">The name of the parameter the OID arrived in.</param>
+    /// <returns>The OID's value.</returns>
+    private static string GetOidValue(Oid oid, string paramName)
+    {
+        ArgumentNullException.ThrowIfNull(oid, paramName);
+        //An Oid constructed from a friendly name alone, or from nothing, has no value to write
+        return oid.Value
+            ?? throw new ArgumentException("The OID has no dotted-decimal value to encode.", paramName);
+    }
+
+
+    /// <summary>Encodes a string as a DER UTF8String, tag and length included.</summary>
+    /// <param name="value">The string to encode.</param>
+    /// <param name="paramName">The name of the parameter the string arrived in.</param>
+    /// <returns>The complete DER encoding of the string.</returns>
+    private static byte[] EncodeUtf8String(string value, string paramName)
+    {
+        ArgumentNullException.ThrowIfNull(value, paramName);
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        writer.WriteCharacterString(UniversalTagNumber.UTF8String, value);
+        return writer.Encode();
+    }
     
     
     /// <summary>Determines whether another builder holds the same general names in the same order.</summary>
