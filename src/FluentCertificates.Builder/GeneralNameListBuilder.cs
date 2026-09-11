@@ -143,6 +143,28 @@ public record GeneralNameListBuilder
         };
     
     
+    /// <summary>Determines whether another builder holds the same general names in the same order.</summary>
+    /// <param name="other">The other builder to compare.</param>
+    /// <returns>True if equal; otherwise, false.</returns>
+    /// <remarks>This is the record's value equality, so <see cref="ImmutableList{T}"/>'s reference equality
+    /// does not stand in for it.</remarks>
+    public virtual bool Equals(GeneralNameListBuilder? other)
+        => other is not null
+           && other.GetType() == GetType()
+           && (ReferenceEquals(this, other) || NameConstraints.SequenceEqual(other.NameConstraints));
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        foreach (var name in NameConstraints) {
+            hash.Add(name);
+        }
+        return hash.ToHashCode();
+    }
+
+
     /// <summary>
     /// Gets the current list of <see cref="GeneralName"/> constraints.
     /// </summary>

@@ -56,6 +56,9 @@ release rather than record it as it happened.
 - `CertificateBuilder.CreateCertificateSigningRequest` ignores any `Issuer` on the builder, rather than writing that issuer's Authority Key Identifier into a request nothing has agreed to sign yet.
 - `CertificateBuilder` no longer throws when an Authority Key Identifier extension is supplied alongside an `Issuer`.
 - A certificate issued under a certificate authority that carries no Subject Key Identifier names that authority by a key identifier derived from its public key, instead of carrying an empty sequence.
+- `CertificateBuilder`, `X500NameBuilder` and `GeneralNameListBuilder` compare by value, so two identically-configured instances are equal and share a hash code, where their immutable-collection fields previously compared by reference. `CertificateBuilder` compares a key by its public `SubjectPublicKeyInfo`.
+- `CertificateBuilder.SetPublicKey`, and so `UseCertificateSigningRequest`, reports the supplied key's own length and curve in `KeyAlgorithm` instead of its family's default, which described every RSA key as RSA-4096 and every elliptic-curve key as nistP256.
+- `KeyAlgorithm` equality no longer compares `Name`, which for an elliptic curve carries whichever friendly name the curve was built with and so made one curve unequal to itself.
 
 ## [0.22.0] - 2026-09-01
 

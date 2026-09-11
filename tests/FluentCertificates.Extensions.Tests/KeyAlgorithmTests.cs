@@ -265,14 +265,24 @@ public class KeyAlgorithmTests
     }
 
 
+    /// <summary>
+    /// The OID value identifies the curve and the friendly name only labels it, so the same curve under two
+    /// labels is one algorithm. The platform supplies whichever label it likes: the same curve comes back as
+    /// <c>nistP256</c> from <see cref="ECCurve.CreateFromFriendlyName"/> but <c>ECDSA_P256</c> from
+    /// <see cref="ECCurve.CreateFromValue"/>, and Windows and Linux disagree again, so letting the label
+    /// decide made a curve unequal to itself.
+    /// </summary>
     [Test]
-    public async Task ECDsa_SameOidValueDifferentFriendlyName_AreDistinguishedByName()
+    public async Task ECDsa_SameOidValueDifferentFriendlyName_AreEqual()
     {
         var byName = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid("1.2.840.10045.3.1.7", "nistP256")));
         var byLabel = KeyAlgorithm.ECDsa(ECCurve.CreateFromOid(new Oid("1.2.840.10045.3.1.7", "ECDSA_P256")));
 
-        //Same curve, different label: Name separates them even though the curve key matches
-        await Assert.That(byName).IsNotEqualTo(byLabel);
+        //Indistinguishable by Name, which is only a label, and equal because the curve key matches
+        await Assert.That(byName.Name).IsNotEqualTo(byLabel.Name);
+
+        await Assert.That(byName).IsEqualTo(byLabel);
+        await Assert.That(byName.GetHashCode()).IsEqualTo(byLabel.GetHashCode());
     }
 
 

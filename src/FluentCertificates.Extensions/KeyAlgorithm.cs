@@ -294,6 +294,9 @@ public sealed record KeyAlgorithm
     /// <summary>
     /// Gets the algorithm's name, which for a post-quantum algorithm is its FIPS parameter-set name.
     /// </summary>
+    /// <remarks>A display label, not an identity: for an elliptic curve it carries whichever friendly name the
+    /// curve was built with, so one curve can read as <c>ECDsa-nistP256</c> or <c>ECDsa-ECDSA_P256</c>
+    /// depending on how it was named and on the platform. Equality does not consult it.</remarks>
     public string Name { get; }
 
     /// <summary>
@@ -358,21 +361,31 @@ public sealed record KeyAlgorithm
 
     /// <inheritdoc/>
     /// <remarks>
-    /// <see cref="Oid"/> is compared as well as <see cref="Name"/> because it, not the name, is what makes a
-    /// post-quantum parameter set distinct: every ML-DSA set shares a <see cref="Family"/> and carries no key
-    /// length or curve, so without the OID the name alone would be separating them.
+    /// <para>
+    /// <see cref="Oid"/> is what makes a post-quantum parameter set distinct: every ML-DSA set shares a
+    /// <see cref="Family"/> and carries no key length or curve, so the OID is what separates them.
+    /// </para>
+    /// <para>
+    /// <see cref="Name"/> is deliberately not compared. It identifies nothing these four do not:
+    /// <see cref="Family"/> separates ECDsa from ECDiffieHellman, <see cref="KeyLength"/> separates two RSA
+    /// lengths, <see cref="GetCurveKey"/> separates two curves, and the OID separates two parameter sets.
+    /// What it would add is instability, since for an elliptic curve the name carries whichever friendly name
+    /// the curve was built with: nistP256 reads as <c>ECDsa-nistP256</c> from
+    /// <see cref="ECCurveType.CreateFromFriendlyName"/> but <c>ECDsa-ECDSA_P256</c> from
+    /// <see cref="ECCurveType.CreateFromValue"/> on the same machine, and differs again between Windows and
+    /// Linux, so comparing it would make one curve unequal to itself.
+    /// </para>
     /// </remarks>
     public bool Equals(KeyAlgorithm? other)
         => other != null
             && Family == other.Family
-            && Name == other.Name
             && Oid == other.Oid
             && KeyLength == other.KeyLength
             && GetCurveKey(Curve) == GetCurveKey(other.Curve);
 
     /// <inheritdoc/>
     public override int GetHashCode()
-        => HashCode.Combine(Family, Name, Oid, KeyLength, GetCurveKey(Curve));
+        => HashCode.Combine(Family, Oid, KeyLength, GetCurveKey(Curve));
 
 
     private KeyAlgorithm(KeyAlgorithmFamily family, string name, string oid, bool canSign)
@@ -406,10 +419,9 @@ public sealed record KeyAlgorithm
 
         var value = curve.Value;
         if (value.IsNamed) {
-            //The friendly-name branch is reachable but its result is never the deciding factor in an
-            //equality test: Name is compared too, and for a curve with no OID value Name is that same
-            //friendly name. Mutation testing reports dropping it as a surviving mutant for that reason,
-            //and no test can kill it. It stays because the alternative is a null key for such a curve.
+            //Since Name left the equality comparison this branch is the only thing identifying a curve that
+            //carries a friendly name and no OID value, and its prefix is what keeps such a curve from
+            //colliding with the curve actually bearing that string as an OID.
             return value.Oid.Value is { } oid
                 ? $"oid:{oid}"
                 : $"name:{value.Oid.FriendlyName}";

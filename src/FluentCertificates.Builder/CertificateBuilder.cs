@@ -89,8 +89,20 @@ public record CertificateBuilder
     public IReadOnlyList<GeneralName>? SubjectAlternativeNames => _subjectAlternativeNames;
     private ImmutableList<GeneralName>? _subjectAlternativeNames { get; init; }
 
-    private PublicKey? PublicKey { get; init; }
+    private PublicKey? PublicKey {
+        get;
+        init {
+            field = value;
+            //Export the SubjectPublicKeyInfo once, when the key is set, so equality and hashing never
+            //re-encode it. This init runs exactly when PublicKey is assigned, so a `with` that leaves the
+            //key alone copies the cached bytes untouched, and one that changes it recomputes them.
+            _publicKeySpki = value?.ExportSubjectPublicKeyInfo();
+        }
+    }
     private CertificateKey? KeyPair { get; init; }
+
+    //The cached SubjectPublicKeyInfo of PublicKey, which is the key's identity for equality; see PublicKey's init.
+    private byte[]? _publicKeySpki { get; init; }
 
 
     /// <summary>Sets the primary usage of the certificate, which determines default extensions, discarding
@@ -1245,14 +1257,66 @@ public record CertificateBuilder
     /// Maps a public key's algorithm OID onto a <see cref="KeyAlgorithm"/>, or <see langword="null"/> when it
     /// is not one the builder knows how to generate, which is not an error here.
     /// </summary>
+    /// <remarks>The key length and curve are read off the key rather than defaulted, so that this agrees with
+    /// <see cref="GetKeyAlgorithm(AsymmetricAlgorithm)"/> about the same key. Defaulting them made
+    /// <see cref="SetPublicKey"/>, and so every request reaching
+    /// <see cref="UseCertificateSigningRequest(CertificateSigningRequest)"/>, describe a 2048-bit key as
+    /// RSA-4096 and any curve as nistP256.</remarks>
     private static KeyAlgorithm? GetKeyAlgorithm(PublicKey? key)
         => key?.Oid.Value switch {
-            Oids.Rsa => KeyAlgorithm.RSA(),
-            Oids.EcPublicKey => KeyAlgorithm.ECDsa(),
-            Oids.Dsa => KeyAlgorithm.DSA(),
+            Oids.Rsa => GetRsaKeyAlgorithm(key),
+            Oids.EcPublicKey => GetEcKeyAlgorithm(key),
+            Oids.Dsa => GetDsaKeyAlgorithm(key),
             { } oid when KeyAlgorithm.PostQuantumAlgorithms.FirstOrDefault(x => x.Oid == oid) is { } pqc => pqc,
             _ => null
         };
+
+
+    /// <summary>
+    /// The parameters of a supplied public key, falling back to the family's default where the platform
+    /// cannot load the key.
+    /// </summary>
+    /// <remarks>A key this platform cannot read is not an error here any more than an unrecognised OID is:
+    /// the caller asked to certify the key, not to generate one like it. Each <c>Get*PublicKey</c> hands back
+    /// a fresh instance which is ours to release.</remarks>
+    private static KeyAlgorithm GetRsaKeyAlgorithm(PublicKey key)
+    {
+        try {
+            using var rsa = key.GetRSAPublicKey();
+            return rsa != null ? KeyAlgorithm.RSA(rsa.KeySize) : KeyAlgorithm.RSA();
+        } catch (CryptographicException) {
+            return KeyAlgorithm.RSA();
+        }
+    }
+
+
+    /// <inheritdoc cref="GetRsaKeyAlgorithm"/>
+    private static KeyAlgorithm GetEcKeyAlgorithm(PublicKey key)
+    {
+        try {
+            using var ecdsa = key.GetECDsaPublicKey();
+            return ecdsa != null
+                ? KeyAlgorithm.ECDsa(ecdsa.ExportParameters(false).Curve)
+                : KeyAlgorithm.ECDsa();
+        } catch (CryptographicException) {
+            return KeyAlgorithm.ECDsa();
+        } catch (NotSupportedException) {
+            //An explicit-parameter curve the platform will not export
+            return KeyAlgorithm.ECDsa();
+        }
+    }
+
+
+    /// <inheritdoc cref="GetRsaKeyAlgorithm"/>
+    private static KeyAlgorithm GetDsaKeyAlgorithm(PublicKey key)
+    {
+        try {
+            using var dsa = key.GetDSAPublicKey();
+            return dsa != null ? KeyAlgorithm.DSA(dsa.KeySize) : KeyAlgorithm.DSA();
+        } catch (CryptographicException) {
+            return KeyAlgorithm.DSA();
+        }
+    }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore CS0618 // Type or member is obsolete
 
@@ -1330,6 +1394,126 @@ public record CertificateBuilder
             ? new PublicKey(key)
             : throw new NotSupportedException($"Cannot derive a public key from a {keys.Family} key on this target framework");
     }
+
+
+    /// <summary>Determines whether another builder is configured identically to this one.</summary>
+    /// <param name="other">The other builder to compare.</param>
+    /// <returns>True if the two builders describe the same certificate configuration; otherwise, false.</returns>
+    /// <remarks>This is the record's value equality, so the immutable-collection fields are compared by their
+    /// contents rather than by reference. The key is compared by its public SubjectPublicKeyInfo, so the private
+    /// half adds nothing and two builders differing only in whether it is present are equal, and a non-exportable
+    /// HSM/TPM key is compared by that public half alone. A <see cref="SignatureGenerator"/> and a
+    /// <see cref="SerialNumberGenerator"/> have no value equality, so each is compared by reference.</remarks>
+    public virtual bool Equals(CertificateBuilder? other)
+    {
+        if (other is null || other.GetType() != GetType()) {
+            return false;
+        }
+        if (ReferenceEquals(this, other)) {
+            return true;
+        }
+
+        return Usage == other.Usage
+            && NotBefore == other.NotBefore
+            && NotAfter == other.NotAfter
+            && FriendlyName == other.FriendlyName
+            && PathLength == other.PathLength
+            && _keyAlgorithm == other._keyAlgorithm
+            && HashAlgorithm == other.HashAlgorithm
+            //Through EqualityComparer so that a null defeating the non-nullable declaration, which only a
+            //`with` expression or an unchecked setter argument can produce, compares rather than throwing
+            && EqualityComparer<RSASignaturePadding>.Default.Equals(RSASignaturePadding, other.RSASignaturePadding)
+            && KeyStorageFlags == other.KeyStorageFlags
+            && ReferenceEquals(SignatureGenerator, other.SignatureGenerator)
+            && ReferenceEquals(SerialNumberGenerator, other.SerialNumberGenerator)
+            && EqualityComparer<X500NameBuilder>.Default.Equals(Subject, other.Subject)
+            && HasSameKey(other)
+            && HasSameIssuer(other)
+            && HasSameExtensions(other)
+            && HasSameSubjectAlternativeNames(other);
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Usage);
+        hash.Add(NotBefore);
+        hash.Add(NotAfter);
+        hash.Add(FriendlyName);
+        hash.Add(PathLength);
+        hash.Add(_keyAlgorithm);
+        hash.Add(HashAlgorithm);
+        hash.Add(RSASignaturePadding);
+        hash.Add(KeyStorageFlags);
+        hash.Add(Subject);
+        if (_publicKeySpki is not null) {
+            hash.AddBytes(_publicKeySpki);
+        }
+        if (Issuer is not null) {
+            hash.Add(Issuer);
+        }
+
+        //The extension set is order-independent, so a commutative sum keeps two equal sets hashing alike
+        var extensionsHash = 0;
+        foreach (var extension in _extensions) {
+            var perExtension = new HashCode();
+            perExtension.Add(extension.Oid?.Value);
+            perExtension.Add(extension.Critical);
+            perExtension.AddBytes(extension.RawData);
+            extensionsHash += perExtension.ToHashCode();
+        }
+        hash.Add(extensionsHash);
+
+        if (_subjectAlternativeNames is not null) {
+            foreach (var name in _subjectAlternativeNames) {
+                hash.Add(name);
+            }
+        }
+
+        //SignatureGenerator and SerialNumberGenerator are compared by reference and left out here: unequal
+        //objects are allowed to share a hash, and equal ones still match on every member folded above.
+        return hash.ToHashCode();
+    }
+
+
+    private bool HasSameKey(CertificateBuilder other)
+        => _publicKeySpki is null
+            ? other._publicKeySpki is null
+            : other._publicKeySpki is not null && _publicKeySpki.AsSpan().SequenceEqual(other._publicKeySpki);
+
+
+    //RawDataMemory rather than RawData, which hands back a fresh copy of the whole certificate on every get
+    private bool HasSameIssuer(CertificateBuilder other)
+        => Issuer is null
+            ? other.Issuer is null
+            : other.Issuer is not null && Issuer.RawDataMemory.Span.SequenceEqual(other.Issuer.RawDataMemory.Span);
+
+
+    private bool HasSameExtensions(CertificateBuilder other)
+    {
+        if (_extensions.Count != other._extensions.Count) {
+            return false;
+        }
+
+        //The set keys on OID alone, so TryGetValue finds the counterpart under the same OID; comparing then
+        //settles what the OID does not, its criticality and its encoded value.
+        foreach (var extension in _extensions) {
+            if (!other._extensions.TryGetValue(extension, out var counterpart)
+                || counterpart.Critical != extension.Critical
+                || !counterpart.RawData.AsSpan().SequenceEqual(extension.RawData)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+
+    private bool HasSameSubjectAlternativeNames(CertificateBuilder other)
+        => _subjectAlternativeNames is null
+            ? other._subjectAlternativeNames is null
+            : other._subjectAlternativeNames is not null && _subjectAlternativeNames.SequenceEqual(other._subjectAlternativeNames);
 
 
     private static readonly X500NameBuilder EmptyNameBuilder = new();
