@@ -1010,6 +1010,25 @@ public class CertificateBuilderSigningRequestTests
     }
 
 
+    [Test]
+    public async Task CreateCertificateSigningRequest_WithAnRsaGeneratorOverTheCertifiedKey_IsAccepted()
+    {
+        //RSA repeats the case above for a key whose SubjectPublicKeyInfo the generator could in principle spell
+        //differently from the key's own, so the proof-of-possession comparison is pinned for it too.
+        using var keys = RSA.Create(2048);
+
+        var csr = new CertificateBuilder()
+            .SetSubject("CN=Unexportable Rsa Requester")
+            .SetPublicKey(new PublicKey(keys))
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForRSA(keys, RSASignaturePadding.Pkcs1))
+            .CreateCertificateSigningRequest();
+
+        var reloaded = CertificateRequest.LoadSigningRequest(csr.RawData, HashAlgorithmName.SHA256);
+        await Assert.That(reloaded.PublicKey.ExportSubjectPublicKeyInfo())
+            .IsEquivalentTo(new PublicKey(keys).ExportSubjectPublicKeyInfo(), CollectionOrdering.Matching);
+    }
+
+
     /// <summary>
     /// Encodes "CN=Multi Valued+OU=Sales, O=Acme" as DER: two relative distinguished names, the second of
     /// which holds two attributes.
