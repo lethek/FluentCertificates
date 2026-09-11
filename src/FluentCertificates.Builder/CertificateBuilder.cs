@@ -1348,9 +1348,9 @@ public record CertificateBuilder
     /// <param name="other">The other builder to compare.</param>
     /// <returns>True if the two builders describe the same certificate configuration; otherwise, false.</returns>
     /// <remarks>This is the record's value equality, so the immutable-collection fields are compared by their
-    /// contents rather than by reference. The key is compared by its public SubjectPublicKeyInfo, so a builder
-    /// holding only a public key equals one holding the matching pair, and a non-exportable HSM/TPM key is
-    /// compared by that public half alone. A <see cref="SignatureGenerator"/> and a
+    /// contents rather than by reference. The key is compared by its public SubjectPublicKeyInfo, so the private
+    /// half adds nothing and two builders differing only in whether it is present are equal, and a non-exportable
+    /// HSM/TPM key is compared by that public half alone. A <see cref="SignatureGenerator"/> and a
     /// <see cref="SerialNumberGenerator"/> have no value equality, so each is compared by reference.</remarks>
     public virtual bool Equals(CertificateBuilder? other)
     {
@@ -1368,11 +1368,13 @@ public record CertificateBuilder
             && PathLength == other.PathLength
             && _keyAlgorithm == other._keyAlgorithm
             && HashAlgorithm == other.HashAlgorithm
-            && RSASignaturePadding.Equals(other.RSASignaturePadding)
+            //Through EqualityComparer so that a null defeating the non-nullable declaration, which only a
+            //`with` expression or an unchecked setter argument can produce, compares rather than throwing
+            && EqualityComparer<RSASignaturePadding>.Default.Equals(RSASignaturePadding, other.RSASignaturePadding)
             && KeyStorageFlags == other.KeyStorageFlags
             && ReferenceEquals(SignatureGenerator, other.SignatureGenerator)
             && ReferenceEquals(SerialNumberGenerator, other.SerialNumberGenerator)
-            && Subject.Equals(other.Subject)
+            && EqualityComparer<X500NameBuilder>.Default.Equals(Subject, other.Subject)
             && HasSameKey(other)
             && HasSameIssuer(other)
             && HasSameExtensions(other)
@@ -1430,10 +1432,11 @@ public record CertificateBuilder
             : other._publicKeySpki is not null && _publicKeySpki.AsSpan().SequenceEqual(other._publicKeySpki);
 
 
+    //RawDataMemory rather than RawData, which hands back a fresh copy of the whole certificate on every get
     private bool HasSameIssuer(CertificateBuilder other)
         => Issuer is null
             ? other.Issuer is null
-            : other.Issuer is not null && Issuer.RawData.AsSpan().SequenceEqual(other.Issuer.RawData);
+            : other.Issuer is not null && Issuer.RawDataMemory.Span.SequenceEqual(other.Issuer.RawDataMemory.Span);
 
 
     private bool HasSameExtensions(CertificateBuilder other)

@@ -144,6 +144,56 @@ public class CertificateBuilderEqualityTests
 
 
     [Test]
+    [Arguments("Usage")]
+    [Arguments("NotBefore")]
+    [Arguments("NotAfter")]
+    [Arguments("FriendlyName")]
+    [Arguments("PathLength")]
+    [Arguments("KeyAlgorithm")]
+    [Arguments("HashAlgorithm")]
+    [Arguments("RSASignaturePadding")]
+    [Arguments("KeyStorageFlags")]
+    public async Task Equals_BuildersDifferingInOneMember_AreNotEqual(string member)
+    {
+        //One case per member equality compares directly, so dropping any one of them from the comparison
+        //fails a test rather than silently making two different configurations equal
+        var baseline = Fixed();
+        var mutated = member switch {
+            "Usage" => baseline.SetUsage(CertificateUsage.Server),
+            "NotBefore" => baseline.SetNotBefore(baseline.NotBefore.AddDays(-1)),
+            "NotAfter" => baseline.SetNotAfter(baseline.NotAfter.AddDays(1)),
+            "FriendlyName" => baseline.SetFriendlyName("another name"),
+            "PathLength" => baseline.SetPathLength(3),
+            "KeyAlgorithm" => baseline.SetKeyAlgorithm(KeyAlgorithm.ECDsa()),
+            "HashAlgorithm" => baseline.SetHashAlgorithm(HashAlgorithmName.SHA384),
+            "RSASignaturePadding" => baseline.SetRSASignaturePadding(RSASignaturePadding.Pss),
+            "KeyStorageFlags" => baseline.SetKeyStorageFlags(X509KeyStorageFlags.Exportable),
+            _ => throw new ArgumentOutOfRangeException(nameof(member), member, "Unhandled member")
+        };
+
+        await Assert.That(baseline.Equals(mutated)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Equals_ANullSubjectOrPadding_ComparesInsteadOfThrowing()
+    {
+        //Both are declared non-nullable, but a `with` expression can still write a null into them, and
+        //Equals must answer rather than throw
+        var withNullSubject = Fixed() with { Subject = null! };
+        var withNullPadding = Fixed() with { RSASignaturePadding = null! };
+
+        await Assert.That(withNullSubject.Equals(Fixed())).IsFalse();
+        await Assert.That(Fixed().Equals(withNullSubject)).IsFalse();
+        await Assert.That(withNullSubject.Equals(Fixed() with { Subject = null! })).IsTrue();
+
+        await Assert.That(withNullPadding.Equals(Fixed())).IsFalse();
+        await Assert.That(Fixed().Equals(withNullPadding)).IsFalse();
+        await Assert.That(withNullPadding.Equals(Fixed() with { RSASignaturePadding = null! })).IsTrue();
+    }
+
+
+    [Test]
     public async Task Equals_BuildersDifferingInOneExtensionValue_AreNotEqual()
     {
         //Same OID, different contents: the comparison must look past the OID the extension set keys on
@@ -213,12 +263,16 @@ public class CertificateBuilderEqualityTests
     [Test]
     public async Task Equals_PublicKeyOnly_EqualsAFullKeyPairWithTheSamePublicKey()
     {
-        //The documented trade-off of SPKI-only key identity: a builder holding only the public key compares
-        //equal to one holding the full pair, even though only the latter can self-sign
-        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        //The documented trade-off of SPKI-only key identity: the private half adds nothing to equality, so
+        //two builders differing only in whether it is present compare equal, even though only one can self-sign.
+        //RSA-4096 is the key this can be stated on: SetKeyPair reads the algorithm off the key while
+        //SetPublicKey falls back to the default, and those two agree only at the default key length. For an
+        //elliptic-curve key they disagree, and disagree differently per platform, since KeyAlgorithm.Name is
+        //built from the curve's platform-specific friendly name.
+        using var rsa = RSA.Create(4096);
 
-        var withPair = Fixed().SetKeyPair(ecdsa);
-        var withPublicOnly = Fixed().SetPublicKey(new PublicKey(ecdsa));
+        var withPair = Fixed().SetKeyPair(rsa);
+        var withPublicOnly = Fixed().SetPublicKey(new PublicKey(rsa));
 
         await Assert.That(withPair.Equals(withPublicOnly)).IsTrue();
         await Assert.That(withPair.GetHashCode()).IsEqualTo(withPublicOnly.GetHashCode());
@@ -259,7 +313,8 @@ public class CertificateBuilderEqualityTests
     [Test]
     public async Task Equals_EqualButDistinctIssuerCertificates_AreEqual()
     {
-        using var issuerCert = new CertificateBuilder().SetSubject("CN=Issuer").Create();
+        //An elliptic-curve key because the test only needs some certificate to hold, and the default RSA-4096 is slow to generate
+        using var issuerCert = new CertificateBuilder().SetSubject("CN=Issuer").SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
         using var first = Internals.CertTools.LoadCertificate(issuerCert.RawData);
         using var second = Internals.CertTools.LoadCertificate(issuerCert.RawData);
 
@@ -274,8 +329,8 @@ public class CertificateBuilderEqualityTests
     [Test]
     public async Task Equals_BuildersWithDifferentIssuers_AreNotEqual()
     {
-        using var issuer1 = new CertificateBuilder().SetSubject("CN=Issuer1").Create();
-        using var issuer2 = new CertificateBuilder().SetSubject("CN=Issuer2").Create();
+        using var issuer1 = new CertificateBuilder().SetSubject("CN=Issuer1").SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
+        using var issuer2 = new CertificateBuilder().SetSubject("CN=Issuer2").SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
 
         var a = Fixed().SetIssuer(issuer1);
         var b = Fixed().SetIssuer(issuer2);
