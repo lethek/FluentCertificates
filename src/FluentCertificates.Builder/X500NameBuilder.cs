@@ -518,6 +518,52 @@ public record X500NameBuilder
         => other != null && X500NameComparer.Exact.Equals(Create(), new X500DistinguishedName(other));
 
 
+    /// <summary>Determines whether another builder holds the same relative distinguished names, in the same
+    /// order, with the same value encodings.</summary>
+    /// <param name="other">The other builder to compare.</param>
+    /// <returns>True if equal; otherwise, false.</returns>
+    /// <remarks>This is the record's value equality, so <see cref="ImmutableList{T}"/>'s reference equality
+    /// does not stand in for it. It is order- and encoding-sensitive, matching <see cref="Equals(X500DistinguishedName)"/>;
+    /// use <see cref="EquivalentTo(X500NameBuilder,IEqualityComparer{X500DistinguishedName})"/> for a comparison
+    /// that disregards order.</remarks>
+    public virtual bool Equals(X500NameBuilder? other)
+    {
+        if (other is null || other.GetType() != GetType()) {
+            return false;
+        }
+        if (ReferenceEquals(this, other)) {
+            return true;
+        }
+
+        var mine = RelativeDistinguishedNames;
+        var theirs = other.RelativeDistinguishedNames;
+        if (mine.Count != theirs.Count) {
+            return false;
+        }
+        for (var i = 0; i < mine.Count; i++) {
+            if (!String.Equals(mine[i].OID.Value, theirs[i].OID.Value)
+                || mine[i].ValueEncoding != theirs[i].ValueEncoding
+                || !String.Equals(mine[i].Value, theirs[i].Value)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        foreach (var rdn in RelativeDistinguishedNames) {
+            hash.Add(rdn.OID.Value);
+            hash.Add(rdn.ValueEncoding);
+            hash.Add(rdn.Value);
+        }
+        return hash.ToHashCode();
+    }
+
+
     /// <summary>
     /// Determines whether the current builder describes the same name as another builder.
     /// </summary>

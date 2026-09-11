@@ -56,6 +56,7 @@ release rather than record it as it happened.
 - `CertificateBuilder.CreateCertificateSigningRequest` ignores any `Issuer` on the builder, rather than writing that issuer's Authority Key Identifier into a request nothing has agreed to sign yet.
 - `CertificateBuilder` no longer throws when an Authority Key Identifier extension is supplied alongside an `Issuer`.
 - A certificate issued under a certificate authority that carries no Subject Key Identifier names that authority by a key identifier derived from its public key, instead of carrying an empty sequence.
+- `CertificateBuilder`, `X500NameBuilder` and `GeneralNameListBuilder` compare by value, so two identically-configured instances are equal and share a hash code, where their immutable-collection fields previously compared by reference. `CertificateBuilder` compares a key by its public `SubjectPublicKeyInfo`.
 
 ## [0.22.0] - 2026-09-01
 
