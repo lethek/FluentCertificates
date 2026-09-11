@@ -484,8 +484,8 @@ Criticality is a flag beside an extension, so a violation can be corrected. Othe
 without deciding what the caller meant, and those are refused. They all throw an
 `InvalidOperationException`. The list
 is short, and follows the boundary above: a value contradicting the `Usage` you stated about whether this is
-a certificate authority, a certificate signed by a key other than the one it names, and the narrow case of a
-value this builder cannot read, since it can neither correct nor vouch for that. Everything else is
+a certificate authority, a signing request signed by a key other than the one it certifies, and the narrow
+case of a value this builder cannot read, since it can neither correct nor vouch for that. Everything else is
 your policy to set:
 
 - **Basic Constraints disagreeing with the profile about whether this is a certificate authority.** A
@@ -514,17 +514,12 @@ your policy to set:
   constraints are decoded through the platform: a `pathLenConstraint` larger than an `Int32` conforms to
   RFC 5280, and those two frameworks refuse it on Windows while reading it as `0` on Linux. Only `cA` is
   consulted and the value is written out as you supplied it, so nothing here turns on the path length.
-- **A certificate whose `SignatureGenerator` holds a key other than the one it would name as having signed
-  it.** With no `Issuer`, that is the subject's own key: such a certificate names itself as its own issuer
-  while some other key vouches for it, so a relying party can build a path for it against whoever does own
-  that key. Java will then accept it as a certificate revocation list issuer for the name it bears,
-  `cA=FALSE` notwithstanding. Set an `Issuer` so the certificate names the authority that really signed it.
-  Where the subject *is* the `Issuer`'s own name, which is ordinary key rollover, that key is the issuer's
-  own instead: naming a real, trusted CA as `Issuer` while signing with an unrelated key mints a certificate
-  a relying party reads as that CA's own successor. The two names are compared as encoded rather than
-  folded, since whether some other name would also be read as your issuer's is a judgement about your own
-  naming policy. A generator over the key it should be signing with, which is how an unexportable key signs,
-  is unaffected either way.
+- **A signing request whose `SignatureGenerator` holds a key other than the one it certifies.** A PKCS#10
+  request is signed to prove the requester holds the private key for the public key being certified, so
+  `CreateCertificateSigningRequest` refuses one signed by any other key: such a signature proves nothing. A
+  generator over the key it certifies, which is how an unexportable key signs its own request, is fine. This
+  is the one place a mismatched signing key is refused. On the certificate path it is not, because there
+  every key is yours to choose and the hazard is one of naming, described below.
 - **An Authority Key Identifier naming a key other than the `Issuer`'s,** or carrying no readable key
   identifier at all. This one turns on `Issuer` rather than `Usage`: RFC 5280 s4.2.1.2 makes the issuer's
   subject key identifier the value that MUST appear there, so naming an issuer settles what belongs in it
@@ -557,6 +552,16 @@ subject matches the target's issuer and whose key usage asserts `cRLSign`, witho
 leaf you issue under your own CA's name can revoke everything that CA ever issued; both OpenSSL and Java
 PKIX honour that. Comparing a requested name against your own is a judgement about how a relying party will
 read it, which depends on the validator and the Unicode tables it carries, so it stays with you.
+
+The key behind the name is yours to choose in the same way. Build a certificate under a real CA's name but
+signed with an unrelated key, whether by leaving `Issuer` unset so it is self-issued or by naming that CA as
+`Issuer` while signing with something else, and a validator doing that name match may read it as the CA's own
+successor and build a path for it, `cA=FALSE` notwithstanding: Java's `CertPathBuilder` will select such a
+certificate as a CRL issuer and report a third party revoked. RFC 5280 defines exactly this shape, a
+self-issued certificate that is not self-signed, and uses it for CA key rollover, so the builder cannot tell
+the abuse from the legitimate use and encodes what you asked for. Every key in that certificate is one you
+supplied, so whether to build it is your call, not the library's. The distinct case where the request itself
+is signed by the wrong key, which no rollover explains, is the proof-of-possession refusal above.
 
 The one exception is an Authority Key Identifier. It names whoever signs the certificate, which the requester
 cannot know beforehand, and unlike everything else here there is exactly one right answer that the builder
