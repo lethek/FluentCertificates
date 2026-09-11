@@ -155,6 +155,21 @@ public class CertificateBuilderEqualityTests
 
 
     [Test]
+    public async Task Equals_SameExtensionsAddedInDifferentOrder_AreEqualWithMatchingHashCode()
+    {
+        //Extensions are a set keyed by OID, so the order they were added in is not part of the configuration
+        var first = new X509Extension(new Oid("1.2.3.4.5"), [1, 2, 3], false);
+        var second = new X509Extension(new Oid("1.2.3.4.6"), [4, 5, 6], true);
+
+        var a = Fixed().AddExtension(first).AddExtension(second);
+        var b = Fixed().AddExtension(second).AddExtension(first);
+
+        await Assert.That(a.Equals(b)).IsTrue();
+        await Assert.That(a.GetHashCode()).IsEqualTo(b.GetHashCode());
+    }
+
+
+    [Test]
     public async Task Equals_BuildersDifferingInSubjectAlternativeNames_AreNotEqual()
     {
         var a = Fixed().SetSubjectAlternativeNames(san => san.AddDnsName("a.example"));
