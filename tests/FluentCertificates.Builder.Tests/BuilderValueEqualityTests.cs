@@ -264,15 +264,11 @@ public class CertificateBuilderEqualityTests
     public async Task Equals_PublicKeyOnly_EqualsAFullKeyPairWithTheSamePublicKey()
     {
         //The documented trade-off of SPKI-only key identity: the private half adds nothing to equality, so
-        //two builders differing only in whether it is present compare equal, even though only one can self-sign.
-        //RSA-4096 is the key this can be stated on: SetKeyPair reads the algorithm off the key while
-        //SetPublicKey falls back to the default, and those two agree only at the default key length. For an
-        //elliptic-curve key they disagree, and disagree differently per platform, since KeyAlgorithm.Name is
-        //built from the curve's platform-specific friendly name.
-        using var rsa = RSA.Create(4096);
+        //two builders differing only in whether it is present compare equal, even though only one can self-sign
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
-        var withPair = Fixed().SetKeyPair(rsa);
-        var withPublicOnly = Fixed().SetPublicKey(new PublicKey(rsa));
+        var withPair = Fixed().SetKeyPair(ecdsa);
+        var withPublicOnly = Fixed().SetPublicKey(new PublicKey(ecdsa));
 
         await Assert.That(withPair.Equals(withPublicOnly)).IsTrue();
         await Assert.That(withPair.GetHashCode()).IsEqualTo(withPublicOnly.GetHashCode());

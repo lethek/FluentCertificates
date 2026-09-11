@@ -1257,14 +1257,66 @@ public record CertificateBuilder
     /// Maps a public key's algorithm OID onto a <see cref="KeyAlgorithm"/>, or <see langword="null"/> when it
     /// is not one the builder knows how to generate, which is not an error here.
     /// </summary>
+    /// <remarks>The key length and curve are read off the key rather than defaulted, so that this agrees with
+    /// <see cref="GetKeyAlgorithm(AsymmetricAlgorithm)"/> about the same key. Defaulting them made
+    /// <see cref="SetPublicKey"/>, and so every request reaching
+    /// <see cref="UseCertificateSigningRequest(CertificateSigningRequest)"/>, describe a 2048-bit key as
+    /// RSA-4096 and any curve as nistP256.</remarks>
     private static KeyAlgorithm? GetKeyAlgorithm(PublicKey? key)
         => key?.Oid.Value switch {
-            Oids.Rsa => KeyAlgorithm.RSA(),
-            Oids.EcPublicKey => KeyAlgorithm.ECDsa(),
-            Oids.Dsa => KeyAlgorithm.DSA(),
+            Oids.Rsa => GetRsaKeyAlgorithm(key),
+            Oids.EcPublicKey => GetEcKeyAlgorithm(key),
+            Oids.Dsa => GetDsaKeyAlgorithm(key),
             { } oid when KeyAlgorithm.PostQuantumAlgorithms.FirstOrDefault(x => x.Oid == oid) is { } pqc => pqc,
             _ => null
         };
+
+
+    /// <summary>
+    /// The parameters of a supplied public key, falling back to the family's default where the platform
+    /// cannot load the key.
+    /// </summary>
+    /// <remarks>A key this platform cannot read is not an error here any more than an unrecognised OID is:
+    /// the caller asked to certify the key, not to generate one like it. Each <c>Get*PublicKey</c> hands back
+    /// a fresh instance which is ours to release.</remarks>
+    private static KeyAlgorithm GetRsaKeyAlgorithm(PublicKey key)
+    {
+        try {
+            using var rsa = key.GetRSAPublicKey();
+            return rsa != null ? KeyAlgorithm.RSA(rsa.KeySize) : KeyAlgorithm.RSA();
+        } catch (CryptographicException) {
+            return KeyAlgorithm.RSA();
+        }
+    }
+
+
+    /// <inheritdoc cref="GetRsaKeyAlgorithm"/>
+    private static KeyAlgorithm GetEcKeyAlgorithm(PublicKey key)
+    {
+        try {
+            using var ecdsa = key.GetECDsaPublicKey();
+            return ecdsa != null
+                ? KeyAlgorithm.ECDsa(ecdsa.ExportParameters(false).Curve)
+                : KeyAlgorithm.ECDsa();
+        } catch (CryptographicException) {
+            return KeyAlgorithm.ECDsa();
+        } catch (NotSupportedException) {
+            //An explicit-parameter curve the platform will not export
+            return KeyAlgorithm.ECDsa();
+        }
+    }
+
+
+    /// <inheritdoc cref="GetRsaKeyAlgorithm"/>
+    private static KeyAlgorithm GetDsaKeyAlgorithm(PublicKey key)
+    {
+        try {
+            using var dsa = key.GetDSAPublicKey();
+            return dsa != null ? KeyAlgorithm.DSA(dsa.KeySize) : KeyAlgorithm.DSA();
+        } catch (CryptographicException) {
+            return KeyAlgorithm.DSA();
+        }
+    }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore CS0618 // Type or member is obsolete
 
