@@ -24,6 +24,7 @@ release rather than record it as it happened.
 - `X500NameComparer`, an `IEqualityComparer<X500DistinguishedName>` with the members `Exact`, `Values`, `ValuesAnyOrder`, `Folded` and `FoldedAnyOrder`, and a `CanFold` property.
 - `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches` narrow a search to certificates whose subject or issuer matches a given name, taking any `IEqualityComparer<X500DistinguishedName>`.
 - `CertificateUsage.CrlSigning`, a dedicated CRL issuer profile asserting only `cRLSign`.
+- `GeneralNameListBuilder.AddOtherName`, `AddUserPrincipalName`, `AddDirectoryName` and `AddRegisteredId`, with plural overloads, add the `otherName`, `directoryName` and `registeredID` general names. `AddUserPrincipalName` encodes the UPN form Active Directory reads; `AddDirectoryName` takes an `X500NameBuilder`, `X500DistinguishedName`, string or configuration function.
 
 ### Changed
 
@@ -43,6 +44,7 @@ release rather than record it as it happened.
 - **Breaking:** `CertificateBuilder.KeyAlgorithm` is get-only; set it through `SetKeyAlgorithm`, which also clears any key already set.
 - **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
 - **Breaking:** `X500NameBuilder.EquivalentTo` takes an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.ValuesAnyOrder`, in place of its `bool orderMatters` parameter.
+- **Breaking:** `GeneralNameListBuilder.AddEmailAddresses`, `AddDnsNames`, `AddUris` and `AddIPAddresses` take `params IEnumerable<T>` in place of `params T[]`.
 - **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` take an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.Values`, in place of comparing the encoded names byte for byte.
 - **Breaking:** `SignatureAlgorithm.ForPostQuantum` renamed to `CreateForPostQuantum`.
 - **Breaking:** `CertificateBuilder.Validate`, `Create`, `CreateCertificateRequest` and `CreateCertificateSigningRequest` throw `InvalidOperationException` for a builder configuration that cannot produce a certificate, in place of `ArgumentException`, `ArgumentNullException` and `ArgumentOutOfRangeException`.
