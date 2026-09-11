@@ -969,6 +969,47 @@ public class CertificateBuilderSigningRequestTests
     }
 
 
+    [Test]
+    public async Task CreateCertificateSigningRequest_SignedByAForeignKey_Throws()
+    {
+        //A PKCS#10 signature is proof the requester holds the private key for the key being certified. A
+        //generator over an unrelated key signs a request that proves nothing, so it is refused.
+        using var subjectKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var foreignKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var ex = await Assert
+            .That(() => new CertificateBuilder()
+                .SetSubject("CN=Proof Of Possession")
+                .SetKeyPair(subjectKeys)
+                .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(foreignKeys))
+                .CreateCertificateSigningRequest())
+            .Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("must be signed by the very key it certifies");
+    }
+
+
+    [Test]
+    public async Task CreateCertificateSigningRequest_WithAGeneratorOverTheCertifiedKey_IsAccepted()
+    {
+        //The legitimate reason to supply a generator: an unexportable private key signs through one rather than
+        //a CertificateKey. Its key is the one being certified, so possession is proven and the request stands.
+        using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var csr = new CertificateBuilder()
+            .SetSubject("CN=Unexportable Requester")
+            .SetPublicKey(new PublicKey(keys))
+            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(keys))
+            .CreateCertificateSigningRequest();
+
+        //LoadSigningRequest verifies the PKCS#10 signature and throws if it does not check out, so a clean
+        //reload proves the request really is signed by the certified key.
+        var reloaded = CertificateRequest.LoadSigningRequest(csr.RawData, HashAlgorithmName.SHA256);
+        await Assert.That(reloaded.PublicKey.ExportSubjectPublicKeyInfo())
+            .IsEquivalentTo(new PublicKey(keys).ExportSubjectPublicKeyInfo(), CollectionOrdering.Matching);
+    }
+
+
     /// <summary>
     /// Encodes "CN=Multi Valued+OU=Sales, O=Acme" as DER: two relative distinguished names, the second of
     /// which holds two attributes.

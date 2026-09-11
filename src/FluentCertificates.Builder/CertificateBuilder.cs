@@ -598,8 +598,7 @@ public record CertificateBuilder
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
     /// <exception cref="InvalidOperationException">Thrown when no key pair is set, when an extension's value
     /// contradicts the <see cref="Usage"/> profile, when the <see cref="Usage"/> profile signs but the
-    /// certified key cannot, when the certificate would be signed by a key that is not the one it names as
-    /// its issuer, when an Authority Key Identifier does not identify the issuer's own key, when the
+    /// certified key cannot, when an Authority Key Identifier does not identify the issuer's own key, when the
     /// <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode, or when a
     /// subject alternative name extension carries no entries or does not decode.</exception>
     public CertificateRequest CreateCertificateRequest()
@@ -611,7 +610,6 @@ public record CertificateBuilder
         var dn = Subject.Create();
 
         CheckKeyAgreesWithUsage(this);
-        CheckSubjectAgreesWithUsage(this, dn);
 
         var request = new CertificateRequest(dn, PublicKey, HashAlgorithm);
 
@@ -653,16 +651,29 @@ public record CertificateBuilder
         //bearing here and must not contribute an Authority Key Identifier the requester cannot know.
         var builder = Issuer != null ? this with { Issuer = null } : this;
 
-        return new(builder.CreateCertificateRequest(), SignatureGenerator ?? CreateSignatureGenerator(KeyPair));
+        var request = builder.CreateCertificateRequest();
+
+        //Proof of possession is the whole point of the signature on a PKCS#10 request: it is only evidence
+        //that the requester holds the private key for the public key being certified if that same key signs.
+        //Only a caller-supplied SignatureGenerator can hold some other key; the one derived from KeyPair is
+        //that key by construction, so it is trusted rather than re-encoded and compared, which DSA's generator
+        //spells differently from the key's own SubjectPublicKeyInfo. PublicKey is non-null here, since
+        //CreateCertificateRequest above throws otherwise.
+        if (SignatureGenerator != null
+            && !SignatureGenerator.PublicKey.ExportSubjectPublicKeyInfo().AsSpan()
+                .SequenceEqual(PublicKey!.ExportSubjectPublicKeyInfo())) {
+            throw new InvalidOperationException($"A certificate signing request must be signed by the very key it certifies, to prove the requester holds it, but the {nameof(SignatureGenerator)} holds a different key. Sign with the subject's own key, or clear the {nameof(SignatureGenerator)} so the key pair signs the request");
+        }
+
+        return new(request, SignatureGenerator ?? CreateSignatureGenerator(KeyPair));
     }
 
 
     /// <summary>Builds an <see cref="X509Certificate2"/> instance based on the builder's parameters.</summary>
     /// <returns>A new <see cref="X509Certificate2"/> instance.</returns>
     /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, when the certificate would be signed by a key that is not the one it
-    /// names as its issuer, when an Authority Key Identifier does not identify the issuer's own key, when
-    /// the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode, or when a
+    /// <see cref="Usage"/> profile, when an Authority Key Identifier does not identify the issuer's own key,
+    /// when the <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode, or when a
     /// subject alternative name extension carries no entries or does not decode. <see cref="Validate"/>,
     /// which this member calls, adds its own: among those, a certificate with an empty
     /// <see cref="Subject"/> and no subject alternative name is refused.</exception>
@@ -1012,43 +1023,6 @@ public record CertificateBuilder
             }
         }
     }
-
-
-    private static void CheckSubjectAgreesWithUsage(CertificateBuilder builder, X500DistinguishedName subject)
-    {
-        if (builder.Usage is null) {
-            return;
-        }
-
-        if (builder.Issuer == null) {
-            //A self-issued certificate signed by some other key still builds a path, since the signature
-            //verifies against whoever owns that key: the named subject is impersonated.
-            if (builder.SignatureGenerator != null && !IsSubjectsOwnKey(builder)) {
-                throw new InvalidOperationException($"The certificate would be self-issued, naming itself as its own issuer, yet signed by a key that is not its own. A relying party reads that as the named issuer vouching for this subject. Set an {nameof(Issuer)} so the certificate names the authority that really signed it, or sign with the subject's own key");
-            }
-            return;
-        }
-
-        //A relying party doing the RFC 5280 s6.3.3 name match reads this as the issuer's successor. Whether
-        //some other name would also be read as the issuer's is the caller's to judge, so the names are
-        //compared as encoded rather than folded.
-        if (builder.SignatureGenerator != null
-            && subject.RawData.AsSpan().SequenceEqual(builder.Issuer.SubjectName.RawData)
-            && !IsIssuersOwnKey(builder)) {
-            throw new InvalidOperationException($"The certificate would be issued under the issuer's own name, which is ordinarily key rollover, yet signed by a key that is not the issuer's own. A relying party reads that as the issuer vouching for a successor certificate it never signed. Sign with the issuer's own key, or issue under a different subject");
-        }
-    }
-
-
-    private static bool IsSubjectsOwnKey(CertificateBuilder builder)
-        => builder.PublicKey != null
-        && builder.SignatureGenerator!.PublicKey.ExportSubjectPublicKeyInfo()
-            .AsSpan().SequenceEqual(builder.PublicKey.ExportSubjectPublicKeyInfo());
-
-
-    private static bool IsIssuersOwnKey(CertificateBuilder builder)
-        => builder.SignatureGenerator!.PublicKey.ExportSubjectPublicKeyInfo()
-            .AsSpan().SequenceEqual(builder.Issuer!.PublicKey.ExportSubjectPublicKeyInfo());
 
 
     /// <summary>

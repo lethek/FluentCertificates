@@ -443,39 +443,6 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
-    public async Task Create_WithASignatureGeneratorAndNoIssuer_ThrowsWhenTheKeyIsNotTheSubjectsOwn()
-    {
-        //With no Issuer the certificate is written self-issued, which is only what it says when the signing
-        //key is the subject's own. A generator holding the CA's key mints a certificate under whatever name
-        //the requester chose,
-        //signed by the CA: Java's CertPathBuilder selects it as a CRL issuer by the CRL's AKID, accepts it as
-        //an end-entity certificate whose signature verifies against the anchor, and reports a third party
-        //REVOKED. Verified on JDK 21; with this certificate absent the same run reports only
-        //UNDETERMINED_REVOCATION_STATUS, so it is this certificate being trusted and not the real CA.
-        using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        using var ca = new CertificateBuilder()
-            .SetUsage(CertificateUsage.CA)
-            .SetSubject(x => x.SetCommonName(CaCommonName))
-            .SetKeyPair(caKeys)
-            .SetValidity(TimeSpan.FromDays(2))
-            .Create();
-
-        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var request = new CertificateRequest(ca.SubjectName, requesterKeys, HashAlgorithmName.SHA256);
-        var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest());
-
-        var builder = new CertificateBuilder()
-            .SetUsage(CertificateUsage.Client)
-            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(caKeys))
-            .UseCertificateSigningRequest(csr);
-
-        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
-
-        await Assert.That(ex!.Message).Contains("signed by a key that is not its own");
-    }
-
-
-    [Test]
     public async Task Create_WithASignatureGeneratorOverItsOwnKey_IsIssuedNormally()
     {
         //The legitimate reason to supply a generator with no issuer: the subject's own key lives somewhere
@@ -495,39 +462,10 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
-    public async Task Create_WithASignatureGeneratorAndNoIssuer_ThrowsUnderTheCaProfileToo()
-    {
-        //The CA profile is no exemption from the rule above. Here the certificate certifies the requester's
-        //key under the signing authority's own name with cA=TRUE and keyCertSign, which is a certificate
-        //authority impersonated outright rather than the rollover the profile exists to allow.
-        using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        using var ca = new CertificateBuilder()
-            .SetUsage(CertificateUsage.CA)
-            .SetSubject(x => x.SetCommonName(CaCommonName))
-            .SetKeyPair(caKeys)
-            .SetValidity(TimeSpan.FromDays(2))
-            .Create();
-
-        using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var request = new CertificateRequest(ca.SubjectName, requesterKeys, HashAlgorithmName.SHA256);
-        var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest());
-
-        var builder = new CertificateBuilder()
-            .SetUsage(CertificateUsage.CA)
-            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(caKeys))
-            .UseCertificateSigningRequest(csr);
-
-        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
-
-        await Assert.That(ex!.Message).Contains("signed by a key that is not its own");
-    }
-
-
-    [Test]
     public async Task Create_WithACaSelfSignedOverItsOwnKey_IsIssuedNormally()
     {
-        //Pins that the rule above turns on whose key signs, not on the CA profile. Without this, refusing
-        //every generator under that profile would still pass the case above.
+        //A CA certificate self-signed through a generator holding its own key, as an unexportable key signs,
+        //still builds: the generator signs with the very key being certified.
         using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
         using var cert = new CertificateBuilder()
@@ -546,7 +484,7 @@ public class CertificateBuilderUsageAgreementTests
     public async Task Create_WithACaRolloverUnderTheIssuersOwnName_IsIssuedNormally()
     {
         //Rollover is the ordinary reason a certificate carries its issuer's own subject, and nothing refuses
-        //it: with no SignatureGenerator the issuer's own private key signs, which is what the check asks for.
+        //it: with no SignatureGenerator the issuer's own private key signs.
         using var ca = BuildCa();
 
         using var cert = new CertificateBuilder()
@@ -561,36 +499,10 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
-    public async Task Create_WithACaRolloverSignedByAForeignKey_Throws()
-    {
-        //The CA profile's rollover exemption above only accepts a same-named issuer when the certificate is
-        //genuinely signed by that issuer. Naming a real, trusted root as Issuer while actually signing with
-        //an unrelated key mints a certificate that looks like the root's own successor to any relying party
-        //doing the RFC 5280 s6.3.3 name match -- the same impersonation the no-Issuer case above refuses,
-        //just reached by borrowing the issuer's name instead of leaving Issuer unset.
-        using var ca = BuildCa();
-
-        using var attackerKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-
-        var builder = new CertificateBuilder()
-            .SetUsage(CertificateUsage.CA)
-            .SetIssuer(ca)
-            .SetSubject(x => x.SetCommonName(CaCommonName))
-            .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(attackerKeys))
-            .SetPublicKey(new PublicKey(attackerKeys));
-
-        var ex = await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
-
-        await Assert.That(ex!.Message).Contains("signed by a key that is not the issuer's own");
-    }
-
-
-    [Test]
     public async Task Create_WithAGenuineCaRolloverSignedByTheIssuersOwnKey_IsIssuedNormally()
     {
-        //Pins that the rule above turns on whose key actually signs, not on merely supplying a
-        //SignatureGenerator: genuine rollover through a generator that really is the issuer's own key, such
-        //as one backed by an HSM, must still be issued.
+        //Genuine rollover through a generator that really is the issuer's own key, such as one backed by an
+        //HSM, certifies a new subject key while the issuer's key signs, and must still be issued.
         using var caKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         using var ca = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
@@ -793,21 +705,32 @@ public class CertificateBuilderUsageAgreementTests
 
 
     [Test]
-    public async Task Create_WithASubjectMatchingTheIssuersAndNoUsage_IsIssuedNormally()
+    [Arguments(null)]
+    [Arguments(CertificateUsage.CA)]
+    public async Task Create_UnderTheIssuersNameSignedByAForeignKey_IsIssuedWhateverTheUsage(CertificateUsage? usage)
     {
-        //A builder with no Usage makes none of these refusals, as UseCertificateSigningRequest's remarks and
-        //the README both warn. The same arrangement under a Usage is refused by
-        //Create_WithACaRolloverSignedByAForeignKey_Throws.
+        //Naming a real CA as both Issuer and subject while signing with an unrelated key mints a certificate a
+        //relying party doing the RFC 5280 s6.3.3 name match may read as that CA's own successor: Java's
+        //CertPathBuilder will select such a certificate as a CRL issuer and trust it over the real CA. Every
+        //input is the caller's own, so this library, which is not a certificate authority, leaves the decision
+        //with them. RFC 5280 defines exactly this shape, a self-issued certificate that is not self-signed, and
+        //uses it for key rollover; the hazard is documented in the README rather than refused. The stated Usage
+        //makes no difference, which is the gate FC-87 removed.
         using var ca = BuildCa();
 
         using var attackerKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
-        using var cert = new CertificateBuilder()
+        var builder = new CertificateBuilder()
             .SetIssuer(ca)
             .SetSubject(ca.SubjectName)
             .SetSignatureGenerator(X509SignatureGenerator.CreateForECDsa(attackerKeys))
-            .SetPublicKey(new PublicKey(attackerKeys))
-            .Create();
+            .SetPublicKey(new PublicKey(attackerKeys));
+
+        if (usage != null) {
+            builder = builder.SetUsage(usage.Value);
+        }
+
+        using var cert = builder.Create();
 
         await Assert.That(cert.SubjectName.RawData).IsEquivalentTo(ca.SubjectName.RawData, TUnit.Assertions.Enums.CollectionOrdering.Matching);
     }
@@ -817,7 +740,7 @@ public class CertificateBuilderUsageAgreementTests
     public async Task Create_WithASubjectMatchingTheIssuersOnTheCaProfile_IsIssuedNormally()
     {
         //A self-issued CA certificate is ordinary key rollover. Whether a subject may bear its issuer's name
-        //is the caller's to judge; only the signing key behind that name is checked.
+        //is the caller's to judge, and nothing here refuses it.
         using var ca = BuildCa();
 
         using var cert = new CertificateBuilder()
@@ -838,8 +761,8 @@ public class CertificateBuilderUsageAgreementTests
     {
         //An end-entity certificate under its issuer's own name is how an indirect CRL issuer is conventionally
         //made, and RFC 5280 s6.3.3 has a relying party match that name to decide whose revocation lists it
-        //will accept. Whether a subject is entitled to the name is the caller's to judge, so only the signing
-        //key behind it is checked, exactly as on the CA profile above.
+        //will accept. Whether a subject is entitled to the name is the caller's to judge, and nothing here
+        //refuses it, exactly as on the CA profile above.
         using var ca = BuildCa();
 
         using var cert = new CertificateBuilder()
