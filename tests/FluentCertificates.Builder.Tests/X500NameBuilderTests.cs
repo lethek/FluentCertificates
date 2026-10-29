@@ -23,7 +23,7 @@ public class X500NameBuilderTests
     [Test]
     public async Task Create_Builder_FromString()
     {
-        const string expected = "DC=app, DC=fake";
+        const string expected = "DC=app,DC=fake";
         await Assert.That(new X500NameBuilder(expected).ToString()).IsEqualTo(expected);
     }
 
@@ -31,7 +31,7 @@ public class X500NameBuilderTests
     [Test]
     public async Task Create_Builder_FromX509Name()
     {
-        const string expected = "DC=app, DC=fake";
+        const string expected = "DC=app,DC=fake";
         await Assert.That(new X500NameBuilder(new X509Name(expected).ConvertToDotNet()).ToString()).IsEqualTo(expected);
     }
 
@@ -39,7 +39,7 @@ public class X500NameBuilderTests
     [Test]
     public async Task Create_Builder_FromX500DistinguishedName()
     {
-        const string expected = "DC=app, DC=fake";
+        const string expected = "DC=app,DC=fake";
         await Assert.That(new X500NameBuilder(new X500DistinguishedName(expected)).ToString()).IsEqualTo(expected);
     }
 
@@ -56,39 +56,35 @@ public class X500NameBuilderTests
         //All of the assertions below demonstrate equivalent, alternative syntaxes
 
         await Assert
-            .That(new X500NameBuilder().AddDomainComponent("app").AddDomainComponent("fake").RelativeDistinguishedNames)
+            .That(GetAttributes(new X500NameBuilder().AddDomainComponent("app").AddDomainComponent("fake")))
             .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
         await Assert
-            .That(new X500NameBuilder().AddDomainComponents("app", "fake").RelativeDistinguishedNames)
+            .That(GetAttributes(new X500NameBuilder().AddDomainComponents("app", "fake")))
             .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
         await Assert
-            .That(new X500NameBuilder()
+            .That(GetAttributes(new X500NameBuilder()
                 .Add(dcOid, UniversalTagNumber.IA5String, "app")
-                .Add(dcOid, UniversalTagNumber.IA5String, "fake")
-                .RelativeDistinguishedNames)
+                .Add(dcOid, UniversalTagNumber.IA5String, "fake")))
             .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
         //Specify OID by an Oid instance
         await Assert
-            .That(new X500NameBuilder()
-                .Add(dcOid, UniversalTagNumber.IA5String, "app", "fake")
-                .RelativeDistinguishedNames)
+            .That(GetAttributes(new X500NameBuilder()
+                .Add(dcOid, UniversalTagNumber.IA5String, "app", "fake")))
             .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
         //Specify OID by its friendly-name string
         await Assert
-            .That(new X500NameBuilder()
-                .Add("DC", UniversalTagNumber.IA5String, "app", "fake")
-                .RelativeDistinguishedNames)
+            .That(GetAttributes(new X500NameBuilder()
+                .Add("DC", UniversalTagNumber.IA5String, "app", "fake")))
             .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
         //Specify OID by its value string
         await Assert
-            .That(new X500NameBuilder()
-                .Add("0.9.2342.19200300.100.1.25", UniversalTagNumber.IA5String, "app", "fake")
-                .RelativeDistinguishedNames)
+            .That(GetAttributes(new X500NameBuilder()
+                .Add("0.9.2342.19200300.100.1.25", UniversalTagNumber.IA5String, "app", "fake")))
             .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
     }
 
@@ -109,7 +105,7 @@ public class X500NameBuilderTests
     [Test]
     public async Task Converts_Implicitly_To_String()
     {
-        const string expected = "DC=app, DC=fake";
+        const string expected = "DC=app,DC=fake";
 
         var actual = (string)new X500NameBuilder().SetDomainComponents("app", "fake");
 
@@ -188,7 +184,6 @@ public class X500NameBuilderTests
 
 
     [Test]
-    [Arguments($"CN={nameof(Equality_With_String)}, O=SMMX, C=AU")]
     [Arguments($"CN={nameof(Equality_With_String)},O=SMMX,C=AU")]
     public async Task Equality_With_String(string dn)
     {
@@ -208,7 +203,6 @@ public class X500NameBuilderTests
 
 
     [Test]
-    [Arguments($"CN={nameof(Inequality_With_String)}, O=SMMX, C=AU")]
     [Arguments($"CN={nameof(Inequality_With_String)},O=SMMX,C=AU")]
     public async Task Inequality_With_String(string dn)
     {
@@ -254,25 +248,25 @@ public class X500NameBuilderTests
     [Test]
     public async Task Equals_TheStringItWasBuiltFrom_ReturnsTrue()
     {
-        var builder = new X500NameBuilder("CN=Example, C=AU");
+        var builder = new X500NameBuilder("CN=Example,C=AU");
 
-        await Assert.That(builder.Equals("CN=Example, C=AU")).IsTrue();
+        await Assert.That(builder.Equals("CN=Example,C=AU")).IsTrue();
     }
 
 
     /// <summary>
-    /// Equals compares the encoded bytes, and the ASN.1 string type is part of them: the setters emit
-    /// UTF8String, while parsing a string yields PrintableString for a value that fits it. EquivalentTo is
-    /// the question that disregards this.
+    /// Equals compares the encoded bytes, and the ASN.1 string type is part of them: SetGivenName emits
+    /// PrintableString, while parsing a string yields UTF8String. EquivalentTo is the question that
+    /// disregards this.
     /// </summary>
     [Test]
     public async Task Equals_SameCharactersDifferentStringType_ReturnsFalse()
     {
-        var builder = new X500NameBuilder().SetCommonName("Example");
+        var builder = new X500NameBuilder().SetGivenName("Example");
 
-        await Assert.That(builder.Equals("CN=Example")).IsFalse();
-        await Assert.That(builder.Equals(new X500DistinguishedName("CN=Example"))).IsFalse();
-        await Assert.That(builder.EquivalentTo("CN=Example")).IsTrue();
+        await Assert.That(builder.Equals($"{Oids.GivenName}=Example")).IsFalse();
+        await Assert.That(builder.Equals(new X500NameBuilder($"{Oids.GivenName}=Example").Create())).IsFalse();
+        await Assert.That(builder.EquivalentTo($"{Oids.GivenName}=Example")).IsTrue();
     }
 
 
@@ -405,11 +399,11 @@ public class X500NameBuilderTests
 
         //By Oid instance and by OID value string, which are the two overloads that take no encoding
         await Assert
-            .That(new X500NameBuilder().Add(ou, "Eng", "Ops").RelativeDistinguishedNames)
+            .That(GetAttributes(new X500NameBuilder().Add(ou, "Eng", "Ops")))
             .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
 
         await Assert
-            .That(new X500NameBuilder().Add(ou.Value!, "Eng", "Ops").RelativeDistinguishedNames)
+            .That(GetAttributes(new X500NameBuilder().Add(ou.Value!, "Eng", "Ops")))
             .IsEquivalentTo(expected, X500RdnTupleComparer, CollectionOrdering.Matching);
     }
 
@@ -428,7 +422,7 @@ public class X500NameBuilderTests
         await Assert.That(withEncoding.GetOrganizationalUnits()).IsEquivalentTo(["Eng", "Ops"], CollectionOrdering.Matching);
         await Assert.That(withEncoding.GetCommonName()).IsEqualTo("Common");
         await Assert
-            .That(withEncoding.RelativeDistinguishedNames.Where(x => x.OID.Value == ou.Value).Select(x => x.ValueEncoding))
+            .That(GetAttributes(withEncoding).Where(x => x.OID.Value == ou.Value).Select(x => x.ValueEncoding))
             .IsEquivalentTo([UniversalTagNumber.PrintableString, UniversalTagNumber.PrintableString], CollectionOrdering.Matching);
 
         //The default encoding, given the OID as a string and as an Oid instance
@@ -438,7 +432,7 @@ public class X500NameBuilderTests
         foreach (var builder in new[] { byString, byOid }) {
             await Assert.That(builder.GetOrganizationalUnits()).IsEquivalentTo(["Eng", "Ops"], CollectionOrdering.Matching);
             await Assert
-                .That(builder.RelativeDistinguishedNames.Select(x => x.ValueEncoding))
+                .That(GetAttributes(builder).Select(x => x.ValueEncoding))
                 .IsEquivalentTo([UniversalTagNumber.UTF8String, UniversalTagNumber.UTF8String], CollectionOrdering.Matching);
         }
     }
@@ -466,8 +460,8 @@ public class X500NameBuilderTests
         var roundTripped = new X500NameBuilder(original.Create());
 
         await Assert
-            .That(roundTripped.RelativeDistinguishedNames)
-            .IsEquivalentTo(original.RelativeDistinguishedNames, X500RdnTupleComparer);
+            .That(GetAttributes(roundTripped))
+            .IsEquivalentTo(GetAttributes(original), X500RdnTupleComparer);
 
         //Country and email carry the encodings RFC 5280 requires, so they are not merely echoed defaults
         await Assert
@@ -481,7 +475,13 @@ public class X500NameBuilderTests
 
 
     private static UniversalTagNumber EncodingOf(X500NameBuilder builder, Oid oid)
-        => builder.RelativeDistinguishedNames.Single(x => x.OID.Value == oid.Value).ValueEncoding;
+        => GetAttributes(builder).Single(x => x.OID.Value == oid.Value).ValueEncoding;
+
+
+    private static IEnumerable<(Oid OID, UniversalTagNumber ValueEncoding, string Value)> GetAttributes(X500NameBuilder builder)
+        => builder.RelativeDistinguishedNames
+            .SelectMany(x => x.Attributes)
+            .Select(x => (x.OID, x.ValueEncoding, x.Value!));
 
 
     private static readonly IEqualityComparer<(Oid, UniversalTagNumber, string)> X500RdnTupleComparer

@@ -1047,7 +1047,7 @@ var subject = new X500NameBuilder()
     .SetLocality("Melbourne")
     .SetEmail("admin@fake.domain");
 
-//Renders as a string in the usual RFC 4514 form
+//Renders as a string in the RFC 4514 form, most specific first, with no spaces
 Console.WriteLine(subject.ToString());
 
 //Converts to X500DistinguishedName explicitly or implicitly
@@ -1079,11 +1079,31 @@ string? missing = new X500NameBuilder().GetCommonName();     //null
 ### Starting from an existing name
 
 ```csharp
-var fromString = new X500NameBuilder("CN=example.com, O=Example Pty Ltd");
+var fromString = new X500NameBuilder("CN=example.com,O=Example Pty Ltd");
 var fromDn = new X500NameBuilder(cert.SubjectName);
 
 //Builders are immutable, so this leaves fromString untouched
 var renamed = fromString.SetCommonName("other.example.com");
+```
+
+A string is read as strict [RFC 4514](https://www.rfc-editor.org/rfc/rfc4514), the same way on every
+platform: no spaces around the separators, no quoted values and no `;` separator. Only the keywords
+`CN`, `L`, `ST`, `O`, `OU`, `C`, `STREET`, `DC` and `UID` are recognised, so write any other attribute
+type as an OID. A string that does not conform throws `FormatException`. Values are encoded as
+`UTF8String`, except a country, which is a `PrintableString`. A value written as `#` and hex digits is
+a DER encoding and is kept as it is.
+
+### Multi-valued relative names
+
+A `+` joins the attributes of one relative distinguished name, as in `CN=Example+OU=Sales,O=Acme`.
+Build one from a string, or with `AddRelativeDistinguishedName`:
+
+```csharp
+var name = new X500NameBuilder()
+    .AddRelativeDistinguishedName(
+        new X500Attribute(Oids.CommonNameOid, UniversalTagNumber.UTF8String, "Example"),
+        new X500Attribute(Oids.OrganizationalUnitOid, UniversalTagNumber.UTF8String, "Sales"))
+    .SetOrganization("Acme");
 ```
 
 ### Attributes without a dedicated method
@@ -1145,7 +1165,7 @@ var b = new X500NameBuilder().SetCountry("AU").SetCommonName("example.com");
 
 a.EquivalentTo(b);                                      //true: same attributes, different order
 a.EquivalentTo(b, X500NameComparer.Values);             //false: order differs
-a.EquivalentTo("CN=example.com, C=AU");                 //true
+a.EquivalentTo("CN=example.com,C=AU");                  //true
 ```
 
 The order-agnostic default is deliberate: this builder emits its attributes in the order the setters were
@@ -1153,15 +1173,14 @@ called, and `Set` moves an attribute it replaces to the end, so the order is not
 
 `Equals` is a different question: it compares the **encoded bytes**, as `X500NameComparer.Exact` does.
 Two names that render as the same string can still differ, because the ASN.1 string type is part of the
-encoding. The `Set*` methods use `UTF8String`, whereas parsing a string into an `X500DistinguishedName`
-yields `PrintableString` for values that fit it:
+encoding. Some `Set*` methods use `PrintableString` where parsing a string yields `UTF8String`:
 
 ```csharp
-var built = new X500NameBuilder().SetCommonName("example.com").SetCountry("AU");
+var built = new X500NameBuilder().SetCommonName("example.com").SetGivenName("Sam");
 
-built.ToString();                           //"CN=example.com, C=AU"
-built.Equals("CN=example.com, C=AU");       //false: UTF8String vs PrintableString
-built.EquivalentTo("CN=example.com, C=AU"); //true
+built.ToString();                                         //"CN=example.com,2.5.4.42=Sam"
+built.Equals("CN=example.com,2.5.4.42=Sam");              //false: PrintableString vs UTF8String
+built.EquivalentTo("CN=example.com,2.5.4.42=Sam");        //true
 ```
 
 Reach for `EquivalentTo` unless you specifically need byte-for-byte identity. If you do need the
@@ -1175,6 +1194,7 @@ encoding to match, set it explicitly with `Set(oid, UniversalTagNumber.Printable
 |`SetOrganizationalUnits`, `SetDomainComponents`|Replace all values of a multi-valued attribute.|
 |`AddOrganizationalUnit(s)`, `AddDomainComponent(s)`|Append to a multi-valued attribute.|
 |`Add(oid, ...)`, `Set(oid, ...)`|Append or replace by OID, with an optional `UniversalTagNumber` encoding. The OID may be an `Oid` or a string.|
+|`AddRelativeDistinguishedName(attributes)`|Append one multi-valued relative name.|
 |`Remove(oid)`, `Clear()`|Remove attributes by OID, or all of them.|
 |`GetCommonName`, `GetCountry`, ... `GetOrganizationalUnits`, `GetDomainComponents`|Read attribute values back.|
 |`Create()`|Build the `X500DistinguishedName`. Also available as an implicit conversion.|

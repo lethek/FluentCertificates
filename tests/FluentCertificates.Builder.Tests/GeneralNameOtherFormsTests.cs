@@ -214,12 +214,11 @@ public class GeneralNameOtherFormsTests
     [Test]
     public async Task AddDirectoryName_FromAString_MatchesTheParsedName()
     {
-        //The string overload parses through X500DistinguishedName, which picks its own value encodings and
-        //so need not agree with X500NameBuilder's
+        //The string overload parses as RFC 4514, so it encodes as UTF8String on every platform
         var fromString = new GeneralNameListBuilder().AddDirectoryName("CN=Parsed").Create().Encode();
-        var fromName = new GeneralNameListBuilder().AddDirectoryName(new X500DistinguishedName("CN=Parsed")).Create().Encode();
+        var fromBuilder = new GeneralNameListBuilder().AddDirectoryName(x => x.SetCommonName("Parsed")).Create().Encode();
 
-        await Assert.That(fromString).IsEquivalentTo(fromName, CollectionOrdering.Matching);
+        await Assert.That(fromString).IsEquivalentTo(fromBuilder, CollectionOrdering.Matching);
     }
 
 

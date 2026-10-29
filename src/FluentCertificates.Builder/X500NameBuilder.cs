@@ -3,6 +3,8 @@ using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
+using FluentCertificates.Internals;
+
 namespace FluentCertificates;
 
 
@@ -19,43 +21,69 @@ public record X500NameBuilder
 
 
     /// <summary>
-    /// Initializes a new, empty instance of the <see cref="X500NameBuilder"/> class.
+    /// Initializes a new instance of the <see cref="X500NameBuilder"/> class from an existing distinguished name.
     /// </summary>
+    /// <param name="name">The distinguished name, whose multi-valued relative names and non-string values are kept as they are.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
+    /// <exception cref="CryptographicException"><paramref name="name"/> is not an ASN.1 Name.</exception>
     public X500NameBuilder(X500DistinguishedName name)
-        => RelativeDistinguishedNames = [
-            .. name
-                .EnumerateRelativeDistinguishedNames()
-                .Select(x => (x.GetSingleElementType(), x.GetSingleElementValueEncoding(), x.GetSingleElementValue()!))
-        ];
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        RelativeDistinguishedNames = X500NameDer.Read(name.RawData);
+    }
 
 
     /// <summary>
     /// Initializes a new instance of the <see cref="X500NameBuilder"/> class from a distinguished name string.
     /// </summary>
-    /// <param name="name">The distinguished name string.</param>
+    /// <param name="name">The distinguished name in the string form defined by RFC 4514, such as <c>CN=Example+OU=Sales,O=Acme</c>.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
+    /// <exception cref="FormatException"><paramref name="name"/> does not strictly conform to RFC 4514.</exception>
+    /// <remarks>
+    /// The same string builds the same name on every platform. No spaces are allowed around the separators. Only the keywords CN, L, ST, O, OU, C, STREET,
+    /// DC and UID are recognised; write any other attribute type as a dotted OID. Values are encoded as UTF8String,
+    /// except that a country is a PrintableString. A value written as <c>#</c> and hex digits is a DER
+    /// encoding and is kept as it is.
+    /// </remarks>
     public X500NameBuilder(string name)
-        : this(new X500DistinguishedName(name))
-    { }
+    {
+        RelativeDistinguishedNames = Rfc4514.Parse(name);
+    }
 
 
     /// <summary>
-    /// Gets the list of relative distinguished names (RDNs) as tuples of OID, value encoding, and value.
+    /// Gets the relative distinguished names (RDNs), each holding one or more attributes.
     /// </summary>
-    public ImmutableList<(Oid OID, UniversalTagNumber ValueEncoding, string Value)> RelativeDistinguishedNames { get; init; }
-        = ImmutableList<(Oid, UniversalTagNumber, string)>.Empty;
+    /// <remarks>The order is that of the string form, most specific first, so <c>CN=Example,O=Acme,C=AU</c>
+    /// lists the common name first. A name is encoded in the reverse of this order.</remarks>
+    public ImmutableList<X500RelativeDistinguishedName> RelativeDistinguishedNames { get; init; }
+        = ImmutableList<X500RelativeDistinguishedName>.Empty;
 
 
     /// <summary>
     /// Builds and returns an <see cref="X500DistinguishedName"/> from the current RDNs.
     /// </summary>
     /// <returns>The constructed <see cref="X500DistinguishedName"/>.</returns>
+    /// <exception cref="InvalidOperationException">A relative name has no attributes.</exception>
     public X500DistinguishedName Create()
+        => X500NameDer.Write(RelativeDistinguishedNames);
+
+
+    /// <summary>
+    /// Returns a new builder with a relative distinguished name holding all of the specified attributes,
+    /// as in <c>CN=Example+OU=Sales</c>.
+    /// </summary>
+    /// <param name="attributes">The attributes of the relative name.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="attributes"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="attributes"/> is empty.</exception>
+    public X500NameBuilder AddRelativeDistinguishedName(params IEnumerable<X500Attribute> attributes)
     {
-        var builder = new X500DistinguishedNameBuilder();
-        foreach (var rdn in RelativeDistinguishedNames) {
-            builder.Add(rdn.OID, rdn.Value, (UniversalTagNumber?)rdn.ValueEncoding);
+        ArgumentNullException.ThrowIfNull(attributes);
+        var relativeName = new X500RelativeDistinguishedName([.. attributes]);
+        if (relativeName.Attributes.IsEmpty) {
+            throw new ArgumentException("A relative distinguished name needs at least one attribute.", nameof(attributes));
         }
-        return builder.Build();
+        return this with { RelativeDistinguishedNames = RelativeDistinguishedNames.Add(relativeName) };
     }
 
 
@@ -67,12 +95,17 @@ public record X500NameBuilder
 
 
     /// <summary>
-    /// Returns a new builder with all RDNs matching the specified OID removed.
+    /// Returns a new builder with all attributes matching the specified OID removed.
     /// </summary>
     /// <param name="oid">The OID to remove.</param>
+    /// <remarks>A relative name left with no attributes is removed too.</remarks>
     public X500NameBuilder Remove(Oid oid)
         => this with {
-            RelativeDistinguishedNames = [.. RelativeDistinguishedNames.Where(x => x.OID.Value != oid.Value)]
+            RelativeDistinguishedNames = [
+                .. RelativeDistinguishedNames
+                    .Select(x => x.WithoutOid(oid.Value))
+                    .Where(x => !x.Attributes.IsEmpty)
+            ]
         };
 
 
@@ -210,8 +243,9 @@ public record X500NameBuilder
     private List<string> GetAllMatchingValues(Oid oid)
         => [
             .. RelativeDistinguishedNames
-                .Where(x => x.OID.Value == oid.Value)
-                .Select(x => x.Value)
+                .SelectMany(x => x.Attributes)
+                .Where(x => x.OID.Value == oid.Value && x.Value is not null)
+                .Select(x => x.Value!)
         ];
 
 
@@ -221,8 +255,13 @@ public record X500NameBuilder
     /// <param name="oid">The OID to match.</param>
     private string? GetFirstMatchingValue(Oid oid)
         => RelativeDistinguishedNames
-            .FirstOrDefault(x => x.OID.Value == oid.Value)
-            .Value;
+            .SelectMany(x => x.Attributes)
+            .FirstOrDefault(x => x.OID.Value == oid.Value && x.Value is not null)
+            ?.Value;
+
+
+    private static X500RelativeDistinguishedName CreateRelativeDistinguishedName(Oid oid, UniversalTagNumber valueEncoding, string value)
+        => new([new X500Attribute(oid, valueEncoding, value)]);
 
 
     /// <summary>
@@ -236,7 +275,7 @@ public record X500NameBuilder
             RelativeDistinguishedNames = RelativeDistinguishedNames.AddRange(
                 values
                     .Where(x => x != null)
-                    .Select(x => (oid, valueEncoding, x))
+                    .Select(x => CreateRelativeDistinguishedName(oid, valueEncoding, x))
             )
         };
 
@@ -279,12 +318,13 @@ public record X500NameBuilder
         => this with {
             RelativeDistinguishedNames = [
                 .. RelativeDistinguishedNames
-                    .Where(x => x.OID.Value != oid.Value),
+                    .Select(x => x.WithoutOid(oid.Value))
+                    .Where(x => !x.Attributes.IsEmpty),
 
 
                 .. values
                     .Where(x => x != null)
-                    .Select(x => (oid, valueEncoding, x))
+                    .Select(x => CreateRelativeDistinguishedName(oid, valueEncoding, x))
             ]
         };
 
@@ -489,9 +529,12 @@ public record X500NameBuilder
     /// <summary>
     /// Returns the distinguished name as a string.
     /// </summary>
-    /// <returns>The distinguished name string.</returns>
+    /// <returns>The distinguished name in the string form defined by RFC 4514.</returns>
+    /// <remarks>Relative names are listed most specific first with no spaces, a multi-valued one joins its attributes
+    /// with <c>+</c>, and any attribute type without an RFC 4514 keyword is written as an OID. The result is
+    /// accepted by <see cref="X500NameBuilder(string)"/>.</remarks>
     public override string ToString()
-        => Create().Name;
+        => Rfc4514.Format(RelativeDistinguishedNames);
 
 
     /// <summary>
@@ -511,11 +554,12 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="other">The distinguished name string to compare.</param>
     /// <returns>True if equal; otherwise, false.</returns>
-    /// <remarks>Compares the encoded bytes, as <see cref="X500NameComparer.Exact"/> does. Note that this
-    /// builder encodes as UTF8String by default while <see cref="X500DistinguishedName"/>'s own string
-    /// constructor prefers PrintableString, so two names that display identically can differ here.</remarks>
+    /// <exception cref="FormatException"><paramref name="other"/> does not strictly conform to RFC 4514.</exception>
+    /// <remarks>Parses <paramref name="other"/> as <see cref="X500NameBuilder(string)"/> does, then compares
+    /// the encoded bytes, as <see cref="X500NameComparer.Exact"/> does. The setters encode some values as
+    /// other string types than the parser's UTF8String, so two names that display identically can differ here.</remarks>
     public bool Equals(string? other)
-        => other != null && X500NameComparer.Exact.Equals(Create(), new X500DistinguishedName(other));
+        => other != null && X500NameComparer.Exact.Equals(Create(), new X500NameBuilder(other).Create());
 
 
     /// <summary>Determines whether another builder holds the same relative distinguished names, in the same
@@ -535,19 +579,7 @@ public record X500NameBuilder
             return true;
         }
 
-        var mine = RelativeDistinguishedNames;
-        var theirs = other.RelativeDistinguishedNames;
-        if (mine.Count != theirs.Count) {
-            return false;
-        }
-        for (var i = 0; i < mine.Count; i++) {
-            if (!String.Equals(mine[i].OID.Value, theirs[i].OID.Value)
-                || mine[i].ValueEncoding != theirs[i].ValueEncoding
-                || !String.Equals(mine[i].Value, theirs[i].Value)) {
-                return false;
-            }
-        }
-        return true;
+        return RelativeDistinguishedNames.SequenceEqual(other.RelativeDistinguishedNames);
     }
 
 
@@ -556,9 +588,7 @@ public record X500NameBuilder
     {
         var hash = new HashCode();
         foreach (var rdn in RelativeDistinguishedNames) {
-            hash.Add(rdn.OID.Value);
-            hash.Add(rdn.ValueEncoding);
-            hash.Add(rdn.Value);
+            hash.Add(rdn);
         }
         return hash.ToHashCode();
     }
@@ -583,8 +613,9 @@ public record X500NameBuilder
     /// <param name="other">The distinguished name string to compare.</param>
     /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.ValuesAnyOrder"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
+    /// <exception cref="FormatException"><paramref name="other"/> does not strictly conform to RFC 4514.</exception>
     public bool EquivalentTo(string other, IEqualityComparer<X500DistinguishedName>? comparer = null)
-        => EquivalentTo(new X500DistinguishedName(other), comparer);
+        => EquivalentTo(new X500NameBuilder(other).Create(), comparer);
 
 
     /// <summary>

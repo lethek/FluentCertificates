@@ -25,6 +25,7 @@ release rather than record it as it happened.
 - `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches` narrow a search to certificates whose subject or issuer matches a given name, taking any `IEqualityComparer<X500DistinguishedName>`.
 - `CertificateUsage.CrlSigning`, a dedicated CRL issuer profile asserting only `cRLSign`.
 - `GeneralNameListBuilder.AddOtherName`, `AddUserPrincipalName`, `AddDirectoryName` and `AddRegisteredId`, with plural overloads, for the `otherName`, `directoryName` and `registeredID` general names.
+- `X500Attribute` and `X500RelativeDistinguishedName`, and `X500NameBuilder.AddRelativeDistinguishedName`, for multi-valued relative distinguished names and values held as raw DER.
 
 ### Changed
 
@@ -44,6 +45,9 @@ release rather than record it as it happened.
 - **Breaking:** `CertificateBuilder.KeyAlgorithm` is get-only; set it through `SetKeyAlgorithm`, which also clears any key already set.
 - **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
 - **Breaking:** `X500NameBuilder.EquivalentTo` takes an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.ValuesAnyOrder`, in place of its `bool orderMatters` parameter.
+- **Breaking:** `X500NameBuilder.RelativeDistinguishedNames` is an `ImmutableList<X500RelativeDistinguishedName>` in place of a list of tuples, and lists the relative names most specific first.
+- **Breaking:** `X500NameBuilder(string)`, `Equals(string)`, `EquivalentTo(string)` and `GeneralNameListBuilder.AddDirectoryName(string)` read the strict RFC 4514 string form in place of `X500DistinguishedName`'s platform-dependent parser, and throw `FormatException` for a string that does not conform.
+- **Breaking:** `X500NameBuilder.ToString` returns the RFC 4514 form in place of `X500DistinguishedName.Name`.
 - **Breaking:** `GeneralNameListBuilder.AddEmailAddresses`, `AddDnsNames`, `AddUris` and `AddIPAddresses` take `params IEnumerable<T>` in place of `params T[]`.
 - **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` take an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.Values`, in place of comparing the encoded names byte for byte.
 - **Breaking:** `SignatureAlgorithm.ForPostQuantum` renamed to `CreateForPostQuantum`.
@@ -53,6 +57,8 @@ release rather than record it as it happened.
 
 ### Fixed
 
+- `X500NameBuilder(string)` builds the same name on every platform, where a `+` joining the attributes of a multi-valued relative distinguished name was an ordinary character on Linux.
+- `X500NameBuilder(X500DistinguishedName)` keeps a multi-valued relative distinguished name, where it threw.
 - `CertificateBuilder.AddExtension`, `AddExtensions` and `SetExtensions` refuse a `null` extension at the call that supplied it, rather than accepting it and throwing `NullReferenceException` from `Create`.
 - `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
 - `CertificateBuilder.CreateCertificateSigningRequest` ignores any `Issuer` on the builder, rather than writing that issuer's Authority Key Identifier into a request nothing has agreed to sign yet.
