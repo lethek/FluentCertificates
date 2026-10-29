@@ -124,13 +124,11 @@ public record GeneralNameListBuilder
     /// where the OID fixes the value to a string.</remarks>
     /// <exception cref="ArgumentNullException"><paramref name="typeId"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException"><paramref name="typeId"/> has no value, or
-    /// <paramref name="derEncodedValue"/> is empty.</exception>
+    /// <paramref name="derEncodedValue"/> is not exactly one DER-encoded value.</exception>
     public GeneralNameListBuilder AddOtherName(Oid typeId, ReadOnlySpan<byte> derEncodedValue)
     {
         var oidValue = GetOidValue(typeId, nameof(typeId));
-        if (derEncodedValue.IsEmpty) {
-            throw new ArgumentException("An otherName's value cannot be empty; it must be a complete DER encoding.", nameof(derEncodedValue));
-        }
+        ThrowIfNotOneDerValue(derEncodedValue, nameof(derEncodedValue));
         return Add(new OtherNameAsn(oidValue, derEncodedValue));
     }
 
@@ -141,13 +139,11 @@ public record GeneralNameListBuilder
     /// <param name="otherNames">The names to add, each an OID paired with the DER encoding of its value.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
     /// <exception cref="ArgumentNullException">An OID is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentException">An OID has no value, or a value is null or empty.</exception>
+    /// <exception cref="ArgumentException">An OID has no value, or a value is null or not exactly one DER-encoded value.</exception>
     public GeneralNameListBuilder AddOtherNames(params IEnumerable<(Oid TypeId, byte[] Value)> otherNames)
         => AddRange(otherNames.Select(x => {
             var oidValue = GetOidValue(x.TypeId, nameof(otherNames));
-            if (x.Value is not { Length: > 0 }) {
-                throw new ArgumentException("An otherName's value cannot be empty; it must be a complete DER encoding.", nameof(otherNames));
-            }
+            ThrowIfNotOneDerValue(x.Value, nameof(otherNames));
             return new OtherNameAsn(oidValue, x.Value);
         }));
 
@@ -179,8 +175,9 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="name">The X.500 name to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddDirectoryName(X500DistinguishedName name)
-        => Add(new DirectoryNameAsn(name));
+        => Add(CreateDirectoryName(name, nameof(name)));
 
 
     /// <summary>
@@ -188,8 +185,12 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="name">A builder for the X.500 name to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddDirectoryName(X500NameBuilder name)
-        => AddDirectoryName(name.Create());
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return AddDirectoryName(name.Create());
+    }
 
 
     /// <summary>
@@ -197,8 +198,12 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="name">The X.500 name to add, such as <c>CN=Example, O=Example Org</c>.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddDirectoryName(string name)
-        => AddDirectoryName(new X500DistinguishedName(name));
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return AddDirectoryName(new X500DistinguishedName(name));
+    }
 
 
     /// <summary>
@@ -206,8 +211,15 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="configureName">A function to configure the X.500 name.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="configureName"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException"><paramref name="configureName"/> returned <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddDirectoryName(Func<X500NameBuilder, X500NameBuilder> configureName)
-        => AddDirectoryName(configureName(new X500NameBuilder()));
+    {
+        ArgumentNullException.ThrowIfNull(configureName);
+        var name = configureName(new X500NameBuilder())
+            ?? throw new InvalidOperationException($"{nameof(configureName)} returned null.");
+        return AddDirectoryName(name);
+    }
 
 
     /// <summary>
@@ -215,8 +227,12 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="names">The X.500 names to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="names"/> or a name in it is <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddDirectoryNames(params IEnumerable<X500DistinguishedName> names)
-        => AddRange(names.Select(x => new DirectoryNameAsn(x)));
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return AddRange(names.Select(x => CreateDirectoryName(x, nameof(names))));
+    }
 
 
     /// <summary>
@@ -224,8 +240,15 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="names">Builders for the X.500 names to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="names"/> or a builder in it is <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddDirectoryNames(params IEnumerable<X500NameBuilder> names)
-        => AddRange(names.Select(x => new DirectoryNameAsn(x.Create())));
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return AddRange(names.Select(x => {
+            ArgumentNullException.ThrowIfNull(x, nameof(names));
+            return CreateDirectoryName(x.Create(), nameof(names));
+        }));
+    }
 
 
     /// <summary>
@@ -233,8 +256,15 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="names">The X.500 names to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the names added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="names"/> or a name in it is <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddDirectoryNames(params IEnumerable<string> names)
-        => AddRange(names.Select(x => new DirectoryNameAsn(new X500DistinguishedName(x))));
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return AddRange(names.Select(x => {
+            ArgumentNullException.ThrowIfNull(x, nameof(names));
+            return CreateDirectoryName(new X500DistinguishedName(x), nameof(names));
+        }));
+    }
 
 
     /// <summary>
@@ -290,6 +320,36 @@ public record GeneralNameListBuilder
         => this with {
             NameConstraints = NameConstraints.AddRange(generalNameConstraints)
         };
+
+
+    /// <summary>Returns a <c>directoryName</c> for an X.500 name, rejecting a null one.</summary>
+    /// <param name="name">The name to wrap.</param>
+    /// <param name="paramName">The name of the parameter the X.500 name arrived in.</param>
+    /// <returns>The <c>directoryName</c>.</returns>
+    private static DirectoryNameAsn CreateDirectoryName(X500DistinguishedName? name, string paramName)
+    {
+        ArgumentNullException.ThrowIfNull(name, paramName);
+        return new DirectoryNameAsn(name);
+    }
+
+
+    /// <summary>Throws unless the bytes are exactly one DER-encoded value, with nothing before or after it.</summary>
+    /// <param name="value">The bytes to check. A null array reads as empty.</param>
+    /// <param name="paramName">The name of the parameter the bytes arrived in.</param>
+    /// <remarks>Only the outer tag and length are checked. What a value's content means depends on its type,
+    /// which is not known here.</remarks>
+    private static void ThrowIfNotOneDerValue(ReadOnlySpan<byte> value, string paramName)
+    {
+        int bytesConsumed;
+        try {
+            AsnDecoder.ReadEncodedValue(value, AsnEncodingRules.DER, out _, out _, out bytesConsumed);
+        } catch (AsnContentException ex) {
+            throw new ArgumentException("An otherName's value must be one complete DER encoding.", paramName, ex);
+        }
+        if (bytesConsumed != value.Length) {
+            throw new ArgumentException("An otherName's value must be one DER encoding with nothing after it.", paramName);
+        }
+    }
 
 
     /// <summary>Returns an OID's dotted-decimal value, which is the only part of it that can be encoded.</summary>

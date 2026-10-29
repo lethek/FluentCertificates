@@ -24,7 +24,7 @@ release rather than record it as it happened.
 - `X500NameComparer`, an `IEqualityComparer<X500DistinguishedName>` with the members `Exact`, `Values`, `ValuesAnyOrder`, `Folded` and `FoldedAnyOrder`, and a `CanFold` property.
 - `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches` narrow a search to certificates whose subject or issuer matches a given name, taking any `IEqualityComparer<X500DistinguishedName>`.
 - `CertificateUsage.CrlSigning`, a dedicated CRL issuer profile asserting only `cRLSign`.
-- `GeneralNameListBuilder.AddOtherName`, `AddUserPrincipalName`, `AddDirectoryName` and `AddRegisteredId`, with plural overloads, add the `otherName`, `directoryName` and `registeredID` general names. `AddUserPrincipalName` encodes the UPN form Active Directory reads; `AddDirectoryName` takes an `X500NameBuilder`, `X500DistinguishedName`, string or configuration function.
+- `GeneralNameListBuilder.AddOtherName`, `AddUserPrincipalName`, `AddDirectoryName` and `AddRegisteredId`, with plural overloads, for the `otherName`, `directoryName` and `registeredID` general names.
 
 ### Changed
 
