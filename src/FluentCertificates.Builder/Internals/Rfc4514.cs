@@ -131,10 +131,11 @@ internal static class Rfc4514
             throw Error(name, start, "expected one or more pairs of hex digits after '#'");
         }
 
+        //RFC 4514 defines the hex as a BER encoding, so it is rewritten as the DER a Name needs
         try {
-            return X500Attribute.CreateFromDer(oid, Convert.FromHexString(hex));
-        } catch (ArgumentException ex) {
-            throw Error(name, start, "the hex digits are not one complete DER value", ex);
+            return X500Attribute.CreateFromDer(oid, BerToDer.Normalize(Convert.FromHexString(hex)));
+        } catch (Exception ex) when (ex is ArgumentException or AsnContentException) {
+            throw Error(name, start, "the hex digits are not one complete BER value", ex);
         }
     }
 

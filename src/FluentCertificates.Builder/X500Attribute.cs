@@ -149,11 +149,12 @@ public sealed record X500Attribute
     }
 
 
+    //T61String is left out because .NET reads its bytes as Latin-1 and writes them back as UTF-8, so the
+    //value would not survive a round trip
     private static bool IsCharacterString(UniversalTagNumber tag)
         => tag is UniversalTagNumber.UTF8String
             or UniversalTagNumber.NumericString
             or UniversalTagNumber.PrintableString
-            or UniversalTagNumber.T61String
             or UniversalTagNumber.IA5String
             or UniversalTagNumber.VisibleString
             or UniversalTagNumber.BMPString;

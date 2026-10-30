@@ -47,7 +47,7 @@ release rather than record it as it happened.
 - **Breaking:** `X500NameBuilder.EquivalentTo` takes an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.ValuesAnyOrder`, in place of its `bool orderMatters` parameter.
 - **Breaking:** `X500NameBuilder.RelativeDistinguishedNames` is an `ImmutableList<X500RelativeDistinguishedName>` in place of a list of tuples, and lists the relative names most specific first.
 - **Breaking:** `X500NameBuilder(string)`, `Equals(string)`, `EquivalentTo(string)` and `GeneralNameListBuilder.AddDirectoryName(string)` read the strict RFC 4514 string form in place of `X500DistinguishedName`'s platform-dependent parser, and throw `FormatException` for a string that does not conform.
-- **Breaking:** `X500NameBuilder.ToString` returns the RFC 4514 form in place of `X500DistinguishedName.Name`.
+- **Breaking:** `X500NameBuilder.ToString` returns a string in the RFC 4514 style in place of `X500DistinguishedName.Name`.
 - **Breaking:** `GeneralNameListBuilder.AddEmailAddresses`, `AddDnsNames`, `AddUris` and `AddIPAddresses` take `params IEnumerable<T>` in place of `params T[]`.
 - **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` take an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.Values`, in place of comparing the encoded names byte for byte.
 - **Breaking:** `SignatureAlgorithm.ForPostQuantum` renamed to `CreateForPostQuantum`.

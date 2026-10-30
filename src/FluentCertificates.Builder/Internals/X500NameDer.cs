@@ -21,6 +21,9 @@ internal static class X500NameDer
             outer.ThrowIfNotEmpty();
             while (sequence.HasData) {
                 var set = sequence.ReadSetOf(skipSortOrderValidation: true);
+                if (!set.HasData) {
+                    throw new AsnContentException("A relative distinguished name has at least one attribute.");
+                }
                 var attributes = ImmutableList.CreateBuilder<X500Attribute>();
                 while (set.HasData) {
                     var pair = set.ReadSequence();
@@ -31,7 +34,7 @@ internal static class X500NameDer
                 }
                 relativeNames.Add(new X500RelativeDistinguishedName(attributes.ToImmutable()));
             }
-        } catch (AsnContentException ex) {
+        } catch (Exception ex) when (ex is AsnContentException or ArgumentException) {
             throw new CryptographicException("The distinguished name is not a valid ASN.1 Name.", ex);
         }
         relativeNames.Reverse();

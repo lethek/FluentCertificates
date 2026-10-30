@@ -1047,7 +1047,7 @@ var subject = new X500NameBuilder()
     .SetLocality("Melbourne")
     .SetEmail("admin@fake.domain");
 
-//Renders as a string in the RFC 4514 form, most specific first, with no spaces
+//Renders as a display string in the RFC 4514 style, most specific first, with no spaces
 Console.WriteLine(subject.ToString());
 
 //Converts to X500DistinguishedName explicitly or implicitly
@@ -1091,7 +1091,7 @@ platform: no spaces around the separators, no quoted values and no `;` separator
 `CN`, `L`, `ST`, `O`, `OU`, `C`, `STREET`, `DC` and `UID` are recognised, so write any other attribute
 type as an OID. A string that does not conform throws `FormatException`. Values are encoded as
 `UTF8String`, except a country, which is a `PrintableString`. A value written as `#` and hex digits is
-a DER encoding and is kept as it is.
+a BER encoding, which is rewritten as DER and kept as raw bytes, or read as a string when it is one.
 
 ### Multi-valued relative names
 

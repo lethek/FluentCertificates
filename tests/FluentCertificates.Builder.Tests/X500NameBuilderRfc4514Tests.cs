@@ -115,6 +115,40 @@ public class X500NameBuilderRfc4514Tests
     }
 
 
+    /// <summary>RFC 4514 s2.4 and s3 define a #hex value as BER, so BER input is accepted and written out as DER.</summary>
+    [Test]
+    [Arguments("1.2.3.4=#30800401410000", new byte[] { 0x30, 0x03, 0x04, 0x01, 0x41 })]
+    [Arguments("1.2.3.4=#300724800401410000", new byte[] { 0x30, 0x03, 0x04, 0x01, 0x41 })]
+    [Arguments("1.2.3.4=#0481012A", new byte[] { 0x04, 0x01, 0x2A })]
+    [Arguments("1.2.3.4=#010101", new byte[] { 0x01, 0x01, 0xFF })]
+    [Arguments("1.2.3.4=#3106020102020101", new byte[] { 0x31, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02 })]
+    public async Task Parse_HexStringInBer_IsNormalisedToDer(string name, byte[] expected)
+    {
+        var attribute = new X500NameBuilder(name).RelativeDistinguishedNames.Single().Attributes.Single();
+
+        await Assert.That(attribute.DerValue.ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    [Arguments("CN=#0C810161", "a")]
+    [Arguments("CN=#2C800401610401620000", "ab")]
+    public async Task Parse_HexStringInBer_AStringIsDecoded(string name, string expected)
+    {
+        await Assert.That(new X500NameBuilder(name).GetCommonName()).IsEqualTo(expected);
+    }
+
+
+    [Test]
+    public async Task Constructor_FromDer_ABerValue_ThrowsCryptographicException()
+    {
+        //A Name read from DER keeps its bytes, so a value that is not DER is refused rather than rewritten
+        var name = new X500DistinguishedName(Convert.FromHexString("300D310B300906035504030C810161"));
+
+        await Assert.That(() => new X500NameBuilder(name)).Throws<CryptographicException>();
+    }
+
+
     [Test]
     [Arguments("CN=a, O=b")]
     [Arguments("CN=a,O=b,")]
@@ -133,6 +167,9 @@ public class X500NameBuilderRfc4514Tests
     [Arguments("CN=#0")]
     [Arguments("CN=#ZZ")]
     [Arguments("CN=#0C0161FF")]
+    [Arguments("1.2.3.4=#230403020041")]
+    [Arguments("1.2.3.4=#0100")]
+    [Arguments("1.2.3.4=#24800201010000")]
     [Arguments("CN=#0C")]
     [Arguments("CN=a<b")]
     [Arguments("CN=a>b")]
@@ -262,6 +299,38 @@ public class X500NameBuilderRfc4514Tests
         await Assert.That(attribute.Value).IsNull();
         await Assert.That(attribute.DerValue.ToArray()).IsEquivalentTo(new byte[] { 0x02, 0x01, 0x07 }, CollectionOrdering.Matching);
         await Assert.That(builder.Create().RawData).IsEquivalentTo(name.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Constructor_FromDer_KeepsAT61StringAsRawDer()
+    {
+        //T61String is not a character set .NET decodes faithfully: E9 reads as Latin-1 and would be written back as UTF-8
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) {
+            using (writer.PushSetOf()) {
+                using (writer.PushSequence()) {
+                    writer.WriteObjectIdentifier(Oids.CommonName);
+                    writer.WriteEncodedValue(new byte[] { 0x14, 0x01, 0xE9 });
+                }
+            }
+        }
+        var name = new X500DistinguishedName(writer.Encode());
+
+        var builder = new X500NameBuilder(name);
+
+        await Assert.That(builder.RelativeDistinguishedNames.Single().Attributes.Single().Value).IsNull();
+        await Assert.That(builder.Create().RawData).IsEquivalentTo(name.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Constructor_FromDer_AnEmptyRdn_ThrowsCryptographicException()
+    {
+        //A relative distinguished name is a SET SIZE (1..MAX), so an empty one is not a Name
+        var name = new X500DistinguishedName(new byte[] { 0x30, 0x02, 0x31, 0x00 });
+
+        await Assert.That(() => new X500NameBuilder(name)).Throws<CryptographicException>();
     }
 
 

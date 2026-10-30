@@ -42,8 +42,8 @@ public record X500NameBuilder
     /// <remarks>
     /// The same string builds the same name on every platform. No spaces are allowed around the separators. Only the keywords CN, L, ST, O, OU, C, STREET,
     /// DC and UID are recognised; write any other attribute type as a dotted OID. Values are encoded as UTF8String,
-    /// except that a country is a PrintableString. A value written as <c>#</c> and hex digits is a DER
-    /// encoding and is kept as it is.
+    /// except that a country is a PrintableString. A value written as <c>#</c> and hex digits is a BER
+    /// encoding, which is kept as raw DER once rewritten as DER, or as a string when it is one.
     /// </remarks>
     public X500NameBuilder(string name)
     {
@@ -529,10 +529,13 @@ public record X500NameBuilder
     /// <summary>
     /// Returns the distinguished name as a string.
     /// </summary>
-    /// <returns>The distinguished name in the string form defined by RFC 4514.</returns>
-    /// <remarks>Relative names are listed most specific first with no spaces, a multi-valued one joins its attributes
-    /// with <c>+</c>, and any attribute type without an RFC 4514 keyword is written as an OID. The result is
-    /// accepted by <see cref="X500NameBuilder(string)"/>.</remarks>
+    /// <returns>The distinguished name as a string for display.</returns>
+    /// <remarks>The string follows RFC 4514: relative names are listed most specific first with no spaces, a
+    /// multi-valued one joins its attributes with <c>+</c>, and any attribute type without an RFC 4514 keyword is
+    /// written as an OID. It is meant for display, so conformance is not guaranteed: the value of an attribute
+    /// written as an OID is shown as text rather than the <c>#</c> and hex form RFC 4514 section 2.4 specifies.
+    /// <see cref="X500NameBuilder(string)"/> reads the result back to the same name. To encode a name, use
+    /// <see cref="Create"/>.</remarks>
     public override string ToString()
         => Rfc4514.Format(RelativeDistinguishedNames);
 
