@@ -155,12 +155,16 @@ public record CertificateBuilder
     /// <summary>Sets the subject name using an <see cref="X500DistinguishedName"/>.</summary>
     /// <param name="value">The distinguished name.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified subject.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is null.</exception>
+    /// <exception cref="CryptographicException"><paramref name="value"/> is not a valid ASN.1 Name, or holds an attribute value that is not DER.</exception>
     public CertificateBuilder SetSubject(X500DistinguishedName value)
         => this with { Subject = new X500NameBuilder(value) };
 
     /// <summary>Sets the subject name using a string representation.</summary>
-    /// <param name="value">The subject name as a string.</param>
+    /// <param name="value">The subject name as a string, in the RFC 4514 form <see cref="X500NameBuilder(string)"/> reads.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified subject.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="value"/> is null.</exception>
+    /// <exception cref="FormatException"><paramref name="value"/> does not strictly conform to RFC 4514.</exception>
     public CertificateBuilder SetSubject(string value)
         => this with { Subject = new X500NameBuilder(value) };
 
@@ -413,8 +417,8 @@ public record CertificateBuilder
     /// <param name="csr">The received certificate signing request.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the request's subject and public key.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="csr"/> is <see langword="null"/>.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the request's subject contains a multi-valued
-    /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent.</exception>
+    /// <exception cref="CryptographicException">Thrown when the request's subject is not a valid ASN.1 Name, or
+    /// holds an attribute value that is not DER.</exception>
     public CertificateBuilder UseCertificateSigningRequest(CertificateSigningRequest csr)
     {
         ArgumentNullException.ThrowIfNull(csr);
@@ -452,8 +456,8 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the request's subject, public key and accepted extensions.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="csr"/> or <paramref name="accept"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="csr"/>'s extension collection holds a <see langword="null"/>.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the request's subject contains a multi-valued
-    /// relative distinguished name, which <see cref="X500NameBuilder"/> cannot represent.</exception>
+    /// <exception cref="CryptographicException">Thrown when the request's subject is not a valid ASN.1 Name, or
+    /// holds an attribute value that is not DER.</exception>
     public CertificateBuilder UseCertificateSigningRequest(CertificateSigningRequest csr, Func<X509Extension, bool> accept)
     {
         ArgumentNullException.ThrowIfNull(csr);

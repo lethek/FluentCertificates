@@ -7,8 +7,9 @@ namespace FluentCertificates.Internals;
 /// </summary>
 /// <remarks>
 /// Covers what BER permits and DER does not at the level of structure: indefinite and non-minimal lengths,
-/// constructed strings, the order of a SET's members, and a BOOLEAN's true value. A value the type-specific
-/// DER rules would also change, such as a constructed BIT STRING, is refused rather than guessed at.
+/// constructed strings, the order of a SET's members, and a BOOLEAN's true value. A constructed BIT STRING is
+/// refused rather than guessed at. The result is not checked here: <see cref="DerValidator"/> refuses what is
+/// still not DER, such as a BIT STRING with non-zero padding or a malformed time.
 /// </remarks>
 internal static class BerToDer
 {

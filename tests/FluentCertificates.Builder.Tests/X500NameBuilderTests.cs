@@ -480,7 +480,7 @@ public class X500NameBuilderTests
 
     private static IEnumerable<(Oid OID, UniversalTagNumber ValueEncoding, string Value)> GetAttributes(X500NameBuilder builder)
         => builder.RelativeDistinguishedNames
-            .SelectMany(x => x.Attributes)
+            .SelectMany(x => x)
             .Select(x => (x.OID, x.ValueEncoding, x.Value!));
 
 

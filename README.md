@@ -1090,7 +1090,7 @@ A string is read as strict [RFC 4514](https://www.rfc-editor.org/rfc/rfc4514), t
 platform: no spaces around the separators, no quoted values and no `;` separator. Only the keywords
 `CN`, `L`, `ST`, `O`, `OU`, `C`, `STREET`, `DC` and `UID` are recognised, so write any other attribute
 type as an OID. A string that does not conform throws `FormatException`. Values are encoded as
-`UTF8String`, except a country, which is a `PrintableString`. A value written as `#` and hex digits is
+`UTF8String`, except a country, which is a `PrintableString`, and a domain component, which is an `IA5String`. A value written as `#` and hex digits is
 a BER encoding, which is rewritten as DER and kept as raw bytes, or read as a string when it is one.
 
 ### Multi-valued relative names

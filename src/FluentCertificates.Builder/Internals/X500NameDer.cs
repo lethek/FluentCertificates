@@ -11,10 +11,10 @@ internal static class X500NameDer
     /// Reads the relative distinguished names out of an encoded Name. A Name is encoded least specific first,
     /// so the result is reversed into the most-specific-first order of the string form.
     /// </summary>
-    public static ImmutableList<X500RelativeDistinguishedName> Read(ReadOnlyMemory<byte> rawData)
+    public static ImmutableList<X500AttributeSet> Read(ReadOnlyMemory<byte> rawData)
     {
         //BER rules, because names in the wild are not always sorted or minimally encoded and still have to be read
-        var relativeNames = ImmutableList.CreateBuilder<X500RelativeDistinguishedName>();
+        var relativeNames = ImmutableList.CreateBuilder<X500AttributeSet>();
         try {
             var outer = new AsnReader(rawData, AsnEncodingRules.BER);
             var sequence = outer.ReadSequence();
@@ -32,7 +32,7 @@ internal static class X500NameDer
                     pair.ThrowIfNotEmpty();
                     attributes.Add(X500Attribute.CreateFromDer(oid, value.Span));
                 }
-                relativeNames.Add(new X500RelativeDistinguishedName(attributes.ToImmutable()));
+                relativeNames.Add(new X500AttributeSet(attributes.ToImmutable()));
             }
         } catch (Exception ex) when (ex is AsnContentException or ArgumentException) {
             throw new CryptographicException("The distinguished name is not a valid ASN.1 Name.", ex);
@@ -42,17 +42,17 @@ internal static class X500NameDer
     }
 
 
-    public static X500DistinguishedName Write(IEnumerable<X500RelativeDistinguishedName> relativeNames)
+    public static X500DistinguishedName Write(IEnumerable<X500AttributeSet> relativeNames)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
         using (writer.PushSequence()) {
             foreach (var relativeName in relativeNames.Reverse()) {
-                if (relativeName.Attributes.IsEmpty) {
+                if (relativeName.Count == 0) {
                     throw new InvalidOperationException("A relative distinguished name needs at least one attribute.");
                 }
                 //DER sorts the members of a SET OF as the writer disposes this scope
                 using (writer.PushSetOf()) {
-                    foreach (var attribute in relativeName.Attributes) {
+                    foreach (var attribute in relativeName) {
                         attribute.Encode(writer);
                     }
                 }

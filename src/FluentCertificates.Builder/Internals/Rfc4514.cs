@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Formats.Asn1;
 using System.Globalization;
@@ -17,11 +18,11 @@ namespace FluentCertificates.Internals;
 /// </remarks>
 internal static class Rfc4514
 {
-    public static ImmutableList<X500RelativeDistinguishedName> Parse(string name)
+    public static ImmutableList<X500AttributeSet> Parse(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
 
-        var relativeNames = ImmutableList.CreateBuilder<X500RelativeDistinguishedName>();
+        var relativeNames = ImmutableList.CreateBuilder<X500AttributeSet>();
         var pos = 0;
         if (name.Length > 0) {
             while (true) {
@@ -34,7 +35,7 @@ internal static class Rfc4514
                     }
                     break;
                 }
-                relativeNames.Add(new X500RelativeDistinguishedName(attributes.ToImmutable()));
+                relativeNames.Add(new X500AttributeSet(attributes.ToImmutable()));
 
                 if (pos == name.Length) {
                     break;
@@ -47,10 +48,10 @@ internal static class Rfc4514
     }
 
 
-    public static string Format(IEnumerable<X500RelativeDistinguishedName> relativeNames)
+    public static string Format(IEnumerable<X500AttributeSet> relativeNames)
         => String.Join(
             ',',
-            relativeNames.Select(x => String.Join('+', x.Attributes.Select(FormatAttribute)))
+            relativeNames.Select(x => String.Join('+', x.Select(FormatAttribute)))
         );
 
 
@@ -68,9 +69,19 @@ internal static class Rfc4514
             return ParseHexValue(name, ref pos, oid);
         }
 
+        var start = pos;
         var value = ParseStringValue(name, ref pos);
-        var encoding = oid.Value == Oids.CountryOrRegionName ? UniversalTagNumber.PrintableString : UniversalTagNumber.UTF8String;
-        return new X500Attribute(oid, encoding, value);
+        //RFC 5280 gives these two their own string types; every other value is a UTF8String
+        var encoding = oid.Value switch {
+            Oids.CountryOrRegionName => UniversalTagNumber.PrintableString,
+            Oids.DomainComponent => UniversalTagNumber.IA5String,
+            _ => UniversalTagNumber.UTF8String
+        };
+        try {
+            return new X500Attribute(oid, encoding, value);
+        } catch (ArgumentException ex) {
+            throw Error(name, start, ex.Message, ex);
+        }
     }
 
 
@@ -199,8 +210,7 @@ internal static class Rfc4514
     private static string FormatAttribute(X500Attribute attribute)
     {
         var type = attribute.OID.Value!;
-        var keyword = Keywords.FirstOrDefault(x => x.Value == type).Key;
-        var builder = new StringBuilder(keyword ?? type).Append('=');
+        var builder = new StringBuilder(KeywordsByOid.GetValueOrDefault(type) ?? type).Append('=');
 
         if (attribute.Value is null) {
             return builder.Append('#').Append(Convert.ToHexString(attribute.DerValue.Span)).ToString();
@@ -230,7 +240,7 @@ internal static class Rfc4514
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
 
-    private static readonly Dictionary<string, string> Keywords = new(StringComparer.OrdinalIgnoreCase) {
+    private static readonly FrozenDictionary<string, string> Keywords = new Dictionary<string, string> {
         ["CN"] = Oids.CommonName,
         ["L"] = Oids.LocalityName,
         ["ST"] = Oids.StateOrProvinceName,
@@ -240,5 +250,9 @@ internal static class Rfc4514
         ["STREET"] = Oids.StreetAddress,
         ["DC"] = Oids.DomainComponent,
         ["UID"] = Oids.UserId,
-    };
+    }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+
+    private static readonly FrozenDictionary<string, string> KeywordsByOid
+        = Keywords.ToFrozenDictionary(x => x.Value, x => x.Key, StringComparer.Ordinal);
 }

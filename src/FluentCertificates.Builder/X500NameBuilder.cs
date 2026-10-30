@@ -42,7 +42,7 @@ public record X500NameBuilder
     /// <remarks>
     /// The same string builds the same name on every platform. No spaces are allowed around the separators. Only the keywords CN, L, ST, O, OU, C, STREET,
     /// DC and UID are recognised; write any other attribute type as a dotted OID. Values are encoded as UTF8String,
-    /// except that a country is a PrintableString. A value written as <c>#</c> and hex digits is a BER
+    /// except that a country is a PrintableString and a domain component is an IA5String. A value written as <c>#</c> and hex digits is a BER
     /// encoding, which is kept as raw DER once rewritten as DER, or as a string when it is one.
     /// </remarks>
     public X500NameBuilder(string name)
@@ -56,8 +56,8 @@ public record X500NameBuilder
     /// </summary>
     /// <remarks>The order is that of the string form, most specific first, so <c>CN=Example,O=Acme,C=AU</c>
     /// lists the common name first. A name is encoded in the reverse of this order.</remarks>
-    public ImmutableList<X500RelativeDistinguishedName> RelativeDistinguishedNames { get; init; }
-        = ImmutableList<X500RelativeDistinguishedName>.Empty;
+    public ImmutableList<X500AttributeSet> RelativeDistinguishedNames { get; init; }
+        = ImmutableList<X500AttributeSet>.Empty;
 
 
     /// <summary>
@@ -79,8 +79,8 @@ public record X500NameBuilder
     public X500NameBuilder AddRelativeDistinguishedName(params IEnumerable<X500Attribute> attributes)
     {
         ArgumentNullException.ThrowIfNull(attributes);
-        var relativeName = new X500RelativeDistinguishedName([.. attributes]);
-        if (relativeName.Attributes.IsEmpty) {
+        var relativeName = new X500AttributeSet(attributes);
+        if (relativeName.Count == 0) {
             throw new ArgumentException("A relative distinguished name needs at least one attribute.", nameof(attributes));
         }
         return this with { RelativeDistinguishedNames = RelativeDistinguishedNames.Add(relativeName) };
@@ -104,7 +104,7 @@ public record X500NameBuilder
             RelativeDistinguishedNames = [
                 .. RelativeDistinguishedNames
                     .Select(x => x.WithoutOid(oid.Value))
-                    .Where(x => !x.Attributes.IsEmpty)
+                    .Where(x => x.Count > 0)
             ]
         };
 
@@ -243,7 +243,7 @@ public record X500NameBuilder
     private List<string> GetAllMatchingValues(Oid oid)
         => [
             .. RelativeDistinguishedNames
-                .SelectMany(x => x.Attributes)
+                .SelectMany(x => x)
                 .Where(x => x.OID.Value == oid.Value && x.Value is not null)
                 .Select(x => x.Value!)
         ];
@@ -255,12 +255,12 @@ public record X500NameBuilder
     /// <param name="oid">The OID to match.</param>
     private string? GetFirstMatchingValue(Oid oid)
         => RelativeDistinguishedNames
-            .SelectMany(x => x.Attributes)
+            .SelectMany(x => x)
             .FirstOrDefault(x => x.OID.Value == oid.Value && x.Value is not null)
             ?.Value;
 
 
-    private static X500RelativeDistinguishedName CreateRelativeDistinguishedName(Oid oid, UniversalTagNumber valueEncoding, string value)
+    private static X500AttributeSet CreateRelativeDistinguishedName(Oid oid, UniversalTagNumber valueEncoding, string value)
         => new([new X500Attribute(oid, valueEncoding, value)]);
 
 
@@ -319,7 +319,7 @@ public record X500NameBuilder
             RelativeDistinguishedNames = [
                 .. RelativeDistinguishedNames
                     .Select(x => x.WithoutOid(oid.Value))
-                    .Where(x => !x.Attributes.IsEmpty),
+                    .Where(x => x.Count > 0),
 
 
                 .. values
@@ -534,8 +534,9 @@ public record X500NameBuilder
     /// multi-valued one joins its attributes with <c>+</c>, and any attribute type without an RFC 4514 keyword is
     /// written as an OID. It is meant for display, so conformance is not guaranteed: the value of an attribute
     /// written as an OID is shown as text rather than the <c>#</c> and hex form RFC 4514 section 2.4 specifies.
-    /// <see cref="X500NameBuilder(string)"/> reads the result back to the same name. To encode a name, use
-    /// <see cref="Create"/>.</remarks>
+    /// <see cref="X500NameBuilder(string)"/> reads the result back to an equivalent name, though not always one
+    /// with the same string types, so compare with <see cref="EquivalentTo(string,IEqualityComparer{X500DistinguishedName})"/>
+    /// rather than <see cref="Equals(string)"/>. To encode a name, use <see cref="Create"/>.</remarks>
     public override string ToString()
         => Rfc4514.Format(RelativeDistinguishedNames);
 

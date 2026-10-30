@@ -1,5 +1,8 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
+using System.Text;
+
+using FluentCertificates.Internals;
 
 namespace FluentCertificates;
 
@@ -20,11 +23,14 @@ public sealed record X500Attribute
     /// <param name="valueEncoding">The ASN.1 string type the value is encoded as.</param>
     /// <param name="value">The value.</param>
     /// <exception cref="ArgumentNullException"><paramref name="oid"/> or <paramref name="value"/> is null.</exception>
+    /// <exception cref="ArgumentException"><paramref name="valueEncoding"/> is not a character string type, or
+    /// <paramref name="value"/> has a character that type cannot hold.</exception>
     public X500Attribute(Oid oid, UniversalTagNumber valueEncoding, string value)
     {
         ArgumentNullException.ThrowIfNull(oid);
         ArgumentNullException.ThrowIfNull(value);
-        OID = oid;
+        ThrowIfNotEncodable(valueEncoding, value);
+        OID = CheckOid(oid);
         ValueEncoding = valueEncoding;
         Value = value;
     }
@@ -32,7 +38,7 @@ public sealed record X500Attribute
 
     private X500Attribute(Oid oid, UniversalTagNumber valueEncoding, byte[] derValue)
     {
-        OID = oid;
+        OID = CheckOid(oid);
         ValueEncoding = valueEncoding;
         DerValue = derValue;
     }
@@ -71,27 +77,31 @@ public sealed record X500Attribute
     /// <returns>A character-string attribute when the value is a well-formed character string, otherwise a raw one.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="oid"/> is null.</exception>
     /// <exception cref="ArgumentException"><paramref name="derValue"/> is not exactly one DER value.</exception>
+    /// <remarks>The value is checked against the DER rules of ITU-T X.690 for its structure and for the universal
+    /// types that have content rules. The character set of a string type is not checked, and the content of a primitive with an
+    /// application, context-specific or private tag cannot be, since what it was implicitly tagged from is not known.</remarks>
     public static X500Attribute CreateFromDer(Oid oid, ReadOnlySpan<byte> derValue)
     {
         ArgumentNullException.ThrowIfNull(oid);
 
         Asn1Tag tag;
-        int consumed;
         try {
+            DerValidator.Validate(derValue);
             tag = Asn1Tag.Decode(derValue, out _);
-            AsnDecoder.ReadEncodedValue(derValue, AsnEncodingRules.DER, out _, out _, out consumed);
         } catch (AsnContentException ex) {
-            throw new ArgumentException("The value must be one complete DER encoding.", nameof(derValue), ex);
-        }
-        if (consumed != derValue.Length) {
-            throw new ArgumentException("The value must be one complete DER encoding.", nameof(derValue));
+            throw new ArgumentException(ex.Message, nameof(derValue), ex);
         }
 
         var universal = tag.TagClass == TagClass.Universal ? (UniversalTagNumber)tag.TagValue : UniversalTagNumber.EndOfContents;
-        if (!tag.IsConstructed && IsCharacterString(universal)) {
+        if (!tag.IsConstructed && (IsCharacterString(universal) || universal == UniversalTagNumber.T61String)) {
             try {
-                return new X500Attribute(oid, universal, AsnDecoder.ReadCharacterString(derValue, AsnEncodingRules.DER, universal, out _));
-            } catch (AsnContentException) {
+                var text = AsnDecoder.ReadCharacterString(derValue, AsnEncodingRules.DER, universal, out _);
+                //T61String is only read as text when it is ASCII, since .NET reads any other byte as Latin-1 and
+                //writes it back as UTF-8, which would change the value
+                if (universal != UniversalTagNumber.T61String || text.All(Char.IsAscii)) {
+                    return new X500Attribute(oid, universal, text);
+                }
+            } catch (Exception ex) when (ex is AsnContentException or ArgumentException) {
                 //Text that does not decode, such as invalid UTF-8, stays as the bytes it came in
             }
         }
@@ -149,8 +159,38 @@ public sealed record X500Attribute
     }
 
 
-    //T61String is left out because .NET reads its bytes as Latin-1 and writes them back as UTF-8, so the
-    //value would not survive a round trip
+    //An Oid with no value could not be encoded
+    private static Oid CheckOid(Oid oid)
+        => String.IsNullOrEmpty(oid.Value)
+            ? throw new ArgumentException("The OID has no value.", nameof(oid))
+            : oid;
+
+
+    private static void ThrowIfNotEncodable(UniversalTagNumber encoding, string value)
+    {
+        //The character sets are spelt out rather than left to the writer, because an older System.Formats.Asn1
+        //does not check them all, and the same value must be refused on every target framework
+        var allowed = encoding switch {
+            UniversalTagNumber.PrintableString => value.All(x => Char.IsAsciiLetterOrDigit(x) || " '()+,-./:=?".Contains(x)),
+            UniversalTagNumber.NumericString => value.All(x => Char.IsAsciiDigit(x) || x == ' '),
+            UniversalTagNumber.IA5String or UniversalTagNumber.T61String => value.All(Char.IsAscii),
+            UniversalTagNumber.VisibleString => value.All(x => x is >= ' ' and <= '~'),
+            _ => true
+        };
+        if (!allowed) {
+            throw new ArgumentException($"The value has a character that a {encoding} cannot hold.", nameof(value));
+        }
+
+        try {
+            new AsnWriter(AsnEncodingRules.DER).WriteCharacterString(encoding, value);
+        } catch (EncoderFallbackException ex) {
+            throw new ArgumentException($"The value has a character that a {encoding} cannot hold.", nameof(value), ex);
+        } catch (ArgumentException ex) {
+            throw new ArgumentException($"{encoding} is not a character string type.", nameof(encoding), ex);
+        }
+    }
+
+
     private static bool IsCharacterString(UniversalTagNumber tag)
         => tag is UniversalTagNumber.UTF8String
             or UniversalTagNumber.NumericString

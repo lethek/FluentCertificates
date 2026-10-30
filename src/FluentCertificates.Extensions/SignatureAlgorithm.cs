@@ -1,4 +1,4 @@
-﻿using System.Collections.Immutable;
+﻿using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 
@@ -199,14 +199,14 @@ public sealed record SignatureAlgorithm
 
 
     /// <summary>
-    /// Immutable lookup dictionary mapping OID strings to <see cref="SignatureAlgorithm"/> instances.
+    /// Frozen lookup dictionary mapping OID strings to <see cref="SignatureAlgorithm"/> instances.
     /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 #pragma warning disable FLUENTCERT001 // Post-quantum support is experimental
-    private static readonly ImmutableDictionary<string, SignatureAlgorithm> InstanceLookup = BuildLookup();
+    private static readonly FrozenDictionary<string, SignatureAlgorithm> InstanceLookup = BuildLookup();
 
 
-    private static ImmutableDictionary<string, SignatureAlgorithm> BuildLookup()
+    private static FrozenDictionary<string, SignatureAlgorithm> BuildLookup()
     {
         var classical = new Dictionary<string, SignatureAlgorithm> {
             [SHA1DSA.Oid] = SHA1DSA,
@@ -236,7 +236,7 @@ public sealed record SignatureAlgorithm
             classical[algorithm.Oid] = CreateForPostQuantum(algorithm);
         }
 
-        return classical.ToImmutableDictionary();
+        return classical.ToFrozenDictionary();
     }
 #pragma warning restore FLUENTCERT001
 #pragma warning restore CS0618 // Type or member is obsolete

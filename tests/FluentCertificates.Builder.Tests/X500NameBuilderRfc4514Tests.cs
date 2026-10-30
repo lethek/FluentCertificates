@@ -15,9 +15,9 @@ public class X500NameBuilderRfc4514Tests
         var builder = new X500NameBuilder("CN=Multi Valued+OU=Sales,O=Acme");
 
         await Assert.That(builder.RelativeDistinguishedNames.Count).IsEqualTo(2);
-        await Assert.That(builder.RelativeDistinguishedNames[0].Attributes.Select(x => x.OID.Value!))
+        await Assert.That(builder.RelativeDistinguishedNames[0].Select(x => x.OID.Value!))
             .IsEquivalentTo([Oids.CommonName, Oids.OrganizationalUnit], CollectionOrdering.Matching);
-        await Assert.That(builder.RelativeDistinguishedNames[1].Attributes.Select(x => x.OID.Value!))
+        await Assert.That(builder.RelativeDistinguishedNames[1].Select(x => x.OID.Value!))
             .IsEquivalentTo([Oids.Organization], CollectionOrdering.Matching);
         await Assert.That(builder.GetCommonName()).IsEqualTo("Multi Valued");
     }
@@ -37,7 +37,7 @@ public class X500NameBuilderRfc4514Tests
     {
         var builder = new X500NameBuilder("CN=Example,O=Acme,C=AU");
 
-        await Assert.That(builder.RelativeDistinguishedNames.Select(x => x.Attributes.Single().OID.Value!))
+        await Assert.That(builder.RelativeDistinguishedNames.Select(x => x.Single().OID.Value!))
             .IsEquivalentTo([Oids.CommonName, Oids.Organization, Oids.CountryOrRegionName], CollectionOrdering.Matching);
 
         //The encoded Name starts with the country and ends with the common name
@@ -50,14 +50,25 @@ public class X500NameBuilderRfc4514Tests
 
 
     [Test]
-    public async Task Parse_EncodesValuesAsUtf8String_AndCountryAsPrintableString()
+    public async Task Parse_EncodesValuesAsUtf8String_AndCountryAsPrintableString_AndDomainComponentAsIa5String()
     {
-        var attributes = new X500NameBuilder("CN=Example,C=AU").RelativeDistinguishedNames
-            .SelectMany(x => x.Attributes)
+        var attributes = new X500NameBuilder("CN=Example,C=AU,DC=app").RelativeDistinguishedNames
+            .SelectMany(x => x)
             .ToDictionary(x => x.OID.Value!, x => x.ValueEncoding);
 
         await Assert.That(attributes[Oids.CommonName]).IsEqualTo(UniversalTagNumber.UTF8String);
         await Assert.That(attributes[Oids.CountryOrRegionName]).IsEqualTo(UniversalTagNumber.PrintableString);
+        await Assert.That(attributes[Oids.DomainComponent]).IsEqualTo(UniversalTagNumber.IA5String);
+    }
+
+
+    [Test]
+    public async Task Parse_DomainComponents_EqualWhatSetDomainComponentsBuilds()
+    {
+        var built = new X500NameBuilder().SetDomainComponents("app", "fake");
+
+        await Assert.That(built.Equals("DC=app,DC=fake")).IsTrue();
+        await Assert.That(() => new X500NameBuilder("DC=café")).Throws<FormatException>();
     }
 
 
@@ -94,7 +105,7 @@ public class X500NameBuilderRfc4514Tests
     {
         var builder = new X500NameBuilder($"{keyword}=x");
 
-        await Assert.That(builder.RelativeDistinguishedNames.Single().Attributes.Single().OID.Value).IsEqualTo(oid);
+        await Assert.That(builder.RelativeDistinguishedNames.Single().Single().OID.Value).IsEqualTo(oid);
     }
 
 
@@ -108,7 +119,7 @@ public class X500NameBuilderRfc4514Tests
     [Test]
     public async Task Parse_HexString_KeepsANonCharacterValueAsRawDer()
     {
-        var attribute = new X500NameBuilder("1.2.3.4=#02020102").RelativeDistinguishedNames.Single().Attributes.Single();
+        var attribute = new X500NameBuilder("1.2.3.4=#02020102").RelativeDistinguishedNames.Single().Single();
 
         await Assert.That(attribute.Value).IsNull();
         await Assert.That(attribute.DerValue.ToArray()).IsEquivalentTo(new byte[] { 0x02, 0x02, 0x01, 0x02 }, CollectionOrdering.Matching);
@@ -124,7 +135,7 @@ public class X500NameBuilderRfc4514Tests
     [Arguments("1.2.3.4=#3106020102020101", new byte[] { 0x31, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02 })]
     public async Task Parse_HexStringInBer_IsNormalisedToDer(string name, byte[] expected)
     {
-        var attribute = new X500NameBuilder(name).RelativeDistinguishedNames.Single().Attributes.Single();
+        var attribute = new X500NameBuilder(name).RelativeDistinguishedNames.Single().Single();
 
         await Assert.That(attribute.DerValue.ToArray()).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
@@ -173,7 +184,6 @@ public class X500NameBuilderRfc4514Tests
     [Arguments("CN=#0C")]
     [Arguments("CN=a<b")]
     [Arguments("CN=a>b")]
-    [Arguments("CN=a#b,O=\\")]
     [Arguments(@"CN=a\")]
     [Arguments(@"CN=a\G0")]
     [Arguments(@"CN=\FF")]
@@ -189,6 +199,57 @@ public class X500NameBuilderRfc4514Tests
     public async Task Parse_NonConformingString_ThrowsFormatException(string name)
     {
         await Assert.That(() => new X500NameBuilder(name)).Throws<FormatException>();
+    }
+
+
+    [Test]
+    [Arguments("C=Ä")]
+    [Arguments("C=a*b")]
+    [Arguments("C=a@b")]
+    [Arguments("C=a_b")]
+    public async Task Parse_ACountryPrintableStringCannotHold_ThrowsFormatException(string name)
+    {
+        await Assert.That(() => new X500NameBuilder(name)).Throws<FormatException>();
+        await Assert.That(() => new X500NameBuilder().SetCommonName("x").Equals(name)).Throws<FormatException>();
+    }
+
+
+    [Test]
+    [Arguments(UniversalTagNumber.PrintableString, "a*b")]
+    [Arguments(UniversalTagNumber.PrintableString, "a@b")]
+    [Arguments(UniversalTagNumber.PrintableString, "Ä")]
+    [Arguments(UniversalTagNumber.NumericString, "12a")]
+    [Arguments(UniversalTagNumber.IA5String, "Ä")]
+    [Arguments(UniversalTagNumber.VisibleString, "a\tb")]
+    [Arguments(UniversalTagNumber.UTF8String, "\uD800")]
+    [Arguments(UniversalTagNumber.BMPString, "\U0001F600")]
+    [Arguments(UniversalTagNumber.Integer, "1")]
+    [Arguments(UniversalTagNumber.T61String, "café")]
+    public async Task Attribute_AValueItsEncodingCannotHold_ThrowsArgumentException(UniversalTagNumber encoding, string value)
+    {
+        await Assert.That(() => new X500Attribute(Oids.CommonNameOid, encoding, value)).Throws<ArgumentException>();
+    }
+
+
+    [Test]
+    [Arguments(UniversalTagNumber.PrintableString, "Ab 0'()+,-./:=?")]
+    [Arguments(UniversalTagNumber.NumericString, "12 3")]
+    [Arguments(UniversalTagNumber.IA5String, "a@b_c\t")]
+    [Arguments(UniversalTagNumber.VisibleString, "a@b~")]
+    [Arguments(UniversalTagNumber.UTF8String, "café \U0001F600")]
+    [Arguments(UniversalTagNumber.BMPString, "café")]
+    [Arguments(UniversalTagNumber.T61String, "abc")]
+    public async Task Attribute_AValueItsEncodingCanHold_IsAccepted(UniversalTagNumber encoding, string value)
+    {
+        await Assert.That(new X500Attribute(Oids.CommonNameOid, encoding, value).Value).IsEqualTo(value);
+    }
+
+
+    [Test]
+    public async Task Attribute_AnOidWithNoValue_Throws()
+    {
+        await Assert.That(() => new X500Attribute(new Oid(), UniversalTagNumber.UTF8String, "x")).Throws<ArgumentException>();
+        await Assert.That(() => X500Attribute.CreateFromDer(new Oid(), new byte[] { 0x05, 0x00 })).Throws<ArgumentException>();
     }
 
 
@@ -283,7 +344,7 @@ public class X500NameBuilderRfc4514Tests
         var builder = new X500NameBuilder(name);
 
         await Assert.That(builder.RelativeDistinguishedNames.Count).IsEqualTo(2);
-        await Assert.That(builder.RelativeDistinguishedNames[0].Attributes.Count).IsEqualTo(2);
+        await Assert.That(builder.RelativeDistinguishedNames[0].Count).IsEqualTo(2);
         await Assert.That(builder.Create().RawData).IsEquivalentTo(name.RawData, CollectionOrdering.Matching);
     }
 
@@ -294,7 +355,7 @@ public class X500NameBuilderRfc4514Tests
         var name = NameWithIntegerAttribute();
 
         var builder = new X500NameBuilder(name);
-        var attribute = builder.RelativeDistinguishedNames.Single().Attributes.Single();
+        var attribute = builder.RelativeDistinguishedNames.Single().Single();
 
         await Assert.That(attribute.Value).IsNull();
         await Assert.That(attribute.DerValue.ToArray()).IsEquivalentTo(new byte[] { 0x02, 0x01, 0x07 }, CollectionOrdering.Matching);
@@ -319,8 +380,52 @@ public class X500NameBuilderRfc4514Tests
 
         var builder = new X500NameBuilder(name);
 
-        await Assert.That(builder.RelativeDistinguishedNames.Single().Attributes.Single().Value).IsNull();
+        await Assert.That(builder.RelativeDistinguishedNames.Single().Single().Value).IsNull();
         await Assert.That(builder.Create().RawData).IsEquivalentTo(name.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task Constructor_FromDer_AnAsciiT61String_IsReadAsTextAndRoundTrips()
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) {
+            using (writer.PushSetOf()) {
+                using (writer.PushSequence()) {
+                    writer.WriteObjectIdentifier(Oids.CommonName);
+                    writer.WriteEncodedValue(new byte[] { 0x14, 0x03, 0x61, 0x62, 0x63 });
+                }
+            }
+        }
+        var name = new X500DistinguishedName(writer.Encode());
+
+        var builder = new X500NameBuilder(name);
+
+        await Assert.That(builder.GetCommonName()).IsEqualTo("abc");
+        await Assert.That(builder.Create().RawData).IsEquivalentTo(name.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    public async Task AttributeSet_ANullAttribute_Throws()
+    {
+        await Assert.That(() => new X500AttributeSet(null!)).Throws<ArgumentNullException>();
+        await Assert.That(() => new X500AttributeSet([null!])).Throws<ArgumentNullException>();
+    }
+
+
+    [Test]
+    public async Task AttributeSet_ReadsAsAListInTheOrderGiven()
+    {
+        var cn = new X500Attribute(Oids.CommonNameOid, UniversalTagNumber.UTF8String, "x");
+        var ou = new X500Attribute(Oids.OrganizationalUnitOid, UniversalTagNumber.UTF8String, "y");
+
+        var set = new X500AttributeSet([ou, cn]);
+
+        await Assert.That(set.Count).IsEqualTo(2);
+        await Assert.That(set[0]).IsEqualTo(ou);
+        await Assert.That(set.SequenceEqual([ou, cn])).IsTrue();
+        await Assert.That(set.Equals(new X500AttributeSet([cn, ou]))).IsTrue();
     }
 
 
@@ -344,7 +449,7 @@ public class X500NameBuilderRfc4514Tests
     [Test]
     public async Task Create_AnRdnWithoutAttributes_Throws()
     {
-        var builder = new X500NameBuilder { RelativeDistinguishedNames = [new X500RelativeDistinguishedName([])] };
+        var builder = new X500NameBuilder { RelativeDistinguishedNames = [new X500AttributeSet([])] };
 
         await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
     }
