@@ -144,6 +144,9 @@ public class X500NameBuilderRfc4514Tests
     [Arguments("=a")]
     [Arguments("FOO=a")]
     [Arguments("1.40=a")]
+    [Arguments("0.40=a")]
+    [Arguments("1.100=a")]
+    [Arguments("3.1=a")]
     [Arguments("01.2=a")]
     [Arguments("2.5.4.3.=a")]
     public async Task Parse_NonConformingString_ThrowsFormatException(string name)

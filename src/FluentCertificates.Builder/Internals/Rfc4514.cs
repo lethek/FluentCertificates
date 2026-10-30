@@ -104,7 +104,13 @@ internal static class Rfc4514
             throw Error(name, start, $"'{type}' is not a numeric OID");
         }
 
-        //The writer is the authority on which arc combinations are valid
+        //The first arc is 0, 1 or 2, and under 0 and 1 the second is at most 39. Older versions of the writer
+        //do not check this, so it is not left to them.
+        if (arcs[0].Length > 1 || arcs[0][0] > '2' || (arcs[0][0] < '2' && (arcs[1].Length > 2 || (arcs[1].Length == 2 && arcs[1][0] > '3')))) {
+            throw Error(name, start, $"'{type}' is not a valid OID");
+        }
+
+        //The writer is the authority on the rest, such as an arc too large to encode
         try {
             new AsnWriter(AsnEncodingRules.DER).WriteObjectIdentifier(type);
         } catch (ArgumentException) {
