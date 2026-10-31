@@ -1090,7 +1090,7 @@ A string is read as strict [RFC 4514](https://www.rfc-editor.org/rfc/rfc4514), t
 platform: no spaces around the separators, no quoted values and no `;` separator. Only the keywords
 `CN`, `L`, `ST`, `O`, `OU`, `C`, `STREET`, `DC` and `UID` are recognised, so write any other attribute
 type as an OID. A string that does not conform throws `FormatException`. Values are encoded as
-`UTF8String`, except a country, which is a `PrintableString`, and a domain component, which is an `IA5String`. A value written as `#` and hex digits is
+`UTF8String`, except the attributes whose standard fixes another type: a country, serial number, DN qualifier and telephone number are `PrintableString`s, and a domain component and email address are `IA5String`s. A value written as `#` and hex digits is
 a BER encoding, which is rewritten as DER and kept as raw bytes, or read as a string when it is one.
 
 ### Multi-valued relative names
@@ -1157,34 +1157,34 @@ trusted.
 
 #### From an X500NameBuilder
 
-`EquivalentTo` takes any of them, defaulting to `ValuesAnyOrder`:
+`EquivalentTo` takes any of them, defaulting to `Values`, so the order of the relative distinguished names
+counts:
 
 ```csharp
 var a = new X500NameBuilder().SetCommonName("example.com").SetCountry("AU");
 var b = new X500NameBuilder().SetCountry("AU").SetCommonName("example.com");
 
-a.EquivalentTo(b);                                      //true: same attributes, different order
-a.EquivalentTo(b, X500NameComparer.Values);             //false: order differs
+a.EquivalentTo(b);                                      //false: order differs
+a.EquivalentTo(b, X500NameComparer.ValuesAnyOrder);     //true: same attributes, different order
 a.EquivalentTo("CN=example.com,C=AU");                  //true
 ```
 
-The order-agnostic default is deliberate: this builder emits its attributes in the order the setters were
-called, and `Set` moves an attribute it replaces to the end, so the order is not something you can state.
+The order is the one you gave. `Set` replaces an attribute where it stands, so setting a value again does
+not reorder the name; a value that was not there yet is added at the end.
 
 `Equals` is a different question: it compares the **encoded bytes**, as `X500NameComparer.Exact` does.
 Two names that render as the same string can still differ, because the ASN.1 string type is part of the
-encoding. Some `Set*` methods use `PrintableString` where parsing a string yields `UTF8String`:
+encoding. The setters and the string parser choose a string type the same way, so they agree. A string
+type you ask for, or one a name read from an `X500DistinguishedName` already carries, can differ:
 
 ```csharp
-var built = new X500NameBuilder().SetCommonName("example.com").SetGivenName("Sam");
+var built = new X500NameBuilder().Add(Oids.GivenNameOid, UniversalTagNumber.PrintableString, "Sam");
 
-built.ToString();                                         //"CN=example.com,2.5.4.42=Sam"
-built.Equals("CN=example.com,2.5.4.42=Sam");              //false: PrintableString vs UTF8String
-built.EquivalentTo("CN=example.com,2.5.4.42=Sam");        //true
+built.Equals("2.5.4.42=Sam");                           //false: PrintableString vs UTF8String
+built.EquivalentTo("2.5.4.42=Sam");                     //true
 ```
 
-Reach for `EquivalentTo` unless you specifically need byte-for-byte identity. If you do need the
-encoding to match, set it explicitly with `Set(oid, UniversalTagNumber.PrintableString, value)`.
+Reach for `EquivalentTo` unless you specifically need byte-for-byte identity.
 
 ### Method summary
 
@@ -1193,14 +1193,14 @@ encoding to match, set it explicitly with `Set(oid, UniversalTagNumber.Printable
 |`SetCommonName`, `SetCountry`, `SetLocality`, `SetState`, `SetOrganization`, `SetStreetAddress`, `SetPostalCode`, `SetEmail`, `SetPhoneNumber`, `SetGivenName`, `SetSurname`, `SetTitle`, `SetSerialNumber`, `SetUserId`, `SetDistinguishedNameQualifier`|Set a single-valued attribute, replacing any existing value.|
 |`SetOrganizationalUnits`, `SetDomainComponents`|Replace all values of a multi-valued attribute.|
 |`AddOrganizationalUnit(s)`, `AddDomainComponent(s)`|Append to a multi-valued attribute.|
-|`Add(oid, ...)`, `Set(oid, ...)`|Append or replace by OID, with an optional `UniversalTagNumber` encoding. The OID may be an `Oid` or a string.|
+|`Add(oid, ...)`, `Set(oid, ...)`|Append or replace by OID. The value is encoded as the attribute's standard fixes, or as the `UniversalTagNumber` you pass. The OID may be an `Oid` or a string. `Set` keeps the position of the attribute it replaces.|
 |`AddRelativeDistinguishedName(attributes)`|Append one multi-valued relative name.|
 |`Remove(oid)`, `Clear()`|Remove attributes by OID, or all of them.|
 |`GetCommonName`, `GetCountry`, ... `GetOrganizationalUnits`, `GetDomainComponents`|Read attribute values back.|
 |`Create()`|Build the `X500DistinguishedName`. Also available as an implicit conversion.|
-|`EquivalentTo(other, comparer = null)`|Compare against another builder, an `X500DistinguishedName` or a string, under any `IEqualityComparer<X500DistinguishedName>`. Defaults to `X500NameComparer.ValuesAnyOrder`.|
+|`EquivalentTo(other, comparer = null)`|Compare against another builder, an `X500DistinguishedName` or a string, under any `IEqualityComparer<X500DistinguishedName>`. Defaults to `X500NameComparer.Values`.|
 |`Equals(other)`|Compare encoded bytes against an `X500DistinguishedName` or a string.|
-|`RelativeDistinguishedNames`|The attributes as `(Oid, UniversalTagNumber, string)` tuples.|
+|`RelativeDistinguishedNames`|The relative names as an `ImmutableList<X500AttributeSet>`, each holding one or more `X500Attribute`s.|
 
 ---
 
