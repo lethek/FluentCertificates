@@ -44,14 +44,14 @@ public class X500NameBuilderEqualityTests
 
 
     [Test]
-    public async Task Equals_NamesDifferingOnlyInRdnOrder_AreNotEqualButRemainEquivalent()
+    public async Task Equals_NamesDifferingOnlyInRdnOrder_AreNotEqualButRemainEquivalentAnyOrder()
     {
         var a = new X500NameBuilder().SetCommonName("Test").SetOrganization("Acme");
         var b = new X500NameBuilder().SetOrganization("Acme").SetCommonName("Test");
 
-        //Self-equality is exact and order-sensitive; EquivalentTo is the order-insensitive comparison
+        //Self-equality is exact and order-sensitive; only the AnyOrder comparers disregard order
         await Assert.That(a.Equals(b)).IsFalse();
-        await Assert.That(a.EquivalentTo(b)).IsTrue();
+        await Assert.That(a.EquivalentTo(b, X500NameComparer.ValuesAnyOrder)).IsTrue();
     }
 }
 

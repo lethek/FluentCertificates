@@ -271,6 +271,73 @@ public class X500NameBuilderTests
 
 
     [Test]
+    public async Task EquivalentTo_ByDefault_TheOrderOfRelativeNamesCounts()
+    {
+        var a = new X500NameBuilder().SetCommonName("x").SetOrganization("y");
+        var b = new X500NameBuilder().SetOrganization("y").SetCommonName("x");
+
+        await Assert.That(a.EquivalentTo(b)).IsFalse();
+        await Assert.That(a.EquivalentTo(b.Create())).IsFalse();
+        await Assert.That(a.EquivalentTo(b, X500NameComparer.ValuesAnyOrder)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Set_AnExistingValue_KeepsItsPosition()
+    {
+        var builder = new X500NameBuilder().SetCommonName("x").SetOrganization("y").SetCountry("AU");
+
+        var result = builder.SetCommonName("z");
+
+        await Assert.That(result.ToString()).IsEqualTo("CN=z,O=y,C=AU");
+        await Assert.That(result.EquivalentTo("CN=z,O=y,C=AU")).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Set_AValueNotYetPresent_IsAppended()
+    {
+        var result = new X500NameBuilder().SetCommonName("x").SetOrganization("y").SetCountry("AU");
+
+        await Assert.That(result.ToString()).IsEqualTo("CN=x,O=y,C=AU");
+    }
+
+
+    [Test]
+    public async Task Set_SeveralValues_ReplaceTheOldOnesAtTheFirstPosition()
+    {
+        var builder = new X500NameBuilder()
+            .SetCommonName("x")
+            .AddOrganizationalUnits("a", "b")
+            .SetCountry("AU");
+
+        var result = builder.SetOrganizationalUnits("c", "d", "e");
+
+        await Assert.That(result.ToString()).IsEqualTo("CN=x,OU=c,OU=d,OU=e,C=AU");
+    }
+
+
+    [Test]
+    public async Task Set_WithNoValues_RemovesTheOldOnesAndKeepsTheRestInOrder()
+    {
+        var builder = new X500NameBuilder().SetCommonName("x").SetOrganization("y").SetCountry("AU");
+
+        await Assert.That(builder.Set(Oids.OrganizationOid).ToString()).IsEqualTo("CN=x,C=AU");
+    }
+
+
+    [Test]
+    public async Task Set_AValueInAMultiValuedName_KeepsTheOtherAttributesAndFollowsThem()
+    {
+        var builder = new X500NameBuilder("CN=x+OU=a,O=y");
+
+        var result = builder.SetCommonName("z");
+
+        await Assert.That(result.ToString()).IsEqualTo("OU=a,CN=z,O=y");
+    }
+
+
+    [Test]
     public async Task EquivalentTo_RepeatedRelativeDistinguishedNames_ComparesMultiplicity()
     {
         var twice = new X500NameBuilder().AddOrganizationalUnits("Eng", "Eng");
