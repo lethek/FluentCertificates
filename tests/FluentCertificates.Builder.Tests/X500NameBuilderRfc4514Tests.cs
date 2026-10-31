@@ -151,12 +151,15 @@ public class X500NameBuilderRfc4514Tests
 
 
     [Test]
-    public async Task Constructor_FromDer_ABerValue_ThrowsCryptographicException()
+    public async Task Constructor_FromDer_ABerValue_IsReadAndWrittenBackAsDer()
     {
-        //A Name read from DER keeps its bytes, so a value that is not DER is refused rather than rewritten
+        //The value has a length that is longer than it needs to be
         var name = new X500DistinguishedName(Convert.FromHexString("300D310B300906035504030C810161"));
 
-        await Assert.That(() => new X500NameBuilder(name)).Throws<CryptographicException>();
+        var builder = new X500NameBuilder(name);
+
+        await Assert.That(builder.GetCommonName()).IsEqualTo("a");
+        await Assert.That(Convert.ToHexString(builder.Create().RawData)).IsEqualTo("300C310A300806035504030C0161");
     }
 
 
@@ -210,7 +213,7 @@ public class X500NameBuilderRfc4514Tests
     public async Task Parse_ACountryPrintableStringCannotHold_ThrowsFormatException(string name)
     {
         await Assert.That(() => new X500NameBuilder(name)).Throws<FormatException>();
-        await Assert.That(() => new X500NameBuilder().SetCommonName("x").Equals(name)).Throws<FormatException>();
+        await Assert.That(new X500NameBuilder().SetCommonName("x").Equals(name)).IsFalse();
     }
 
 
@@ -447,11 +450,23 @@ public class X500NameBuilderRfc4514Tests
 
 
     [Test]
-    public async Task Create_AnRdnWithoutAttributes_Throws()
+    public async Task RelativeDistinguishedNames_AnRdnWithoutAttributes_ThrowsArgumentException()
     {
-        var builder = new X500NameBuilder { RelativeDistinguishedNames = [new X500AttributeSet([])] };
+        await Assert.That(() => new X500NameBuilder { RelativeDistinguishedNames = [new X500AttributeSet([])] }).Throws<ArgumentException>();
+    }
 
-        await Assert.That(() => builder.Create()).Throws<InvalidOperationException>();
+
+    [Test]
+    public async Task RelativeDistinguishedNames_ANullRdn_ThrowsArgumentNullException()
+    {
+        await Assert.That(() => new X500NameBuilder { RelativeDistinguishedNames = [null!] }).Throws<ArgumentNullException>();
+    }
+
+
+    [Test]
+    public async Task RelativeDistinguishedNames_ANullList_ThrowsArgumentNullException()
+    {
+        await Assert.That(() => new X500NameBuilder { RelativeDistinguishedNames = null! }).Throws<ArgumentNullException>();
     }
 
 
@@ -492,7 +507,9 @@ public class X500NameBuilderRfc4514Tests
         await Assert.That(builder.Equals("CN=Multi Valued,O=Acme")).IsTrue();
         await Assert.That(builder.Equals("O=Acme,CN=Multi Valued")).IsFalse();
         await Assert.That(builder.EquivalentTo("O=Acme,CN=Multi Valued")).IsTrue();
-        await Assert.That(() => builder.Equals("CN=a, O=b")).Throws<FormatException>();
+        await Assert.That(builder.Equals("CN=a, O=b")).IsFalse();
+        await Assert.That(builder.EquivalentTo("CN=a, O=b")).IsFalse();
+        await Assert.That(builder.EquivalentTo((string?)null)).IsFalse();
     }
 
 

@@ -76,10 +76,12 @@ public sealed record X500Attribute
     /// <param name="derValue">One complete DER encoding of the value.</param>
     /// <returns>A character-string attribute when the value is a well-formed character string, otherwise a raw one.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="oid"/> is null.</exception>
-    /// <exception cref="ArgumentException"><paramref name="derValue"/> is not exactly one DER value.</exception>
+    /// <exception cref="ArgumentException"><paramref name="derValue"/> is not exactly one DER value, or is a
+    /// UTF8String or BMPString whose bytes are not valid text.</exception>
     /// <remarks>The value is checked against the DER rules of ITU-T X.690 for its structure and for the universal
-    /// types that have content rules. The character set of a string type is not checked, and the content of a primitive with an
-    /// application, context-specific or private tag cannot be, since what it was implicitly tagged from is not known.</remarks>
+    /// types that have content rules. A value outside the character set of its string type, such as a wildcard in a
+    /// PrintableString, is kept as raw DER. The content of a primitive with an application, context-specific or
+    /// private tag cannot be checked, since what it was implicitly tagged from is not known.</remarks>
     public static X500Attribute CreateFromDer(Oid oid, ReadOnlySpan<byte> derValue)
     {
         ArgumentNullException.ThrowIfNull(oid);
@@ -101,8 +103,11 @@ public sealed record X500Attribute
                 if (universal != UniversalTagNumber.T61String || text.All(Char.IsAscii)) {
                     return new X500Attribute(oid, universal, text);
                 }
+            } catch (AsnContentException ex) when (universal is UniversalTagNumber.UTF8String or UniversalTagNumber.BMPString) {
+                //These two types hold any text, so bytes that decode to none are not a value of the type
+                throw new ArgumentException($"The {universal} value is not valid text.", nameof(derValue), ex);
             } catch (Exception ex) when (ex is AsnContentException or ArgumentException) {
-                //Text that does not decode, such as invalid UTF-8, stays as the bytes it came in
+                //A value outside the character set of its type, such as a * in a PrintableString, stays as the bytes it came in
             }
         }
         return new X500Attribute(oid, universal, derValue.ToArray());

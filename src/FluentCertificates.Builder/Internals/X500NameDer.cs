@@ -30,7 +30,7 @@ internal static class X500NameDer
                     var oid = new Oid(pair.ReadObjectIdentifier());
                     var value = pair.ReadEncodedValue();
                     pair.ThrowIfNotEmpty();
-                    attributes.Add(X500Attribute.CreateFromDer(oid, value.Span));
+                    attributes.Add(X500Attribute.CreateFromDer(oid, BerToDer.Normalize(value.Span)));
                 }
                 relativeNames.Add(new X500AttributeSet(attributes.ToImmutable()));
             }
@@ -47,9 +47,6 @@ internal static class X500NameDer
         var writer = new AsnWriter(AsnEncodingRules.DER);
         using (writer.PushSequence()) {
             foreach (var relativeName in relativeNames.Reverse()) {
-                if (relativeName.Count == 0) {
-                    throw new InvalidOperationException("A relative distinguished name needs at least one attribute.");
-                }
                 //DER sorts the members of a SET OF as the writer disposes this scope
                 using (writer.PushSetOf()) {
                     foreach (var attribute in relativeName) {

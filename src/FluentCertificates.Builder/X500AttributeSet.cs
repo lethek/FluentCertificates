@@ -25,6 +25,7 @@ public sealed class X500AttributeSet : IReadOnlyList<X500Attribute>, IEquatable<
         if (_attributes.Any(x => x is null)) {
             throw new ArgumentNullException(nameof(attributes), "An attribute is null.");
         }
+        _sortedAttributes = _attributes.Sort(X500Attribute.Compare);
     }
 
 
@@ -55,7 +56,7 @@ public sealed class X500AttributeSet : IReadOnlyList<X500Attribute>, IEquatable<
     /// </summary>
     /// <param name="other">The set to compare.</param>
     public bool Equals(X500AttributeSet? other)
-        => other is not null && GetSortedAttributes().SequenceEqual(other.GetSortedAttributes());
+        => other is not null && _sortedAttributes.SequenceEqual(other._sortedAttributes);
 
 
     /// <inheritdoc/>
@@ -67,24 +68,17 @@ public sealed class X500AttributeSet : IReadOnlyList<X500Attribute>, IEquatable<
     public override int GetHashCode()
     {
         var hash = new HashCode();
-        foreach (var attribute in GetSortedAttributes()) {
+        foreach (var attribute in _sortedAttributes) {
             hash.Add(attribute);
         }
         return hash.ToHashCode();
     }
 
 
-    internal X500AttributeSet WithoutOid(string? oid)
+    internal X500AttributeSet GetSetWithoutOid(string? oid)
         => new(_attributes.Where(x => x.OID.Value != oid));
 
 
-    private List<X500Attribute> GetSortedAttributes()
-    {
-        var sorted = new List<X500Attribute>(_attributes);
-        sorted.Sort(X500Attribute.Compare);
-        return sorted;
-    }
-
-
     private readonly ImmutableList<X500Attribute> _attributes;
+    private readonly ImmutableList<X500Attribute> _sortedAttributes;
 }

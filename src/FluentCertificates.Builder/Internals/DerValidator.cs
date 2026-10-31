@@ -18,7 +18,7 @@ internal static class DerValidator
     {
         var consumed = ValidateElement(value, 0);
         if (consumed != value.Length) {
-            throw Error("The value has bytes after its encoding.");
+            throw CreateError("The value has bytes after its encoding.");
         }
     }
 
@@ -26,7 +26,7 @@ internal static class DerValidator
     private static int ValidateElement(ReadOnlySpan<byte> source, int depth)
     {
         if (depth > MaxDepth) {
-            throw Error("The value is nested too deeply.");
+            throw CreateError("The value is nested too deeply.");
         }
 
         var offset = ReadTag(source, out var tagClass, out var constructed, out var number);
@@ -64,13 +64,13 @@ internal static class DerValidator
 
         //Everything else is primitive in DER, including every string type
         if (constructed) {
-            throw Error("A constructed form is not allowed for this type in DER.");
+            throw CreateError("A constructed form is not allowed for this type in DER.");
         }
 
         switch (number) {
             case Boolean:
                 if (content.Length != 1 || content[0] is not (0x00 or 0xFF)) {
-                    throw Error("A BOOLEAN is one byte, 00 or FF.");
+                    throw CreateError("A BOOLEAN is one byte, 00 or FF.");
                 }
                 break;
             case Integer or Enumerated:
@@ -81,7 +81,7 @@ internal static class DerValidator
                 break;
             case Null:
                 if (content.Length != 0) {
-                    throw Error("A NULL has no content.");
+                    throw CreateError("A NULL has no content.");
                 }
                 break;
             case ObjectIdentifier:
@@ -100,10 +100,10 @@ internal static class DerValidator
     private static void ValidateInteger(ReadOnlySpan<byte> content)
     {
         if (content.Length == 0) {
-            throw Error("An INTEGER has at least one content byte.");
+            throw CreateError("An INTEGER has at least one content byte.");
         }
         if (content.Length > 1 && ((content[0] == 0x00 && content[1] < 0x80) || (content[0] == 0xFF && content[1] >= 0x80))) {
-            throw Error("An INTEGER is encoded in as few bytes as possible.");
+            throw CreateError("An INTEGER is encoded in as few bytes as possible.");
         }
     }
 
@@ -111,14 +111,14 @@ internal static class DerValidator
     private static void ValidateBitString(ReadOnlySpan<byte> content)
     {
         if (content.Length == 0) {
-            throw Error("A BIT STRING has a byte counting its unused bits.");
+            throw CreateError("A BIT STRING has a byte counting its unused bits.");
         }
         var unused = content[0];
         if (unused > 7 || (content.Length == 1 && unused != 0)) {
-            throw Error("A BIT STRING has 0 to 7 unused bits, and none when it has no content.");
+            throw CreateError("A BIT STRING has 0 to 7 unused bits, and none when it has no content.");
         }
         if (unused > 0 && (content[^1] & ((1 << unused) - 1)) != 0) {
-            throw Error("The unused bits of a BIT STRING are zero.");
+            throw CreateError("The unused bits of a BIT STRING are zero.");
         }
     }
 
@@ -126,17 +126,17 @@ internal static class DerValidator
     private static void ValidateObjectIdentifier(ReadOnlySpan<byte> content)
     {
         if (content.Length == 0) {
-            throw Error("An OBJECT IDENTIFIER has at least one content byte.");
+            throw CreateError("An OBJECT IDENTIFIER has at least one content byte.");
         }
         var startsSubidentifier = true;
         foreach (var b in content) {
             if (startsSubidentifier && b == 0x80) {
-                throw Error("An OBJECT IDENTIFIER arc is encoded in as few bytes as possible.");
+                throw CreateError("An OBJECT IDENTIFIER arc is encoded in as few bytes as possible.");
             }
             startsSubidentifier = (b & 0x80) == 0;
         }
         if (!startsSubidentifier) {
-            throw Error("An OBJECT IDENTIFIER ends in the middle of an arc.");
+            throw CreateError("An OBJECT IDENTIFIER ends in the middle of an arc.");
         }
     }
 
@@ -148,25 +148,25 @@ internal static class DerValidator
         var yearDigits = generalized ? 4 : 2;
         var fixedLength = yearDigits + 10;
         if (content.Length < fixedLength + 1 || content[^1] != (byte)'Z') {
-            throw Error("The time is not in the DER form, which is in UTC and ends in Z.");
+            throw CreateError("The time is not in the DER form, which is in UTC and ends in Z.");
         }
         for (var i = 0; i < fixedLength; i++) {
             if (!Char.IsAsciiDigit((char)content[i])) {
-                throw Error("The time has a character that is not a digit.");
+                throw CreateError("The time has a character that is not a digit.");
             }
         }
 
         if (content.Length > fixedLength + 1) {
             if (!generalized || content[fixedLength] != (byte)'.' || content.Length < fixedLength + 3) {
-                throw Error("The time has an unexpected fraction.");
+                throw CreateError("The time has an unexpected fraction.");
             }
             for (var i = fixedLength + 1; i < content.Length - 1; i++) {
                 if (!Char.IsAsciiDigit((char)content[i])) {
-                    throw Error("The time has a character that is not a digit.");
+                    throw CreateError("The time has a character that is not a digit.");
                 }
             }
             if (content[^2] == (byte)'0') {
-                throw Error("The fraction of a time has no trailing zero.");
+                throw CreateError("The fraction of a time has no trailing zero.");
             }
         }
 
@@ -182,7 +182,7 @@ internal static class DerValidator
         if (month is < 1 or > 12
             || day < 1 || day > DateTime.DaysInMonth(year == 0 ? 2000 : year, month)
             || hour > 23 || minute > 59 || second > 59) {
-            throw Error("The time is not a valid date and time.");
+            throw CreateError("The time is not a valid date and time.");
         }
     }
 
@@ -214,7 +214,7 @@ internal static class DerValidator
             }
         }
         if (!byEncoding && !byTag) {
-            throw Error("The members of a SET are not in the order DER requires.");
+            throw CreateError("The members of a SET are not in the order DER requires.");
         }
     }
 
@@ -234,7 +234,7 @@ internal static class DerValidator
     private static int ReadTag(ReadOnlySpan<byte> source, out int tagClass, out bool constructed, out int number)
     {
         if (source.IsEmpty) {
-            throw Error("The value is empty or cut short.");
+            throw CreateError("The value is empty or cut short.");
         }
 
         var first = source[0];
@@ -250,14 +250,14 @@ internal static class DerValidator
         number = 0;
         for (var count = 1; ; count++) {
             if (offset >= source.Length) {
-                throw Error("The tag is cut short.");
+                throw CreateError("The tag is cut short.");
             }
             var b = source[offset++];
             if (count == 1 && b == 0x80) {
-                throw Error("The tag number is not encoded in as few bytes as possible.");
+                throw CreateError("The tag number is not encoded in as few bytes as possible.");
             }
             if (count > 4) {
-                throw Error("The tag number is too large.");
+                throw CreateError("The tag number is too large.");
             }
             number = (number << 7) | (b & 0x7F);
             if ((b & 0x80) == 0) {
@@ -265,7 +265,7 @@ internal static class DerValidator
             }
         }
         if (number < 0x1F) {
-            throw Error("The tag number is not encoded in as few bytes as possible.");
+            throw CreateError("The tag number is not encoded in as few bytes as possible.");
         }
         return offset;
     }
@@ -274,7 +274,7 @@ internal static class DerValidator
     private static int ReadLength(ReadOnlySpan<byte> source, ref int offset)
     {
         if (offset >= source.Length) {
-            throw Error("The length is missing.");
+            throw CreateError("The length is missing.");
         }
 
         var first = source[offset++];
@@ -282,25 +282,25 @@ internal static class DerValidator
         if (first >= 0x80) {
             var count = first & 0x7F;
             if (first == 0x80) {
-                throw Error("DER does not allow the indefinite length form.");
+                throw CreateError("DER does not allow the indefinite length form.");
             }
             if (count > 4 || offset + count > source.Length) {
-                throw Error("The length is too large or cut short.");
+                throw CreateError("The length is too large or cut short.");
             }
             if (source[offset] == 0x00) {
-                throw Error("The length is not encoded in as few bytes as possible.");
+                throw CreateError("The length is not encoded in as few bytes as possible.");
             }
             length = 0;
             for (var i = 0; i < count; i++) {
                 length = (length << 8) | source[offset++];
             }
             if (length < 0x80) {
-                throw Error("The length is not encoded in as few bytes as possible.");
+                throw CreateError("The length is not encoded in as few bytes as possible.");
             }
         }
 
         if (length > source.Length - offset) {
-            throw Error("The content is shorter than its length says.");
+            throw CreateError("The content is shorter than its length says.");
         }
         return (int)length;
     }
@@ -309,12 +309,12 @@ internal static class DerValidator
     private static void RequireConstructed(bool constructed)
     {
         if (!constructed) {
-            throw Error("This type is constructed.");
+            throw CreateError("This type is constructed.");
         }
     }
 
 
-    private static AsnContentException Error(string message)
+    private static AsnContentException CreateError(string message)
         => new($"The value is not DER: {message}");
 
 

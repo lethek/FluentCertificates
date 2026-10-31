@@ -46,8 +46,8 @@ release rather than record it as it happened.
 - **Breaking:** Removed `X509AuthorityKeyIdentifierExtension`, superseded by .NET's own `System.Security.Cryptography.X509Certificates.X509AuthorityKeyIdentifierExtension`.
 - **Breaking:** `X500NameBuilder.EquivalentTo` takes an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.ValuesAnyOrder`, in place of its `bool orderMatters` parameter.
 - **Breaking:** `X500NameBuilder.RelativeDistinguishedNames` is an `ImmutableList<X500AttributeSet>` in place of a list of tuples.
-- **Breaking:** `X500NameBuilder(string)`, `Equals(string)`, `EquivalentTo(string)` and `GeneralNameListBuilder.AddDirectoryName(string)` read the strict RFC 4514 string form in place of `X500DistinguishedName`'s platform-dependent parser, and throw `FormatException` for a string that does not conform.
-- **Breaking:** `X500NameBuilder(X500DistinguishedName)` and `CertificateBuilder.SetSubject(X500DistinguishedName)` throw `CryptographicException` for a name that is not valid ASN.1 or holds an attribute value that is not DER.
+- **Breaking:** `X500NameBuilder(string)`, `Equals(string)`, `EquivalentTo(string)` and `GeneralNameListBuilder.AddDirectoryName(string)` read the strict RFC 4514 string form in place of `X500DistinguishedName`'s platform-dependent parser. The constructor and `AddDirectoryName` throw `FormatException` for a string that does not conform, and `Equals` and `EquivalentTo` return false.
+- **Breaking:** `X500NameBuilder(X500DistinguishedName)` and `CertificateBuilder.SetSubject(X500DistinguishedName)` throw `CryptographicException` for a name that is not valid ASN.1, or holds a UTF8String or BMPString that is not valid text.
 - **Breaking:** `X500NameBuilder.Add`, `Set` and the `Set*` methods throw `ArgumentException` at the call for a value its string type cannot hold, in place of `Create` throwing `EncoderFallbackException`.
 - **Breaking:** `X500NameBuilder.ToString` returns a string in the RFC 4514 style in place of `X500DistinguishedName.Name`.
 - **Breaking:** `GeneralNameListBuilder.AddEmailAddresses`, `AddDnsNames`, `AddUris` and `AddIPAddresses` take `params IEnumerable<T>` in place of `params T[]`.
@@ -59,7 +59,6 @@ release rather than record it as it happened.
 
 ### Fixed
 
-- `X500NameBuilder(X500DistinguishedName)` keeps a multi-valued relative distinguished name, where it threw.
 - `CertificateBuilder.AddExtension`, `AddExtensions` and `SetExtensions` refuse a `null` extension at the call that supplied it, rather than accepting it and throwing `NullReferenceException` from `Create`.
 - `Oids`' cached `Oid` properties no longer risk handing two different instances to callers racing on first access.
 - `CertificateBuilder.CreateCertificateSigningRequest` ignores any `Issuer` on the builder, rather than writing that issuer's Authority Key Identifier into a request nothing has agreed to sign yet.

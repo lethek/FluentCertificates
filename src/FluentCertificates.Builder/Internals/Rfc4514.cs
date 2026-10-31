@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Formats.Asn1;
@@ -60,7 +61,7 @@ internal static class Rfc4514
         var oid = ParseAttributeType(name, ref pos);
 
         if (pos >= name.Length || name[pos] != '=') {
-            throw Error(name, pos, "expected '=' after the attribute type");
+            throw CreateError(name, pos, "expected '=' after the attribute type");
         }
         pos++;
 
@@ -80,7 +81,7 @@ internal static class Rfc4514
         try {
             return new X500Attribute(oid, encoding, value);
         } catch (ArgumentException ex) {
-            throw Error(name, start, ex.Message, ex);
+            throw CreateError(name, start, ex.Message, ex);
         }
     }
 
@@ -92,7 +93,7 @@ internal static class Rfc4514
             pos++;
         }
         if (pos == start) {
-            throw Error(name, pos, "expected an attribute type");
+            throw CreateError(name, pos, "expected an attribute type");
         }
 
         var type = name.AsSpan(start, pos - start);
@@ -101,7 +102,7 @@ internal static class Rfc4514
         }
 
         if (type.Contains('.') || !Keywords.TryGetValue(type.ToString(), out var oid)) {
-            throw Error(name, start, $"'{type}' is not a keyword RFC 4514 defines, so write the attribute type as an OID");
+            throw CreateError(name, start, $"'{type}' is not a keyword RFC 4514 defines, so write the attribute type as an OID");
         }
         return new Oid(oid);
     }
@@ -112,20 +113,20 @@ internal static class Rfc4514
         //numericoid = number 1*( DOT number ), where a number has no leading zero
         var arcs = type.ToString().Split('.');
         if (arcs.Length < 2 || arcs.Any(x => x.Length == 0 || !x.All(Char.IsAsciiDigit) || (x.Length > 1 && x[0] == '0'))) {
-            throw Error(name, start, $"'{type}' is not a numeric OID");
+            throw CreateError(name, start, $"'{type}' is not a numeric OID");
         }
 
         //The first arc is 0, 1 or 2, and under 0 and 1 the second is at most 39. Older versions of the writer
         //do not check this, so it is not left to them.
         if (arcs[0].Length > 1 || arcs[0][0] > '2' || (arcs[0][0] < '2' && (arcs[1].Length > 2 || (arcs[1].Length == 2 && arcs[1][0] > '3')))) {
-            throw Error(name, start, $"'{type}' is not a valid OID");
+            throw CreateError(name, start, $"'{type}' is not a valid OID");
         }
 
         //The writer is the authority on the rest, such as an arc too large to encode
         try {
             new AsnWriter(AsnEncodingRules.DER).WriteObjectIdentifier(type);
         } catch (ArgumentException) {
-            throw Error(name, start, $"'{type}' is not a valid OID");
+            throw CreateError(name, start, $"'{type}' is not a valid OID");
         }
         return new Oid(type.ToString());
     }
@@ -139,70 +140,76 @@ internal static class Rfc4514
         }
         var hex = name.AsSpan(start, pos - start);
         if (hex.IsEmpty || hex.Length % 2 != 0 || hex.IndexOfAnyExcept("0123456789abcdefABCDEF") >= 0) {
-            throw Error(name, start, "expected one or more pairs of hex digits after '#'");
+            throw CreateError(name, start, "expected one or more pairs of hex digits after '#'");
         }
 
         //RFC 4514 defines the hex as a BER encoding, so it is rewritten as the DER a Name needs
         try {
             return X500Attribute.CreateFromDer(oid, BerToDer.Normalize(Convert.FromHexString(hex)));
         } catch (Exception ex) when (ex is ArgumentException or AsnContentException) {
-            throw Error(name, start, "the hex digits are not one complete BER value", ex);
+            throw CreateError(name, start, "the hex digits are not one complete BER value", ex);
         }
     }
 
 
     private static string ParseStringValue(string name, ref int pos)
     {
-        var bytes = new List<byte>();
         var start = pos;
         var endsInSpace = false;
 
-        while (pos < name.Length && name[pos] is not (',' or '+')) {
-            var c = name[pos];
-            endsInSpace = false;
-
-            if (c == '\\') {
-                if (pos + 1 >= name.Length) {
-                    throw Error(name, pos, "a backslash needs a character to escape");
-                }
-                var next = name[pos + 1];
-                if (next is '"' or '+' or ',' or ';' or '<' or '>' or '\\' or ' ' or '#' or '=') {
-                    bytes.Add((byte)next);
-                    pos += 2;
-                } else if (pos + 2 < name.Length && Char.IsAsciiHexDigit(next) && Char.IsAsciiHexDigit(name[pos + 2])) {
-                    bytes.Add(Byte.Parse(name.AsSpan(pos + 1, 2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture));
-                    pos += 3;
-                } else {
-                    throw Error(name, pos, "a backslash must be followed by a special character or two hex digits");
-                }
-                continue;
-            }
-
-            if (c is '"' or ';' or '<' or '>' or '\0') {
-                throw Error(name, pos, $"'{c}' must be escaped");
-            }
-            if (pos == start && c == ' ') {
-                throw Error(name, pos, "a leading space must be escaped");
-            }
-
-            var length = Char.IsHighSurrogate(c) && pos + 1 < name.Length && Char.IsLowSurrogate(name[pos + 1]) ? 2 : 1;
-            try {
-                bytes.AddRange(StrictUtf8.GetBytes(name.AsSpan(pos, length).ToString()));
-            } catch (EncoderFallbackException) {
-                throw Error(name, pos, "the text is not valid Unicode");
-            }
-            endsInSpace = c == ' ';
-            pos += length;
-        }
-
-        if (endsInSpace) {
-            throw Error(name, pos - 1, "a trailing space must be escaped");
-        }
-
+        //A character takes at most 3 bytes of UTF-8, and an escape takes more characters than the byte it stands for
+        var buffer = ArrayPool<byte>.Shared.Rent((name.Length - pos) * 3);
+        var count = 0;
         try {
-            return StrictUtf8.GetString(bytes.ToArray());
-        } catch (DecoderFallbackException ex) {
-            throw Error(name, start, "the escaped bytes are not valid UTF-8", ex);
+            while (pos < name.Length && name[pos] is not (',' or '+')) {
+                var c = name[pos];
+                endsInSpace = false;
+
+                if (c == '\\') {
+                    if (pos + 1 >= name.Length) {
+                        throw CreateError(name, pos, "a backslash needs a character to escape");
+                    }
+                    var next = name[pos + 1];
+                    if (next is '"' or '+' or ',' or ';' or '<' or '>' or '\\' or ' ' or '#' or '=') {
+                        buffer[count++] = (byte)next;
+                        pos += 2;
+                    } else if (pos + 2 < name.Length && Char.IsAsciiHexDigit(next) && Char.IsAsciiHexDigit(name[pos + 2])) {
+                        buffer[count++] = Byte.Parse(name.AsSpan(pos + 1, 2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture);
+                        pos += 3;
+                    } else {
+                        throw CreateError(name, pos, "a backslash must be followed by a special character or two hex digits");
+                    }
+                    continue;
+                }
+
+                if (c is '"' or ';' or '<' or '>' or '\0') {
+                    throw CreateError(name, pos, $"'{c}' must be escaped");
+                }
+                if (pos == start && c == ' ') {
+                    throw CreateError(name, pos, "a leading space must be escaped");
+                }
+
+                var length = Char.IsHighSurrogate(c) && pos + 1 < name.Length && Char.IsLowSurrogate(name[pos + 1]) ? 2 : 1;
+                try {
+                    count += StrictUtf8.GetBytes(name.AsSpan(pos, length), buffer.AsSpan(count));
+                } catch (EncoderFallbackException) {
+                    throw CreateError(name, pos, "the text is not valid Unicode");
+                }
+                endsInSpace = c == ' ';
+                pos += length;
+            }
+
+            if (endsInSpace) {
+                throw CreateError(name, pos - 1, "a trailing space must be escaped");
+            }
+
+            try {
+                return StrictUtf8.GetString(buffer, 0, count);
+            } catch (DecoderFallbackException ex) {
+                throw CreateError(name, start, "the escaped bytes are not valid UTF-8", ex);
+            }
+        } finally {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
@@ -233,7 +240,7 @@ internal static class Rfc4514
     }
 
 
-    private static FormatException Error(string name, int pos, string reason, Exception? inner = null)
+    private static FormatException CreateError(string name, int pos, string reason, Exception? inner = null)
         => new($"'{name}' is not an RFC 4514 distinguished name: {reason} (at position {pos}).", inner);
 
 

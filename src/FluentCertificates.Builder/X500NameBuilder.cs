@@ -56,15 +56,29 @@ public record X500NameBuilder
     /// </summary>
     /// <remarks>The order is that of the string form, most specific first, so <c>CN=Example,O=Acme,C=AU</c>
     /// lists the common name first. A name is encoded in the reverse of this order.</remarks>
-    public ImmutableList<X500AttributeSet> RelativeDistinguishedNames { get; init; }
-        = ImmutableList<X500AttributeSet>.Empty;
+    /// <exception cref="ArgumentNullException">The list, or one of its relative names, is null.</exception>
+    /// <exception cref="ArgumentException">A relative name has no attributes.</exception>
+    public ImmutableList<X500AttributeSet> RelativeDistinguishedNames
+    {
+        get => _relativeDistinguishedNames;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            foreach (var relativeName in value) {
+                ArgumentNullException.ThrowIfNull(relativeName, nameof(value));
+                if (relativeName.Count == 0) {
+                    throw new ArgumentException("A relative distinguished name needs at least one attribute.", nameof(value));
+                }
+            }
+            _relativeDistinguishedNames = value;
+        }
+    }
 
 
     /// <summary>
     /// Builds and returns an <see cref="X500DistinguishedName"/> from the current RDNs.
     /// </summary>
     /// <returns>The constructed <see cref="X500DistinguishedName"/>.</returns>
-    /// <exception cref="InvalidOperationException">A relative name has no attributes.</exception>
     public X500DistinguishedName Create()
         => X500NameDer.Write(RelativeDistinguishedNames);
 
@@ -100,13 +114,7 @@ public record X500NameBuilder
     /// <param name="oid">The OID to remove.</param>
     /// <remarks>A relative name left with no attributes is removed too.</remarks>
     public X500NameBuilder Remove(Oid oid)
-        => this with {
-            RelativeDistinguishedNames = [
-                .. RelativeDistinguishedNames
-                    .Select(x => x.WithoutOid(oid.Value))
-                    .Where(x => x.Count > 0)
-            ]
-        };
+        => this with { RelativeDistinguishedNames = [.. GetRelativeNamesWithoutOid(oid)] };
 
 
     /// <summary>
@@ -260,6 +268,25 @@ public record X500NameBuilder
             ?.Value;
 
 
+    private static X500DistinguishedName? GetNameFromString(string? name)
+    {
+        if (name is null) {
+            return null;
+        }
+        try {
+            return new X500NameBuilder(name).Create();
+        } catch (FormatException) {
+            return null;
+        }
+    }
+
+
+    private IEnumerable<X500AttributeSet> GetRelativeNamesWithoutOid(Oid oid)
+        => RelativeDistinguishedNames
+            .Select(x => x.GetSetWithoutOid(oid.Value))
+            .Where(x => x.Count > 0);
+
+
     private static X500AttributeSet CreateRelativeDistinguishedName(Oid oid, UniversalTagNumber valueEncoding, string value)
         => new([new X500Attribute(oid, valueEncoding, value)]);
 
@@ -317,9 +344,7 @@ public record X500NameBuilder
     public X500NameBuilder Set(Oid oid, UniversalTagNumber valueEncoding = UniversalTagNumber.UTF8String, params string[] values)
         => this with {
             RelativeDistinguishedNames = [
-                .. RelativeDistinguishedNames
-                    .Select(x => x.WithoutOid(oid.Value))
-                    .Where(x => x.Count > 0),
+                .. GetRelativeNamesWithoutOid(oid),
 
 
                 .. values
@@ -558,12 +583,12 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="other">The distinguished name string to compare.</param>
     /// <returns>True if equal; otherwise, false.</returns>
-    /// <exception cref="FormatException"><paramref name="other"/> does not strictly conform to RFC 4514.</exception>
     /// <remarks>Parses <paramref name="other"/> as <see cref="X500NameBuilder(string)"/> does, then compares
-    /// the encoded bytes, as <see cref="X500NameComparer.Exact"/> does. The setters encode some values as
-    /// other string types than the parser's UTF8String, so two names that display identically can differ here.</remarks>
+    /// the encoded bytes, as <see cref="X500NameComparer.Exact"/> does. A string that does not strictly conform to
+    /// RFC 4514 equals no name. The setters encode some values as other string types than the parser's
+    /// UTF8String, so two names that display identically can differ here.</remarks>
     public bool Equals(string? other)
-        => other != null && X500NameComparer.Exact.Equals(Create(), new X500NameBuilder(other).Create());
+        => GetNameFromString(other) is { } name && X500NameComparer.Exact.Equals(Create(), name);
 
 
     /// <summary>Determines whether another builder holds the same relative distinguished names, in the same
@@ -617,9 +642,9 @@ public record X500NameBuilder
     /// <param name="other">The distinguished name string to compare.</param>
     /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.ValuesAnyOrder"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
-    /// <exception cref="FormatException"><paramref name="other"/> does not strictly conform to RFC 4514.</exception>
-    public bool EquivalentTo(string other, IEqualityComparer<X500DistinguishedName>? comparer = null)
-        => EquivalentTo(new X500NameBuilder(other).Create(), comparer);
+    /// <remarks>A string that does not strictly conform to RFC 4514 is equivalent to no name.</remarks>
+    public bool EquivalentTo(string? other, IEqualityComparer<X500DistinguishedName>? comparer = null)
+        => GetNameFromString(other) is { } name && EquivalentTo(name, comparer);
 
 
     /// <summary>
@@ -644,4 +669,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="builder">The builder to convert.</param>    
     public static explicit operator string(X500NameBuilder builder) => builder.ToString();
+
+
+    private readonly ImmutableList<X500AttributeSet> _relativeDistinguishedNames = ImmutableList<X500AttributeSet>.Empty;
 }

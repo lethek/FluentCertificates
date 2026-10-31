@@ -159,14 +159,59 @@ public class DerValidatorTests
 
 
     [Test]
-    [Arguments("2403040141")]
-    [Arguments("010101")]
-    [Arguments("300730800201010000")]
-    public async Task Constructor_FromDer_ARawValueThatIsNotDer_ThrowsCryptographicException(string valueHex)
+    [Arguments("040541")]
+    [Arguments("0401")]
+    [Arguments("3080020101")]
+    public async Task Constructor_FromDer_AValueThatIsNotOneCompleteBerValue_ThrowsCryptographicException(string valueHex)
     {
         var name = NameWithValue(Convert.FromHexString(valueHex));
 
         await Assert.That(() => new X500NameBuilder(name)).Throws<CryptographicException>();
+    }
+
+
+    [Test]
+    [Arguments("0C01FF")]
+    [Arguments("0C02C328")]
+    [Arguments("1E0141")]
+    [Arguments("1E02D800")]
+    public async Task Constructor_FromDer_AUtf8OrBmpStringThatIsNotText_ThrowsCryptographicException(string valueHex)
+    {
+        var name = NameWithValue(Convert.FromHexString(valueHex));
+
+        await Assert.That(() => new X500NameBuilder(name)).Throws<CryptographicException>();
+    }
+
+
+    /// <summary>
+    /// Only a UTF8String or BMPString must decode. A value outside the character set of a restricted type is
+    /// kept as raw DER, since CAs have issued them.
+    /// </summary>
+    [Test]
+    [Arguments("1601E9")]
+    [Arguments("13012A")]
+    public async Task Constructor_FromDer_AValueOutsideTheCharacterSetOfItsType_IsKeptAsRawDer(string valueHex)
+    {
+        var name = NameWithValue(Convert.FromHexString(valueHex));
+
+        var builder = new X500NameBuilder(name);
+
+        await Assert.That(builder.GetCommonName()).IsNull();
+        await Assert.That(builder.Create().RawData).IsEquivalentTo(name.RawData, CollectionOrdering.Matching);
+    }
+
+
+    [Test]
+    [Arguments("2403040141", "040141")]
+    [Arguments("010101", "0101FF")]
+    [Arguments("300730800201010000", "30053003020101")]
+    public async Task Constructor_FromDer_ABerValue_IsWrittenBackAsDer(string berHex, string derHex)
+    {
+        var name = NameWithValue(Convert.FromHexString(berHex));
+
+        var builder = new X500NameBuilder(name);
+
+        await Assert.That(builder.Create().RawData).IsEquivalentTo(NameWithValue(Convert.FromHexString(derHex)).RawData, CollectionOrdering.Matching);
     }
 
 
