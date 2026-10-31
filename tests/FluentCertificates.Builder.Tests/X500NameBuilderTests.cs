@@ -255,14 +255,14 @@ public class X500NameBuilderTests
 
 
     /// <summary>
-    /// Equals compares the encoded bytes, and the ASN.1 string type is part of them: SetGivenName emits
-    /// PrintableString, while parsing a string yields UTF8String. EquivalentTo is the question that
-    /// disregards this.
+    /// Equals compares the encoded bytes, and the ASN.1 string type is part of them: a given name the caller
+    /// asks to be a PrintableString differs from the UTF8String that parsing a string yields. EquivalentTo is
+    /// the question that disregards this.
     /// </summary>
     [Test]
     public async Task Equals_SameCharactersDifferentStringType_ReturnsFalse()
     {
-        var builder = new X500NameBuilder().SetGivenName("Example");
+        var builder = new X500NameBuilder().Add(Oids.GivenNameOid, UniversalTagNumber.PrintableString, "Example");
 
         await Assert.That(builder.Equals($"{Oids.GivenName}=Example")).IsFalse();
         await Assert.That(builder.Equals(new X500NameBuilder($"{Oids.GivenName}=Example").Create())).IsFalse();

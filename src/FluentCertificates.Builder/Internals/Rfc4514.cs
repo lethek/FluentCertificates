@@ -72,14 +72,8 @@ internal static class Rfc4514
 
         var start = pos;
         var value = ParseStringValue(name, ref pos);
-        //RFC 5280 gives these two their own string types; every other value is a UTF8String
-        var encoding = oid.Value switch {
-            Oids.CountryOrRegionName => UniversalTagNumber.PrintableString,
-            Oids.DomainComponent => UniversalTagNumber.IA5String,
-            _ => UniversalTagNumber.UTF8String
-        };
         try {
-            return new X500Attribute(oid, encoding, value);
+            return new X500Attribute(oid, AttributeEncodings.GetValueEncoding(oid.Value), value);
         } catch (ArgumentException ex) {
             throw CreateError(name, start, ex.Message, ex);
         }

@@ -42,7 +42,8 @@ public record X500NameBuilder
     /// <remarks>
     /// The same string builds the same name on every platform. No spaces are allowed around the separators. Only the keywords CN, L, ST, O, OU, C, STREET,
     /// DC and UID are recognised; write any other attribute type as a dotted OID. Values are encoded as UTF8String,
-    /// except that a country is a PrintableString and a domain component is an IA5String. A value written as <c>#</c> and hex digits is a BER
+    /// except for the attributes whose standard fixes another string type: a country, serial number, DN qualifier and
+    /// telephone number are PrintableStrings, and a domain component and email address are IA5Strings. A value written as <c>#</c> and hex digits is a BER
     /// encoding, which is kept as raw DER once rewritten as DER, or as a string when it is one.
     /// </remarks>
     public X500NameBuilder(string name)
@@ -333,12 +334,14 @@ public record X500NameBuilder
 
 
     /// <summary>
-    /// Returns a new builder with the specified values added as RDNs with the given OID and UTF8 encoding.
+    /// Returns a new builder with the specified values added as RDNs with the given OID.
     /// </summary>
     /// <param name="oid">The OID of the RDN.</param>
     /// <param name="values">The values to add.</param>
+    /// <remarks>The values are encoded as the string type the attribute's standard fixes, such as a
+    /// PrintableString for a serial number, and as UTF8String for any other attribute.</remarks>
     public X500NameBuilder Add(Oid oid, params string[] values)
-        => Add(oid, UniversalTagNumber.UTF8String, values);
+        => Add(oid, AttributeEncodings.GetValueEncoding(oid.Value), values);
 
 
     /// <summary>
@@ -352,10 +355,11 @@ public record X500NameBuilder
 
 
     /// <summary>
-    /// Returns a new builder with the specified values added as RDNs with the given OID string and UTF8 encoding.
+    /// Returns a new builder with the specified values added as RDNs with the given OID string.
     /// </summary>
     /// <param name="oid">The OID string of the RDN.</param>
     /// <param name="values">The values to add.</param>
+    /// <remarks>The values are encoded as <see cref="Add(Oid,string[])"/> does.</remarks>
     public X500NameBuilder Add(string oid, params string[] values)
         => Add(new Oid(oid), values);
 
@@ -368,7 +372,7 @@ public record X500NameBuilder
     /// <param name="values">The values to set.</param>
     /// <remarks>The new RDNs take the position of the first RDN that held the OID, so setting a value again
     /// does not reorder the name. They are appended when nothing held the OID.</remarks>
-    public X500NameBuilder Set(Oid oid, UniversalTagNumber valueEncoding = UniversalTagNumber.UTF8String, params string[] values)
+    public X500NameBuilder Set(Oid oid, UniversalTagNumber valueEncoding, params string[] values)
         => this with {
             RelativeDistinguishedNames = [
                 .. GetRelativeNamesWithOidReplaced(
@@ -384,12 +388,14 @@ public record X500NameBuilder
 
 
     /// <summary>
-    /// Returns a new builder with the specified RDNs set (replacing any existing RDNs with the same OID), using UTF8 encoding.
+    /// Returns a new builder with the specified RDNs set (replacing any existing RDNs with the same OID).
     /// </summary>
     /// <param name="oid">The OID of the RDN.</param>
     /// <param name="values">The values to set.</param>
+    /// <remarks>The values are encoded as <see cref="Add(Oid,string[])"/> does, and take the position of the
+    /// first RDN that held the OID.</remarks>
     public X500NameBuilder Set(Oid oid, params string[] values)
-        => Set(oid, UniversalTagNumber.UTF8String, values);
+        => Set(oid, AttributeEncodings.GetValueEncoding(oid.Value), values);
 
 
     /// <summary>
@@ -398,15 +404,16 @@ public record X500NameBuilder
     /// <param name="oid">The OID string of the RDN.</param>
     /// <param name="valueEncoding">The ASN.1 encoding for the value.</param>
     /// <param name="values">The values to set.</param>
-    public X500NameBuilder Set(string oid, UniversalTagNumber valueEncoding = UniversalTagNumber.UTF8String, params string[] values)
+    public X500NameBuilder Set(string oid, UniversalTagNumber valueEncoding, params string[] values)
         => Set(new Oid(oid), valueEncoding, values);
 
 
     /// <summary>
-    /// Returns a new builder with the specified RDNs set (replacing any existing RDNs with the same OID string), using UTF8 encoding.
+    /// Returns a new builder with the specified RDNs set (replacing any existing RDNs with the same OID string).
     /// </summary>
     /// <param name="oid">The OID string of the RDN.</param>
     /// <param name="values">The values to set.</param>
+    /// <remarks>The values are encoded as <see cref="Set(Oid,string[])"/> does.</remarks>
     public X500NameBuilder Set(string oid, params string[] values)
         => Set(new Oid(oid), values);
 
@@ -416,7 +423,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The common name value.</param>
     public X500NameBuilder SetCommonName(string value)
-        => Set(Oids.CommonNameOid, UniversalTagNumber.UTF8String, value);
+        => Set(Oids.CommonNameOid, value);
 
 
     /// <summary>
@@ -424,7 +431,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The organization value.</param>
     public X500NameBuilder SetOrganization(string value)
-        => Set(Oids.OrganizationOid, UniversalTagNumber.UTF8String, value);
+        => Set(Oids.OrganizationOid, value);
 
 
     /// <summary>
@@ -432,7 +439,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The country value.</param>
     public X500NameBuilder SetCountry(string value)
-        => Set(Oids.CountryOrRegionNameOid, UniversalTagNumber.PrintableString, value);
+        => Set(Oids.CountryOrRegionNameOid, value);
 
 
     /// <summary>
@@ -440,7 +447,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The locality value.</param>
     public X500NameBuilder SetLocality(string value)
-        => Set(Oids.LocalityNameOid, UniversalTagNumber.UTF8String, value);
+        => Set(Oids.LocalityNameOid, value);
 
 
     /// <summary>
@@ -448,7 +455,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The phone number value.</param>
     public X500NameBuilder SetPhoneNumber(string value)
-        => Set(Oids.TelephoneNumberOid, UniversalTagNumber.PrintableString, value);
+        => Set(Oids.TelephoneNumberOid, value);
 
 
     /// <summary>
@@ -456,7 +463,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The street address value.</param>
     public X500NameBuilder SetStreetAddress(string value)
-        => Set(Oids.StreetAddressOid, UniversalTagNumber.PrintableString, value);
+        => Set(Oids.StreetAddressOid, value);
 
 
     /// <summary>
@@ -464,7 +471,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The state or province value.</param>
     public X500NameBuilder SetState(string value)
-        => Set(Oids.StateOrProvinceNameOid, UniversalTagNumber.UTF8String, value);
+        => Set(Oids.StateOrProvinceNameOid, value);
 
 
     /// <summary>
@@ -472,7 +479,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The postal code value.</param>
     public X500NameBuilder SetPostalCode(string value)
-        => Set(Oids.PostalCodeOid, UniversalTagNumber.PrintableString, value);
+        => Set(Oids.PostalCodeOid, value);
 
 
     /// <summary>
@@ -488,7 +495,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The serial number value.</param>
     public X500NameBuilder SetSerialNumber(string value)
-        => Set(Oids.SerialNumberOid, UniversalTagNumber.PrintableString, value);
+        => Set(Oids.SerialNumberOid, value);
 
 
     /// <summary>
@@ -496,7 +503,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The given name value.</param>
     public X500NameBuilder SetGivenName(string value)
-        => Set(Oids.GivenNameOid, UniversalTagNumber.PrintableString, value);
+        => Set(Oids.GivenNameOid, value);
 
 
     /// <summary>
@@ -504,7 +511,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The surname value.</param>
     public X500NameBuilder SetSurname(string value)
-        => Set(Oids.SurnameOid, UniversalTagNumber.PrintableString, value);
+        => Set(Oids.SurnameOid, value);
 
 
     /// <summary>
@@ -512,7 +519,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The title value.</param>
     public X500NameBuilder SetTitle(string value)
-        => Set(Oids.TitleOid, UniversalTagNumber.UTF8String, value);
+        => Set(Oids.TitleOid, value);
 
 
     /// <summary>
@@ -520,7 +527,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The DN qualifier value.</param>
     public X500NameBuilder SetDistinguishedNameQualifier(string value)
-        => Set(Oids.DnQualifierOid, UniversalTagNumber.PrintableString, value);
+        => Set(Oids.DnQualifierOid, value);
 
 
     /// <summary>
@@ -528,7 +535,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="values">The organizational unit values.</param>
     public X500NameBuilder SetOrganizationalUnits(params string[] values)
-        => Set(Oids.OrganizationalUnitOid, UniversalTagNumber.UTF8String, values);
+        => Set(Oids.OrganizationalUnitOid, values);
 
 
     /// <summary>
@@ -536,7 +543,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="values">The domain component values.</param>
     public X500NameBuilder SetDomainComponents(params string[] values)
-        => Set(Oids.DomainComponentOid, UniversalTagNumber.IA5String, values);
+        => Set(Oids.DomainComponentOid, values);
 
 
     /// <summary>
@@ -544,7 +551,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The organizational unit value.</param>
     public X500NameBuilder AddOrganizationalUnit(string value)
-        => Add(Oids.OrganizationalUnitOid, UniversalTagNumber.UTF8String, value);
+        => Add(Oids.OrganizationalUnitOid, value);
 
 
     /// <summary>
@@ -552,7 +559,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="values">The organizational unit values.</param>
     public X500NameBuilder AddOrganizationalUnits(params string[] values)
-        => Add(Oids.OrganizationalUnitOid, UniversalTagNumber.UTF8String, values);
+        => Add(Oids.OrganizationalUnitOid, values);
 
 
     /// <summary>
@@ -560,7 +567,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="value">The domain component value.</param>
     public X500NameBuilder AddDomainComponent(string value)
-        => Add(Oids.DomainComponentOid, UniversalTagNumber.IA5String, value);
+        => Add(Oids.DomainComponentOid, value);
 
 
     /// <summary>
@@ -568,7 +575,7 @@ public record X500NameBuilder
     /// </summary>
     /// <param name="values">The domain component values.</param>
     public X500NameBuilder AddDomainComponents(params string[] values)
-        => Add(Oids.DomainComponentOid, UniversalTagNumber.IA5String, values);
+        => Add(Oids.DomainComponentOid, values);
 
 
     /// <summary>
@@ -577,7 +584,7 @@ public record X500NameBuilder
     /// <param name="value">The email address value.</param>
     [Obsolete("Obsolete: use Subject Alternative Name extensions instead. If you're using CertificateBuilder then try its SetEmail method.")]
     public X500NameBuilder SetEmail(string value)
-        => Set(Oids.EmailAddressOid, UniversalTagNumber.IA5String, value);
+        => Set(Oids.EmailAddressOid, value);
 
 
     /// <summary>
@@ -614,8 +621,8 @@ public record X500NameBuilder
     /// <returns>True if equal; otherwise, false.</returns>
     /// <remarks>Parses <paramref name="other"/> as <see cref="X500NameBuilder(string)"/> does, then compares
     /// the encoded bytes, as <see cref="X500NameComparer.Exact"/> does. A string that does not strictly conform to
-    /// RFC 4514 equals no name. The setters encode some values as other string types than the parser's
-    /// UTF8String, so two names that display identically can differ here.</remarks>
+    /// RFC 4514 equals no name. A builder read from an <see cref="X500DistinguishedName"/> keeps the string
+    /// types that name used, so it can differ here from the same text parsed.</remarks>
     public bool Equals(string? other)
         => GetNameFromString(other) is { } name && X500NameComparer.Exact.Equals(Create(), name);
 

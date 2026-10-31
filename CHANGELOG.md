@@ -50,6 +50,9 @@ release rather than record it as it happened.
 - **Breaking:** `X500NameBuilder(X500DistinguishedName)` and `CertificateBuilder.SetSubject(X500DistinguishedName)` throw `CryptographicException` for a name that is not valid ASN.1, or holds a UTF8String or BMPString that is not valid text.
 - **Breaking:** `X500NameBuilder.Add`, `Set` and the `Set*` methods throw `ArgumentException` at the call for a value its string type cannot hold, in place of `Create` throwing `EncoderFallbackException`.
 - **Breaking:** `X500NameBuilder.Set` and the `Set*` methods replace the RDNs they overwrite in place, in place of moving them to the end of the name.
+- **Breaking:** `X500NameBuilder.SetGivenName`, `SetSurname`, `SetStreetAddress` and `SetPostalCode` encode as UTF8String in place of PrintableString.
+- **Breaking:** `X500NameBuilder.Add` and `Set` without a `valueEncoding` encode country, serial number, DN qualifier, telephone number and destination indicator as PrintableString, X.121 address and international ISDN number as NumericString, and domain component and email address as IA5String, in place of UTF8String.
+- **Breaking:** `X500NameBuilder.Set(Oid, UniversalTagNumber, ...)` and `Set(string, UniversalTagNumber, ...)` no longer default `valueEncoding` to UTF8String.
 - **Breaking:** `X500NameBuilder.ToString` returns a string in the RFC 4514 style in place of `X500DistinguishedName.Name`.
 - **Breaking:** `GeneralNameListBuilder.AddEmailAddresses`, `AddDnsNames`, `AddUris` and `AddIPAddresses` take `params IEnumerable<T>` in place of `params T[]`.
 - **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` take an `IEqualityComparer<X500DistinguishedName>`, defaulting to `X500NameComparer.Values`, in place of comparing the encoded names byte for byte.
