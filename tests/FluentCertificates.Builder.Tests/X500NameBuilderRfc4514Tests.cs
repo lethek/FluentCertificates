@@ -506,7 +506,8 @@ public class X500NameBuilderRfc4514Tests
 
         await Assert.That(builder.Equals("CN=Multi Valued,O=Acme")).IsTrue();
         await Assert.That(builder.Equals("O=Acme,CN=Multi Valued")).IsFalse();
-        await Assert.That(builder.EquivalentTo("O=Acme,CN=Multi Valued")).IsTrue();
+        await Assert.That(builder.EquivalentTo("O=Acme,CN=Multi Valued")).IsFalse();
+        await Assert.That(builder.EquivalentTo("O=Acme,CN=Multi Valued", X500NameComparer.ValuesAnyOrder)).IsTrue();
         await Assert.That(builder.Equals("CN=a, O=b")).IsFalse();
         await Assert.That(builder.EquivalentTo("CN=a, O=b")).IsFalse();
         await Assert.That(builder.EquivalentTo((string?)null)).IsFalse();

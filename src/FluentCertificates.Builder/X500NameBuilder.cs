@@ -287,6 +287,31 @@ public record X500NameBuilder
             .Where(x => x.Count > 0);
 
 
+    //The replacements take the place of the first relative name holding the OID, after whatever else that
+    //relative name holds, and are appended only when no relative name held it
+    private IEnumerable<X500AttributeSet> GetRelativeNamesWithOidReplaced(Oid oid, List<X500AttributeSet> replacements)
+    {
+        var placed = false;
+        foreach (var relativeName in RelativeDistinguishedNames) {
+            var remaining = relativeName.GetSetWithoutOid(oid.Value);
+            if (remaining.Count > 0) {
+                yield return remaining;
+            }
+            if (!placed && remaining.Count != relativeName.Count) {
+                placed = true;
+                foreach (var replacement in replacements) {
+                    yield return replacement;
+                }
+            }
+        }
+        if (!placed) {
+            foreach (var replacement in replacements) {
+                yield return replacement;
+            }
+        }
+    }
+
+
     private static X500AttributeSet CreateRelativeDistinguishedName(Oid oid, UniversalTagNumber valueEncoding, string value)
         => new([new X500Attribute(oid, valueEncoding, value)]);
 
@@ -341,15 +366,19 @@ public record X500NameBuilder
     /// <param name="oid">The OID of the RDN.</param>
     /// <param name="valueEncoding">The ASN.1 encoding for the value.</param>
     /// <param name="values">The values to set.</param>
+    /// <remarks>The new RDNs take the position of the first RDN that held the OID, so setting a value again
+    /// does not reorder the name. They are appended when nothing held the OID.</remarks>
     public X500NameBuilder Set(Oid oid, UniversalTagNumber valueEncoding = UniversalTagNumber.UTF8String, params string[] values)
         => this with {
             RelativeDistinguishedNames = [
-                .. GetRelativeNamesWithoutOid(oid),
-
-
-                .. values
-                    .Where(x => x != null)
-                    .Select(x => CreateRelativeDistinguishedName(oid, valueEncoding, x))
+                .. GetRelativeNamesWithOidReplaced(
+                    oid,
+                    [
+                        .. values
+                            .Where(x => x != null)
+                            .Select(x => CreateRelativeDistinguishedName(oid, valueEncoding, x))
+                    ]
+                )
             ]
         };
 
@@ -627,20 +656,19 @@ public record X500NameBuilder
     /// Determines whether the current builder describes the same name as another builder.
     /// </summary>
     /// <param name="other">The other builder to compare.</param>
-    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.ValuesAnyOrder"/>.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
-    /// <remarks>The default disregards the order of the relative distinguished names because this builder
-    /// does not let a caller state that order: it follows the sequence the setters were called in, and
-    /// <c>Set</c> moves an attribute it replaces to the end.</remarks>
+    /// <remarks>The default is <see cref="X500NameComparer.Values"/>, so the order of the relative distinguished
+    /// names counts, as RFC 5280 section 7.1 requires. Pass <see cref="X500NameComparer.ValuesAnyOrder"/> to disregard it.</remarks>
     public bool EquivalentTo(X500NameBuilder other, IEqualityComparer<X500DistinguishedName>? comparer = null)
-        => (comparer ?? X500NameComparer.ValuesAnyOrder).Equals(Create(), other.Create());
+        => (comparer ?? X500NameComparer.Values).Equals(Create(), other.Create());
 
 
     /// <summary>
     /// Determines whether the current builder describes the same name as the specified distinguished name string.
     /// </summary>
     /// <param name="other">The distinguished name string to compare.</param>
-    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.ValuesAnyOrder"/>.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
     /// <remarks>A string that does not strictly conform to RFC 4514 is equivalent to no name.</remarks>
     public bool EquivalentTo(string? other, IEqualityComparer<X500DistinguishedName>? comparer = null)
@@ -651,10 +679,10 @@ public record X500NameBuilder
     /// Determines whether the current builder describes the same name as the specified <see cref="X500DistinguishedName"/>.
     /// </summary>
     /// <param name="other">The distinguished name to compare.</param>
-    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.ValuesAnyOrder"/>.</param>
+    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
     public bool EquivalentTo(X500DistinguishedName other, IEqualityComparer<X500DistinguishedName>? comparer = null)
-        => (comparer ?? X500NameComparer.ValuesAnyOrder).Equals(Create(), other);
+        => (comparer ?? X500NameComparer.Values).Equals(Create(), other);
 
 
     /// <summary>
