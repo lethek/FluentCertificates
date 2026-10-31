@@ -196,13 +196,14 @@ public record GeneralNameListBuilder
     /// <summary>
     /// Adds a <c>directoryName</c> to the list, parsed from its string form.
     /// </summary>
-    /// <param name="name">The X.500 name to add, such as <c>CN=Example, O=Example Org</c>.</param>
+    /// <param name="name">The X.500 name to add, in the RFC 4514 form <see cref="X500NameBuilder(string)"/> reads, such as <c>CN=Example,O=Example Org</c>.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the name added.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
+    /// <exception cref="FormatException"><paramref name="name"/> does not strictly conform to RFC 4514.</exception>
     public GeneralNameListBuilder AddDirectoryName(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        return AddDirectoryName(new X500DistinguishedName(name));
+        return AddDirectoryName(new X500NameBuilder(name).Create());
     }
 
 
@@ -262,7 +263,7 @@ public record GeneralNameListBuilder
         ArgumentNullException.ThrowIfNull(names);
         return AddRange(names.Select(x => {
             ArgumentNullException.ThrowIfNull(x, nameof(names));
-            return CreateDirectoryName(new X500DistinguishedName(x), nameof(names));
+            return CreateDirectoryName(new X500NameBuilder(x).Create(), nameof(names));
         }));
     }
 

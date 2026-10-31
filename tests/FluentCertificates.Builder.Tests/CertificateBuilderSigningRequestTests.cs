@@ -21,7 +21,7 @@ public class CertificateBuilderSigningRequestTests
     {
         //More than a bare CN, so the round trip has attribute order and several encodings to preserve
         using var requesterKeys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        var csr = BuildRequest("CN=Requesting Party, OU=Sales, O=Acme, C=AU", requesterKeys);
+        var csr = BuildRequest("CN=Requesting Party,OU=Sales,O=Acme,C=AU", requesterKeys);
 
         using var ca = BuildCa();
         using var issued = new CertificateBuilder()
@@ -955,17 +955,22 @@ public class CertificateBuilderSigningRequestTests
 
 
     [Test]
-    public async Task UseCertificateSigningRequest_WithAMultiValuedRelativeDistinguishedName_Throws()
+    public async Task UseCertificateSigningRequest_WithAMultiValuedRelativeDistinguishedName_KeepsItIntact()
     {
-        //X500NameBuilder models a name as a flat list of single-valued RDNs, so it cannot represent
-        //"CN=Multi Valued+OU=Sales" and its constructor rejects one. The subject of a received request is
-        //peer-supplied, so a CA has to expect this rather than meet it as an unhandled fault.
+        //The subject of a received request is peer-supplied, and a multi-valued RDN in it must carry
+        //across to the certificate exactly as it arrived
         using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var request = new CertificateRequest(MultiValuedSubject(), keys, HashAlgorithmName.SHA256);
         var csr = CertificateSigningRequest.FromDer(request.CreateSigningRequest());
 
-        await Assert.That(() => new CertificateBuilder().UseCertificateSigningRequest(csr))
-            .Throws<InvalidOperationException>();
+        using var ca = BuildCa();
+        using var issued = new CertificateBuilder()
+            .SetIssuer(ca)
+            .UseCertificateSigningRequest(csr)
+            .Create();
+
+        await Assert.That(issued.SubjectName.RawData)
+            .IsEquivalentTo(csr.CertificateRequest.SubjectName.RawData, CollectionOrdering.Matching);
     }
 
 
@@ -1030,13 +1035,12 @@ public class CertificateBuilderSigningRequestTests
 
 
     /// <summary>
-    /// Encodes "CN=Multi Valued+OU=Sales, O=Acme" as DER: two relative distinguished names, the second of
+    /// Encodes "CN=Multi Valued+OU=Sales,O=Acme" as DER: two relative distinguished names, the second of
     /// which holds two attributes.
     /// </summary>
     /// <remarks>
-    /// Only Windows honours the '+' multi-value separator in the string constructor of
-    /// <see cref="X500DistinguishedName"/>. Elsewhere "Multi Valued+OU=Sales" parses as one common name
-    /// value, so a string here would build a single-valued name and silently test nothing.
+    /// Written as DER by hand, with PrintableString values, rather than parsed from a string, so the test
+    /// does not depend on the parser it is checking the result against.
     /// </remarks>
     private static X500DistinguishedName MultiValuedSubject()
     {
