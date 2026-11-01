@@ -13,6 +13,14 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `X500NameComparer` overloads of `X500NameBuilder.EquivalentTo`, `CertificateFinder.WhereSubjectMatches` and `WhereIssuerMatches`, and `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned`, defaulting to `X500NameComparer.Values`.
+
+### Changed
+
+- **Breaking:** The overloads of those methods taking an `IEqualityComparer<X500DistinguishedName>` require it and throw `ArgumentNullException` for null, in place of defaulting to `X500NameComparer.Values`.
+
 ## [0.23.0] - 2026-11-01
 
 ### Added

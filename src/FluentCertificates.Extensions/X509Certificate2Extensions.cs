@@ -215,12 +215,30 @@ public static class X509Certificate2Extensions
     /// </summary>
     /// <param name="cert">The certificate.</param>
     /// <param name="verifySignature">Whether to verify the signature.</param>
-    /// <param name="comparer">How to compare the subject and issuer names, or null for <see cref="X500NameComparer.Values"/>.</param>
+    /// <param name="comparer">How to compare the subject and issuer names: <see cref="X500NameComparer.Exact"/>,
+    /// <see cref="X500NameComparer.Values"/>, <see cref="X500NameComparer.ValuesAnyOrder"/>,
+    /// <see cref="X500NameComparer.Folded"/> or <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means
+    /// <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if self-signed; otherwise, false.</returns>
     public static bool IsSelfSigned(
         this X509Certificate2 cert,
         bool verifySignature = false,
-        IEqualityComparer<X500DistinguishedName>? comparer = null)
+        X500NameComparer? comparer = null)
+        => cert.IsIssuedBy(cert, verifySignature, comparer);
+
+
+    /// <summary>
+    /// Determines if the certificate is self-signed, under a comparer of the caller's own.
+    /// </summary>
+    /// <param name="cert">The certificate.</param>
+    /// <param name="verifySignature">Whether to verify the signature.</param>
+    /// <param name="comparer">How to compare the subject and issuer names. The ready-made rules are on <see cref="X500NameComparer"/>.</param>
+    /// <returns>True if self-signed; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
+    public static bool IsSelfSigned(
+        this X509Certificate2 cert,
+        bool verifySignature,
+        IEqualityComparer<X500DistinguishedName> comparer)
         => cert.IsIssuedBy(cert, verifySignature, comparer);
 
 
@@ -231,7 +249,9 @@ public static class X509Certificate2Extensions
     /// <param name="issuer">The issuer certificate.</param>
     /// <param name="verifySignature">Whether to verify the signature.</param>
     /// <param name="comparer">How to compare this certificate's issuer name against <paramref name="issuer"/>'s
-    /// subject name, or null for <see cref="X500NameComparer.Values"/>.</param>
+    /// subject name: <see cref="X500NameComparer.Exact"/>, <see cref="X500NameComparer.Values"/>,
+    /// <see cref="X500NameComparer.ValuesAnyOrder"/>, <see cref="X500NameComparer.Folded"/> or
+    /// <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if issued by the specified issuer; otherwise, false.</returns>
     /// <remarks>The default disregards how the names were encoded, which RFC 5280 s4.1.2.4 makes necessary:
     /// a conforming authority may encode a name as either PrintableString or UTF8String, and the RFC's own
@@ -241,9 +261,31 @@ public static class X509Certificate2Extensions
         this X509Certificate2 cert,
         X509Certificate2 issuer,
         bool verifySignature = false,
-        IEqualityComparer<X500DistinguishedName>? comparer = null)
+        X500NameComparer? comparer = null)
         => (comparer ?? X500NameComparer.Values).Equals(cert.IssuerName, issuer.SubjectName)
         && (!verifySignature || VerifySignature(cert, issuer));
+
+
+    /// <summary>
+    /// Determines if the certificate was issued by the specified issuer, under a comparer of the caller's own.
+    /// </summary>
+    /// <param name="cert">The certificate.</param>
+    /// <param name="issuer">The issuer certificate.</param>
+    /// <param name="verifySignature">Whether to verify the signature.</param>
+    /// <param name="comparer">How to compare this certificate's issuer name against <paramref name="issuer"/>'s
+    /// subject name. The ready-made rules are on <see cref="X500NameComparer"/>.</param>
+    /// <returns>True if issued by the specified issuer; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
+    public static bool IsIssuedBy(
+        this X509Certificate2 cert,
+        X509Certificate2 issuer,
+        bool verifySignature,
+        IEqualityComparer<X500DistinguishedName> comparer)
+    {
+        ArgumentNullException.ThrowIfNull(comparer);
+        return comparer.Equals(cert.IssuerName, issuer.SubjectName)
+            && (!verifySignature || VerifySignature(cert, issuer));
+    }
 
 
     /// <summary>

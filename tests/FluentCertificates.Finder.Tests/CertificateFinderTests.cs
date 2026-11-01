@@ -722,6 +722,33 @@ public class CertificateFinderTests
     }
 
 
+    /// <summary>A comparer that is not an <see cref="X500NameComparer"/> takes the overload that requires one.</summary>
+    [Test]
+    public async Task WhereSubjectMatchesAndWhereIssuerMatches_WithAnyOtherComparer_UseIt()
+    {
+        using var cert = CreateSelfSignedCertificate("Example");
+        var anyName = EqualityComparer<X500DistinguishedName>.Create((_, _) => true, _ => 0);
+        var other = new X500DistinguishedName("CN=Other");
+
+        var bySubject = new CertificateFinder(MockFileSystem).AddCertificates(cert).WhereSubjectMatches(other, anyName).ToList();
+        var byIssuer = new CertificateFinder(MockFileSystem).AddCertificates(cert).WhereIssuerMatches(other, anyName).ToList();
+
+        await Assert.That(bySubject).HasSingleItem();
+        await Assert.That(byIssuer).HasSingleItem();
+    }
+
+
+    [Test]
+    public async Task WhereSubjectMatchesAndWhereIssuerMatches_WithNullInterfaceComparer_Throw()
+    {
+        var name = new X500DistinguishedName("CN=Example");
+        IEqualityComparer<X500DistinguishedName> none = null!;
+
+        await Assert.That(() => new CertificateFinder().WhereSubjectMatches(name, none)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => new CertificateFinder().WhereIssuerMatches(name, none)).ThrowsExactly<ArgumentNullException>();
+    }
+
+
     [Test]
     public async Task WhereIssuerMatches_SameName_Matches()
     {
