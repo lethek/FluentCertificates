@@ -663,33 +663,85 @@ public record X500NameBuilder
     /// Determines whether the current builder describes the same name as another builder.
     /// </summary>
     /// <param name="other">The other builder to compare.</param>
-    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>.</param>
+    /// <param name="comparer">How to compare the two names: <see cref="X500NameComparer.Exact"/>,
+    /// <see cref="X500NameComparer.Values"/>, <see cref="X500NameComparer.ValuesAnyOrder"/>,
+    /// <see cref="X500NameComparer.Folded"/> or <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means
+    /// <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
     /// <remarks>The default is <see cref="X500NameComparer.Values"/>, so the order of the relative distinguished
     /// names counts, as RFC 5280 section 7.1 requires. Pass <see cref="X500NameComparer.ValuesAnyOrder"/> to disregard it.</remarks>
-    public bool EquivalentTo(X500NameBuilder other, IEqualityComparer<X500DistinguishedName>? comparer = null)
+    public bool EquivalentTo(X500NameBuilder other, X500NameComparer? comparer = null)
         => (comparer ?? X500NameComparer.Values).Equals(Create(), other.Create());
+
+
+    /// <summary>
+    /// Determines whether the current builder describes the same name as another builder, under a comparer of the caller's own.
+    /// </summary>
+    /// <param name="other">The other builder to compare.</param>
+    /// <param name="comparer">How to compare the two names. The ready-made rules are on <see cref="X500NameComparer"/>.</param>
+    /// <returns>True if equivalent; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
+    public bool EquivalentTo(X500NameBuilder other, IEqualityComparer<X500DistinguishedName> comparer)
+    {
+        ArgumentNullException.ThrowIfNull(comparer);
+        return comparer.Equals(Create(), other.Create());
+    }
 
 
     /// <summary>
     /// Determines whether the current builder describes the same name as the specified distinguished name string.
     /// </summary>
     /// <param name="other">The distinguished name string to compare.</param>
-    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>.</param>
+    /// <param name="comparer">How to compare the two names: <see cref="X500NameComparer.Exact"/>,
+    /// <see cref="X500NameComparer.Values"/>, <see cref="X500NameComparer.ValuesAnyOrder"/>,
+    /// <see cref="X500NameComparer.Folded"/> or <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means
+    /// <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
     /// <remarks>A string that does not strictly conform to RFC 4514 is equivalent to no name.</remarks>
-    public bool EquivalentTo(string? other, IEqualityComparer<X500DistinguishedName>? comparer = null)
+    public bool EquivalentTo(string? other, X500NameComparer? comparer = null)
         => GetNameFromString(other) is { } name && EquivalentTo(name, comparer);
+
+
+    /// <summary>
+    /// Determines whether the current builder describes the same name as the specified distinguished name string, under a comparer of the caller's own.
+    /// </summary>
+    /// <param name="other">The distinguished name string to compare.</param>
+    /// <param name="comparer">How to compare the two names. The ready-made rules are on <see cref="X500NameComparer"/>.</param>
+    /// <returns>True if equivalent; otherwise, false.</returns>
+    /// <remarks>A string that does not strictly conform to RFC 4514 is equivalent to no name.</remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
+    public bool EquivalentTo(string? other, IEqualityComparer<X500DistinguishedName> comparer)
+    {
+        ArgumentNullException.ThrowIfNull(comparer);
+        return GetNameFromString(other) is { } name && EquivalentTo(name, comparer);
+    }
 
 
     /// <summary>
     /// Determines whether the current builder describes the same name as the specified <see cref="X500DistinguishedName"/>.
     /// </summary>
     /// <param name="other">The distinguished name to compare.</param>
-    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>.</param>
+    /// <param name="comparer">How to compare the two names: <see cref="X500NameComparer.Exact"/>,
+    /// <see cref="X500NameComparer.Values"/>, <see cref="X500NameComparer.ValuesAnyOrder"/>,
+    /// <see cref="X500NameComparer.Folded"/> or <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means
+    /// <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if equivalent; otherwise, false.</returns>
-    public bool EquivalentTo(X500DistinguishedName other, IEqualityComparer<X500DistinguishedName>? comparer = null)
+    public bool EquivalentTo(X500DistinguishedName other, X500NameComparer? comparer = null)
         => (comparer ?? X500NameComparer.Values).Equals(Create(), other);
+
+
+    /// <summary>
+    /// Determines whether the current builder describes the same name as the specified <see cref="X500DistinguishedName"/>, under a comparer of the caller's own.
+    /// </summary>
+    /// <param name="other">The distinguished name to compare.</param>
+    /// <param name="comparer">How to compare the two names. The ready-made rules are on <see cref="X500NameComparer"/>.</param>
+    /// <returns>True if equivalent; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
+    public bool EquivalentTo(X500DistinguishedName other, IEqualityComparer<X500DistinguishedName> comparer)
+    {
+        ArgumentNullException.ThrowIfNull(comparer);
+        return comparer.Equals(Create(), other);
+    }
 
 
     /// <summary>

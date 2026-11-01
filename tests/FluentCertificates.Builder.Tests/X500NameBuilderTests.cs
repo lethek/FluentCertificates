@@ -282,6 +282,44 @@ public class X500NameBuilderTests
     }
 
 
+    /// <summary>A comparer that is not an <see cref="X500NameComparer"/> takes the overload that requires one.</summary>
+    [Test]
+    public async Task EquivalentTo_WithAnyOtherComparer_UsesIt()
+    {
+        var anyName = EqualityComparer<X500DistinguishedName>.Create((_, _) => true, _ => 0);
+        var builder = new X500NameBuilder().SetCommonName("x");
+        var other = new X500NameBuilder().SetCommonName("y");
+
+        await Assert.That(builder.EquivalentTo(other)).IsFalse();
+        await Assert.That(builder.EquivalentTo(other, anyName)).IsTrue();
+        await Assert.That(builder.EquivalentTo(other.Create(), anyName)).IsTrue();
+        await Assert.That(builder.EquivalentTo("CN=y", anyName)).IsTrue();
+        await Assert.That(builder.EquivalentTo("not a name", anyName)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task EquivalentTo_WithNullInterfaceComparer_Throws()
+    {
+        var builder = new X500NameBuilder().SetCommonName("x");
+        IEqualityComparer<X500DistinguishedName> none = null!;
+
+        await Assert.That(() => builder.EquivalentTo(builder, none)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.EquivalentTo(builder.Create(), none)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.EquivalentTo("CN=x", none)).ThrowsExactly<ArgumentNullException>();
+    }
+
+
+    [Test]
+    public async Task EquivalentTo_WithALiteralNullComparer_DefaultsToValues()
+    {
+        var builder = new X500NameBuilder().SetCommonName("x").SetOrganization("y");
+
+        await Assert.That(builder.EquivalentTo("CN=x,O=y", null)).IsTrue();
+        await Assert.That(builder.EquivalentTo("O=y,CN=x", null)).IsFalse();
+    }
+
+
     [Test]
     public async Task Set_AnExistingValue_KeepsItsPosition()
     {

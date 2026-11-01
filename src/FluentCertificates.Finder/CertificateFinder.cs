@@ -44,34 +44,56 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <summary>Narrows the search to certificates whose subject is the same name as <paramref name="name"/>.
     /// Combines with other predicates by AND, like <see cref="Where"/>.</summary>
     /// <param name="name">The name a result's subject must match.</param>
-    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>,
-    /// which disregards how the characters were encoded and answers the same on every runtime.</param>
+    /// <param name="comparer">How to compare the two names: <see cref="X500NameComparer.Exact"/>,
+    /// <see cref="X500NameComparer.Values"/>, <see cref="X500NameComparer.ValuesAnyOrder"/>,
+    /// <see cref="X500NameComparer.Folded"/> or <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means
+    /// <see cref="X500NameComparer.Values"/>, which disregards how the characters were encoded and answers
+    /// the same on every runtime.</param>
     /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
-    public CertificateFinder WhereSubjectMatches(
-        X500DistinguishedName name,
-        IEqualityComparer<X500DistinguishedName>? comparer = null)
+    public CertificateFinder WhereSubjectMatches(X500DistinguishedName name, X500NameComparer? comparer = null)
+        => WhereSubjectMatches(name, comparer ?? (IEqualityComparer<X500DistinguishedName>)X500NameComparer.Values);
+
+
+    /// <summary>Narrows the search to certificates whose subject is the same name as <paramref name="name"/>,
+    /// under a comparer of the caller's own. Combines with other predicates by AND, like <see cref="Where"/>.</summary>
+    /// <param name="name">The name a result's subject must match.</param>
+    /// <param name="comparer">How to compare the two names. The ready-made rules are on <see cref="X500NameComparer"/>.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> or <paramref name="comparer"/> is null.</exception>
+    public CertificateFinder WhereSubjectMatches(X500DistinguishedName name, IEqualityComparer<X500DistinguishedName> comparer)
     {
         ArgumentNullException.ThrowIfNull(name);
-        var matches = comparer ?? X500NameComparer.Values;
-        return Where(r => matches.Equals(name, r.Certificate.SubjectName));
+        ArgumentNullException.ThrowIfNull(comparer);
+        return Where(r => comparer.Equals(name, r.Certificate.SubjectName));
     }
 
 
     /// <summary>Narrows the search to certificates whose issuer is the same name as <paramref name="name"/>.
     /// Combines with other predicates by AND, like <see cref="Where"/>.</summary>
     /// <param name="name">The name a result's issuer must match.</param>
-    /// <param name="comparer">How to compare the two names, or null for <see cref="X500NameComparer.Values"/>,
-    /// which disregards how the characters were encoded and answers the same on every runtime.</param>
+    /// <param name="comparer">How to compare the two names: <see cref="X500NameComparer.Exact"/>,
+    /// <see cref="X500NameComparer.Values"/>, <see cref="X500NameComparer.ValuesAnyOrder"/>,
+    /// <see cref="X500NameComparer.Folded"/> or <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means
+    /// <see cref="X500NameComparer.Values"/>, which disregards how the characters were encoded and answers
+    /// the same on every runtime.</param>
     /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is null.</exception>
-    public CertificateFinder WhereIssuerMatches(
-        X500DistinguishedName name,
-        IEqualityComparer<X500DistinguishedName>? comparer = null)
+    public CertificateFinder WhereIssuerMatches(X500DistinguishedName name, X500NameComparer? comparer = null)
+        => WhereIssuerMatches(name, comparer ?? (IEqualityComparer<X500DistinguishedName>)X500NameComparer.Values);
+
+
+    /// <summary>Narrows the search to certificates whose issuer is the same name as <paramref name="name"/>,
+    /// under a comparer of the caller's own. Combines with other predicates by AND, like <see cref="Where"/>.</summary>
+    /// <param name="name">The name a result's issuer must match.</param>
+    /// <param name="comparer">How to compare the two names. The ready-made rules are on <see cref="X500NameComparer"/>.</param>
+    /// <returns>A new <see cref="CertificateFinder"/> with the predicate added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> or <paramref name="comparer"/> is null.</exception>
+    public CertificateFinder WhereIssuerMatches(X500DistinguishedName name, IEqualityComparer<X500DistinguishedName> comparer)
     {
         ArgumentNullException.ThrowIfNull(name);
-        var matches = comparer ?? X500NameComparer.Values;
-        return Where(r => matches.Equals(name, r.Certificate.IssuerName));
+        ArgumentNullException.ThrowIfNull(comparer);
+        return Where(r => comparer.Equals(name, r.Certificate.IssuerName));
     }
 
 

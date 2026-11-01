@@ -928,8 +928,8 @@ var cert = new CertificateFinder()
 
 ### Find certificates by subject or issuer name
 
-`WhereSubjectMatches` and `WhereIssuerMatches` narrow the search by name, using any
-`IEqualityComparer<X500DistinguishedName>`. See [Comparing names](#comparing-names) for the built-in
+`WhereSubjectMatches` and `WhereIssuerMatches` narrow the search by name, using one of the
+`X500NameComparer` members or any other `IEqualityComparer<X500DistinguishedName>`. See [Comparing names](#comparing-names) for the built-in
 comparers and what each of them disregards.
 
 ```csharp
@@ -1198,7 +1198,7 @@ Reach for `EquivalentTo` unless you specifically need byte-for-byte identity.
 |`Remove(oid)`, `Clear()`|Remove attributes by OID, or all of them.|
 |`GetCommonName`, `GetCountry`, ... `GetOrganizationalUnits`, `GetDomainComponents`|Read attribute values back.|
 |`Create()`|Build the `X500DistinguishedName`. Also available as an implicit conversion.|
-|`EquivalentTo(other, comparer = null)`|Compare against another builder, an `X500DistinguishedName` or a string, under any `IEqualityComparer<X500DistinguishedName>`. Defaults to `X500NameComparer.Values`.|
+|`EquivalentTo(other, comparer = null)`|Compare against another builder, an `X500DistinguishedName` or a string, under an `X500NameComparer` member, or under any `IEqualityComparer<X500DistinguishedName>` passed explicitly. Defaults to `X500NameComparer.Values`.|
 |`Equals(other)`|Compare encoded bytes against an `X500DistinguishedName` or a string.|
 |`RelativeDistinguishedNames`|The relative names as an `ImmutableList<X500AttributeSet>`, each holding one or more `X500Attribute`s.|
 
@@ -1213,8 +1213,8 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`BuildChain()`|Starts a fluent `X509ChainBuilder` for building and verifying a chain for this certificate. See [Building a certificate chain](#building-a-certificate-chain).|
 |`IsValidNow()`|Whether the current UTC time falls within the certificate's validity period.|
 |`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. There is no `DateTime` overload, because a `DateTime` carries no offset and its `DateTimeKind` would change the result.|
-|`IsSelfSigned(bool verifySignature = false, IEqualityComparer<X500DistinguishedName>? comparer = null)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
-|`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false, IEqualityComparer<X500DistinguishedName>? comparer = null)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
+|`IsSelfSigned(bool verifySignature = false, X500NameComparer? comparer = null)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
+|`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false, X500NameComparer? comparer = null)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
 |`CanSign()`|Whether the private key can actually be used for signing, as opposed to merely being associated with the certificate. Every "cannot sign" outcome returns `false` rather than throwing. Costs a key-store lookup. See [Find a certificate whose private key can actually sign](#find-a-certificate-whose-private-key-can-actually-sign).|
 |`GetPrivateKey()`|Returns the private key as a `CertificateKey`, whatever its algorithm, classical or post-quantum. Reach a classical key through `.AsAsymmetricAlgorithm`. Every call returns a **new instance which you own and should dispose**; see [Key ownership](#key-ownership-and-disposal).|
 |`GetSignatureAlgorithm()`|Returns the `SignatureAlgorithm` the certificate was signed with, combining key algorithm, hash and padding.|

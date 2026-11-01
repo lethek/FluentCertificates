@@ -111,6 +111,32 @@ public class X509Certificate2ExtensionsTests
     }
 
 
+    /// <summary>A comparer that is not an <see cref="X500NameComparer"/> takes the overload that requires one.</summary>
+    [Test]
+    public async Task IsIssuedByAndIsSelfSigned_WithAnyOtherComparer_UseIt()
+    {
+        var anyName = EqualityComparer<X500DistinguishedName>.Create((_, _) => true, _ => 0);
+        using var ca = CreateCertificate(new X500DistinguishedName("CN=One"), new X500DistinguishedName("CN=One"));
+        using var leaf = CreateCertificate(new X500DistinguishedName("CN=Leaf"), new X500DistinguishedName("CN=Two"));
+
+        await Assert.That(leaf.IsIssuedBy(ca)).IsFalse();
+        await Assert.That(leaf.IsIssuedBy(ca, false, anyName)).IsTrue();
+        await Assert.That(leaf.IsSelfSigned()).IsFalse();
+        await Assert.That(leaf.IsSelfSigned(false, anyName)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task IsIssuedByAndIsSelfSigned_WithNullInterfaceComparer_Throw()
+    {
+        using var cert = CreateCertificate(new X500DistinguishedName("CN=One"), new X500DistinguishedName("CN=One"));
+        IEqualityComparer<X500DistinguishedName> none = null!;
+
+        await Assert.That(() => cert.IsIssuedBy(cert, false, none)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => cert.IsSelfSigned(false, none)).ThrowsExactly<ArgumentNullException>();
+    }
+
+
     /// <summary>A certificate carrying the given subject and issuer names, signed with its own key: it
     /// proves nothing about signatures, and serves only to compare the names it asserts.</summary>
     private static X509Certificate2 CreateCertificate(X500DistinguishedName subject, X500DistinguishedName issuer)
