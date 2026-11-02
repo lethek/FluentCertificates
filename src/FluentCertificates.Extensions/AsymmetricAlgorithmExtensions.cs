@@ -78,7 +78,7 @@ public static class AsymmetricAlgorithmExtensions
     /// <returns>The original <see cref="AsymmetricAlgorithm"/> instance.</returns>
     public static AsymmetricAlgorithm ExportAsPrivateKeyPem(this AsymmetricAlgorithm keys, string path, string? password = null)
     {
-        using var stream = File.OpenWrite(path);
+        using var stream = File.Create(path);
         using var writer = new StreamWriter(stream);
         return keys.ExportAsPrivateKeyPem(writer, password);
     }
@@ -92,7 +92,7 @@ public static class AsymmetricAlgorithmExtensions
     /// <returns>The original <see cref="AsymmetricAlgorithm"/> instance.</returns>
     public static AsymmetricAlgorithm ExportAsPublicKeyPem(this AsymmetricAlgorithm keys, string path)
     {
-        using var stream = File.OpenWrite(path);
+        using var stream = File.Create(path);
         using var writer = new StreamWriter(stream);
         return keys.ExportAsPublicKeyPem(writer);
     }

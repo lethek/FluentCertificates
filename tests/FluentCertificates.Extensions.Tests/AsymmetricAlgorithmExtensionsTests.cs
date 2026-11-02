@@ -135,6 +135,28 @@ public class AsymmetricAlgorithmExtensionsTests
 
 
     [Test]
+    public async Task ExportAsPem_ToFile_ReplacesALongerExistingFile()
+    {
+        using var key = ECDsa.Create();
+        var dir = CreateTempDirectory();
+        try {
+            var privatePath = Path.Combine(dir, "key.pem");
+            var publicPath = Path.Combine(dir, "key.pub.pem");
+            File.WriteAllText(privatePath, new string('x', 10_000));
+            File.WriteAllText(publicPath, new string('x', 10_000));
+
+            key.ExportAsPrivateKeyPem(privatePath);
+            key.ExportAsPublicKeyPem(publicPath);
+
+            await Assert.That(File.ReadAllText(privatePath)).IsEqualTo(key.ToPrivateKeyPemString());
+            await Assert.That(File.ReadAllText(publicPath)).IsEqualTo(key.ToPublicKeyPemString());
+        } finally {
+            Directory.Delete(dir, true);
+        }
+    }
+
+
+    [Test]
     public async Task ExportAsPrivateKeyPem_ToFileWithPassword_IsEncrypted()
     {
         using var key = ECDsa.Create();

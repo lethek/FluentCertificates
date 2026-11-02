@@ -25,6 +25,7 @@ release rather than record it as it happened.
 ### Fixed
 
 - The `[Obsolete]` message on `X500NameBuilder.SetEmail` names `CertificateBuilder.SetSubjectAlternativeNames` with `GeneralNameListBuilder.AddEmailAddress` in place of a `SetEmail` method that does not exist.
+- The `ExportAsPem`, `ExportAsPrivateKeyPem` and `ExportAsPublicKeyPem` overloads taking a file path replace an existing file in place of overwriting only its start.
 
 ## [0.24.0] - 2026-11-02
 

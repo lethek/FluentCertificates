@@ -30,7 +30,7 @@ public static class CertificateRequestExtensions
     /// <returns>The original <see cref="CertificateRequest"/> instance.</returns>
     public static CertificateRequest ExportAsPem(this CertificateRequest certRequest, string path)
     {
-        using var stream = File.OpenWrite(path);
+        using var stream = File.Create(path);
         using var writer = new StreamWriter(stream);
         return certRequest.ExportAsPem(writer);
     }

@@ -1470,6 +1470,28 @@ public class CertificateBuilderTests
 
 
     [Test]
+    public async Task CertificateSigningRequest_ExportAsPem_ToFile_ReplacesALongerExistingFile()
+    {
+        using var keys = ECDsa.Create();
+        var csr = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("CSR Truncate Test"))
+            .SetKeyPair(keys)
+            .CreateCertificateSigningRequest();
+
+        var path = Path.Combine(Path.GetTempPath(), $"csr-{Guid.NewGuid():N}.pem");
+        try {
+            File.WriteAllText(path, new string('x', 10_000));
+
+            csr.ExportAsPem(path);
+
+            await Assert.That(File.ReadAllText(path)).IsEqualTo(csr.ToPemString());
+        } finally {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+
+    [Test]
     [Arguments(0)]
     [Arguments(2)]
     public async Task Build_CACertificate_WithPathLength_ConstrainsTheChainDepth(int pathLength)
