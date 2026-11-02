@@ -13,6 +13,8 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-02
+
 ### Added
 
 - A package icon on all five packages.
@@ -628,7 +630,8 @@ release rather than record it as it happened.
 - Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
   including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
 
-[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/lethek/FluentCertificates/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/lethek/FluentCertificates/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/lethek/FluentCertificates/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/lethek/FluentCertificates/compare/v0.21.0...v0.22.0
