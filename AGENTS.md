@@ -15,7 +15,7 @@ change breaks compatibility carries no weight against it. Never rank one design 
 compatibility grounds, never soften a design to preserve an existing signature, and never present the
 break as a cost when weighing an option up. Judge a feature, fix or refactor on its other merits alone.
 
-Record the break in `CHANGELOG.md` under `### Changed`, one line, prefixed `**Breaking:**`.
+Record the break in `CHANGELOG.md` under `### Changed` (or `### Removed` for a removal), one line, prefixed `**Breaking:**`.
 
 ## Responsibility boundary
 
@@ -94,7 +94,7 @@ dotnet test -c Debug --project tests/FluentCertificates.Builder.Tests/FluentCert
 ```
 
 GitVersion computes versions in CI and passes them to `dotnet build`/`pack` via `-p:`. A local build
-produces a default version; only CI-produced packages carry real ones. Releases are cut with the
+produces a default version (a local `dotnet pack` stamps 1.0.0); only CI-produced packages carry real ones. Releases are cut with the
 `/release` skill (`.claude/skills/release/SKILL.md`), which stops before the push that publishes.
 
 `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Add one terse line under
@@ -109,10 +109,11 @@ settle what changed, since the commit log shows in-window churn as though it shi
 
 ## Mutation testing
 
-`stryker-config.json` drives Stryker.NET. Set **`FLUENTCERT_MUTATION_TESTING=true`** for the run: it
-relaxes `FLUENTCERT001` to a warning in `FluentCertificates.Builder`, and Stryker cannot mutate the
-project without it. Never make that `NoWarn` unconditional; the `#pragma` directives in
-`CertificateBuilder.cs` are the real suppression.
+`stryker-config.json` drives Stryker.NET. Install the tool with `dotnet tool install -g dotnet-stryker`;
+it is not in a tool manifest. Set **`FLUENTCERT_MUTATION_TESTING=true`** for the run: it adds
+`FLUENTCERT001` to `NoWarn` in `FluentCertificates.Builder`, and Stryker cannot mutate the project
+without it. Never make that `NoWarn` unconditional; the `#pragma` directives in `CertificateBuilder.cs`
+are the real suppression.
 
 Two limits are the tool's, not the tests':
 
@@ -134,7 +135,9 @@ to the config.
   one whose first word is also a verb reads as a command.
 - Builders are immutable records with init-only properties and immutable collections. Methods return a
   new instance.
-- Several projects expose internals via `InternalsVisibleTo` to test projects and LINQPad. Check the
+- Several projects expose internals via `InternalsVisibleTo` to test projects and LINQPad. Internals in
+  `Common` are also visible to `Builder`, `Extensions` and `Finder`, and internals in `Extensions` to
+  `Builder`, so a member made internal there is reachable from other published packages. Check the
   `.csproj` before making a member internal.
 - **BouncyCastle is not a dependency of any shipped package.** Nothing under `src/` references
   `Org.BouncyCastle`, and nothing should. Some test projects use it as a tool and take their own
@@ -181,8 +184,13 @@ as passed.
 
 The PQC surface is `[Experimental("FLUENTCERT001")]`, declared separately from Microsoft's `SYSLIB5006`
 so it stays visible independently. Every route into the surface must report it; check when adding one.
+Lookups that read an existing certificate are exempt, since reading one is not opting in:
+`SignatureAlgorithm.FromOid`, `FromOidValue` and `GetSignatureAlgorithm` can return a post-quantum
+instance without the diagnostic.
 The public API does not vary by target framework, so never put PQC members behind `#if NET10_0_OR_GREATER`
-— only their implementations.
+— only their implementations. The one exception is a member whose signature names a BCL post-quantum
+type, such as `CertificateKey`'s constructors and `As*` members, because that type does not exist
+before .NET 10.
 
 Availability is a runtime capability, not an OS fact. `KeyAlgorithm.IsSupported` means "usable to build a
 certificate", not "the key generates", and is settled by cached probes in `PostQuantumSupport`. **Add a
@@ -202,8 +210,11 @@ probe, never an OS check**, when the next gap appears. Tests gate through `PostQ
 The OpenSSL version decides this, not the distribution. Check `openssl version` before concluding a
 platform is broken.
 
-CI runs PQC in the `pqc` job on **`ubuntu-26.04`** (OpenSSL 3.5.5), pinned rather than `ubuntu-latest`,
-which is Ubuntu 24.04 with OpenSSL 3.0.13 and would silently stop testing anything. That job sets
+CI runs PQC in the `pqc` job on **`ubuntu-26.04`** (OpenSSL 3.5.5), pinned explicitly so it does not
+depend on what `ubuntu-latest` resolves to. That alias currently means Ubuntu 24.04 (OpenSSL 3.0.13,
+where every PQC test would skip), and GitHub is migrating it to 26.04 between 19 October and
+19 November 2026. The `build` job runs on `ubuntu-latest` and does not set `FLUENTCERT_REQUIRE_PQC`, so
+it must not be relied on to exercise PQC. The `pqc` job sets
 **`FLUENTCERT_REQUIRE_PQC=1`**, which stops every PQC gate from skipping so an unavailable algorithm
 fails loudly instead of vanishing. Set that variable only on runs meant to prove PQC works; on Windows it
 fails, correctly.

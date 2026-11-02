@@ -47,6 +47,7 @@ public static class X509Certificate2Extensions
     /// </remarks>
     /// <param name="cert">The certificate.</param>
     /// <returns>The private key. Dispose it when finished with it.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="cert"/> is <see langword="null"/>.</exception>
     /// <exception cref="NotSupportedException">Thrown if the key algorithm is not supported.</exception>
     /// <exception cref="CryptographicException">Thrown if the private key is not found.</exception>
     public static CertificateKey GetPrivateKey(this X509Certificate2 cert)
@@ -173,6 +174,7 @@ public static class X509Certificate2Extensions
     /// </summary>
     /// <param name="cert">The certificate.</param>
     /// <returns>The <see cref="SignatureAlgorithm"/> used.</returns>
+    /// <exception cref="NotSupportedException">Thrown if the signature algorithm is not recognised.</exception>
     public static SignatureAlgorithm GetSignatureAlgorithm(this X509Certificate2 cert)
     {
         var reader = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
@@ -192,7 +194,7 @@ public static class X509Certificate2Extensions
 
 
     /// <summary>
-    /// Determines if the certificate is currently valid (based on <see cref="DateTime.UtcNow"/>).
+    /// Determines if the certificate is currently valid (based on <see cref="DateTimeOffset.UtcNow"/>).
     /// </summary>
     /// <param name="cert">The certificate.</param>
     /// <returns>True if valid now; otherwise, false.</returns>
@@ -220,6 +222,8 @@ public static class X509Certificate2Extensions
     /// <see cref="X500NameComparer.Folded"/> or <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means
     /// <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if self-signed; otherwise, false.</returns>
+    /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
+    /// names match, and the certificate's signature algorithm is not recognised.</exception>
     public static bool IsSelfSigned(
         this X509Certificate2 cert,
         bool verifySignature = false,
@@ -235,6 +239,8 @@ public static class X509Certificate2Extensions
     /// <param name="comparer">How to compare the subject and issuer names. The ready-made rules are on <see cref="X500NameComparer"/>.</param>
     /// <returns>True if self-signed; otherwise, false.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
+    /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
+    /// names match, and the certificate's signature algorithm is not recognised.</exception>
     public static bool IsSelfSigned(
         this X509Certificate2 cert,
         bool verifySignature,
@@ -253,6 +259,8 @@ public static class X509Certificate2Extensions
     /// <see cref="X500NameComparer.ValuesAnyOrder"/>, <see cref="X500NameComparer.Folded"/> or
     /// <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if issued by the specified issuer; otherwise, false.</returns>
+    /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
+    /// names match, and the certificate's signature algorithm is not recognised.</exception>
     /// <remarks>The default disregards how the names were encoded, which RFC 5280 s4.1.2.4 makes necessary:
     /// a conforming authority may encode a name as either PrintableString or UTF8String, and the RFC's own
     /// notes cite comparing the bytes across such a transition as a cause of name chaining failures. Pass
@@ -276,6 +284,8 @@ public static class X509Certificate2Extensions
     /// subject name. The ready-made rules are on <see cref="X500NameComparer"/>.</param>
     /// <returns>True if issued by the specified issuer; otherwise, false.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
+    /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
+    /// names match, and the certificate's signature algorithm is not recognised.</exception>
     public static bool IsIssuedBy(
         this X509Certificate2 cert,
         X509Certificate2 issuer,
@@ -348,16 +358,6 @@ public static class X509Certificate2Extensions
                 return false;
         }
     }
-
-
-    /// <summary>
-    /// Compares two byte spans for equality.
-    /// </summary>
-    /// <param name="first">The first span.</param>
-    /// <param name="second">The second span.</param>
-    /// <returns>True if equal; otherwise, false.</returns>
-    private static bool AreByteSpansEqual(Span<byte> first, Span<byte> second)
-        => first.SequenceEqual(second);
 
 
     /// <summary>

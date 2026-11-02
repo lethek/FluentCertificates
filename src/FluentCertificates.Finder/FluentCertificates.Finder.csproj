@@ -13,11 +13,12 @@
 
     <Authors>Michael Monsour</Authors>
     <Copyright>Copyright © Michael Monsour 2022</Copyright>
-    <Description>FluentCertificates.Finder is part of the FluentCertificates package. This library uses the Immutable Fluent Builder pattern for easily finding/querying certificates in X509Stores.</Description>
+    <Description>FluentCertificates.Finder is part of the FluentCertificates package. This library uses the Immutable Fluent Builder pattern for easily finding/querying certificates in X509Stores, directories, certificates you already hold, and custom sources.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>certificate;certs;fluent;x509;pfx;pem;cert;crt;CA</PackageTags>
     <PackageProjectUrl>https://github.com/lethek/FluentCertificates</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <RepositoryUrl>https://github.com/lethek/FluentCertificates</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
@@ -35,13 +36,14 @@
     </When>
     <Otherwise>
       <ItemGroup>
-        <PackageReference Include="System.Collections.Immutable" Version="10.0.11" />
+        <PackageReference Include="System.Collections.Immutable" Version="10.0.14" />
       </ItemGroup>
     </Otherwise>
   </Choose>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" Visible="false" PackagePath="" />
+    <None Include="..\..\assets\icon.png" Pack="true" Visible="false" PackagePath="" />
   </ItemGroup>
 
   <ItemGroup>
@@ -49,8 +51,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="TestableIO.System.IO.Abstractions" Version="22.2.0" />
-    <PackageReference Include="TestableIO.System.IO.Abstractions.Wrappers" Version="22.2.0" />
+    <PackageReference Include="TestableIO.System.IO.Abstractions" Version="22.3.0" />
+    <PackageReference Include="TestableIO.System.IO.Abstractions.Wrappers" Version="22.3.0" />
   </ItemGroup>
 
 </Project>

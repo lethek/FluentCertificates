@@ -31,7 +31,7 @@ public static class X509ChainExtensions
     /// <remarks>
     /// Any <paramref name="include"/> value other than <see cref="ExportKeys.All"/> replaces the keyed
     /// certificates with new keyless ones and passes the rest through, so the collection mixes certificates
-    /// created here with the chain's own. Do not dispose its elements; dispose the <paramref name="chain"/>.
+    /// created here with the chain's own. Do not dispose its elements; they belong to the <paramref name="chain"/>.
     /// </remarks>
     public static X509Certificate2Collection ToCollection(this X509Chain chain, ExportKeys include = ExportKeys.None)
         => chain.ToEnumerable().FilterPrivateKeys(include).ToCollection();

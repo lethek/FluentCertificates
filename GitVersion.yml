@@ -7,7 +7,7 @@ mode: ContinuousDelivery
 branches:
   # The key must be `main`: v6 renamed v5's `master` branch config, and an unrecognised key is
   # silently ignored along with its `label`. Untagged commits on main are prereleases
-  # (0.13.1-ci.N); pushing a v* tag produces the stable release.
+  # (for example 0.x.y-ci.N); pushing a v* tag produces the stable release.
   main:
     regex: ^main$|^master$
     label: ci

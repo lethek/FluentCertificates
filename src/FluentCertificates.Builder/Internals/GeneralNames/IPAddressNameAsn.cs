@@ -13,6 +13,8 @@ internal sealed record IPAddressNameAsn : GeneralName
 
     public IPAddressNameAsn(IPAddress ipAddress, IPAddress? subnetMask = null)
     {
+        ArgumentNullException.ThrowIfNull(ipAddress);
+
         if (subnetMask != null && subnetMask.AddressFamily != ipAddress.AddressFamily) {
             throw new ArgumentException($"{nameof(subnetMask)} must be of the same AddressFamily as {nameof(ipAddress)}", nameof(subnetMask));
         }

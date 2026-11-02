@@ -84,6 +84,9 @@ public class CertificateExporter
     /// </summary>
     /// <param name="path">Destination file path. The directory must already exist.</param>
     /// <returns>This <see cref="CertificateExporter"/> instance.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the export needs a primary certificate, for
+    /// <see cref="ExportKeys.Primary"/> or <see cref="CertificateExportBuilder.AsCert"/>, and none is
+    /// anchored.</exception>
     public CertificateExporter ToFile(string path)
     {
         File.WriteAllBytes(path, ToByteArray());
@@ -95,6 +98,9 @@ public class CertificateExporter
     /// </summary>
     /// <param name="stream">The destination stream. Must be writable.</param>
     /// <returns>This <see cref="CertificateExporter"/> instance.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the export needs a primary certificate, for
+    /// <see cref="ExportKeys.Primary"/> or <see cref="CertificateExportBuilder.AsCert"/>, and none is
+    /// anchored.</exception>
     public CertificateExporter ToStream(Stream stream)
     {
         stream.Write(ToByteArray());
@@ -105,6 +111,9 @@ public class CertificateExporter
     /// Produces the exported certificate data as a byte array.
     /// </summary>
     /// <returns>The exported bytes in the format selected on the builder.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the export needs a primary certificate, for
+    /// <see cref="ExportKeys.Primary"/> or <see cref="CertificateExportBuilder.AsCert"/>, and none is
+    /// anchored.</exception>
     public byte[] ToByteArray()
         => _format switch {
             ExportFormat.Pkcs12 =>

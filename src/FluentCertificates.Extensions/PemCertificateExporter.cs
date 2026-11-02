@@ -34,6 +34,8 @@ public sealed class PemCertificateExporter : CertificateExporter
     /// key blocks first, then CERTIFICATE blocks in leaf-first order; for
     /// <see cref="CertificateExportBuilder.AsPkcs7Pem"/> it is the one <c>PKCS7</c> block.
     /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when <see cref="ExportKeys.Primary"/> needs a
+    /// primary certificate and none is anchored.</exception>
     public string ToPemString()
         => Format == ExportFormat.Pkcs7Pem ? ExportPkcs7Pem() : ExportPem();
 }

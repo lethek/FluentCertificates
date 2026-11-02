@@ -23,8 +23,8 @@ public sealed record X500Attribute
     /// <param name="valueEncoding">The ASN.1 string type the value is encoded as.</param>
     /// <param name="value">The value.</param>
     /// <exception cref="ArgumentNullException"><paramref name="oid"/> or <paramref name="value"/> is null.</exception>
-    /// <exception cref="ArgumentException"><paramref name="valueEncoding"/> is not a character string type, or
-    /// <paramref name="value"/> has a character that type cannot hold.</exception>
+    /// <exception cref="ArgumentException"><paramref name="valueEncoding"/> is not a character string type,
+    /// <paramref name="value"/> has a character that type cannot hold, or <paramref name="oid"/> has no value.</exception>
     public X500Attribute(Oid oid, UniversalTagNumber valueEncoding, string value)
     {
         ArgumentNullException.ThrowIfNull(oid);
@@ -76,8 +76,8 @@ public sealed record X500Attribute
     /// <param name="derValue">One complete DER encoding of the value.</param>
     /// <returns>A character-string attribute when the value is a well-formed character string, otherwise a raw one.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="oid"/> is null.</exception>
-    /// <exception cref="ArgumentException"><paramref name="derValue"/> is not exactly one DER value, or is a
-    /// UTF8String or BMPString whose bytes are not valid text.</exception>
+    /// <exception cref="ArgumentException"><paramref name="derValue"/> is not exactly one DER value, is a
+    /// UTF8String or BMPString whose bytes are not valid text, or <paramref name="oid"/> has no value.</exception>
     /// <remarks>The value is checked against the DER rules of ITU-T X.690 for its structure and for the universal
     /// types that have content rules. A value outside the character set of its string type, such as a wildcard in a
     /// PrintableString, is kept as raw DER. The content of a primitive with an application, context-specific or

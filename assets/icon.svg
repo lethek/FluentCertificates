@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="t">
+  <title id="t">FluentCertificates</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14213D"/>
+      <stop offset="1" stop-color="#1B4F72"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5EEAD4"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFD166"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+
+  <!-- chain of trust as interlocking links: root, intermediate, leaf -->
+  <g fill="none" stroke="url(#flow)" stroke-width="13">
+    <circle cx="92" cy="92" r="40"/>
+    <circle cx="146" cy="138" r="30"/>
+  </g>
+  <circle cx="186" cy="178" r="20" fill="url(#leaf)"/>
+</svg>

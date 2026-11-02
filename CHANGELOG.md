@@ -13,6 +13,23 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- A package icon on all five packages.
+
+### Changed
+
+- Bumped `System.Security.Cryptography.Pkcs`, `System.Collections.Immutable` and `TestableIO.System.IO.Abstractions` to their latest versions for each target framework's major.
+- **Breaking:** `X509NameConstraintExtension` throws `ArgumentException` when both lists are null or a list that is supplied is empty.
+- **Breaking:** `GeneralNameListBuilder.AddUri` and `AddUris` throw `ArgumentException` for a relative `Uri`, which previously failed when the name was encoded.
+
+### Fixed
+
+- The `[Obsolete]` message on `X500NameBuilder.SetEmail` names `CertificateBuilder.SetSubjectAlternativeNames` with `GeneralNameListBuilder.AddEmailAddress` in place of a `SetEmail` method that does not exist.
+- The `ExportAsPem`, `ExportAsPrivateKeyPem` and `ExportAsPublicKeyPem` overloads taking a file path replace an existing file in place of overwriting only its start.
+- Disposing a `ChainResult` disposes the chain's element certificates.
+- The `GeneralNameListBuilder` DNS name, email address, URI and IP address methods, `X509NameConstraintExtension` and `CertificateBuilder.SetSubjectAlternativeNames` throw `ArgumentNullException` for a null argument in place of `NullReferenceException`.
+
 ## [0.24.0] - 2026-11-02
 
 ### Added
@@ -132,10 +149,10 @@ release rather than record it as it happened.
 - **Breaking:** `CertificateFinder.Sources` is now a public `ImmutableList<AbstractCertificateSource>`.
 - **Breaking:** `CertificateStore` and `CertificateDirectory` are renamed to `CertificateStoreSource` and `CertificateDirectorySource`, both sealed and derived from `AbstractCertificateSource`. `CertificateDirectorySource` gains `Recurse` and `FileSystem`.
 - **Breaking:** `CertificateFinder.AddCustomSource` is replaced by `AddCertificates`, taking `IEnumerable<X509Certificate2>` rather than `IEnumerable<CertificateFinderResult>`.
-- **Breaking:** `CertificateFinder.AddCustomSources` is removed.
+- **Breaking:** `CertificateFinder.AddCustomSources` is removed in favour of `AddCertificates`.
 - **Breaking:** `CertificateFinder.AddStores` takes `params IEnumerable<T>` in place of its `params T[]` and `IEnumerable<T>` overload pairs.
 - **Breaking:** 14 `Oids` members are now properties rather than public mutable fields.
-- **Breaking:** `CertificateSigningRequest.GetRawData()` is removed.
+- **Breaking:** `CertificateSigningRequest.GetRawData()` is removed in favour of `RawDataMemory`.
 - **Breaking:** `CertificateSigningRequest.RawData` returns a copy and can no longer be set.
 - **Breaking:** `CertificateSigningRequest.CertificateRequest` and `SignatureGenerator` can no longer be set, and `SignatureGenerator` is nullable.
 
@@ -203,7 +220,6 @@ release rather than record it as it happened.
 - Composite ML-DSA support: all eighteen `KeyAlgorithm.MLDsa*With*` parameter sets. `IsSupported` reports `false` for every one of them on .NET 10.
 - `KeyAlgorithm.PostQuantumAlgorithms`, listing every post-quantum parameter set the library knows.
 - `SignatureAlgorithm.ForPostQuantum(KeyAlgorithm)`, and `FromOid` now resolves every post-quantum signature OID.
-- `SkipUnlessAlgorithmSupportedAttribute` in the test-support library.
 - ML-KEM (FIPS 203) key-encapsulation certificates: `KeyAlgorithm.MLKem512` / `MLKem768` / `MLKem1024`. Unavailable on Windows, where `IsSupported` reports `false`.
 
 ### Changed
@@ -289,11 +305,11 @@ release rather than record it as it happened.
 - `keyEncipherment` is now set only on RSA certificates. Affects `CertificateUsage.Server` and `SMime`.
 - `GeneralNameListBuilder` validates DNS names, email addresses and IP addresses as they are added.
 - Setting `SetECCurve` with a non-ECDsa `KeyAlgorithm` is now rejected by `Validate` instead of ignored.
+- `KeyAlgorithm.DSA` now carries guidance on its `[Obsolete]` attribute.
 
 ### Deprecated
 
 - `IsValidAt(DateTime)`. Use the `DateTimeOffset` overload.
-- `KeyAlgorithm.DSA` now carries guidance on its `[Obsolete]` attribute.
 
 ### Removed
 
@@ -322,16 +338,11 @@ release rather than record it as it happened.
   `X509Chain` and `IEnumerable<X509Certificate2>` returns a `CertificateExportBuilder`, configured
   with `With*`, given a format with `As*`, and terminated with `To*`.
 
-### Changed
-
-- Test suite migrated from xUnit to TUnit, and the solution moved to the `.slnx` format.
-- Build moved from NUKE to the `dotnet` CLI directly.
-
 ### Deprecated
 
 - The legacy `ExportAs*`, `ToPemString` and `ToBase64String` export extension methods, each with a
   message naming its `Export()` replacement.
-- `KeyAlgorithm.DSA`.
+- `KeyAlgorithm.DSA`, with no replacement.
 
 ### Removed
 
@@ -377,13 +388,13 @@ release rather than record it as it happened.
 
 ### Changed
 
-- `CertificateBuilder.SetSubjectAlternativeName` renamed to `SetSubjectAlternativeNames`, since it
-  sets the contents of the extension rather than the extension itself.
+- `CertificateBuilder.SetDnsNames` and `SetEmail` replaced by `SetSubjectAlternativeNames`, and the
+  `DnsNames` and `Email` properties by `SubjectAlternativeNames`.
 - General name handling generalised across the library.
 
 ### Removed
 
-- `SubjectAlternativeNameBuilderExtensions` and `GeneralNameList`, superseded by
+- `GeneralSubtreeBuilder`, `GeneralSubtree` and `GeneralNameConstraint`, superseded by
   `GeneralNameListBuilder`.
 
 ### Fixed
@@ -575,7 +586,7 @@ release rather than record it as it happened.
 - Certificate signing request support, including extension methods for exporting a
   `CertificateRequest` to a PEM string or file.
 - Extension methods for S/MIME certificates.
-- `IsValidNow`, `IsValid(DateTime)`, `IsSelfSigned`, `IsIssuedBy` and `VerifyIssuerSignature`
+- `IsValidNow`, `IsValid(DateTime)`, `IsSelfSigned`, `IsIssuedBy` and `VerifyIssuer`
   extension methods on `X509Certificate2`.
 - Options for selecting the hash algorithm and RSA signature padding.
 - Methods for customising and overriding certificate extensions, and for supplying an existing key
@@ -585,11 +596,8 @@ release rather than record it as it happened.
 
 - X.509 extension handling uses the native .NET `X509Extension` class rather than the BouncyCastle
   equivalent, with extension methods for converting between the two.
-
-### Removed
-
-- `CertificateBuilder.GenerateKey()`, replaced by `SetKey(AsymmetricAlgorithm)`. A key pair must be
-  supplied explicitly when creating a CSR.
+- Creating a certificate signing request requires a key pair supplied through
+  `SetKeyPair(AsymmetricAlgorithm?)`.
 
 ### Fixed
 

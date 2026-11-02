@@ -175,7 +175,7 @@ public record CertificateSigningRequest
     /// <returns>This instance.</returns>
     public CertificateSigningRequest ExportAsPem(string path)
     {
-        using var stream = File.OpenWrite(path);
+        using var stream = File.Create(path);
         using var writer = new StreamWriter(stream);
         return ExportAsPem(writer);
     }

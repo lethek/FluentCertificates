@@ -20,7 +20,8 @@ namespace FluentCertificates;
 /// A <see cref="CertificateKey"/> owns the key it wraps and disposes it. Where the library hands one back it
 /// hands back a fresh instance each time, so dispose it when finished; disposing it does not affect the
 /// certificate it came from or any other instance. Where the caller supplies one, the library never disposes
-/// it - see the key-ownership rules in the project's AGENTS.md.
+/// it. Dispose the <see cref="CertificateKey"/> itself rather than anything reached through
+/// <see cref="AsAsymmetricAlgorithm"/> or <c>AsMLDsa</c>.
 /// </para>
 /// </remarks>
 public sealed class CertificateKey : IDisposable
@@ -162,6 +163,7 @@ public sealed class CertificateKey : IDisposable
     /// A new certificate holding the private key. The original is unaffected and remains the caller's to
     /// dispose.
     /// </returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="cert"/> is <see langword="null"/>.</exception>
     /// <exception cref="NotSupportedException">Thrown when the key's type cannot be attached.</exception>
     public X509Certificate2 CopyToCertificate(X509Certificate2 cert)
     {

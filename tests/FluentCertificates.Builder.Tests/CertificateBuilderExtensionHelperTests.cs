@@ -193,6 +193,39 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
+    public async Task SetSubjectAlternativeNames_ANullCollectionOrName_ThrowsArgumentNullException()
+    {
+        var builder = new CertificateBuilder();
+        GeneralName[] withNull = [new GeneralNameListBuilder().AddDnsName("a.com").Create().Single(), null!];
+
+        await Assert.That(() => builder.SetSubjectAlternativeNames((IEnumerable<GeneralName>)null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.SetSubjectAlternativeNames(withNull)).ThrowsExactly<ArgumentNullException>();
+    }
+
+
+    [Test]
+    public async Task SetSubjectAlternativeNames_AnEmptySequence_ClearsTheNames()
+    {
+        var builder = new CertificateBuilder()
+            .SetSubjectAlternativeNames(x => x.AddDnsName("a.com"))
+            .SetSubjectAlternativeNames([]);
+
+        await Assert.That(builder.SubjectAlternativeNames).IsEmpty();
+    }
+
+
+    [Test]
+    public async Task SetCertificatePolicies_NullMorePolicyIdentifiers_ThrowsArgumentNullException()
+    {
+        var builder = new CertificateBuilder();
+
+        var thrown = await Assert.That(() => builder.SetCertificatePolicies(PolicyOid, (IEnumerable<string>)null!)).ThrowsExactly<ArgumentNullException>();
+
+        await Assert.That(thrown.ParamName).IsEqualTo("morePolicyIdentifiers");
+    }
+
+
+    [Test]
     public async Task SetCertificatePolicies_MarkedCritical_CarriesTheCriticalFlag()
     {
         using var fromOids = new CertificateBuilder()

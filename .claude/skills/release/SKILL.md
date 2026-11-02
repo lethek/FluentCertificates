@@ -169,7 +169,7 @@ are the whole test, and they turn on one question: what happened to the public A
 
 | Bump | Spec rule | When |
 |---|---|---|
-| Major | 8, backward incompatible change to the public API | A public type or member was removed, renamed, or had its signature changed. Also a raised minimum dependency version, since the dependency range is part of the contract consumers resolve against. |
+| Major | 8, backward incompatible change to the public API | A public type or member was removed, renamed, or had its signature changed. |
 | Minor | 7, new backward compatible functionality | A new public type or member was added, with everything existing still working. |
 | Patch | 6, backward compatible bug fixes | An internal fix with no public API change. |
 
@@ -232,7 +232,7 @@ Rules, from the spec and from how the file already reads:
   affected.
 - **Anything deprecated or removed must point somewhere.** Name the replacement API, or link the upstream
   doc that explains the move, so the reader is not left to search. Do not log a removal without an exit
-  route. Per SemVer rule 9 and the SemVer FAQ, a removal should have been preceded by a `### Deprecated`
+  route. Per the SemVer FAQ, a removal should have been preceded by a `### Deprecated`
   entry in an earlier release; if it was not, say so in the entry.
 - **Dates are ISO 8601** (`YYYY-MM-DD`), as the spec requires.
 - **No prerelease entries.** Per-commit prereleases (`-ci.*`, or whatever label `GitVersion.yml` sets)

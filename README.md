@@ -13,6 +13,7 @@ FluentCertificates is a library for creating, finding, and exporting certificate
 This project is published in several NuGet packages:
 
 * [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Top-level package that imports the Builder, Extensions, and Finder packages.
+* [FluentCertificates.Common](https://www.nuget.org/packages/FluentCertificates.Common): Types shared by the other packages, including `X500NameComparer` and `Oids`.
 * [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension methods. [Examples below](#certificatebuilder-examples)
 * [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides certificate exporting via `Export()`, plus additional extension methods. [Examples below](#exporting-certificates)
 * [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across X509Stores, directories, certificates you already hold, and sources of your own. [Examples below](#certificatefinder-examples)
@@ -175,6 +176,10 @@ using var clientAuthCert = new CertificateBuilder()
 
 ### Set a validity period from a duration
 
+Without one, a certificate is valid from one hour ago until one hour ahead, so the
+[minimum example](#minimum-example) produces a certificate that lasts two hours. The start is backdated to
+tolerate clock skew. Set a validity period for anything meant to last.
+
 `SetValidity` sets `NotBefore` and `NotAfter` together. The single-argument overload starts at the
 current time; note that it does not backdate the start, so use the two-argument overload if you need
 to tolerate clock skew on the verifying machine.
@@ -191,6 +196,35 @@ using var skewTolerant = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
     .SetValidity(DateTimeOffset.UtcNow.AddMinutes(-5), TimeSpan.FromDays(90))
+    .Create();
+```
+
+### Name a certificate with other kinds of Subject Alternative Name
+
+`SetSubjectAlternativeNames` takes a delegate over a `GeneralNameListBuilder`. The builder is immutable like
+the others, and every method has a plural form that takes several values.
+
+|Method|Adds|
+|---|---|
+|`AddDnsName`, `AddDnsNames`|A `dNSName`, such as `example.com` or `*.example.com`.|
+|`AddEmailAddress`, `AddEmailAddresses`|An `rfc822Name`, such as `admin@example.com`.|
+|`AddIPAddress`, `AddIPAddresses`|An `iPAddress`, from a string or an `IPAddress`, with an optional subnet mask for a name constraint.|
+|`AddUri`, `AddUris`|A `uniformResourceIdentifier`. It must be an absolute `Uri`.|
+|`AddUserPrincipalName`, `AddUserPrincipalNames`|A Microsoft UPN, `user@domain`, as an `otherName`. Smart-card logon uses this.|
+|`AddOtherName`, `AddOtherNames`|Any other `otherName`, from an `Oid` and a single DER-encoded value.|
+|`AddDirectoryName`, `AddDirectoryNames`|A `directoryName`, from an `X500DistinguishedName`, an `X500NameBuilder`, an RFC 4514 string or a delegate over an `X500NameBuilder`.|
+|`AddRegisteredId`, `AddRegisteredIds`|A `registeredID`, from an `Oid`.|
+
+```csharp
+using var cert = new CertificateBuilder()
+    .SetUsage(CertificateUsage.Client)
+    .SetSubject(b => b.SetCommonName("Example user"))
+    .SetSubjectAlternativeNames(x => x
+        .AddEmailAddress("user@fake.domain")
+        .AddUserPrincipalName("user@corp.fake.domain")
+        .AddUri(new Uri("https://fake.domain/users/42"))
+        .AddDirectoryName(b => b.SetCommonName("Example user").SetOrganization("Example Pty Ltd")))
+    .SetIssuer(issuer)
     .Create();
 ```
 
@@ -215,6 +249,47 @@ using var cert = new CertificateBuilder()
 
 A key supplied through `SetKeyPair` already carries its own parameters and takes precedence over
 anything set here.
+
+### Choose a hash algorithm, RSA padding, serial number and key storage
+
+Four settings shape how a certificate is signed and what comes back. None of them changes what the
+certificate says about its holder.
+
+|Method|Default|Effect|
+|---|---|---|
+|`SetHashAlgorithm`|SHA-256|The hash the signature uses.|
+|`SetRSASignaturePadding`|`RSASignaturePadding.Pkcs1`|The padding for an RSA signature. Ignored for every other algorithm.|
+|`SetSerialNumberGenerator`|18 bytes, 8 of them random|Supplies the serial number. The delegate runs once for each certificate created.|
+|`SetKeyStorageFlags`|`DefaultKeySet`|How the platform stores the private key of the certificate you get back.|
+
+```csharp
+using var cert = new CertificateBuilder()
+    .SetSubject(b => b.SetCommonName("Example RSA-PSS certificate"))
+    .SetHashAlgorithm(HashAlgorithmName.SHA384)
+    .SetRSASignaturePadding(RSASignaturePadding.Pss)
+    //A leading 0x01 keeps the serial number positive
+    .SetSerialNumberGenerator(() => [0x01, .. RandomNumberGenerator.GetBytes(19)])
+    .Create();
+```
+
+A DSA certificate can only be signed with SHA-1 or SHA-256, so any other hash throws
+`InvalidOperationException` from `Create()`.
+
+`SetKeyStorageFlags` takes the .NET `X509KeyStorageFlags`, and the flags that matter most are the Windows
+ones: whether the key is exportable, whether it is persisted in the key store, and whether it belongs to the
+current user or the machine. Anything other than the default makes `Create()` re-load the certificate from
+a PKCS#12 export with those flags, so the certificate you get back is not the instance that was signed.
+
+```csharp
+using var persisted = new CertificateBuilder()
+    .SetSubject(b => b.SetCommonName("Example persisted certificate"))
+    .SetKeyStorageFlags(X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable)
+    .Create();
+```
+
+`CreateCertificateRequest()` returns the .NET `CertificateRequest` for a configured builder when you want to
+sign it yourself. `AddExtensions` takes several extensions at once where `AddExtension` takes one, and each
+replaces any extension already present under the same OID. `SetExtensions` replaces the whole collection.
 
 ### Build an OCSP responder, time-stamping or CRL signing certificate
 
@@ -245,7 +320,7 @@ using var crlIssuer = new CertificateBuilder()
 
 An ECDH key derives a shared secret and cannot sign anything, so these certificates assert
 `keyAgreement` rather than `digitalSignature` and must be issued by a CA. Self-signing, CSRs, and the
-`CA`, `CodeSign`, `OcspSigning` and `TimeStamping` usages are all rejected. Supplying a
+`CA`, `CodeSign`, `OcspSigning`, `TimeStamping` and `CrlSigning` usages are all rejected. Supplying a
 `SignatureGenerator` does not lift those restrictions, since it signs with an unrelated key.
 
 ```csharp
@@ -309,12 +384,61 @@ Ubuntu 24.04 does not. Selecting an unsupported algorithm throws `PlatformNotSup
 from `Create()` rather than producing a certificate that does not work.
 
 The members exist on every target framework so the API surface does not vary; on .NET 8 and .NET 9
-selecting one throws.
+`Create()` throws.
 
 ML-KEM is key encapsulation, not signing. Like `ECDiffieHellman`, an ML-KEM certificate must be
-issued by a CA, cannot self-sign, cannot be a CA or a code-signing, OCSP-signing or time-stamping
+issued by a CA, cannot self-sign, cannot be a CA or a code-signing, OCSP-signing, time-stamping or CRL-signing
 certificate, and has no CSR. It asserts `keyEncipherment`, not `keyAgreement`: encapsulating to the
 certified key is key transport rather than Diffie-Hellman agreement.
+
+### Supply, read and export a post-quantum key yourself
+
+.NET's post-quantum key types (`MLDsa`, `SlhDsa`, `CompositeMLDsa` and `MLKem`) do not derive from
+`AsymmetricAlgorithm`, so `SetKeyPair(AsymmetricAlgorithm)` cannot take them. `CertificateKey` wraps any key,
+classical or post-quantum, and `SetKeyPair(CertificateKey)` takes it. It is the type `GetPrivateKey()` returns.
+
+A `CertificateKey` owns the key it wraps and disposes it. A key you pass to `SetKeyPair` is still yours,
+so the builder does not dispose it. See [Key ownership and disposal](#key-ownership-and-disposal).
+
+```csharp
+#pragma warning disable FLUENTCERT001, SYSLIB5006
+
+//Supply a key you generated, such as one you keep for renewals
+using var key = new CertificateKey(MLDsa.GenerateKey(MLDsaAlgorithm.MLDsa65));
+
+using var cert = new CertificateBuilder()
+    .SetSubject(b => b.SetCommonName("Example ML-DSA certificate"))
+    .SetKeyPair(key)
+    .Create();
+
+//Read the private key back out of a certificate
+using var extracted = cert.GetPrivateKey();
+```
+
+The key can be exported without reaching through to the .NET type underneath:
+
+|Method|Returns|
+|---|---|
+|`ExportSubjectPublicKeyInfo()`|The public key as DER.|
+|`ExportPkcs8PrivateKey()`|The private key as unencrypted DER.|
+|`ExportPkcs8PrivateKeyPem()`|The private key as unencrypted PEM.|
+|`ExportEncryptedPkcs8PrivateKeyPem(password, parameters)`|The private key as password-protected PEM.|
+
+```csharp
+var pem = key.ExportPkcs8PrivateKeyPem();
+
+var protectedPem = key.ExportEncryptedPkcs8PrivateKeyPem(
+    "hunter2",
+    new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 100_000));
+```
+
+The `ToPrivateKeyPemString` and `ExportAsPrivateKeyPem` extension methods in
+[AsymmetricAlgorithm extension methods](#asymmetricalgorithm-extension-methods) take an `AsymmetricAlgorithm`, so
+they cannot export a post-quantum key. Use the methods above. `AsMLDsa`, `AsSlhDsa`, `AsMLKem`,
+`AsCompositeMLDsa` and `AsAsymmetricAlgorithm` return the underlying key, or `null` when it is another kind.
+Dispose the `CertificateKey` rather than anything reached through them. The `CertificateKey` members for
+post-quantum types exist only when the library is built for .NET 10, and the export methods work on every
+target framework for a classical key.
 
 ### Advanced: signing with a key held in an HSM, TPM or cloud KMS
 
@@ -366,7 +490,7 @@ using var customCert = new CertificateBuilder()
 //Permit the CA cert to issue certificates for specific names and IP addresses
 var permittedNames = new GeneralNameListBuilder()
     .AddDnsName(".mydomain.local")
-    .AddEmailAddress("@mydomain.local")
+    .AddEmailAddress("mydomain.local")
     .AddIPAddress(ipAddress: "192.168.0.0", subnetMask: "255.255.255.0")
     .Create();
 
@@ -540,8 +664,8 @@ your policy to set:
   is: read the extent, not the spelling.
 
 > **Set a `Usage` before accepting anything from a request.** A builder with no `Usage` has declared no
-> intent to measure an extension against, and makes none of these refusals bar the Authority Key Identifier
-> one. A request accepted onto such a builder can carry `cA=TRUE` and `keyCertSign`, and the certificate
+> intent to measure an extension against, so the refusals made against a `Usage` are skipped: the basic
+> constraints, key usage and key-cannot-sign ones. The rest still apply. A request accepted onto such a builder can carry `cA=TRUE` and `keyCertSign`, and the certificate
 > issued from it will sign other certificates that chain to your issuer.
 
 Almost nothing else in a request is screened. What an extension says is the `accept` predicate's decision,
@@ -696,7 +820,8 @@ leafCert.Export().AddCertificates(certs.Where(IsCurrent));  //a lazy sequence
 ```
 
 Each `WithPassword` overload clears the other kind of password, so the last call wins, and
-`WithoutPassword()` clears both. A `SecureString` password is honoured by every format, but only
+`WithoutPassword()` clears both. Only PEM and PKCS#12 use a password; `AsPkcs7()`, `AsPkcs7Pem()` and
+`AsCert()` ignore any you set. A `SecureString` password is honoured by both of those, but only
 `AsPem()` keeps it out of the managed heap: the platform's PKCS#12 export takes a `string`, so
 `AsPkcs12()` has to materialise one.
 
@@ -738,9 +863,11 @@ retarget the export, even when the result does form a valid chain:
 intermediateCert.Export().AddChain([rootCert, leafCert]).AsCert().ToByteArray();
 ```
 
-`collection.Export()` and the `IEnumerable<X509Certificate2>` overload designate no leaf, so both throw
-`InvalidOperationException` there. This holds even when the certificates do form a chain: a bundle names
-no primary certificate, and arriving first is not evidence of being one. Since keys are opt-in, the
+`collection.Export()` and the `IEnumerable<X509Certificate2>` overload designate no leaf, so a bundle of
+more than one certificate throws `InvalidOperationException` there, when the export is written with a `To*`
+method rather than at `AsCert()`. This holds even when the certificates do form a chain: a bundle names
+no primary certificate, and arriving first is not evidence of being one. A bundle holding exactly one
+certificate does not throw, because that certificate becomes the primary. Since keys are opt-in, the
 `ExportKeys.Primary` half of that only bites when you actually write `WithPrivateKey()` on a bundle.
 
 ```csharp
@@ -768,7 +895,7 @@ returns a new finder and leaves the original alone.
 |---|---|
 |`AddCommonStores()`|`My`, `CA` and `Root` for `CurrentUser`, plus `My`, `CA`, `Root` and `WebHosting` for `LocalMachine`|
 |`AddStore(...)`, `AddStores(...)`|An `X509Store`, or a store name and `StoreLocation`|
-|`AddDirectory(path, recurse)`, `AddDirectories(...)`|`.crt`, `.cer`, `.der`, `.pem`, `.ca-bundle`, `.pfx`, `.p12`, `.pkcs12`, `.p7b` and `.p7c` files|
+|`AddDirectory(dir, recurse)`, `AddDirectories(...)`|`.crt`, `.cer`, `.der`, `.pem`, `.ca-bundle`, `.pfx`, `.p12`, `.pkcs12`, `.p7b` and `.p7c` files|
 |`AddCertificates(...)`|Certificates you already hold in memory|
 |`AddSource(...)`, `AddSources(...)`|A source of your own, covered at the end of this section|
 
@@ -902,10 +1029,14 @@ itself, and ones you supplied through `AddCertificates` it never touches. See
 ```csharp
 const string thumbprint = "622A2B8374D9BBE3969B91EDBC8F5152783AFC78";
 
-var cert = new CertificateFinder()
+var result = new CertificateFinder()
     .AddCommonStores()
     .FirstOrDefault(x => x.Certificate.Thumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
 ```
+
+The `result.Certificate` from a store or directory source is a new instance that you dispose, while one from
+`AddCertificates` is your own instance and stays yours. See
+[Key ownership and disposal](#key-ownership-and-disposal).
 
 ### Find a valid certificate with matching subject, giving preference to included private keys
 
@@ -920,7 +1051,7 @@ var subject = new X500NameBuilder()
 var cert = new CertificateFinder()
     .AddCommonStores()
     .Where(x => x.Certificate.IsValidNow())
-    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, false))
+    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, X500NameComparer.ValuesAnyOrder))
     .OrderBy(x => !x.Certificate.HasPrivateKey) //Ensure certs with private keys are listed before those without
     .Select(x => x.Certificate)
     .FirstOrDefault();
@@ -959,7 +1090,7 @@ time:
 ```csharp
 var ca = new CertificateFinder()
     .AddCommonStores()
-    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, false))
+    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, X500NameComparer.ValuesAnyOrder))
     .Select(x => x.Certificate)
     .FirstOrDefault(x => x.CanSign());
 ```
@@ -996,7 +1127,7 @@ public sealed record EnvironmentCertificateSource(string Prefix) : AbstractCerti
     }
 }
 
-var cert = new CertificateFinder()
+var result = new CertificateFinder()
     .AddSource(new EnvironmentCertificateSource("TLS_CERT_"))
     .FirstOrDefault(x => x.Certificate.IsValidNow());
 ```
@@ -1012,7 +1143,7 @@ other one is passed to `Release`, including the ones behind a caller who stopped
 match. Batches are pulled one at a time, so a source that yields a batch per file only ever loads as far
 as the caller reads. Keep nothing of your own between batches and your source cannot leak.
 
-Three optional members:
+The members you can override:
 
 |Member|Why|
 |---|---|
@@ -1021,9 +1152,9 @@ Three optional members:
 |`EnumerateAsync(CertificateFilter, CancellationToken)`|Only worth overriding if your source has real asynchronous work, such as reading files or calling a service. By default it wraps `Enumerate`, so a source implementing the synchronous members alone is already usable from `AsAsyncEnumerable` and already cancellable. `EnumerateDescendingAsync` pairs with it the same way.|
 |`Kind`|Required, but free-form. Callers group and deduplicate results on it.|
 
-Make the source a `record` rather than a `class`. The finder deduplicates sources by value, so two
-records describing the same thing are searched once, whereas a class is compared by reference and would
-be searched twice.
+`AbstractCertificateSource` is an `abstract record`, so your source is a record too. Records compare by
+value, and the finder deduplicates sources on that, so two sources describing the same thing are
+searched once.
 
 ---
 
@@ -1044,8 +1175,7 @@ var subject = new X500NameBuilder()
     .SetOrganizationalUnits("Engineering", "Platform")
     .SetCountry("AU")
     .SetState("Victoria")
-    .SetLocality("Melbourne")
-    .SetEmail("admin@fake.domain");
+    .SetLocality("Melbourne");
 
 //Renders as a display string in the RFC 4514 style, most specific first, with no spaces
 Console.WriteLine(subject.ToString());
@@ -1055,7 +1185,7 @@ var dn = subject.Create();
 X500DistinguishedName implicitly = subject;
 ```
 
-`CertificateBuilder.SetSubject` and `SetIssuer` take a delegate, so the same methods are usually
+`CertificateBuilder.SetSubject` takes a delegate, so the same methods are usually
 used inline:
 
 ```csharp
@@ -1066,7 +1196,7 @@ using var cert = new CertificateBuilder()
 
 ### Reading values back
 
-Every `Set*` method has a matching `Get*`. Single-valued attributes return `null` when absent, and
+Every named setter, such as `SetCommonName`, has a matching `Get*`. Single-valued attributes return `null` when absent, and
 multi-valued ones return an empty sequence.
 
 ```csharp
@@ -1090,7 +1220,7 @@ A string is read as strict [RFC 4514](https://www.rfc-editor.org/rfc/rfc4514), t
 platform: no spaces around the separators, no quoted values and no `;` separator. Only the keywords
 `CN`, `L`, `ST`, `O`, `OU`, `C`, `STREET`, `DC` and `UID` are recognised, so write any other attribute
 type as an OID. A string that does not conform throws `FormatException`. Values are encoded as
-`UTF8String`, except the attributes whose standard fixes another type: a country, serial number, DN qualifier and telephone number are `PrintableString`s, and a domain component and email address are `IA5String`s. A value written as `#` and hex digits is
+`UTF8String`, except the attributes whose standard fixes another type: a country, serial number, DN qualifier, telephone number and destination indicator are `PrintableString`s, an X.121 address and international ISDN number are `NumericString`s, and a domain component and email address are `IA5String`s. A value written as `#` and hex digits is
 a BER encoding, which is rewritten as DER and kept as raw bytes, or read as a string when it is one.
 
 ### Multi-valued relative names
@@ -1190,7 +1320,7 @@ Reach for `EquivalentTo` unless you specifically need byte-for-byte identity.
 
 |Method|Description|
 |-|-|
-|`SetCommonName`, `SetCountry`, `SetLocality`, `SetState`, `SetOrganization`, `SetStreetAddress`, `SetPostalCode`, `SetEmail`, `SetPhoneNumber`, `SetGivenName`, `SetSurname`, `SetTitle`, `SetSerialNumber`, `SetUserId`, `SetDistinguishedNameQualifier`|Set a single-valued attribute, replacing any existing value.|
+|`SetCommonName`, `SetCountry`, `SetLocality`, `SetState`, `SetOrganization`, `SetStreetAddress`, `SetPostalCode`, `SetPhoneNumber`, `SetGivenName`, `SetSurname`, `SetTitle`, `SetSerialNumber`, `SetUserId`, `SetDistinguishedNameQualifier`|Set a single-valued attribute, replacing any existing value.|
 |`SetOrganizationalUnits`, `SetDomainComponents`|Replace all values of a multi-valued attribute.|
 |`AddOrganizationalUnit(s)`, `AddDomainComponent(s)`|Append to a multi-valued attribute.|
 |`Add(oid, ...)`, `Set(oid, ...)`|Append or replace by OID. The value is encoded as the attribute's standard fixes, or as the `UniversalTagNumber` you pass. The OID may be an `Oid` or a string. `Set` keeps the position of the attribute it replaces.|
@@ -1213,8 +1343,8 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`BuildChain()`|Starts a fluent `X509ChainBuilder` for building and verifying a chain for this certificate. See [Building a certificate chain](#building-a-certificate-chain).|
 |`IsValidNow()`|Whether the current UTC time falls within the certificate's validity period.|
 |`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. There is no `DateTime` overload, because a `DateTime` carries no offset and its `DateTimeKind` would change the result.|
-|`IsSelfSigned(bool verifySignature = false, X500NameComparer? comparer = null)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
-|`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false, X500NameComparer? comparer = null)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
+|`IsSelfSigned(bool verifySignature = false, X500NameComparer? comparer = null)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`. An overload takes any `IEqualityComparer<X500DistinguishedName>` instead, and requires it.|
+|`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false, X500NameComparer? comparer = null)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`. An overload takes any `IEqualityComparer<X500DistinguishedName>` instead, and requires it.|
 |`CanSign()`|Whether the private key can actually be used for signing, as opposed to merely being associated with the certificate. Every "cannot sign" outcome returns `false` rather than throwing. Costs a key-store lookup. See [Find a certificate whose private key can actually sign](#find-a-certificate-whose-private-key-can-actually-sign).|
 |`GetPrivateKey()`|Returns the private key as a `CertificateKey`, whatever its algorithm, classical or post-quantum. Reach a classical key through `.AsAsymmetricAlgorithm`. Every call returns a **new instance which you own and should dispose**; see [Key ownership](#key-ownership-and-disposal).|
 |`GetSignatureAlgorithm()`|Returns the `SignatureAlgorithm` the certificate was signed with, combining key algorithm, hash and padding.|

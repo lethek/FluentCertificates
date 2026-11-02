@@ -64,19 +64,19 @@ public sealed record KeyAlgorithm
     /// <param name="curve">The elliptic curve to generate the key on.</param>
     /// <exception cref="ArgumentException">Thrown if <paramref name="curve"/> is a named curve carrying no OID.</exception>
     public static KeyAlgorithm ECDsa(ECCurveType curve)
-        => new(KeyAlgorithmFamily.ECDsa, $"ECDsa-{DescribeCurve(Validated(curve))}", Oids.EcPublicKey, canSign: true) { Curve = curve };
+        => new(KeyAlgorithmFamily.ECDsa, $"ECDsa-{DescribeCurve(GetValidatedCurve(curve))}", Oids.EcPublicKey, canSign: true) { Curve = curve };
 
     /// <summary>ECDH key agreement on the default curve, nistP256.</summary>
     public static KeyAlgorithm ECDiffieHellman() => ECDiffieHellman(ECCurveType.NamedCurves.nistP256);
 
     /// <summary>
     /// ECDH key agreement on the specified curve. An ECDH key cannot sign, so a certificate for one must be
-    /// issued by a CA and cannot itself be a CA or a code-signing, OCSP-signing or time-stamping certificate.
+    /// issued by a CA and cannot itself be a CA or a code-signing, OCSP-signing, CRL-signing or time-stamping certificate.
     /// </summary>
     /// <param name="curve">The elliptic curve to generate the key on.</param>
     /// <exception cref="ArgumentException">Thrown if <paramref name="curve"/> is a named curve carrying no OID.</exception>
     public static KeyAlgorithm ECDiffieHellman(ECCurveType curve)
-        => new(KeyAlgorithmFamily.ECDiffieHellman, $"ECDH-{DescribeCurve(Validated(curve))}", Oids.EcPublicKey, canSign: false) { Curve = curve };
+        => new(KeyAlgorithmFamily.ECDiffieHellman, $"ECDH-{DescribeCurve(GetValidatedCurve(curve))}", Oids.EcPublicKey, canSign: false) { Curve = curve };
 
 
     /// <summary>
@@ -86,8 +86,8 @@ public sealed record KeyAlgorithm
     /// </summary>
     /// <param name="family">The family to take the default of.</param>
     /// <returns>
-    /// RSA-4096, DSA-1024, nistP256 for either elliptic-curve family, or the middle parameter set for a
-    /// post-quantum family.
+    /// RSA-4096, DSA-1024, nistP256 for either elliptic-curve family, ML-DSA-65, SLH-DSA-SHA2-128f (the
+    /// lowest security level), ML-DSA-65 with ECDSA P-256 for Composite ML-DSA, or ML-KEM-768.
     /// </returns>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the family has no default.</exception>
     public static KeyAlgorithm Default(KeyAlgorithmFamily family)
@@ -247,21 +247,21 @@ public sealed record KeyAlgorithm
 
     /// <summary>
     /// ML-KEM-512 (FIPS 203) key encapsulation. Cannot sign, so a certificate for one must be issued by a
-    /// CA and cannot itself be a CA or a code-signing, OCSP-signing or time-stamping certificate.
+    /// CA and cannot itself be a CA or a code-signing, OCSP-signing, CRL-signing or time-stamping certificate.
     /// </summary>
     [Experimental(Experiments.PostQuantumCryptography)]
     public static readonly KeyAlgorithm MLKem512 = new(KeyAlgorithmFamily.MLKem, "ML-KEM-512", Oids.MLKem512, canSign: false);
 
     /// <summary>
     /// ML-KEM-768 (FIPS 203) key encapsulation. Cannot sign, so a certificate for one must be issued by a
-    /// CA and cannot itself be a CA or a code-signing, OCSP-signing or time-stamping certificate.
+    /// CA and cannot itself be a CA or a code-signing, OCSP-signing, CRL-signing or time-stamping certificate.
     /// </summary>
     [Experimental(Experiments.PostQuantumCryptography)]
     public static readonly KeyAlgorithm MLKem768 = new(KeyAlgorithmFamily.MLKem, "ML-KEM-768", Oids.MLKem768, canSign: false);
 
     /// <summary>
     /// ML-KEM-1024 (FIPS 203) key encapsulation. Cannot sign, so a certificate for one must be issued by a
-    /// CA and cannot itself be a CA or a code-signing, OCSP-signing or time-stamping certificate.
+    /// CA and cannot itself be a CA or a code-signing, OCSP-signing, CRL-signing or time-stamping certificate.
     /// </summary>
     [Experimental(Experiments.PostQuantumCryptography)]
     public static readonly KeyAlgorithm MLKem1024 = new(KeyAlgorithmFamily.MLKem, "ML-KEM-1024", Oids.MLKem1024, canSign: false);
@@ -342,7 +342,8 @@ public sealed record KeyAlgorithm
     /// property of the operating system, so test it rather than inferring it from the OS.
     /// </para>
     /// <para>
-    /// Known gaps as of .NET 10: SLH-DSA is unavailable on Windows; Composite ML-DSA is unavailable
+    /// Known gaps as of .NET 10: SLH-DSA is unavailable on Windows; ML-KEM is unavailable on Windows because
+    /// its private key cannot be attached to a certificate there; Composite ML-DSA is unavailable
     /// everywhere for certificate use, because although composite keys generate, no platform can yet build
     /// an <c>X509SignatureGenerator</c> from one; and four Composite parameter sets do not generate at all.
     /// </para>
@@ -466,7 +467,7 @@ public sealed record KeyAlgorithm
     /// least one half is present.
     /// </remarks>
     /// <exception cref="ArgumentException">Thrown if the curve is named but carries no OID.</exception>
-    private static ECCurveType Validated(ECCurveType curve)
+    private static ECCurveType GetValidatedCurve(ECCurveType curve)
     {
         if (curve.IsNamed && curve.Oid is null) {
             throw new ArgumentException(

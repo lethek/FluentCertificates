@@ -57,6 +57,29 @@ public class CertificateRequestExtensionsTests
     }
 
 
+    [Test]
+    public async Task ExportAsPem_ToFile_ReplacesALongerExistingFile()
+    {
+        using var key = ECDsa.Create();
+        var request = NewRequest(key);
+        var dir = Path.Combine(Path.GetTempPath(), "fluentcerts-csr-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try {
+            var path = Path.Combine(dir, "request.pem");
+            File.WriteAllText(path, new string('#', 10_000));
+
+            request.ExportAsPem(path);
+
+            //An ECDSA signature differs per encoding, so check for leftovers rather than equality
+            var pem = File.ReadAllText(path);
+            await Assert.That(pem).DoesNotContain("#");
+            await Assert.That(pem.TrimEnd()).EndsWith("-----END CERTIFICATE REQUEST-----");
+        } finally {
+            Directory.Delete(dir, true);
+        }
+    }
+
+
     /// <summary>
     /// The PEM body must be the request's own DER, not merely a well-formed block. RSA rather than
     /// ECDSA because a PKCS#1 v1.5 signature is deterministic, so two encodings compare equal.

@@ -9,8 +9,9 @@ namespace FluentCertificates;
 /// not interchangeable. Post-quantum availability is not a property of the operating system that
 /// <c>[SupportedOSPlatform]</c> could describe: it depends on the target framework the test is running under
 /// and on what the platform's cryptographic provider implements. SLH-DSA is the clearest case - it is
-/// unavailable on Windows while ML-DSA and ML-KEM are not, and it can appear or disappear with the
-/// provider's version rather than with the OS.
+/// unavailable on Windows while ML-DSA is not (ML-KEM is also unavailable there, as its private key cannot
+/// be attached to a certificate), and it can appear or disappear with the provider's version rather than
+/// with the OS.
 /// </para>
 /// <para>
 /// A skipped test reports as skipped. A capability gate that silently turned into a no-op passing test would

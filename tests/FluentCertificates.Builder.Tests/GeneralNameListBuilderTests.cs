@@ -402,6 +402,47 @@ public class GeneralNameListBuilderTests
 
 
     [Test]
+    public async Task AddMethods_GivenANullArgument_ThrowArgumentNullException()
+    {
+        var builder = new GeneralNameListBuilder();
+
+        await Assert.That(() => builder.AddDnsName(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddEmailAddress(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddUri(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddIPAddress((IPAddress)null!)).ThrowsExactly<ArgumentNullException>();
+    }
+
+
+    [Test]
+    public async Task AddMethods_GivenANullCollectionOrElement_ThrowArgumentNullException()
+    {
+        var builder = new GeneralNameListBuilder();
+
+        await Assert.That(() => builder.AddDnsNames(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddEmailAddresses(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddUris(null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddIPAddresses((IEnumerable<IPAddress>)null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddIPAddresses((IEnumerable<string>)null!)).ThrowsExactly<ArgumentNullException>();
+
+        await Assert.That(() => builder.AddDnsNames("a.com", null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddEmailAddresses("a@a.com", null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddUris(new Uri("https://a.com"), null!)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => builder.AddIPAddresses(IPAddress.Loopback, null!)).ThrowsExactly<ArgumentNullException>();
+    }
+
+
+    [Test]
+    public async Task AddUri_RelativeUri_Throws()
+    {
+        var relative = new Uri("/users/42", UriKind.Relative);
+        var builder = new GeneralNameListBuilder();
+
+        await Assert.That(() => builder.AddUri(relative)).ThrowsExactly<ArgumentException>();
+        await Assert.That(() => builder.AddUris(new Uri("https://a.com"), relative)).ThrowsExactly<ArgumentException>();
+    }
+
+
+    [Test]
     public async Task AddMethods_AreImmutable()
     {
         var builder = new GeneralNameListBuilder().AddDnsName("a.com");

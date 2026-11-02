@@ -11,8 +11,9 @@ namespace FluentCertificates;
 /// <remarks>
 /// Availability is a property of the runtime and its cryptographic provider, not of the operating system, so
 /// none of this can be expressed with <c>[SupportedOSPlatform]</c>. On .NET 9 and earlier the types do not
-/// exist at all; on .NET 10 they exist but the provider may still not implement them, which is why SLH-DSA is
-/// unavailable on Windows while ML-DSA and ML-KEM are not, and why several Composite ML-DSA parameter sets
+/// exist at all; on .NET 10 they exist but the provider may still not implement them, which is why SLH-DSA and ML-KEM
+/// (whose private key cannot be attached to a certificate there) are unavailable on Windows while ML-DSA is
+/// not, and why several Composite ML-DSA parameter sets
 /// are unavailable everywhere tested. Availability is therefore resolved per parameter set, never per family.
 /// </remarks>
 internal static class PostQuantumSupport
@@ -174,7 +175,7 @@ internal static class PostQuantumSupport
 
 
     /// <summary>
-    /// Throws unless keys for the given algorithm can be generated here, naming why not.
+    /// Throws unless the given algorithm can be used to build a certificate here, naming why not.
     /// </summary>
     /// <exception cref="PlatformNotSupportedException">Thrown when the algorithm is unavailable.</exception>
     internal static void ThrowIfUnsupported(KeyAlgorithm algorithm)
@@ -214,7 +215,7 @@ internal static class PostQuantumSupport
 
 
     /// <summary>Maps an SLH-DSA algorithm onto its BCL counterpart.</summary>
-    internal static SlhDsaAlgorithm SlhDsaAlgorithmFor(KeyAlgorithm algorithm)
+    internal static SlhDsaAlgorithm GetSlhDsaAlgorithmFor(KeyAlgorithm algorithm)
         => algorithm.Oid switch {
             Oids.SlhDsaSha2_128s => SlhDsaAlgorithm.SlhDsaSha2_128s,
             Oids.SlhDsaSha2_128f => SlhDsaAlgorithm.SlhDsaSha2_128f,

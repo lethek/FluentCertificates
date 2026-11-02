@@ -22,6 +22,7 @@ public sealed record CertificateStoreSource(string Name, StoreLocation Location)
     /// <summary>Initializes a new instance from a <see cref="StoreName"/> and <see cref="StoreLocation"/>.</summary>
     /// <param name="name">The store name.</param>
     /// <param name="location">The store location.</param>
+    /// <exception cref="ArgumentException">The <see cref="StoreName"/> value is unsupported.</exception>
     public CertificateStoreSource(StoreName name, StoreLocation location)
         : this(GetProperStoreName(name), location) { }
 
@@ -42,17 +43,17 @@ public sealed record CertificateStoreSource(string Name, StoreLocation Location)
     /// <param name="filter">The predicates the caller asked for; unused.</param>
     /// <returns>One batch holding every certificate in the store.</returns>
     protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
-        => [Located(OpenCertificates())];
+        => [GetLocatedBatch(OpenCertificates())];
 
 
     /// <summary>Identical to <see cref="Enumerate"/>: one batch, so there is no order of batches to reverse.</summary>
     /// <param name="filter">The predicates the caller asked for; unused.</param>
     /// <returns>One batch holding every certificate in the store.</returns>
     protected override IEnumerable<CertificateBatch> EnumerateDescending(CertificateFilter filter)
-        => [Located(OpenCertificates())];
+        => [GetLocatedBatch(OpenCertificates())];
 
 
-    private CertificateBatch Located(IEnumerable<X509Certificate2> certificates)
+    private CertificateBatch GetLocatedBatch(IEnumerable<X509Certificate2> certificates)
         => new(certificates, $@"{Location}\{Name}");
 
 

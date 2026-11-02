@@ -1,11 +1,17 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
-
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "nuget"
+    directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+    # These two are pinned to a major version per target framework in <Choose> blocks in the csproj
+    # files (8.x for net8.0, 10.x otherwise). A major bump would break the net8.0 branch.
+    ignore:
+      - dependency-name: "System.Collections.Immutable"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.Security.Cryptography.Pkcs"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
