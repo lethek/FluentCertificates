@@ -582,7 +582,7 @@ public record X500NameBuilder
     /// Sets the Email Address RDN to the specified value.
     /// </summary>
     /// <param name="value">The email address value.</param>
-    [Obsolete("Obsolete: use Subject Alternative Name extensions instead. If you're using CertificateBuilder then try its SetEmail method.")]
+    [Obsolete("Obsolete: use Subject Alternative Name extensions instead. If you're using CertificateBuilder then try its SetSubjectAlternativeNames method with GeneralNameListBuilder.AddEmailAddress.")]
     public X500NameBuilder SetEmail(string value)
         => Set(Oids.EmailAddressOid, value);
 
