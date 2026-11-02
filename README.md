@@ -176,6 +176,10 @@ using var clientAuthCert = new CertificateBuilder()
 
 ### Set a validity period from a duration
 
+Without one, a certificate is valid from one hour ago until one hour ahead, so the
+[minimum example](#minimum-example) produces a certificate that lasts two hours. The start is backdated to
+tolerate clock skew. Set a validity period for anything meant to last.
+
 `SetValidity` sets `NotBefore` and `NotAfter` together. The single-argument overload starts at the
 current time; note that it does not backdate the start, so use the two-argument overload if you need
 to tolerate clock skew on the verifying machine.
@@ -192,6 +196,35 @@ using var skewTolerant = new CertificateBuilder()
     .SetUsage(CertificateUsage.Server)
     .SetSubject(b => b.SetCommonName("*.fake.domain"))
     .SetValidity(DateTimeOffset.UtcNow.AddMinutes(-5), TimeSpan.FromDays(90))
+    .Create();
+```
+
+### Name a certificate with other kinds of Subject Alternative Name
+
+`SetSubjectAlternativeNames` takes a delegate over a `GeneralNameListBuilder`. The builder is immutable like
+the others, and every method has a plural form that takes several values.
+
+|Method|Adds|
+|---|---|
+|`AddDnsName`, `AddDnsNames`|A `dNSName`, such as `example.com` or `*.example.com`.|
+|`AddEmailAddress`, `AddEmailAddresses`|An `rfc822Name`, such as `admin@example.com`.|
+|`AddIPAddress`, `AddIPAddresses`|An `iPAddress`, from a string or an `IPAddress`, with an optional subnet mask for a name constraint.|
+|`AddUri`, `AddUris`|A `uniformResourceIdentifier`. It must be an absolute `Uri`.|
+|`AddUserPrincipalName`, `AddUserPrincipalNames`|A Microsoft UPN, `user@domain`, as an `otherName`. Smart-card logon uses this.|
+|`AddOtherName`, `AddOtherNames`|Any other `otherName`, from an `Oid` and a single DER-encoded value.|
+|`AddDirectoryName`, `AddDirectoryNames`|A `directoryName`, from an `X500DistinguishedName`, an `X500NameBuilder`, an RFC 4514 string or a delegate over an `X500NameBuilder`.|
+|`AddRegisteredId`, `AddRegisteredIds`|A `registeredID`, from an `Oid`.|
+
+```csharp
+using var cert = new CertificateBuilder()
+    .SetUsage(CertificateUsage.Client)
+    .SetSubject(b => b.SetCommonName("Example user"))
+    .SetSubjectAlternativeNames(x => x
+        .AddEmailAddress("user@fake.domain")
+        .AddUserPrincipalName("user@corp.fake.domain")
+        .AddUri(new Uri("https://fake.domain/users/42"))
+        .AddDirectoryName(b => b.SetCommonName("Example user").SetOrganization("Example Pty Ltd")))
+    .SetIssuer(issuer)
     .Create();
 ```
 
@@ -216,6 +249,47 @@ using var cert = new CertificateBuilder()
 
 A key supplied through `SetKeyPair` already carries its own parameters and takes precedence over
 anything set here.
+
+### Choose a hash algorithm, RSA padding, serial number and key storage
+
+Four settings shape how a certificate is signed and what comes back. None of them changes what the
+certificate says about its holder.
+
+|Method|Default|Effect|
+|---|---|---|
+|`SetHashAlgorithm`|SHA-256|The hash the signature uses.|
+|`SetRSASignaturePadding`|`RSASignaturePadding.Pkcs1`|The padding for an RSA signature. Ignored for every other algorithm.|
+|`SetSerialNumberGenerator`|18 bytes, 8 of them random|Supplies the serial number. The delegate runs once for each certificate created.|
+|`SetKeyStorageFlags`|`DefaultKeySet`|How the platform stores the private key of the certificate you get back.|
+
+```csharp
+using var cert = new CertificateBuilder()
+    .SetSubject(b => b.SetCommonName("Example RSA-PSS certificate"))
+    .SetHashAlgorithm(HashAlgorithmName.SHA384)
+    .SetRSASignaturePadding(RSASignaturePadding.Pss)
+    //A leading 0x01 keeps the serial number positive
+    .SetSerialNumberGenerator(() => [0x01, .. RandomNumberGenerator.GetBytes(19)])
+    .Create();
+```
+
+A DSA certificate can only be signed with SHA-1 or SHA-256, so any other hash throws
+`InvalidOperationException` from `Create()`.
+
+`SetKeyStorageFlags` takes the .NET `X509KeyStorageFlags`, and the flags that matter most are the Windows
+ones: whether the key is exportable, whether it is persisted in the key store, and whether it belongs to the
+current user or the machine. Anything other than the default makes `Create()` re-load the certificate from
+a PKCS#12 export with those flags, so the certificate you get back is not the instance that was signed.
+
+```csharp
+using var persisted = new CertificateBuilder()
+    .SetSubject(b => b.SetCommonName("Example persisted certificate"))
+    .SetKeyStorageFlags(X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable)
+    .Create();
+```
+
+`CreateCertificateRequest()` returns the .NET `CertificateRequest` for a configured builder when you want to
+sign it yourself. `AddExtensions` takes several extensions at once where `AddExtension` takes one, and each
+replaces any extension already present under the same OID. `SetExtensions` replaces the whole collection.
 
 ### Build an OCSP responder, time-stamping or CRL signing certificate
 
@@ -316,6 +390,55 @@ ML-KEM is key encapsulation, not signing. Like `ECDiffieHellman`, an ML-KEM cert
 issued by a CA, cannot self-sign, cannot be a CA or a code-signing, OCSP-signing, time-stamping or CRL-signing
 certificate, and has no CSR. It asserts `keyEncipherment`, not `keyAgreement`: encapsulating to the
 certified key is key transport rather than Diffie-Hellman agreement.
+
+### Supply, read and export a post-quantum key yourself
+
+.NET's post-quantum key types (`MLDsa`, `SlhDsa`, `CompositeMLDsa` and `MLKem`) do not derive from
+`AsymmetricAlgorithm`, so `SetKeyPair(AsymmetricAlgorithm)` cannot take them. `CertificateKey` wraps any key,
+classical or post-quantum, and `SetKeyPair(CertificateKey)` takes it. It is the type `GetPrivateKey()` returns.
+
+A `CertificateKey` owns the key it wraps and disposes it. A key you pass to `SetKeyPair` is still yours,
+so the builder does not dispose it. See [Key ownership and disposal](#key-ownership-and-disposal).
+
+```csharp
+#pragma warning disable FLUENTCERT001, SYSLIB5006
+
+//Supply a key you generated, such as one you keep for renewals
+using var key = new CertificateKey(MLDsa.GenerateKey(MLDsaAlgorithm.MLDsa65));
+
+using var cert = new CertificateBuilder()
+    .SetSubject(b => b.SetCommonName("Example ML-DSA certificate"))
+    .SetKeyPair(key)
+    .Create();
+
+//Read the private key back out of a certificate
+using var extracted = cert.GetPrivateKey();
+```
+
+The key can be exported without reaching through to the .NET type underneath:
+
+|Method|Returns|
+|---|---|
+|`ExportSubjectPublicKeyInfo()`|The public key as DER.|
+|`ExportPkcs8PrivateKey()`|The private key as unencrypted DER.|
+|`ExportPkcs8PrivateKeyPem()`|The private key as unencrypted PEM.|
+|`ExportEncryptedPkcs8PrivateKeyPem(password, parameters)`|The private key as password-protected PEM.|
+
+```csharp
+var pem = key.ExportPkcs8PrivateKeyPem();
+
+var protectedPem = key.ExportEncryptedPkcs8PrivateKeyPem(
+    "hunter2",
+    new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 100_000));
+```
+
+The `ToPrivateKeyPemString` and `ExportAsPrivateKeyPem` extension methods in
+[AsymmetricAlgorithm extension methods](#asymmetricalgorithm-extension-methods) take an `AsymmetricAlgorithm`, so
+they cannot export a post-quantum key. Use the methods above. `AsMLDsa`, `AsSlhDsa`, `AsMLKem`,
+`AsCompositeMLDsa` and `AsAsymmetricAlgorithm` return the underlying key, or `null` when it is another kind.
+Dispose the `CertificateKey` rather than anything reached through them. The `CertificateKey` members for
+post-quantum types exist only when the library is built for .NET 10, and the export methods work on every
+target framework for a classical key.
 
 ### Advanced: signing with a key held in an HSM, TPM or cloud KMS
 
