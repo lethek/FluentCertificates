@@ -215,7 +215,7 @@ internal static class PostQuantumSupport
 
 
     /// <summary>Maps an SLH-DSA algorithm onto its BCL counterpart.</summary>
-    internal static SlhDsaAlgorithm SlhDsaAlgorithmFor(KeyAlgorithm algorithm)
+    internal static SlhDsaAlgorithm GetSlhDsaAlgorithmFor(KeyAlgorithm algorithm)
         => algorithm.Oid switch {
             Oids.SlhDsaSha2_128s => SlhDsaAlgorithm.SlhDsaSha2_128s,
             Oids.SlhDsaSha2_128f => SlhDsaAlgorithm.SlhDsaSha2_128f,

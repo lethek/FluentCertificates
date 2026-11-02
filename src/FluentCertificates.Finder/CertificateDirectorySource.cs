@@ -87,13 +87,13 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     /// <inheritdoc/>
     /// <remarks>Nothing is filtered natively: answering a predicate means parsing the file anyway.</remarks>
     protected override IEnumerable<CertificateBatch> Enumerate(CertificateFilter filter)
-        => Load(CertificateFiles());
+        => Load(GetCertificateFiles());
 
 
     /// <inheritdoc/>
     /// <remarks>The listing runs to completion before the first certificate is yielded.</remarks>
     protected override IEnumerable<CertificateBatch> EnumerateDescending(CertificateFilter filter)
-        => Load(CertificateFiles().Reverse());
+        => Load(GetCertificateFiles().Reverse());
 
 
     /// <inheritdoc/>
@@ -101,18 +101,18 @@ public sealed record CertificateDirectorySource : AbstractCertificateSource
     protected override IAsyncEnumerable<CertificateBatch> EnumerateAsync(
         CertificateFilter filter,
         CancellationToken cancellationToken)
-        => LoadAsync(CertificateFiles(), cancellationToken);
+        => LoadAsync(GetCertificateFiles(), cancellationToken);
 
 
     /// <inheritdoc/>
     protected override IAsyncEnumerable<CertificateBatch> EnumerateDescendingAsync(
         CertificateFilter filter,
         CancellationToken cancellationToken)
-        => LoadAsync(CertificateFiles().Reverse(), cancellationToken);
+        => LoadAsync(GetCertificateFiles().Reverse(), cancellationToken);
 
 
     /// <summary>The files whose extension names a format, paired with that format.</summary>
-    private IEnumerable<(string Path, FileFormat Format)> CertificateFiles()
+    private IEnumerable<(string Path, FileFormat Format)> GetCertificateFiles()
     {
         foreach (var path in ListFiles()) {
             if (FileFormats.TryGetValue(FileSystem.Path.GetExtension(path), out var format)) {

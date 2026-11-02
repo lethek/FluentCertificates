@@ -39,7 +39,7 @@ internal sealed class DSAX509SignatureGenerator : X509SignatureGenerator
             return Convert.FromHexString("300B0609608648016503040302");
         }
 
-        throw new InvalidOperationException();
+        throw new InvalidOperationException($"DSA certificates can only be signed with SHA-1 or SHA-256, not {hashAlgorithm.Name}.");
     }
 
     private static byte[] EncodeLength(int length)

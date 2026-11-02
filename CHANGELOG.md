@@ -20,6 +20,7 @@ release rather than record it as it happened.
 ### Changed
 
 - Bumped `System.Security.Cryptography.Pkcs`, `System.Collections.Immutable` and `TestableIO.System.IO.Abstractions` to their latest versions for each target framework's major.
+- **Breaking:** `X509NameConstraintExtension` throws `ArgumentException` when both lists are null or a list that is supplied is empty.
 
 ### Fixed
 

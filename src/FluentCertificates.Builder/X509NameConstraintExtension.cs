@@ -6,15 +6,15 @@ namespace FluentCertificates;
 /// <summary>
 /// Represents the X.509 Name Constraints extension, which specifies permitted and excluded name subtrees for certificate subjects.
 /// </summary>
-/// <remarks>RFC 5280 s4.2.1.10 requires at least one non-empty list. Nothing here checks that: a null or empty
-/// list is encoded as given, so supplying neither a permitted nor an excluded name produces the empty
-/// sequence the RFC forbids, and an empty list produces a zero-length GeneralSubtrees.</remarks>
+/// <remarks>RFC 5280 s4.2.1.10 requires at least one of the two lists, and each list it carries to hold at
+/// least one name, so a null list is omitted and an empty one is refused.</remarks>
 /// <param name="permittedSubtrees">
 /// A collection of <see cref="GeneralName"/> objects representing the permitted name subtrees. May be null, which omits the field.
 /// </param>
 /// <param name="excludedSubtrees">
 /// A collection of <see cref="GeneralName"/> objects representing the excluded name subtrees. May be null, which omits the field.
 /// </param>
+/// <exception cref="ArgumentException">Both lists are null, or a list that is supplied is empty.</exception>
 public class X509NameConstraintExtension(IEnumerable<GeneralName>? permittedSubtrees, IEnumerable<GeneralName>? excludedSubtrees)
     : X509Extension(Oids.NameConstraints, EncodeExtension(permittedSubtrees, excludedSubtrees), true)
 {
@@ -26,21 +26,36 @@ public class X509NameConstraintExtension(IEnumerable<GeneralName>? permittedSubt
     /// <returns>A byte array containing the DER-encoded extension value.</returns>
     private static byte[] EncodeExtension(IEnumerable<GeneralName>? permittedSubtrees, IEnumerable<GeneralName>? excludedSubtrees)
     {
+        var permitted = permittedSubtrees?.ToList();
+        var excluded = excludedSubtrees?.ToList();
+
+        if (permitted is null && excluded is null) {
+            throw new ArgumentException("Supply a permitted or an excluded subtree list, since RFC 5280 s4.2.1.10 forbids an empty name constraints sequence", nameof(permittedSubtrees));
+        }
+
+        if (permitted is { Count: 0 }) {
+            throw new ArgumentException("A subtree list must hold at least one name, since RFC 5280 s4.2.1.10 gives GeneralSubtrees a minimum size of 1. Pass null to omit it", nameof(permittedSubtrees));
+        }
+
+        if (excluded is { Count: 0 }) {
+            throw new ArgumentException("A subtree list must hold at least one name, since RFC 5280 s4.2.1.10 gives GeneralSubtrees a minimum size of 1. Pass null to omit it", nameof(excludedSubtrees));
+        }
+
         var writer = new AsnWriter(AsnEncodingRules.DER);
 
         using (writer.PushSequence()) {
-            if (permittedSubtrees != null) {
+            if (permitted != null) {
                 using var permittedSubtreesScope = writer.PushSequence(PermittedSubtreesTag);
-                foreach (var subtree in permittedSubtrees) {
+                foreach (var subtree in permitted) {
                     using (writer.PushSequence()) {
                         subtree.WriteTo(writer);
                     }
                 }
             }
 
-            if (excludedSubtrees != null) {
+            if (excluded != null) {
                 using var excludedSubtreesScope = writer.PushSequence(ExcludedSubtreesTag);
-                foreach (var subtree in excludedSubtrees) {
+                foreach (var subtree in excluded) {
                     using (writer.PushSequence()) {
                         subtree.WriteTo(writer);
                     }

@@ -361,16 +361,6 @@ public static class X509Certificate2Extensions
 
 
     /// <summary>
-    /// Compares two byte spans for equality.
-    /// </summary>
-    /// <param name="first">The first span.</param>
-    /// <param name="second">The second span.</param>
-    /// <returns>True if equal; otherwise, false.</returns>
-    private static bool AreByteSpansEqual(Span<byte> first, Span<byte> second)
-        => first.SequenceEqual(second);
-
-
-    /// <summary>
     /// Creates a <see cref="CertificateExportBuilder"/> initialised with this certificate.
     /// Chain configuration and format-selection methods on the returned builder allow you to
     /// build a fully configured export operation.

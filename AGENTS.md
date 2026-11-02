@@ -184,8 +184,13 @@ as passed.
 
 The PQC surface is `[Experimental("FLUENTCERT001")]`, declared separately from Microsoft's `SYSLIB5006`
 so it stays visible independently. Every route into the surface must report it; check when adding one.
+Lookups that read an existing certificate are exempt, since reading one is not opting in:
+`SignatureAlgorithm.FromOid`, `FromOidValue` and `GetSignatureAlgorithm` can return a post-quantum
+instance without the diagnostic.
 The public API does not vary by target framework, so never put PQC members behind `#if NET10_0_OR_GREATER`
-— only their implementations.
+— only their implementations. The one exception is a member whose signature names a BCL post-quantum
+type, such as `CertificateKey`'s constructors and `As*` members, because that type does not exist
+before .NET 10.
 
 Availability is a runtime capability, not an OS fact. `KeyAlgorithm.IsSupported` means "usable to build a
 certificate", not "the key generates", and is settled by cached probes in `PostQuantumSupport`. **Add a

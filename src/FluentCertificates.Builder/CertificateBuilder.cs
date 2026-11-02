@@ -848,7 +848,7 @@ public record CertificateBuilder
             case KeyAlgorithmFamily.MLDsa:
                 return WithKeyPair(new CertificateKey(MLDsa.GenerateKey(PostQuantumSupport.GetMLDsaAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.SlhDsa:
-                return WithKeyPair(new CertificateKey(SlhDsa.GenerateKey(PostQuantumSupport.SlhDsaAlgorithmFor(KeyAlgorithm))));
+                return WithKeyPair(new CertificateKey(SlhDsa.GenerateKey(PostQuantumSupport.GetSlhDsaAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.CompositeMLDsa:
                 return WithKeyPair(new CertificateKey(CompositeMLDsa.GenerateKey(PostQuantumSupport.GetCompositeAlgorithmFor(KeyAlgorithm))));
             case KeyAlgorithmFamily.MLKem:

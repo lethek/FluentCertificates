@@ -64,7 +64,7 @@ public sealed record KeyAlgorithm
     /// <param name="curve">The elliptic curve to generate the key on.</param>
     /// <exception cref="ArgumentException">Thrown if <paramref name="curve"/> is a named curve carrying no OID.</exception>
     public static KeyAlgorithm ECDsa(ECCurveType curve)
-        => new(KeyAlgorithmFamily.ECDsa, $"ECDsa-{DescribeCurve(Validated(curve))}", Oids.EcPublicKey, canSign: true) { Curve = curve };
+        => new(KeyAlgorithmFamily.ECDsa, $"ECDsa-{DescribeCurve(GetValidatedCurve(curve))}", Oids.EcPublicKey, canSign: true) { Curve = curve };
 
     /// <summary>ECDH key agreement on the default curve, nistP256.</summary>
     public static KeyAlgorithm ECDiffieHellman() => ECDiffieHellman(ECCurveType.NamedCurves.nistP256);
@@ -76,7 +76,7 @@ public sealed record KeyAlgorithm
     /// <param name="curve">The elliptic curve to generate the key on.</param>
     /// <exception cref="ArgumentException">Thrown if <paramref name="curve"/> is a named curve carrying no OID.</exception>
     public static KeyAlgorithm ECDiffieHellman(ECCurveType curve)
-        => new(KeyAlgorithmFamily.ECDiffieHellman, $"ECDH-{DescribeCurve(Validated(curve))}", Oids.EcPublicKey, canSign: false) { Curve = curve };
+        => new(KeyAlgorithmFamily.ECDiffieHellman, $"ECDH-{DescribeCurve(GetValidatedCurve(curve))}", Oids.EcPublicKey, canSign: false) { Curve = curve };
 
 
     /// <summary>
@@ -467,7 +467,7 @@ public sealed record KeyAlgorithm
     /// least one half is present.
     /// </remarks>
     /// <exception cref="ArgumentException">Thrown if the curve is named but carries no OID.</exception>
-    private static ECCurveType Validated(ECCurveType curve)
+    private static ECCurveType GetValidatedCurve(ECCurveType curve)
     {
         if (curve.IsNamed && curve.Oid is null) {
             throw new ArgumentException(

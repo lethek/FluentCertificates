@@ -596,7 +596,7 @@ public class CertificateBuilderUsageAgreementTests
         using var cert = new CertificateBuilder()
             .SetUsage(usage)
             .SetSubject("CN=Would Constrain Names")
-            .AddExtension(new X509NameConstraintExtension(null, null))
+            .AddExtension(new X509NameConstraintExtension(new GeneralNameListBuilder().AddDnsName("example.com").Create(), null))
             .Create();
 
         await Assert.That(cert.Extensions[Oids.NameConstraints]!.Critical).IsTrue();
@@ -649,7 +649,7 @@ public class CertificateBuilderUsageAgreementTests
         using var cert = new CertificateBuilder()
             .SetUsage(CertificateUsage.CA)
             .SetSubject("CN=May Constrain Names")
-            .AddExtension(new X509NameConstraintExtension(null, null))
+            .AddExtension(new X509NameConstraintExtension(new GeneralNameListBuilder().AddDnsName("example.com").Create(), null))
             .Create();
 
         await Assert.That(cert.Extensions[Oids.NameConstraints]).IsNotNull();

@@ -20,19 +20,19 @@ public sealed record SignatureAlgorithm
 {
     // ReSharper disable InconsistentNaming
     /// <summary>SHA-1 with DSA signature algorithm.</summary>
-    [Obsolete("Obsolete")]
+    [Obsolete("DSA is deprecated for certificate use. Consider using ECDsa, RSA or ML-DSA instead.")]
     public static readonly SignatureAlgorithm SHA1DSA = new(KeyAlgorithmFamily.Dsa, HashAlgorithmName.SHA1, null, Oids.DsaWithSha1);
 
     /// <summary>SHA-256 with DSA signature algorithm.</summary>
-    [Obsolete("Obsolete")]
+    [Obsolete("DSA is deprecated for certificate use. Consider using ECDsa, RSA or ML-DSA instead.")]
     public static readonly SignatureAlgorithm SHA256DSA = new(KeyAlgorithmFamily.Dsa, HashAlgorithmName.SHA256, null, Oids.DsaWithSha256);
 
     /// <summary>SHA-384 with DSA signature algorithm.</summary>
-    [Obsolete("Obsolete")]
+    [Obsolete("DSA is deprecated for certificate use. Consider using ECDsa, RSA or ML-DSA instead.")]
     public static readonly SignatureAlgorithm SHA384DSA = new(KeyAlgorithmFamily.Dsa, HashAlgorithmName.SHA384, null, Oids.DsaWithSha384);
 
     /// <summary>SHA-512 with DSA signature algorithm.</summary>
-    [Obsolete("Obsolete")]
+    [Obsolete("DSA is deprecated for certificate use. Consider using ECDsa, RSA or ML-DSA instead.")]
     public static readonly SignatureAlgorithm SHA512DSA = new(KeyAlgorithmFamily.Dsa, HashAlgorithmName.SHA512, null, Oids.DsaWithSha512);
 
     /// <summary>SHA-1 with ECDSA signature algorithm.</summary>

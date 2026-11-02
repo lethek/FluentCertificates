@@ -54,12 +54,23 @@ public class X509NameConstraintExtensionTests
 
 
     [Test]
-    public async Task Encode_NoSubtrees_ProducesAnEmptySequence()
+    public async Task Constructor_NoSubtrees_Throws()
     {
-        var ext = new X509NameConstraintExtension(null, null);
-        var outer = new AsnReader(ext.RawData, AsnEncodingRules.DER).ReadSequence();
+        await Assert.That(() => new X509NameConstraintExtension(null, null)).Throws<ArgumentException>();
+    }
 
-        await Assert.That(outer.HasData).IsFalse();
+
+    [Test]
+    public async Task Constructor_AnEmptyPermittedList_Throws()
+    {
+        await Assert.That(() => new X509NameConstraintExtension([], Dns("excluded.example.com"))).Throws<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task Constructor_AnEmptyExcludedList_Throws()
+    {
+        await Assert.That(() => new X509NameConstraintExtension(Dns("permitted.example.com"), [])).Throws<ArgumentException>();
     }
 
 
