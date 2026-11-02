@@ -45,6 +45,31 @@ public class X509ChainBuilderTests
 
 
     [Test]
+    public async Task Dispose_DisposesTheChainsElementCertificatesButNotTheCallers()
+    {
+        using var root = BuildRootCa();
+        using var mid = BuildIntermediate(root);
+        using var leaf = BuildLeaf(mid);
+
+        var result = leaf.BuildChain().TrustRoot(root).AddCertificates(mid).Create();
+        var elements = result.Chain.ToEnumerable().ToList();
+
+        result.Dispose();
+        result.Dispose();
+
+        await Assert.That(elements.Count).IsEqualTo(3);
+        foreach (var element in elements) {
+            await Assert.That(element.Handle).IsEqualTo(IntPtr.Zero);
+        }
+
+        //The elements are the platform's own copies, so the caller's instances must survive
+        await Assert.That(leaf.Handle).IsNotEqualTo(IntPtr.Zero);
+        await Assert.That(mid.Handle).IsNotEqualTo(IntPtr.Zero);
+        await Assert.That(root.Handle).IsNotEqualTo(IntPtr.Zero);
+    }
+
+
+    [Test]
     public async Task TrustRoot_SetsCustomRootTrustAndPopulatesCustomTrustStore()
     {
         using var root = BuildRootCa();

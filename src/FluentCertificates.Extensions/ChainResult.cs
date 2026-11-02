@@ -62,5 +62,13 @@ public sealed class ChainResult : IDisposable
 
 
     /// <summary>Disposes the owned <see cref="X509Chain"/> and with it the chain's element certificates.</summary>
-    public void Dispose() => Chain.Dispose();
+    public void Dispose()
+    {
+        //X509Chain.Dispose leaves its element certificates alive, so release them first
+        foreach (var certificate in Chain.ToEnumerable().ToList()) {
+            certificate.Dispose();
+        }
+
+        Chain.Dispose();
+    }
 }
