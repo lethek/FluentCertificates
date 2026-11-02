@@ -35,7 +35,7 @@
     </When>
     <Otherwise>
       <ItemGroup>
-        <PackageReference Include="System.Collections.Immutable" Version="10.0.11" />
+        <PackageReference Include="System.Collections.Immutable" Version="10.0.14" />
       </ItemGroup>
     </Otherwise>
   </Choose>
@@ -49,8 +49,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="TestableIO.System.IO.Abstractions" Version="22.2.0" />
-    <PackageReference Include="TestableIO.System.IO.Abstractions.Wrappers" Version="22.2.0" />
+    <PackageReference Include="TestableIO.System.IO.Abstractions" Version="22.3.0" />
+    <PackageReference Include="TestableIO.System.IO.Abstractions.Wrappers" Version="22.3.0" />
   </ItemGroup>
 
 </Project>

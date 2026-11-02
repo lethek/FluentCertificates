@@ -37,7 +37,7 @@
     </When>
     <Otherwise>
       <ItemGroup>
-        <PackageReference Include="System.Collections.Immutable" Version="10.0.11" />
+        <PackageReference Include="System.Collections.Immutable" Version="10.0.14" />
       </ItemGroup>
     </Otherwise>
   </Choose>

@@ -13,6 +13,10 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped `System.Security.Cryptography.Pkcs`, `System.Collections.Immutable` and `TestableIO.System.IO.Abstractions` to their latest versions.
+
 ## [0.24.0] - 2026-11-02
 
 ### Added
