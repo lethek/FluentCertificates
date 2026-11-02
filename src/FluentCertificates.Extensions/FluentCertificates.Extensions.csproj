@@ -29,10 +29,6 @@
     <InternalsVisibleTo Include="FluentCertificates.Extensions.Tests" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="SideData" Version="1.1.1" />
-  </ItemGroup>
-
   <Choose>
     <When Condition="'$(TargetFramework)' == 'net8.0'">
       <ItemGroup>

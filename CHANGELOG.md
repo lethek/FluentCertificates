@@ -21,6 +21,11 @@ release rather than record it as it happened.
 
 - **Breaking:** The overloads of those methods taking an `IEqualityComparer<X500DistinguishedName>` require it and throw `ArgumentNullException` for null, in place of defaulting to `X500NameComparer.Values`.
 
+### Removed
+
+- **Breaking:** `X500RelativeDistinguishedNameExtensions.GetSingleElementValueEncoding`, with no replacement.
+- The dependency on `SideData`.
+
 ## [0.23.0] - 2026-11-01
 
 ### Added
