@@ -14,7 +14,8 @@ namespace FluentCertificates;
 /// <summary>A certificate source reading certificate files from a directory.</summary>
 /// <remarks>
 /// A file that will not parse, a subdirectory that cannot be opened, and a directory that is not there
-/// are all skipped rather than throwing. Set <see cref="OnLoadFailure"/> to learn what was skipped.
+/// are all skipped rather than throwing. Set <see cref="OnLoadFailure"/> to learn of files that failed to
+/// read or parse, and of a missing directory. Subdirectories that cannot be opened are skipped silently.
 /// </remarks>
 public sealed record CertificateDirectorySource : AbstractCertificateSource
 {

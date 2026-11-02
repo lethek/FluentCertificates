@@ -104,6 +104,7 @@ public sealed record SignatureAlgorithm
     /// eighteen, each duplicating an OID already declared on <see cref="KeyAlgorithm"/>.
     /// </remarks>
     /// <param name="algorithm">A post-quantum signing algorithm.</param>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="algorithm"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown if the algorithm is not a post-quantum signing one.</exception>
     [Experimental(Experiments.PostQuantumCryptography)]
     public static SignatureAlgorithm CreateForPostQuantum(KeyAlgorithm algorithm)
@@ -175,7 +176,7 @@ public sealed record SignatureAlgorithm
     /// <summary>
     /// Creates a <see cref="SignatureAlgorithm"/> for RSA-PSS with the specified signature and hash OIDs.
     /// </summary>
-    /// <param name="signatureOid">The signature OID.</param>
+    /// <param name="signatureOid">Unused. The signature OID is always <see cref="Oids.RsaPss"/>.</param>
     /// <param name="hashOid">The hash algorithm OID.</param>
     /// <returns>A new <see cref="SignatureAlgorithm"/> instance for RSA-PSS.</returns>
     internal static SignatureAlgorithm CreateForRsaSsaPss(string signatureOid, string hashOid)

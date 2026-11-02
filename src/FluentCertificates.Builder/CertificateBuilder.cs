@@ -203,15 +203,18 @@ public record CertificateBuilder
     /// <remarks>Keys supplied here are never disposed by the builder; their lifetime stays the caller's.
     /// Discarding that extension keeps the certificate from naming a key other than the one it certifies;
     /// add or accept a Subject Key Identifier afterwards to carry a different value.</remarks>
-    /// <param name="value">The asymmetric key pair, or <see langword="null" /> to remove. Supported algorithms currently include RSA, ECDsa and the deprecated DSA.</param>
+    /// <param name="value">The asymmetric key pair, or <see langword="null" /> to remove. Supported key types are RSA, ECDsa, ECDiffieHellman and the deprecated DSA; for the post-quantum algorithms use the <see cref="CertificateKey"/> overload.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified key pair.</returns>
+    /// <exception cref="NotSupportedException">Thrown when <paramref name="value"/> is not one of the supported key types.</exception>
     public CertificateBuilder SetKeyPair(AsymmetricAlgorithm? value)
         => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier).WithKeyPair(value);
 
 
     /// <summary>Sets the key pair to use for certificate creation or certificate-requests, from a key of any supported kind including the post-quantum ones, discarding any Subject Key Identifier extension already on the builder.</summary>
+    /// <remarks>Keys supplied here are never disposed by the builder; their lifetime stays the caller's.</remarks>
     /// <param name="value">The key pair, or <see langword="null" /> to remove.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified key pair.</returns>
+    /// <exception cref="NotSupportedException">Thrown when <paramref name="value"/> holds a key type or post-quantum parameter set the builder does not support, or one this target framework cannot derive a public key from.</exception>
     public CertificateBuilder SetKeyPair(CertificateKey? value)
         => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier).WithKeyPair(value);
 
@@ -265,7 +268,7 @@ public record CertificateBuilder
     /// <summary>Sets the key algorithm for automatic key generation, removing any key pair previously set and
     /// discarding any Subject Key Identifier extension already on the builder.</summary>
     /// <remarks>Each <see cref="Create"/> call generates a key pair and disposes it on return.</remarks>
-    /// <param name="value">The key algorithm to use. Supported algorithms currently include RSA, ECDsa and the deprecated DSA. If unspecified, the default is RSA.</param>
+    /// <param name="value">The key algorithm to use. If unspecified, the default is RSA-4096.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified key algorithm.</returns>
     public CertificateBuilder SetKeyAlgorithm(KeyAlgorithm value)
         => RemoveExtensionsByOidValue(Oids.SubjectKeyIdentifier) with {
@@ -380,6 +383,7 @@ public record CertificateBuilder
     /// <param name="policyIdentifier">The OID of the first (or only) policy to assert.</param>
     /// <param name="morePolicyIdentifiers">The OIDs of any further policies to assert.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when the same OID is supplied more than once.</exception>
     public CertificateBuilder SetCertificatePolicies(string policyIdentifier, params IEnumerable<string> morePolicyIdentifiers)
         => SetCertificatePolicies([policyIdentifier, .. morePolicyIdentifiers]);
 
@@ -388,6 +392,8 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
     /// <exception cref="ArgumentException">Thrown when an <see cref="Oid"/> in <paramref name="policyIdentifiers"/> has no <see cref="Oid.Value"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when the same OID is supplied more than once.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="policyIdentifiers"/> is <see langword="null"/>.</exception>
     public CertificateBuilder SetCertificatePolicies(params IEnumerable<Oid> policyIdentifiers)
         => SetCertificatePolicies(policyIdentifiers, false);
 
@@ -397,6 +403,8 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
     /// <exception cref="ArgumentException">Thrown when an <see cref="Oid"/> in <paramref name="policyIdentifiers"/> has no <see cref="Oid.Value"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when the same OID is supplied more than once.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="policyIdentifiers"/> is <see langword="null"/>.</exception>
     public CertificateBuilder SetCertificatePolicies(IEnumerable<Oid> policyIdentifiers, bool critical)
         => SetCertificatePolicies((policyIdentifiers ?? throw new ArgumentNullException(nameof(policyIdentifiers)))
             .Select(x => x?.Value ?? throw new ArgumentException("Every Oid in policyIdentifiers must have a Value", nameof(policyIdentifiers))), critical);
@@ -406,6 +414,8 @@ public record CertificateBuilder
     /// <param name="critical">Whether to mark the extension critical, which forces a relying party that cannot interpret it to reject the certificate.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="policyIdentifiers"/> is empty.</exception>
+    /// <exception cref="ArgumentException">Thrown when the same OID is supplied more than once.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="policyIdentifiers"/> is <see langword="null"/>.</exception>
     public CertificateBuilder SetCertificatePolicies(IEnumerable<string> policyIdentifiers, bool critical = false)
         => SetExtension(new X509CertificatePolicyExtension(policyIdentifiers, critical));
 
@@ -433,8 +443,9 @@ public record CertificateBuilder
     /// <remarks>
     /// An accepted extension replaces anything already present under the same OID, and the last call wins
     /// thereafter. <b>Nothing in the request is screened here</b>: apply your policy in
-    /// <paramref name="accept"/>, and set a <see cref="Usage"/> first, or none of
-    /// <see cref="CreateCertificateRequest"/>'s refusals apply to what an accepted extension asserts.
+    /// <paramref name="accept"/>, and set a <see cref="Usage"/> first, or the refusals
+    /// <see cref="CreateCertificateRequest"/> measures against it (basic constraints, key usage and a key
+    /// that cannot sign) do not apply to what an accepted extension asserts.
     /// <para>
     /// Two hazards a permissive <paramref name="accept"/> would not think to screen for:
     /// </para>
@@ -610,7 +621,8 @@ public record CertificateBuilder
     /// supplied. Where RFC 5280 states a criticality MUST, the extension is written with that criticality;
     /// its value is untouched and <see cref="Extensions"/> still reports what it was given.</remarks>
     /// <returns>A new <see cref="CertificateRequest"/> instance.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when no key pair is set, when an extension's value
+    /// <exception cref="InvalidOperationException">Thrown when no key is set through <see cref="SetKeyPair(AsymmetricAlgorithm)"/>
+    /// or <see cref="SetPublicKey"/>, when an extension's value
     /// contradicts the <see cref="Usage"/> profile, when the <see cref="Usage"/> profile signs but the
     /// certified key cannot, when an Authority Key Identifier does not identify the issuer's own key, when the
     /// <see cref="Issuer"/> publishes a Subject Key Identifier whose value does not decode, or when a
@@ -650,10 +662,12 @@ public record CertificateBuilder
     /// <summary>Creates a <see cref="CertificateSigningRequest"/> based on the builder's parameters.</summary>
     /// <returns>A new <see cref="CertificateSigningRequest"/> instance.</returns>
     /// <exception cref="NotSupportedException">Thrown when the key to certify cannot sign, so cannot produce the proof-of-possession signature.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when an extension's value contradicts the
-    /// <see cref="Usage"/> profile, when the request would be signed by a key that is not the one it
-    /// certifies, or when a subject alternative name extension carries no entries or does not decode.
-    /// Nothing here depends on the <see cref="Issuer"/>, which this member discards.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no key is set through
+    /// <see cref="SetKeyPair(AsymmetricAlgorithm)"/> or <see cref="SetPublicKey"/>, when the key was set only
+    /// through <see cref="SetPublicKey"/> and no <see cref="SignatureGenerator"/> is set, when an extension's
+    /// value contradicts the <see cref="Usage"/> profile, when the request would be signed by a key that is
+    /// not the one it certifies, or when a subject alternative name extension carries no entries or does not
+    /// decode. Nothing here depends on the <see cref="Issuer"/>, which this member discards.</exception>
     public CertificateSigningRequest CreateCertificateSigningRequest()
     {
         //PKCS#10 proves possession by signing the request with the very key being certified
@@ -691,6 +705,14 @@ public record CertificateBuilder
     /// subject alternative name extension carries no entries or does not decode. <see cref="Validate"/>,
     /// which this member calls, adds its own: among those, a certificate with an empty
     /// <see cref="Subject"/> and no subject alternative name is refused.</exception>
+    /// <exception cref="PlatformNotSupportedException">Thrown when the builder is to generate a key and
+    /// <see cref="KeyAlgorithm"/> is a post-quantum algorithm this platform does not provide.</exception>
+    /// <exception cref="CryptographicException">Thrown when the <see cref="Issuer"/> has no private key
+    /// attached and no <see cref="SignatureGenerator"/> is set.</exception>
+    /// <exception cref="NotSupportedException">Thrown when the signing key is of a kind that cannot sign, such
+    /// as an ECDiffieHellman key, or is not a supported type.</exception>
+    /// <exception cref="InvalidOperationException">Also thrown when the signing key is a DSA key and
+    /// <see cref="HashAlgorithm"/> is neither SHA-1 nor SHA-256.</exception>
     [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Call site is only reachable on supported platforms")]
     public X509Certificate2 Create()
     {
@@ -703,6 +725,8 @@ public record CertificateBuilder
             : this;
 
         try {
+            //Unreachable: GenerateKeyPair always sets PublicKey, and without generating, KeyPair or PublicKey
+            //is set, and every assignment of KeyPair sets PublicKey with it
             if (builder.PublicKey == null) {
                 throw new InvalidOperationException($"Call {nameof(SetKeyPair)}(...), {nameof(SetPublicKey)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a key to certify");
             }

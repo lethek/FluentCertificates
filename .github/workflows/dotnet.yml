@@ -26,9 +26,10 @@ env:
 jobs:
   # .NET's post-quantum algorithms need OpenSSL 3.5+. The ubuntu-24.04 image ships OpenSSL 3.0.13,
   # where ML-DSA, SLH-DSA, Composite ML-DSA and ML-KEM all report IsSupported = false, so every PQC
-  # test skips there. ubuntu-latest currently resolves to ubuntu-24.04, so the main job below cannot
-  # verify any of this; ubuntu-26.04 ships OpenSSL 3.5.5 and is pinned explicitly here rather than
-  # tracking ubuntu-latest, so this job keeps testing what it is meant to when that alias moves on.
+  # test skips there. ubuntu-latest currently resolves to ubuntu-24.04, and GitHub is migrating it to
+  # 26.04 between 19 October and 19 November 2026. ubuntu-26.04 ships OpenSSL 3.5.5 and is pinned
+  # explicitly here so this job does not depend on what the alias resolves to. The build job below uses
+  # ubuntu-latest and does not set FLUENTCERT_REQUIRE_PQC, so it must not be relied on to exercise PQC.
   pqc:
     runs-on: ubuntu-26.04
 
@@ -47,8 +48,7 @@ jobs:
     # FLUENTCERT_REQUIRE_PQC turns the capability gate around for this job. Every post-quantum test is
     # skipped where the algorithms are unavailable, so without this the job would stay green on an image
     # that had lost PQC support, having built no post-quantum certificate at all. Setting it makes
-    # PostQuantumRequiredTests assert that ML-DSA, SLH-DSA and ML-KEM are supported and that a certificate
-    # really is produced for each. Set it anywhere else PQC is expected, such as a local Alpine container.
+    # PostQuantumRequiredTests assert that ML-DSA, SLH-DSA and ML-KEM report IsSupported. Set it anywhere else PQC is expected, such as a local Alpine container.
     - name: Test (net10.0, PQC-capable)
       env:
         FLUENTCERT_REQUIRE_PQC: '1'

@@ -246,7 +246,7 @@ using var crlIssuer = new CertificateBuilder()
 
 An ECDH key derives a shared secret and cannot sign anything, so these certificates assert
 `keyAgreement` rather than `digitalSignature` and must be issued by a CA. Self-signing, CSRs, and the
-`CA`, `CodeSign`, `OcspSigning` and `TimeStamping` usages are all rejected. Supplying a
+`CA`, `CodeSign`, `OcspSigning`, `TimeStamping` and `CrlSigning` usages are all rejected. Supplying a
 `SignatureGenerator` does not lift those restrictions, since it signs with an unrelated key.
 
 ```csharp
@@ -310,10 +310,10 @@ Ubuntu 24.04 does not. Selecting an unsupported algorithm throws `PlatformNotSup
 from `Create()` rather than producing a certificate that does not work.
 
 The members exist on every target framework so the API surface does not vary; on .NET 8 and .NET 9
-selecting one throws.
+`Create()` throws.
 
 ML-KEM is key encapsulation, not signing. Like `ECDiffieHellman`, an ML-KEM certificate must be
-issued by a CA, cannot self-sign, cannot be a CA or a code-signing, OCSP-signing or time-stamping
+issued by a CA, cannot self-sign, cannot be a CA or a code-signing, OCSP-signing, time-stamping or CRL-signing
 certificate, and has no CSR. It asserts `keyEncipherment`, not `keyAgreement`: encapsulating to the
 certified key is key transport rather than Diffie-Hellman agreement.
 
@@ -367,7 +367,7 @@ using var customCert = new CertificateBuilder()
 //Permit the CA cert to issue certificates for specific names and IP addresses
 var permittedNames = new GeneralNameListBuilder()
     .AddDnsName(".mydomain.local")
-    .AddEmailAddress("@mydomain.local")
+    .AddEmailAddress("mydomain.local")
     .AddIPAddress(ipAddress: "192.168.0.0", subnetMask: "255.255.255.0")
     .Create();
 
@@ -541,8 +541,8 @@ your policy to set:
   is: read the extent, not the spelling.
 
 > **Set a `Usage` before accepting anything from a request.** A builder with no `Usage` has declared no
-> intent to measure an extension against, and makes none of these refusals bar the Authority Key Identifier
-> one. A request accepted onto such a builder can carry `cA=TRUE` and `keyCertSign`, and the certificate
+> intent to measure an extension against, so the refusals made against a `Usage` are skipped: the basic
+> constraints, key usage and key-cannot-sign ones. The rest still apply. A request accepted onto such a builder can carry `cA=TRUE` and `keyCertSign`, and the certificate
 > issued from it will sign other certificates that chain to your issuer.
 
 Almost nothing else in a request is screened. What an extension says is the `accept` predicate's decision,
@@ -697,7 +697,8 @@ leafCert.Export().AddCertificates(certs.Where(IsCurrent));  //a lazy sequence
 ```
 
 Each `WithPassword` overload clears the other kind of password, so the last call wins, and
-`WithoutPassword()` clears both. A `SecureString` password is honoured by every format, but only
+`WithoutPassword()` clears both. Only PEM and PKCS#12 use a password; `AsPkcs7()`, `AsPkcs7Pem()` and
+`AsCert()` ignore any you set. A `SecureString` password is honoured by both of those, but only
 `AsPem()` keeps it out of the managed heap: the platform's PKCS#12 export takes a `string`, so
 `AsPkcs12()` has to materialise one.
 
@@ -739,9 +740,11 @@ retarget the export, even when the result does form a valid chain:
 intermediateCert.Export().AddChain([rootCert, leafCert]).AsCert().ToByteArray();
 ```
 
-`collection.Export()` and the `IEnumerable<X509Certificate2>` overload designate no leaf, so both throw
-`InvalidOperationException` there. This holds even when the certificates do form a chain: a bundle names
-no primary certificate, and arriving first is not evidence of being one. Since keys are opt-in, the
+`collection.Export()` and the `IEnumerable<X509Certificate2>` overload designate no leaf, so a bundle of
+more than one certificate throws `InvalidOperationException` there, when the export is written with a `To*`
+method rather than at `AsCert()`. This holds even when the certificates do form a chain: a bundle names
+no primary certificate, and arriving first is not evidence of being one. A bundle holding exactly one
+certificate does not throw, because that certificate becomes the primary. Since keys are opt-in, the
 `ExportKeys.Primary` half of that only bites when you actually write `WithPrivateKey()` on a bundle.
 
 ```csharp
@@ -769,7 +772,7 @@ returns a new finder and leaves the original alone.
 |---|---|
 |`AddCommonStores()`|`My`, `CA` and `Root` for `CurrentUser`, plus `My`, `CA`, `Root` and `WebHosting` for `LocalMachine`|
 |`AddStore(...)`, `AddStores(...)`|An `X509Store`, or a store name and `StoreLocation`|
-|`AddDirectory(path, recurse)`, `AddDirectories(...)`|`.crt`, `.cer`, `.der`, `.pem`, `.ca-bundle`, `.pfx`, `.p12`, `.pkcs12`, `.p7b` and `.p7c` files|
+|`AddDirectory(dir, recurse)`, `AddDirectories(...)`|`.crt`, `.cer`, `.der`, `.pem`, `.ca-bundle`, `.pfx`, `.p12`, `.pkcs12`, `.p7b` and `.p7c` files|
 |`AddCertificates(...)`|Certificates you already hold in memory|
 |`AddSource(...)`, `AddSources(...)`|A source of your own, covered at the end of this section|
 
@@ -903,10 +906,14 @@ itself, and ones you supplied through `AddCertificates` it never touches. See
 ```csharp
 const string thumbprint = "622A2B8374D9BBE3969B91EDBC8F5152783AFC78";
 
-var cert = new CertificateFinder()
+var result = new CertificateFinder()
     .AddCommonStores()
     .FirstOrDefault(x => x.Certificate.Thumbprint.Equals(thumbprint, StringComparison.OrdinalIgnoreCase));
 ```
+
+The `result.Certificate` from a store or directory source is a new instance that you dispose, while one from
+`AddCertificates` is your own instance and stays yours. See
+[Key ownership and disposal](#key-ownership-and-disposal).
 
 ### Find a valid certificate with matching subject, giving preference to included private keys
 
@@ -997,7 +1004,7 @@ public sealed record EnvironmentCertificateSource(string Prefix) : AbstractCerti
     }
 }
 
-var cert = new CertificateFinder()
+var result = new CertificateFinder()
     .AddSource(new EnvironmentCertificateSource("TLS_CERT_"))
     .FirstOrDefault(x => x.Certificate.IsValidNow());
 ```
@@ -1022,9 +1029,9 @@ The members you can override:
 |`EnumerateAsync(CertificateFilter, CancellationToken)`|Only worth overriding if your source has real asynchronous work, such as reading files or calling a service. By default it wraps `Enumerate`, so a source implementing the synchronous members alone is already usable from `AsAsyncEnumerable` and already cancellable. `EnumerateDescendingAsync` pairs with it the same way.|
 |`Kind`|Required, but free-form. Callers group and deduplicate results on it.|
 
-Make the source a `record` rather than a `class`. The finder deduplicates sources by value, so two
-records describing the same thing are searched once, whereas a class is compared by reference and would
-be searched twice.
+`AbstractCertificateSource` is an `abstract record`, so your source is a record too. Records compare by
+value, and the finder deduplicates sources on that, so two sources describing the same thing are
+searched once.
 
 ---
 
@@ -1055,7 +1062,7 @@ var dn = subject.Create();
 X500DistinguishedName implicitly = subject;
 ```
 
-`CertificateBuilder.SetSubject` and `SetIssuer` take a delegate, so the same methods are usually
+`CertificateBuilder.SetSubject` takes a delegate, so the same methods are usually
 used inline:
 
 ```csharp
@@ -1066,7 +1073,7 @@ using var cert = new CertificateBuilder()
 
 ### Reading values back
 
-Every `Set*` method has a matching `Get*`. Single-valued attributes return `null` when absent, and
+Every named setter, such as `SetCommonName`, has a matching `Get*`. Single-valued attributes return `null` when absent, and
 multi-valued ones return an empty sequence.
 
 ```csharp
@@ -1090,7 +1097,7 @@ A string is read as strict [RFC 4514](https://www.rfc-editor.org/rfc/rfc4514), t
 platform: no spaces around the separators, no quoted values and no `;` separator. Only the keywords
 `CN`, `L`, `ST`, `O`, `OU`, `C`, `STREET`, `DC` and `UID` are recognised, so write any other attribute
 type as an OID. A string that does not conform throws `FormatException`. Values are encoded as
-`UTF8String`, except the attributes whose standard fixes another type: a country, serial number, DN qualifier and telephone number are `PrintableString`s, and a domain component and email address are `IA5String`s. A value written as `#` and hex digits is
+`UTF8String`, except the attributes whose standard fixes another type: a country, serial number, DN qualifier, telephone number and destination indicator are `PrintableString`s, an X.121 address and international ISDN number are `NumericString`s, and a domain component and email address are `IA5String`s. A value written as `#` and hex digits is
 a BER encoding, which is rewritten as DER and kept as raw bytes, or read as a string when it is one.
 
 ### Multi-valued relative names

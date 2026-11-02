@@ -21,8 +21,10 @@ public record CertificateExportBuilder
     /// <remarks>
     /// <see cref="ExportKeys.Primary"/> and <see cref="AsCert"/> read the primary certificate from here
     /// rather than from list position, so <see cref="AddChain(IEnumerable{X509Certificate2})"/> cannot
-    /// retarget the export and both throw without an anchor. Only the entry points set this; it cannot be
-    /// assigned through a <c>with</c> expression, and an anchor absent from the certificates is rejected.
+    /// retarget the export. Without an anchor, a builder holding exactly one certificate takes that one as
+    /// primary, and any larger bundle has none, so the output methods throw for both. Only the entry points
+    /// set this; it cannot be assigned through a <c>with</c> expression, and an anchor absent from the
+    /// certificates is rejected.
     /// </remarks>
     public X509Certificate2? Anchor { get; private init; }
 
@@ -182,14 +184,20 @@ public record CertificateExportBuilder
 
 
     /// <summary>Selects PKCS#12 (PFX) as the export format, written as binary.</summary>
+    /// <exception cref="InvalidOperationException">Thrown when there are no certificates, or the
+    /// <see cref="Anchor"/> is not among them.</exception>
     public CertificateExporter AsPkcs12()
         => new(Certificates, Anchor, ExportFormat.Pkcs12, Password, SecurePassword, Keys);
 
     /// <summary>Selects PEM as the export format, written as the UTF-8 bytes of the PEM text.</summary>
+    /// <exception cref="InvalidOperationException">Thrown when there are no certificates, or the
+    /// <see cref="Anchor"/> is not among them.</exception>
     public PemCertificateExporter AsPem()
         => new(Certificates, Anchor, ExportFormat.Pem, Password, SecurePassword, Keys);
 
     /// <summary>Selects DER-encoded PKCS#7 (P7B). Private keys are never included.</summary>
+    /// <exception cref="InvalidOperationException">Thrown when there are no certificates, or the
+    /// <see cref="Anchor"/> is not among them.</exception>
     public CertificateExporter AsPkcs7()
         => new(Certificates, Anchor, ExportFormat.Pkcs7, null, null, ExportKeys.None);
 
@@ -199,11 +207,16 @@ public record CertificateExportBuilder
     /// RFC 7468 s8 says implementations SHOULD NOT generate the <c>PKCS7</c> label where s9's <c>CMS</c>
     /// will do, but OpenSSL writes <c>PKCS7</c> and <c>CMS</c> support is thin, so <c>PKCS7</c> is used.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">Thrown when there are no certificates, or the
+    /// <see cref="Anchor"/> is not among them.</exception>
     public PemCertificateExporter AsPkcs7Pem()
         => new(Certificates, Anchor, ExportFormat.Pkcs7Pem, null, null, ExportKeys.None);
 
-    /// <summary>Selects DER-encoded certificate (CER/CRT). Only the <see cref="Anchor"/> is exported, and
-    /// this throws when there is none.</summary>
+    /// <summary>Selects DER-encoded certificate (CER/CRT). Only the primary certificate is exported: the
+    /// <see cref="Anchor"/>, or the only certificate when there is just one. The output methods throw when
+    /// there is neither.</summary>
+    /// <exception cref="InvalidOperationException">Thrown when there are no certificates, or the
+    /// <see cref="Anchor"/> is not among them.</exception>
     public CertificateExporter AsCert()
         => new(Certificates, Anchor, ExportFormat.Cert, null, null, ExportKeys.None);
 }

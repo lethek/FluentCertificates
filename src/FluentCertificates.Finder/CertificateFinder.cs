@@ -100,6 +100,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <summary>Whether any certificate matches <paramref name="predicate"/>.</summary>
     /// <param name="predicate">The predicate a result must satisfy.</param>
     /// <returns><see langword="true"/> if at least one matches.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="predicate"/> is null.</exception>
     public bool Any(Expression<Func<CertificateFinderResult, bool>> predicate)
     {
         foreach (var result in Where(predicate)) {
@@ -124,6 +125,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <summary>The first certificate matching <paramref name="predicate"/>.</summary>
     /// <param name="predicate">The predicate a result must satisfy.</param>
     /// <returns>The first matching result.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="predicate"/> is null.</exception>
     /// <exception cref="InvalidOperationException">Nothing matched.</exception>
     public CertificateFinderResult First(Expression<Func<CertificateFinderResult, bool>> predicate)
         => Where(predicate).First();
@@ -204,6 +206,7 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
     /// <summary>How many certificates match <paramref name="predicate"/>.</summary>
     /// <param name="predicate">The predicate a result must satisfy.</param>
     /// <returns>The number of matching results.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="predicate"/> is null.</exception>
     public int Count(Expression<Func<CertificateFinderResult, bool>> predicate)
     {
         var count = 0;
@@ -453,7 +456,8 @@ public record CertificateFinder : IEnumerable<CertificateFinderResult>
         => AddSource(new CertificateStoreSource(name, location));
 
 
-    /// <summary>Adds the common stores (My, CA, Root, WebHosting) for CurrentUser and LocalMachine.</summary>
+    /// <summary>Adds the common stores (My, CA, Root) for CurrentUser and LocalMachine, and WebHosting for
+    /// LocalMachine only.</summary>
     /// <returns>A new <see cref="CertificateFinder"/> instance with the common stores added.</returns>
     public CertificateFinder AddCommonStores()
         => AddSources(CommonStores);

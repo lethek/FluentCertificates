@@ -14,7 +14,7 @@ namespace FluentCertificates;
 public record GeneralNameListBuilder
 {
     /// <summary>
-    /// Creates a list of the current <see cref="GeneralName"/> constraints.
+    /// Creates a list of the <see cref="GeneralName"/> entries added so far.
     /// </summary>
     /// <returns>A list containing all added <see cref="GeneralName"/> instances.</returns>
     public ImmutableList<GeneralName> Create()
@@ -26,6 +26,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="emailAddress">The email address to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the email address added.</returns>
+    /// <exception cref="ArgumentException"><paramref name="emailAddress"/> contains a non-ASCII or control character, is longer than 254 characters, or has a local part longer than 64.</exception>
     public GeneralNameListBuilder AddEmailAddress(string emailAddress)
         => Add(new Rfc822NameAsn(emailAddress));
 
@@ -35,6 +36,8 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="emailAddresses">The email addresses to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the email addresses added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="emailAddresses"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">An address contains a non-ASCII or control character, is longer than 254 characters, or has a local part longer than 64.</exception>
     public GeneralNameListBuilder AddEmailAddresses(params IEnumerable<string> emailAddresses)
         => AddRange(emailAddresses.Select(x => new Rfc822NameAsn(x)));
     
@@ -44,6 +47,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="dnsName">The DNS name to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the DNS name added.</returns>
+    /// <exception cref="ArgumentException"><paramref name="dnsName"/> contains a non-ASCII or control character, is longer than 253 characters, or has a label longer than 63.</exception>
     public GeneralNameListBuilder AddDnsName(string dnsName)
         => Add(new DnsNameAsn(dnsName));
 
@@ -53,6 +57,8 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="dnsNames">The DNS names to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the DNS names added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="dnsNames"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">A name contains a non-ASCII or control character, is longer than 253 characters, or has a label longer than 63.</exception>
     public GeneralNameListBuilder AddDnsNames(params IEnumerable<string> dnsNames)
         => AddRange(dnsNames.Select(x => new DnsNameAsn(x)));
 
@@ -62,6 +68,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="uri">The URI to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the URI added.</returns>
+    /// <remarks>A relative <see cref="Uri"/> is accepted here but cannot be encoded, so it fails when the name is encoded.</remarks>
     public GeneralNameListBuilder AddUri(Uri uri)
         => Add(new UriNameAsn(uri));
     
@@ -71,6 +78,8 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="uris">The URIs to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the URIs added.</returns>
+    /// <remarks>A relative <see cref="Uri"/> is accepted here but cannot be encoded, so it fails when the name is encoded.</remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="uris"/> is <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddUris(params IEnumerable<Uri> uris)
         => AddRange(uris.Select(x => new UriNameAsn(x)));
     
@@ -81,6 +90,8 @@ public record GeneralNameListBuilder
     /// <param name="ipAddress">The IP address to add, in string format.</param>
     /// <param name="subnetMask">The optional subnet mask to add, in string format. If null, no subnet mask is used.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP address (and optional subnet mask) added.</returns>
+    /// <exception cref="FormatException"><paramref name="ipAddress"/> or <paramref name="subnetMask"/> is not a valid IP address.</exception>
+    /// <exception cref="ArgumentException"><paramref name="subnetMask"/> is not of the same address family as <paramref name="ipAddress"/>.</exception>
     public GeneralNameListBuilder AddIPAddress(string ipAddress, string? subnetMask = null)
         => Add(new IPAddressNameAsn(IPAddress.Parse(ipAddress), subnetMask != null ? IPAddress.Parse(subnetMask) : null));
 
@@ -91,6 +102,7 @@ public record GeneralNameListBuilder
     /// <param name="ipAddress">The IP address to add.</param>
     /// <param name="subnetMask">The optional subnet mask.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP address added.</returns>
+    /// <exception cref="ArgumentException"><paramref name="subnetMask"/> is not of the same address family as <paramref name="ipAddress"/>.</exception>
     public GeneralNameListBuilder AddIPAddress(IPAddress ipAddress, IPAddress? subnetMask = null)
         => Add(new IPAddressNameAsn(ipAddress, subnetMask));
 
@@ -100,6 +112,8 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="ipAddresses">The IP addresses to add, each in string format.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP addresses added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="ipAddresses"/> is <see langword="null"/>.</exception>
+    /// <exception cref="FormatException">An address is not a valid IP address.</exception>
     public GeneralNameListBuilder AddIPAddresses(params IEnumerable<string> ipAddresses)
         => AddRange(ipAddresses.Select(x => new IPAddressNameAsn(IPAddress.Parse(x))));
 
@@ -109,6 +123,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="ipAddresses">The IP addresses to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP addresses added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="ipAddresses"/> is <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddIPAddresses(params IEnumerable<IPAddress> ipAddresses)
         => AddRange(ipAddresses.Select(x => new IPAddressNameAsn(x)));
 
@@ -402,7 +417,7 @@ public record GeneralNameListBuilder
 
 
     /// <summary>
-    /// Gets the current list of <see cref="GeneralName"/> constraints.
+    /// Gets the <see cref="GeneralName"/> entries added so far.
     /// </summary>
     private ImmutableList<GeneralName> NameConstraints { get; init; }
         = ImmutableList<GeneralName>.Empty;

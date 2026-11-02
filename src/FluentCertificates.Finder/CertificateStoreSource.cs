@@ -22,6 +22,7 @@ public sealed record CertificateStoreSource(string Name, StoreLocation Location)
     /// <summary>Initializes a new instance from a <see cref="StoreName"/> and <see cref="StoreLocation"/>.</summary>
     /// <param name="name">The store name.</param>
     /// <param name="location">The store location.</param>
+    /// <exception cref="ArgumentException">The <see cref="StoreName"/> value is unsupported.</exception>
     public CertificateStoreSource(StoreName name, StoreLocation location)
         : this(GetProperStoreName(name), location) { }
 

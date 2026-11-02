@@ -12,6 +12,10 @@ namespace FluentCertificates;
 /// Provides a builder for constructing and manipulating X.500 distinguished names,
 /// commonly used for X.509 certificate subjects and issuers.
 /// </summary>
+/// <remarks>The <c>Get</c> methods read the first attribute of the type, in the order of
+/// <see cref="RelativeDistinguishedNames"/>, that is held as a string. An attribute held as raw DER, such as a
+/// non-ASCII T61String or a value outside its string type's character set, is skipped, so a getter can return
+/// null (or leave a value out of a list) though the name has an attribute of that type.</remarks>
 public record X500NameBuilder
 {
     /// <summary>
@@ -42,9 +46,10 @@ public record X500NameBuilder
     /// <remarks>
     /// The same string builds the same name on every platform. No spaces are allowed around the separators. Only the keywords CN, L, ST, O, OU, C, STREET,
     /// DC and UID are recognised; write any other attribute type as a dotted OID. Values are encoded as UTF8String,
-    /// except for the attributes whose standard fixes another string type: a country, serial number, DN qualifier and
-    /// telephone number are PrintableStrings, and a domain component and email address are IA5Strings. A value written as <c>#</c> and hex digits is a BER
-    /// encoding, which is kept as raw DER once rewritten as DER, or as a string when it is one.
+    /// except for the attributes whose standard fixes another string type: a country, serial number, DN qualifier,
+    /// telephone number and destination indicator are PrintableStrings, an X.121 address and an international ISDN number
+    /// are NumericStrings, and a domain component and email address are IA5Strings. A value written as <c>#</c> and hex digits is a BER
+    /// encoding. It is rewritten as DER, then read as a string when it is one and kept as raw bytes otherwise.
     /// </remarks>
     public X500NameBuilder(string name)
     {
@@ -119,9 +124,10 @@ public record X500NameBuilder
 
 
     /// <summary>
-    /// Returns a new builder with all RDNs matching the specified OID string removed.
+    /// Returns a new builder with all attributes matching the specified OID string removed.
     /// </summary>
     /// <param name="oid">The OID string to remove.</param>
+    /// <remarks>A relative name left with no attributes is removed too.</remarks>
     public X500NameBuilder Remove(string oid)
         => Remove(new Oid(oid));
 
@@ -365,13 +371,14 @@ public record X500NameBuilder
 
 
     /// <summary>
-    /// Returns a new builder with the specified RDNs set (replacing any existing RDNs with the same OID).
+    /// Returns a new builder with the specified RDNs set (replacing any existing attributes with the same OID).
     /// </summary>
     /// <param name="oid">The OID of the RDN.</param>
     /// <param name="valueEncoding">The ASN.1 encoding for the value.</param>
     /// <param name="values">The values to set.</param>
-    /// <remarks>The new RDNs take the position of the first RDN that held the OID, so setting a value again
-    /// does not reorder the name. They are appended when nothing held the OID.</remarks>
+    /// <remarks>The OID's attributes are removed from every RDN that holds them, so a multi-valued RDN keeps
+    /// its other attributes. The new RDNs are inserted after what is left of the first RDN that held the OID,
+    /// so setting a value again does not reorder the name. They are appended when nothing held the OID.</remarks>
     public X500NameBuilder Set(Oid oid, UniversalTagNumber valueEncoding, params string[] values)
         => this with {
             RelativeDistinguishedNames = [
@@ -388,32 +395,33 @@ public record X500NameBuilder
 
 
     /// <summary>
-    /// Returns a new builder with the specified RDNs set (replacing any existing RDNs with the same OID).
+    /// Returns a new builder with the specified RDNs set (replacing any existing attributes with the same OID).
     /// </summary>
     /// <param name="oid">The OID of the RDN.</param>
     /// <param name="values">The values to set.</param>
-    /// <remarks>The values are encoded as <see cref="Add(Oid,string[])"/> does, and take the position of the
-    /// first RDN that held the OID.</remarks>
+    /// <remarks>The values are encoded as <see cref="Add(Oid,string[])"/> does, and placed as
+    /// <see cref="Set(Oid,UniversalTagNumber,string[])"/> does.</remarks>
     public X500NameBuilder Set(Oid oid, params string[] values)
         => Set(oid, AttributeEncodings.GetValueEncoding(oid.Value), values);
 
 
     /// <summary>
-    /// Returns a new builder with the specified RDNs set (replacing any existing RDNs with the same OID string and encoding).
+    /// Returns a new builder with the specified RDNs set (replacing any existing attributes with the same OID string).
     /// </summary>
     /// <param name="oid">The OID string of the RDN.</param>
     /// <param name="valueEncoding">The ASN.1 encoding for the value.</param>
     /// <param name="values">The values to set.</param>
+    /// <remarks>The values are placed as <see cref="Set(Oid,UniversalTagNumber,string[])"/> does.</remarks>
     public X500NameBuilder Set(string oid, UniversalTagNumber valueEncoding, params string[] values)
         => Set(new Oid(oid), valueEncoding, values);
 
 
     /// <summary>
-    /// Returns a new builder with the specified RDNs set (replacing any existing RDNs with the same OID string).
+    /// Returns a new builder with the specified RDNs set (replacing any existing attributes with the same OID string).
     /// </summary>
     /// <param name="oid">The OID string of the RDN.</param>
     /// <param name="values">The values to set.</param>
-    /// <remarks>The values are encoded as <see cref="Set(Oid,string[])"/> does.</remarks>
+    /// <remarks>The values are encoded and placed as <see cref="Set(Oid,string[])"/> does.</remarks>
     public X500NameBuilder Set(string oid, params string[] values)
         => Set(new Oid(oid), values);
 
@@ -633,8 +641,8 @@ public record X500NameBuilder
     /// <returns>True if equal; otherwise, false.</returns>
     /// <remarks>This is the record's value equality, so <see cref="ImmutableList{T}"/>'s reference equality
     /// does not stand in for it. It is order- and encoding-sensitive, matching <see cref="Equals(X500DistinguishedName)"/>;
-    /// use <see cref="EquivalentTo(X500NameBuilder,IEqualityComparer{X500DistinguishedName})"/> for a comparison
-    /// that disregards order.</remarks>
+    /// use <see cref="EquivalentTo(X500NameBuilder,X500NameComparer)"/> with
+    /// <see cref="X500NameComparer.ValuesAnyOrder"/> for a comparison that disregards order.</remarks>
     public virtual bool Equals(X500NameBuilder? other)
     {
         if (other is null || other.GetType() != GetType()) {

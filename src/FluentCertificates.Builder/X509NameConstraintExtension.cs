@@ -6,11 +6,14 @@ namespace FluentCertificates;
 /// <summary>
 /// Represents the X.509 Name Constraints extension, which specifies permitted and excluded name subtrees for certificate subjects.
 /// </summary>
+/// <remarks>RFC 5280 s4.2.1.10 requires at least one non-empty list. Nothing here checks that: a null or empty
+/// list is encoded as given, so supplying neither a permitted nor an excluded name produces the empty
+/// sequence the RFC forbids, and an empty list produces a zero-length GeneralSubtrees.</remarks>
 /// <param name="permittedSubtrees">
-/// A collection of <see cref="GeneralName"/> objects representing the permitted name subtrees. May be null.
+/// A collection of <see cref="GeneralName"/> objects representing the permitted name subtrees. May be null, which omits the field.
 /// </param>
 /// <param name="excludedSubtrees">
-/// A collection of <see cref="GeneralName"/> objects representing the excluded name subtrees. May be null.
+/// A collection of <see cref="GeneralName"/> objects representing the excluded name subtrees. May be null, which omits the field.
 /// </param>
 public class X509NameConstraintExtension(IEnumerable<GeneralName>? permittedSubtrees, IEnumerable<GeneralName>? excludedSubtrees)
     : X509Extension(Oids.NameConstraints, EncodeExtension(permittedSubtrees, excludedSubtrees), true)

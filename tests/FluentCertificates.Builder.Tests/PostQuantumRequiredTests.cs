@@ -8,7 +8,7 @@ namespace FluentCertificates;
 /// <see cref="PostQuantumGate"/> already stops every other post-quantum test from skipping on such a run, so
 /// a missing algorithm cannot hide. What it cannot do is say so clearly: the failure arrives as a
 /// <see cref="PlatformNotSupportedException"/> from whichever of forty-odd tests happened to touch the
-/// algorithm first. These two assertions name the missing family directly, before the rest of the suite turns
+/// algorithm first. The assertion here names the missing family directly, before the rest of the suite turns
 /// it into noise.
 /// </para>
 /// <para>
