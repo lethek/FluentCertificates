@@ -13,6 +13,10 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- A package icon on all five packages.
+
 ### Changed
 
 - Bumped `System.Security.Cryptography.Pkcs`, `System.Collections.Immutable` and `TestableIO.System.IO.Abstractions` to their latest versions.
