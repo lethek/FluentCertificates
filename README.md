@@ -13,6 +13,7 @@ FluentCertificates is a library for creating, finding, and exporting certificate
 This project is published in several NuGet packages:
 
 * [FluentCertificates](https://www.nuget.org/packages/FluentCertificates): Top-level package that imports the Builder, Extensions, and Finder packages.
+* [FluentCertificates.Common](https://www.nuget.org/packages/FluentCertificates.Common): Types shared by the other packages, including `X500NameComparer` and `Oids`.
 * [FluentCertificates.Builder](https://www.nuget.org/packages/FluentCertificates.Builder): Provides `CertificateBuilder` for building certificates and also includes a bunch of convenient extension methods. [Examples below](#certificatebuilder-examples)
 * [FluentCertificates.Extensions](https://www.nuget.org/packages/FluentCertificates.Extensions): Provides certificate exporting via `Export()`, plus additional extension methods. [Examples below](#exporting-certificates)
 * [FluentCertificates.Finder](https://www.nuget.org/packages/FluentCertificates.Finder): Provides `CertificateFinder` for finding certificates across X509Stores, directories, certificates you already hold, and sources of your own. [Examples below](#certificatefinder-examples)
@@ -920,7 +921,7 @@ var subject = new X500NameBuilder()
 var cert = new CertificateFinder()
     .AddCommonStores()
     .Where(x => x.Certificate.IsValidNow())
-    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, false))
+    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, X500NameComparer.ValuesAnyOrder))
     .OrderBy(x => !x.Certificate.HasPrivateKey) //Ensure certs with private keys are listed before those without
     .Select(x => x.Certificate)
     .FirstOrDefault();
@@ -959,7 +960,7 @@ time:
 ```csharp
 var ca = new CertificateFinder()
     .AddCommonStores()
-    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, false))
+    .Where(x => subject.EquivalentTo(x.Certificate.SubjectName, X500NameComparer.ValuesAnyOrder))
     .Select(x => x.Certificate)
     .FirstOrDefault(x => x.CanSign());
 ```
@@ -1012,7 +1013,7 @@ other one is passed to `Release`, including the ones behind a caller who stopped
 match. Batches are pulled one at a time, so a source that yields a batch per file only ever loads as far
 as the caller reads. Keep nothing of your own between batches and your source cannot leak.
 
-Three optional members:
+The members you can override:
 
 |Member|Why|
 |---|---|
@@ -1044,8 +1045,7 @@ var subject = new X500NameBuilder()
     .SetOrganizationalUnits("Engineering", "Platform")
     .SetCountry("AU")
     .SetState("Victoria")
-    .SetLocality("Melbourne")
-    .SetEmail("admin@fake.domain");
+    .SetLocality("Melbourne");
 
 //Renders as a display string in the RFC 4514 style, most specific first, with no spaces
 Console.WriteLine(subject.ToString());
@@ -1190,7 +1190,7 @@ Reach for `EquivalentTo` unless you specifically need byte-for-byte identity.
 
 |Method|Description|
 |-|-|
-|`SetCommonName`, `SetCountry`, `SetLocality`, `SetState`, `SetOrganization`, `SetStreetAddress`, `SetPostalCode`, `SetEmail`, `SetPhoneNumber`, `SetGivenName`, `SetSurname`, `SetTitle`, `SetSerialNumber`, `SetUserId`, `SetDistinguishedNameQualifier`|Set a single-valued attribute, replacing any existing value.|
+|`SetCommonName`, `SetCountry`, `SetLocality`, `SetState`, `SetOrganization`, `SetStreetAddress`, `SetPostalCode`, `SetPhoneNumber`, `SetGivenName`, `SetSurname`, `SetTitle`, `SetSerialNumber`, `SetUserId`, `SetDistinguishedNameQualifier`|Set a single-valued attribute, replacing any existing value.|
 |`SetOrganizationalUnits`, `SetDomainComponents`|Replace all values of a multi-valued attribute.|
 |`AddOrganizationalUnit(s)`, `AddDomainComponent(s)`|Append to a multi-valued attribute.|
 |`Add(oid, ...)`, `Set(oid, ...)`|Append or replace by OID. The value is encoded as the attribute's standard fixes, or as the `UniversalTagNumber` you pass. The OID may be an `Oid` or a string. `Set` keeps the position of the attribute it replaces.|
@@ -1213,8 +1213,8 @@ These extension methods require the [FluentCertificates.Extensions](https://www.
 |`BuildChain()`|Starts a fluent `X509ChainBuilder` for building and verifying a chain for this certificate. See [Building a certificate chain](#building-a-certificate-chain).|
 |`IsValidNow()`|Whether the current UTC time falls within the certificate's validity period.|
 |`IsValidAt(DateTimeOffset atTime)`|Whether the given instant falls within the validity period. Both bounds are inclusive. There is no `DateTime` overload, because a `DateTime` carries no offset and its `DateTimeKind` would change the result.|
-|`IsSelfSigned(bool verifySignature = false, X500NameComparer? comparer = null)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
-|`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false, X500NameComparer? comparer = null)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`.|
+|`IsSelfSigned(bool verifySignature = false, X500NameComparer? comparer = null)`|Whether subject and issuer match. Pass `true` to also verify the certificate's signature against its own public key. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`. An overload takes any `IEqualityComparer<X500DistinguishedName>` instead, and requires it.|
+|`IsIssuedBy(X509Certificate2 issuer, bool verifySignature = false, X500NameComparer? comparer = null)`|Whether the certificate names the given issuer. Pass `true` to also verify the signature, which is what distinguishes a genuine issuer from one merely claiming the name. See [Comparing names](#comparing-names) for the comparer, which defaults to `X500NameComparer.Values`. An overload takes any `IEqualityComparer<X500DistinguishedName>` instead, and requires it.|
 |`CanSign()`|Whether the private key can actually be used for signing, as opposed to merely being associated with the certificate. Every "cannot sign" outcome returns `false` rather than throwing. Costs a key-store lookup. See [Find a certificate whose private key can actually sign](#find-a-certificate-whose-private-key-can-actually-sign).|
 |`GetPrivateKey()`|Returns the private key as a `CertificateKey`, whatever its algorithm, classical or post-quantum. Reach a classical key through `.AsAsymmetricAlgorithm`. Every call returns a **new instance which you own and should dispose**; see [Key ownership](#key-ownership-and-disposal).|
 |`GetSignatureAlgorithm()`|Returns the `SignatureAlgorithm` the certificate was signed with, combining key algorithm, hash and padding.|
