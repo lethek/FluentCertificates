@@ -384,8 +384,9 @@ public record CertificateBuilder
     /// <param name="morePolicyIdentifiers">The OIDs of any further policies to assert.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified Certificate Policies extension.</returns>
     /// <exception cref="ArgumentException">Thrown when the same OID is supplied more than once.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="morePolicyIdentifiers"/> is <see langword="null"/>.</exception>
     public CertificateBuilder SetCertificatePolicies(string policyIdentifier, params IEnumerable<string> morePolicyIdentifiers)
-        => SetCertificatePolicies([policyIdentifier, .. morePolicyIdentifiers]);
+        => SetCertificatePolicies([policyIdentifier, .. morePolicyIdentifiers ?? throw new ArgumentNullException(nameof(morePolicyIdentifiers))]);
 
     /// <summary>Sets the Certificate Policies extension, naming the policies under which the certificate is issued.</summary>
     /// <param name="policyIdentifiers">The policies to assert. Must contain at least one.</param>
@@ -571,8 +572,17 @@ public record CertificateBuilder
     /// to let an accepted Subject Alternative Name win instead.</remarks>
     /// <param name="san">The subject alternative names. An empty sequence leaves the certificate with no Subject Alternative Name extension at all.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified SANs.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="san"/> or a name in it is <see langword="null"/>.</exception>
     public CertificateBuilder SetSubjectAlternativeNames(IEnumerable<GeneralName> san)
-        => RemoveExtensionsByOidValue(Oids.SubjectAltName) with { _subjectAlternativeNames = [.. san] };
+    {
+        ArgumentNullException.ThrowIfNull(san);
+        ImmutableList<GeneralName> names = [.. san];
+        if (names.Contains(null!)) {
+            throw new ArgumentNullException(nameof(san), "The names must not contain a null name");
+        }
+
+        return RemoveExtensionsByOidValue(Oids.SubjectAltName) with { _subjectAlternativeNames = names };
+    }
 
 
     /// <summary>Validates the current builder configuration and throws if invalid.</summary>

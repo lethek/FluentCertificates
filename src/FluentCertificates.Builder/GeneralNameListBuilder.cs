@@ -26,6 +26,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="emailAddress">The email address to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the email address added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="emailAddress"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException"><paramref name="emailAddress"/> contains a non-ASCII or control character, is longer than 254 characters, or has a local part longer than 64.</exception>
     public GeneralNameListBuilder AddEmailAddress(string emailAddress)
         => Add(new Rfc822NameAsn(emailAddress));
@@ -36,10 +37,13 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="emailAddresses">The email addresses to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the email addresses added.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="emailAddresses"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="emailAddresses"/> or an address in it is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">An address contains a non-ASCII or control character, is longer than 254 characters, or has a local part longer than 64.</exception>
     public GeneralNameListBuilder AddEmailAddresses(params IEnumerable<string> emailAddresses)
-        => AddRange(emailAddresses.Select(x => new Rfc822NameAsn(x)));
+    {
+        ArgumentNullException.ThrowIfNull(emailAddresses);
+        return AddRange(emailAddresses.Select(x => new Rfc822NameAsn(x)));
+    }
     
     
     /// <summary>
@@ -47,6 +51,7 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="dnsName">The DNS name to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the DNS name added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="dnsName"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException"><paramref name="dnsName"/> contains a non-ASCII or control character, is longer than 253 characters, or has a label longer than 63.</exception>
     public GeneralNameListBuilder AddDnsName(string dnsName)
         => Add(new DnsNameAsn(dnsName));
@@ -57,10 +62,13 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="dnsNames">The DNS names to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the DNS names added.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="dnsNames"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="dnsNames"/> or a name in it is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">A name contains a non-ASCII or control character, is longer than 253 characters, or has a label longer than 63.</exception>
     public GeneralNameListBuilder AddDnsNames(params IEnumerable<string> dnsNames)
-        => AddRange(dnsNames.Select(x => new DnsNameAsn(x)));
+    {
+        ArgumentNullException.ThrowIfNull(dnsNames);
+        return AddRange(dnsNames.Select(x => new DnsNameAsn(x)));
+    }
 
     
     /// <summary>
@@ -68,9 +76,10 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="uri">The URI to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the URI added.</returns>
-    /// <remarks>A relative <see cref="Uri"/> is accepted here but cannot be encoded, so it fails when the name is encoded.</remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="uri"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="uri"/> is a relative <see cref="Uri"/>.</exception>
     public GeneralNameListBuilder AddUri(Uri uri)
-        => Add(new UriNameAsn(uri));
+        => Add(CreateUriName(uri, nameof(uri)));
     
     
     /// <summary>
@@ -78,10 +87,13 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="uris">The URIs to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the URIs added.</returns>
-    /// <remarks>A relative <see cref="Uri"/> is accepted here but cannot be encoded, so it fails when the name is encoded.</remarks>
-    /// <exception cref="ArgumentNullException"><paramref name="uris"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="uris"/> or a URI in it is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">A URI is a relative <see cref="Uri"/>.</exception>
     public GeneralNameListBuilder AddUris(params IEnumerable<Uri> uris)
-        => AddRange(uris.Select(x => new UriNameAsn(x)));
+    {
+        ArgumentNullException.ThrowIfNull(uris);
+        return AddRange(uris.Select(x => CreateUriName(x, nameof(uris))));
+    }
     
     
     /// <summary>
@@ -102,6 +114,7 @@ public record GeneralNameListBuilder
     /// <param name="ipAddress">The IP address to add.</param>
     /// <param name="subnetMask">The optional subnet mask.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP address added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="ipAddress"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException"><paramref name="subnetMask"/> is not of the same address family as <paramref name="ipAddress"/>.</exception>
     public GeneralNameListBuilder AddIPAddress(IPAddress ipAddress, IPAddress? subnetMask = null)
         => Add(new IPAddressNameAsn(ipAddress, subnetMask));
@@ -112,10 +125,13 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="ipAddresses">The IP addresses to add, each in string format.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP addresses added.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="ipAddresses"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="ipAddresses"/> or an address in it is <see langword="null"/>.</exception>
     /// <exception cref="FormatException">An address is not a valid IP address.</exception>
     public GeneralNameListBuilder AddIPAddresses(params IEnumerable<string> ipAddresses)
-        => AddRange(ipAddresses.Select(x => new IPAddressNameAsn(IPAddress.Parse(x))));
+    {
+        ArgumentNullException.ThrowIfNull(ipAddresses);
+        return AddRange(ipAddresses.Select(x => new IPAddressNameAsn(IPAddress.Parse(x))));
+    }
 
 
     /// <summary>
@@ -123,9 +139,12 @@ public record GeneralNameListBuilder
     /// </summary>
     /// <param name="ipAddresses">The IP addresses to add.</param>
     /// <returns>A new <see cref="GeneralNameListBuilder"/> with the IP addresses added.</returns>
-    /// <exception cref="ArgumentNullException"><paramref name="ipAddresses"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentNullException"><paramref name="ipAddresses"/> or an address in it is <see langword="null"/>.</exception>
     public GeneralNameListBuilder AddIPAddresses(params IEnumerable<IPAddress> ipAddresses)
-        => AddRange(ipAddresses.Select(x => new IPAddressNameAsn(x)));
+    {
+        ArgumentNullException.ThrowIfNull(ipAddresses);
+        return AddRange(ipAddresses.Select(x => new IPAddressNameAsn(x)));
+    }
 
 
     /// <summary>
@@ -346,6 +365,20 @@ public record GeneralNameListBuilder
     {
         ArgumentNullException.ThrowIfNull(name, paramName);
         return new DirectoryNameAsn(name);
+    }
+
+
+    /// <summary>Returns a <c>uniformResourceIdentifier</c> for a URI, rejecting a null or relative one.</summary>
+    /// <param name="uri">The URI to wrap.</param>
+    /// <param name="paramName">The name of the parameter the URI arrived in.</param>
+    /// <returns>The <c>uniformResourceIdentifier</c>.</returns>
+    private static UriNameAsn CreateUriName(Uri? uri, string paramName)
+    {
+        ArgumentNullException.ThrowIfNull(uri, paramName);
+        //The name is written from AbsoluteUri, which a relative Uri does not have
+        return uri.IsAbsoluteUri
+            ? new UriNameAsn(uri)
+            : throw new ArgumentException("A URI name must be an absolute URI.", paramName);
     }
 
 

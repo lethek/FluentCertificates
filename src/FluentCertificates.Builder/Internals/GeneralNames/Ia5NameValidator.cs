@@ -57,6 +57,8 @@ internal static class Ia5NameValidator
 
     private static void ValidateIa5(string value, string paramName, int maxLength, string description)
     {
+        ArgumentNullException.ThrowIfNull(value, paramName);
+
         for (var i = 0; i < value.Length; i++) {
             var c = value[i];
             if (c > 0x7F) {

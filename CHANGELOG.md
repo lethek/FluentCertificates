@@ -21,12 +21,14 @@ release rather than record it as it happened.
 
 - Bumped `System.Security.Cryptography.Pkcs`, `System.Collections.Immutable` and `TestableIO.System.IO.Abstractions` to their latest versions for each target framework's major.
 - **Breaking:** `X509NameConstraintExtension` throws `ArgumentException` when both lists are null or a list that is supplied is empty.
+- **Breaking:** `GeneralNameListBuilder.AddUri` and `AddUris` throw `ArgumentException` for a relative `Uri`, which previously failed when the name was encoded.
 
 ### Fixed
 
 - The `[Obsolete]` message on `X500NameBuilder.SetEmail` names `CertificateBuilder.SetSubjectAlternativeNames` with `GeneralNameListBuilder.AddEmailAddress` in place of a `SetEmail` method that does not exist.
 - The `ExportAsPem`, `ExportAsPrivateKeyPem` and `ExportAsPublicKeyPem` overloads taking a file path replace an existing file in place of overwriting only its start.
 - Disposing a `ChainResult` disposes the chain's element certificates.
+- The `GeneralNameListBuilder` DNS name, email address, URI and IP address methods, `X509NameConstraintExtension` and `CertificateBuilder.SetSubjectAlternativeNames` throw `ArgumentNullException` for a null argument in place of `NullReferenceException`.
 
 ## [0.24.0] - 2026-11-02
 

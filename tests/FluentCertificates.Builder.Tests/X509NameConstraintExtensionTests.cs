@@ -74,6 +74,16 @@ public class X509NameConstraintExtensionTests
     }
 
 
+    [Test]
+    public async Task Constructor_ANullNameInAList_Throws()
+    {
+        GeneralName[] withNull = [Dns("permitted.example.com").Single(), null!];
+
+        await Assert.That(() => new X509NameConstraintExtension(withNull, null)).ThrowsExactly<ArgumentNullException>();
+        await Assert.That(() => new X509NameConstraintExtension(null, withNull)).ThrowsExactly<ArgumentNullException>();
+    }
+
+
     private static IEnumerable<GeneralName> Dns(params string[] names)
         => new GeneralNameListBuilder().AddDnsNames(names).Create();
 

@@ -15,6 +15,7 @@ namespace FluentCertificates;
 /// A collection of <see cref="GeneralName"/> objects representing the excluded name subtrees. May be null, which omits the field.
 /// </param>
 /// <exception cref="ArgumentException">Both lists are null, or a list that is supplied is empty.</exception>
+/// <exception cref="ArgumentNullException">A list that is supplied contains a null name.</exception>
 public class X509NameConstraintExtension(IEnumerable<GeneralName>? permittedSubtrees, IEnumerable<GeneralName>? excludedSubtrees)
     : X509Extension(Oids.NameConstraints, EncodeExtension(permittedSubtrees, excludedSubtrees), true)
 {
@@ -39,6 +40,14 @@ public class X509NameConstraintExtension(IEnumerable<GeneralName>? permittedSubt
 
         if (excluded is { Count: 0 }) {
             throw new ArgumentException("A subtree list must hold at least one name, since RFC 5280 s4.2.1.10 gives GeneralSubtrees a minimum size of 1. Pass null to omit it", nameof(excludedSubtrees));
+        }
+
+        if (permitted is not null && permitted.Contains(null!)) {
+            throw new ArgumentNullException(nameof(permittedSubtrees), "A subtree list must not contain a null name");
+        }
+
+        if (excluded is not null && excluded.Contains(null!)) {
+            throw new ArgumentNullException(nameof(excludedSubtrees), "A subtree list must not contain a null name");
         }
 
         var writer = new AsnWriter(AsnEncodingRules.DER);
