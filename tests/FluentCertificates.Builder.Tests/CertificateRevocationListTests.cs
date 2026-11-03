@@ -334,6 +334,27 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    public async Task VerifySignature_RsaPssWithAnUnknownHash_ThrowsNotSupported()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var rsa = CreateCa(KeyAlgorithm.RSA(2048));
+
+        var identifier = new AsnWriter(AsnEncodingRules.DER);
+        using (identifier.PushSequence()) {
+            identifier.WriteObjectIdentifier(Oids.RsaPss);
+            using (identifier.PushSequence())
+            using (identifier.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0)))
+            using (identifier.PushSequence()) {
+                identifier.WriteObjectIdentifier("1.2.3.4.5");
+            }
+        }
+        var crl = CertificateRevocationList.Load(BuildCrl(key, null, [], identifier.Encode()));
+
+        await Assert.That(() => crl.VerifySignature(rsa)).Throws<NotSupportedException>();
+    }
+
+
+    [Test]
     public async Task VerifySignature_RsaPssWithUnreadableParameters_ThrowsNotSupported()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);

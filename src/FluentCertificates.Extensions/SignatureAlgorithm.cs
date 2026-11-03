@@ -197,6 +197,9 @@ public sealed record SignatureAlgorithm
                 return CreateForRsaSsaPss(algorithm, hashAlgorithm);
             } catch (AsnContentException ex) {
                 throw new NotSupportedException("The RSASSA-PSS parameters are not in a form that can be read.", ex);
+            } catch (Exception ex) when (ex is CryptographicException or ArgumentException) {
+                //HashAlgorithmName.FromOid refuses a hash it does not know
+                throw new NotSupportedException("The RSASSA-PSS hash algorithm is not supported.", ex);
             }
         }
         return FromOidValue(algorithm);
