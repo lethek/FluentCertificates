@@ -375,8 +375,11 @@ public record CertificateBuilder
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty.</exception>
     /// <exception cref="CryptographicException">Thrown when a URI contains a character outside the 7-bit ASCII set.</exception>
+    /// <remarks>Removes any Freshest CRL extension set earlier, since it named delta addresses for the points replaced
+    /// here. Set it afterwards with a <see cref="CrlDistributionPoint"/> that has <see cref="CrlDistributionPoint.DeltaUris"/>.</remarks>
     public CertificateBuilder SetCrlDistributionPoints(IEnumerable<string> uris, bool critical)
-        => SetExtension(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension(uris, critical));
+        => SetExtension(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension(uris, critical))
+            .RemoveExtensionsByOidValue(Oids.FreshestCrl);
 
     /// <summary>Sets the CRL Distribution Points extension from the same <see cref="CrlDistributionPoint"/> values
     /// that <see cref="X509CrlBuilder.SetDistributionPoint"/> writes into the CRLs.</summary>

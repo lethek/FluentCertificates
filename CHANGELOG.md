@@ -21,6 +21,10 @@ release rather than record it as it happened.
 - `CertificateBuilder.SetCrlDistributionPoints` overloads taking `CrlDistributionPoint`, which also set the Freshest CRL extension for delta CRL addresses.
 - `Oids.InvalidityDate`, `DeltaCrlIndicator`, `IssuingDistributionPoint` and `CertificateIssuer`.
 
+### Changed
+
+- `CertificateBuilder.SetCrlDistributionPoints` with addresses as strings removes a Freshest CRL extension set earlier.
+
 ### Fixed
 
 - `X509Certificate2Extensions.IsIssuedBy` with `verifySignature` returns `false` in place of throwing `NullReferenceException` when the issuer's key is of a different kind than the signature algorithm.
