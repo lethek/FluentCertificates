@@ -146,17 +146,7 @@ public record CertificateSigningRequest
     {
         var reader = new AsnReader(rawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
         reader.ReadSequence(Asn1Tag.Sequence); //Skip CertificationRequestInfo
-        var algIdentifier = reader.ReadSequence(Asn1Tag.Sequence);
-        var algorithm = algIdentifier.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-        if (algorithm == Oids.RsaPss) {
-            var hashAlgorithm = algIdentifier
-                .ReadSequence(Asn1Tag.Sequence)
-                .ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0))
-                .ReadSequence(Asn1Tag.Sequence)
-                .ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-            return SignatureAlgorithm.CreateForRsaSsaPss(algorithm, hashAlgorithm);
-        }
-        return SignatureAlgorithm.FromOidValue(algorithm);
+        return SignatureAlgorithm.FromAlgorithmIdentifier(reader.ReadEncodedValue());
     }
 
 
