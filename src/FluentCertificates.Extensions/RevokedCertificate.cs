@@ -5,7 +5,9 @@ namespace FluentCertificates;
 
 /// <summary>One entry of a CRL: a certificate that has been revoked, and when and why.</summary>
 /// <remarks>Equality compares <see cref="SerialNumber"/> by reference, as it does for any
-/// <see cref="ReadOnlyMemory{T}"/>.</remarks>
+/// <see cref="ReadOnlyMemory{T}"/>. A serial number is unsigned. A loaded CRL that lists a negative one, which
+/// RFC 5280 s4.1.2.2 forbids, yields its two's-complement bytes, and writing those back gives a different,
+/// positive number.</remarks>
 /// <param name="SerialNumber">The revoked certificate's serial number, as unsigned big-endian bytes.</param>
 /// <param name="RevocationDate">When the certificate was revoked.</param>
 /// <param name="Reason">Why it was revoked, or <see langword="null"/> to state no reason.</param>
