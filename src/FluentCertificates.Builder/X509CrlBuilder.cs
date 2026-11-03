@@ -258,6 +258,8 @@ public record X509CrlBuilder
     /// <returns>The signed CRL, read back from its encoding.</returns>
     /// <exception cref="InvalidOperationException">The issuer, signing key, CRL number or next update is missing;
     /// or the settings contradict each other or RFC 5280. The message says which.</exception>
+    /// <exception cref="CryptographicException">The <see cref="Issuer"/> certificate has no private key that can be found.</exception>
+    /// <exception cref="NotSupportedException">The <see cref="Issuer"/>'s key cannot sign, such as an ECDH key, or is of an unsupported kind.</exception>
     /// <remarks>Refuses: a signing certificate whose key usage lacks <see cref="X509KeyUsageFlags.CrlSign"/>; a next
     /// update before this update; a delta CRL whose number is not above its base's, or whose scope differs from the
     /// base CRL passed to <see cref="SetDeltaOf(CertificateRevocationList)"/>; a certificate listed twice with
