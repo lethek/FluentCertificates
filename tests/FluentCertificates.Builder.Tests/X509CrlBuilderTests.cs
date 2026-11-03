@@ -293,6 +293,29 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task CrlDistributionPoint_SameAddressesCoverageAndIssuer_AreEqual()
+    {
+        var a = new CrlDistributionPoint("http://crl.test/a.crl") { DeltaUris = ["http://crl.test/d.crl"], CrlIssuer = new X500DistinguishedName("CN=Issuer") };
+        var b = new CrlDistributionPoint("http://crl.test/a.crl") { DeltaUris = ["http://crl.test/d.crl"], CrlIssuer = new X500DistinguishedName("CN=Issuer") };
+
+        await Assert.That(a).IsEqualTo(b);
+        await Assert.That(a.GetHashCode()).IsEqualTo(b.GetHashCode());
+    }
+
+
+    [Test]
+    public async Task CrlDistributionPoint_DifferentAddressCoverageDeltaOrIssuer_AreNotEqual()
+    {
+        var point = new CrlDistributionPoint("http://crl.test/a.crl");
+
+        await Assert.That(point).IsNotEqualTo(new CrlDistributionPoint("http://crl.test/b.crl"));
+        await Assert.That(point).IsNotEqualTo(point with { Covers = CrlCoverage.CACertificates });
+        await Assert.That(point).IsNotEqualTo(point with { DeltaUris = ["http://crl.test/d.crl"] });
+        await Assert.That(point).IsNotEqualTo(point with { CrlIssuer = new X500DistinguishedName("CN=Issuer") });
+    }
+
+
+    [Test]
     public async Task CrlDistributionPoint_AnInvalidDeltaAddress_ThrowsWhenSet()
     {
         await Assert.That(() => new CrlDistributionPoint("http://crl.test/a.crl") { DeltaUris = [""] }).Throws<ArgumentException>();
@@ -591,6 +614,21 @@ public class X509CrlBuilderTests
         var number = new X509Extension(Oids.CrlNumber, new byte[] { 2, 1, 1 }, false);
 
         await Assert.That(() => new X509CrlBuilder().AddExtension(number)).Throws<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task AddExtension_EveryExtensionOfALoadedCrl_IsAccepted()
+    {
+        using var ca = CreateCa();
+        var custom = new X509Extension(new Oid("1.2.3.4.5"), [0x05, 0x00], false);
+        var loaded = CertificateRevocationList.Load(NewBuilder(ca).AddExtension(custom).Create().RawData.Span);
+
+        var rebuilt = loaded.Extensions.Aggregate(NewBuilder(ca), (builder, extension) => builder.AddExtension(extension)).Create();
+
+        await Assert.That(loaded.AuthorityKeyIdentifier).IsNotNull();
+        await Assert.That(loaded.Extensions.Select(x => x.Oid!.Value!)).IsEquivalentTo(["1.2.3.4.5"]);
+        await Assert.That(rebuilt.Extensions.Single().Oid?.Value).IsEqualTo("1.2.3.4.5");
     }
 
 

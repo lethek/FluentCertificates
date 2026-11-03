@@ -14,7 +14,8 @@ namespace FluentCertificates;
 /// certificate's CRL Distribution Points, which is what lets a relying party tell that it was handed the
 /// right CRL.</para>
 /// <para>Windows and .NET on Linux honour a scope, and treat a CRL that does not match as unusable. Neither
-/// honours <see cref="CrlIssuer"/> (an indirect CRL). Browsers do not read CRLs named in certificates.</para>
+/// honours <see cref="CrlIssuer"/> (an indirect CRL). Windows uses delta CRLs (<see cref="DeltaUris"/>) but .NET on
+/// Linux never fetches them. Browsers do not read CRLs named in certificates.</para>
 /// </remarks>
 public sealed record CrlDistributionPoint
 {
@@ -43,7 +44,8 @@ public sealed record CrlDistributionPoint
 
     /// <summary>Gets the addresses the matching delta CRL can be downloaded from. Empty when there is none.</summary>
     /// <remarks>Written as the Freshest CRL extension of a full CRL or a certificate. A delta CRL carries none,
-    /// since RFC 5280 s5.2.6 forbids it.</remarks>
+    /// since RFC 5280 s5.2.6 forbids it. Windows uses delta CRLs; .NET on Linux never fetches them, and browsers
+    /// do not read CRLs from certificates, so a client may check only the full CRL.</remarks>
     /// <exception cref="ArgumentException">Setting it to a list with an address that is empty, <see langword="null"/> or not ASCII.</exception>
     public ImmutableList<string> DeltaUris
     {
@@ -57,10 +59,42 @@ public sealed record CrlDistributionPoint
 
     /// <summary>Gets the name of the party that signs the CRL where that is not the certificate's issuer,
     /// which makes it an indirect CRL, or <see langword="null"/> where the issuer signs its own CRL.</summary>
+    /// <remarks>Neither Windows nor .NET on Linux honours an indirect CRL, so a certificate that relies on one is
+    /// not reported revoked by either.</remarks>
     public X500DistinguishedName? CrlIssuer { get; init; }
 
     /// <summary>Gets which certificates the CRL covers. Defaults to <see cref="CrlCoverage.AllCertificates"/>.</summary>
     public CrlCoverage Covers { get; init; } = CrlCoverage.AllCertificates;
+
+
+    /// <summary>Gets whether another point has the same addresses in the same order, the same coverage and the same
+    /// CRL issuer, comparing the issuer by its encoded bytes.</summary>
+    /// <param name="other">The point to compare with.</param>
+    public bool Equals(CrlDistributionPoint? other)
+        => other != null
+           && Covers == other.Covers
+           && Uris.SequenceEqual(other.Uris)
+           && DeltaUris.SequenceEqual(other.DeltaUris)
+           && (CrlIssuer?.RawData is { } issuer
+               ? other.CrlIssuer?.RawData is { } otherIssuer && issuer.AsSpan().SequenceEqual(otherIssuer)
+               : other.CrlIssuer == null);
+
+    /// <summary>Gets a hash code consistent with <see cref="Equals(CrlDistributionPoint)"/>.</summary>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(Covers);
+        foreach (var uri in Uris) {
+            hash.Add(uri);
+        }
+        foreach (var uri in DeltaUris) {
+            hash.Add(uri);
+        }
+        if (CrlIssuer != null) {
+            hash.AddBytes(CrlIssuer.RawData);
+        }
+        return hash.ToHashCode();
+    }
 
 
     /// <summary>Creates a point without checking its addresses, for one read out of a CRL that another tool wrote

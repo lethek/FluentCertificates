@@ -74,7 +74,14 @@ public sealed class CertificateRevocationList
     /// than a URI. The extension is then left in <see cref="Extensions"/> as it was received.</remarks>
     public CrlDistributionPoint? DistributionPoint { get; private init; }
 
+    /// <summary>Gets the Authority Key Identifier extension as it was received, or <see langword="null"/> where the CRL carries none.</summary>
+    /// <remarks>Not repeated in <see cref="Extensions"/>. <c>X509CrlBuilder</c> writes its own from the issuer's key.</remarks>
+    public X509Extension? AuthorityKeyIdentifier { get; private init; }
+
     /// <summary>Gets the CRL-wide extensions this type has no property for, as they were received.</summary>
+    /// <remarks>Each can be passed to <c>X509CrlBuilder.AddExtension</c> except an Issuing Distribution Point or
+    /// Freshest CRL extension that <see cref="DistributionPoint"/> could not express, which the builder writes only
+    /// from its own settings.</remarks>
     public ImmutableList<X509Extension> Extensions { get; private init; } = [];
 
     /// <summary>Gets the revoked certificates.</summary>
@@ -197,7 +204,7 @@ public sealed class CertificateRevocationList
             entries = tbs.ReadEncodedValue();
         }
 
-        var extensions = new CrlExtensions(null, null, null, false, []);
+        var extensions = new CrlExtensions(null, null, null, false, null, []);
         if (tbs.HasData) {
             var wrapper = tbs.ReadSequence(Context0Tag);
             extensions = ReadCrlExtensions(ReadExtensions(wrapper.ReadSequence()), issuer);
@@ -209,6 +216,7 @@ public sealed class CertificateRevocationList
             CrlNumber = extensions.CrlNumber,
             BaseCrlNumber = extensions.BaseCrlNumber,
             DistributionPoint = extensions.DistributionPoint,
+            AuthorityKeyIdentifier = extensions.AuthorityKeyIdentifier,
             Extensions = extensions.Others,
             //After the extensions, because whether the CRL is indirect decides whether its entries may name another issuer
             RevokedCertificates = ReadEntries(entries, extensions.IsIndirect)
@@ -221,6 +229,7 @@ public sealed class CertificateRevocationList
         BigInteger? BaseCrlNumber,
         CrlDistributionPoint? DistributionPoint,
         bool IsIndirect,
+        X509Extension? AuthorityKeyIdentifier,
         ImmutableList<X509Extension> Others);
 
 
@@ -236,6 +245,7 @@ public sealed class CertificateRevocationList
         BigInteger? number = null, baseNumber = null;
         CrlDistributionPoint? point = null;
         var indirect = false;
+        X509Extension? authorityKeyIdentifier = null;
         RawExtension? scope = null;
         RawExtension? freshest = null;
         var others = ImmutableList.CreateBuilder<X509Extension>();
@@ -255,6 +265,9 @@ public sealed class CertificateRevocationList
                 case Oids.FreshestCrl:
                     freshest = extension;
                     break;
+                case Oids.AuthorityKeyIdentifier:
+                    authorityKeyIdentifier = extension.ToX509Extension();
+                    break;
                 default:
                     others.Add(extension.ToX509Extension());
                     break;
@@ -273,7 +286,7 @@ public sealed class CertificateRevocationList
             others.Add(freshest.Value.ToX509Extension());
         }
 
-        return new CrlExtensions(number, baseNumber, point, indirect, others.ToImmutable());
+        return new CrlExtensions(number, baseNumber, point, indirect, authorityKeyIdentifier, others.ToImmutable());
     }
 
 

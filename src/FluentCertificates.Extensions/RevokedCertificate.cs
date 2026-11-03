@@ -14,7 +14,8 @@ namespace FluentCertificates;
 /// <param name="InvalidityDate">When the key is known or suspected to have been compromised, if that is earlier
 /// than <paramref name="RevocationDate"/>, or <see langword="null"/>.</param>
 /// <param name="CertificateIssuer">The issuer of the revoked certificate where it is not the CRL's own issuer, as
-/// happens in an indirect CRL, or <see langword="null"/> for the CRL's own issuer.</param>
+/// happens in an indirect CRL, or <see langword="null"/> for the CRL's own issuer. Neither Windows nor .NET on
+/// Linux honours an indirect CRL.</param>
 public sealed record RevokedCertificate(
     ReadOnlyMemory<byte> SerialNumber,
     DateTimeOffset RevocationDate,

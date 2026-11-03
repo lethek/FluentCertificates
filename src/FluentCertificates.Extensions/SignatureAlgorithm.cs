@@ -248,7 +248,8 @@ public sealed record SignatureAlgorithm
 
     /// <summary>
     /// Reads RSASSA-PSS-params. A lenient read takes only the hash, and only when it is the first field, and
-    /// ignores everything else. A strict read walks every field.
+    /// ignores everything else. A strict read walks every field and refuses one that is out of order, repeated or
+    /// followed by content it does not read.
     /// </summary>
     /// <param name="parameters">The contents of the parameter SEQUENCE.</param>
     /// <param name="strict">Whether to read and refuse every field, rather than only the hash.</param>
@@ -257,6 +258,7 @@ public sealed record SignatureAlgorithm
     private static RsaPssParameters ReadRsaPssParameters(AsnReader parameters, bool strict)
     {
         var result = new RsaPssParameters(Oids.Sha1, Oids.Sha1, 20, 1);
+        var previousTagValue = -1;
         while (parameters.HasData) {
             var tag = parameters.PeekTag();
             if (!strict && !tag.HasSameClassAndValue(HashAlgorithmTag)) {
@@ -265,18 +267,25 @@ public sealed record SignatureAlgorithm
             if (tag.TagClass != TagClass.ContextSpecific) {
                 throw new AsnContentException("Unexpected field in the RSASSA-PSS parameters.");
             }
+            if (strict && tag.TagValue <= previousTagValue) {
+                throw new AsnContentException("The RSASSA-PSS parameters are out of order or repeat a field.");
+            }
+            previousTagValue = tag.TagValue;
 
             var field = parameters.ReadSequence(tag);
             switch (tag.TagValue) {
                 case 0:
-                    result = result with { Hash = field.ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) };
+                    result = result with { Hash = ReadHashAlgorithmOid(field, strict) };
                     break;
                 case 1:
                     var maskGenerator = field.ReadSequence(Asn1Tag.Sequence);
                     if (maskGenerator.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) != Oids.Mgf1) {
                         throw new NotSupportedException("The RSASSA-PSS mask generation function is not MGF1.");
                     }
-                    result = result with { MaskHash = maskGenerator.ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) };
+                    result = result with { MaskHash = ReadHashAlgorithmOid(maskGenerator, strict) };
+                    if (strict) {
+                        maskGenerator.ThrowIfNotEmpty();
+                    }
                     break;
                 case 2:
                     result = result with { SaltLength = field.ReadInteger() };
@@ -291,8 +300,24 @@ public sealed record SignatureAlgorithm
             if (!strict) {
                 break;
             }
+            field.ThrowIfNotEmpty();
         }
         return result;
+    }
+
+
+    /// <summary>Reads the OID of a hash AlgorithmIdentifier. A strict read also refuses content after the optional NULL parameters.</summary>
+    private static string ReadHashAlgorithmOid(AsnReader container, bool strict)
+    {
+        var algorithm = container.ReadSequence(Asn1Tag.Sequence);
+        var oid = algorithm.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+        if (strict) {
+            if (algorithm.HasData) {
+                algorithm.ReadNull();
+            }
+            algorithm.ThrowIfNotEmpty();
+        }
+        return oid;
     }
 
 

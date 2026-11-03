@@ -167,7 +167,9 @@ public record X509CrlBuilder
     /// <para>Of <see cref="CrlDistributionPoint.DeltaUris"/>, a full CRL writes the Freshest CRL extension and a
     /// delta CRL writes nothing, since RFC 5280 s5.2.6 forbids a delta CRL to carry one.</para>
     /// <para>A <see cref="CrlDistributionPoint.CrlIssuer"/> makes the CRL indirect. It must be the name this
-    /// builder issues under.</para>
+    /// builder issues under. Neither Windows nor .NET on Linux honours an indirect CRL.</para>
+    /// <para>Windows and .NET on Linux honour the scope and treat a CRL that does not match as unusable. Browsers do
+    /// not read CRLs named in certificates.</para>
     /// </remarks>
     public X509CrlBuilder SetDistributionPoint(CrlDistributionPoint point)
     {
@@ -185,7 +187,8 @@ public record X509CrlBuilder
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="baseCrlNumber"/> is negative.</exception>
     /// <remarks>The scope must be the same as the base CRL's, which this cannot see: pass the base CRL itself to
     /// <see cref="SetDeltaOf(CertificateRevocationList)"/> to have it checked. A delta needs a
-    /// <see cref="CrlNumber"/> above the base's.</remarks>
+    /// <see cref="CrlNumber"/> above the base's. Windows uses delta CRLs; .NET on Linux never fetches them, so
+    /// publish full CRLs often enough that a client without delta support is not left stale.</remarks>
     public X509CrlBuilder SetDeltaOf(BigInteger baseCrlNumber)
         => baseCrlNumber.Sign >= 0
             ? this with { BaseCrlNumber = baseCrlNumber, BaseCrl = null }
@@ -198,7 +201,7 @@ public record X509CrlBuilder
     /// <exception cref="ArgumentException"><paramref name="baseCrl"/> has no CRL number, is itself a delta CRL, or has a
     /// scope that <see cref="CertificateRevocationList.DistributionPoint"/> cannot express.</exception>
     /// <remarks><see cref="Create"/> refuses a <see cref="DistributionPoint"/> whose scope differs from the base's,
-    /// since RFC 5280 s5.2.4 requires the two to match.</remarks>
+    /// since RFC 5280 s5.2.4 requires the two to match. Windows uses delta CRLs; .NET on Linux never fetches them.</remarks>
     public X509CrlBuilder SetDeltaOf(CertificateRevocationList baseCrl)
     {
         ArgumentNullException.ThrowIfNull(baseCrl);

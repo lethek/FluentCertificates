@@ -382,7 +382,10 @@ public record CertificateBuilder
     public CertificateBuilder SetCrlDistributionPoints(IEnumerable<string> uris, bool critical)
     {
         ArgumentNullException.ThrowIfNull(uris);
-        return SetCrlDistributionPoints([.. uris.Select(uri => new CrlDistributionPoint(uri))], critical);
+        var points = uris.Select(uri => new CrlDistributionPoint(uri)).ToList();
+        return points.Count == 0
+            ? throw new ArgumentException("At least one URI must be supplied", nameof(uris))
+            : SetCrlDistributionPoints(points, critical);
     }
 
     /// <summary>Sets the CRL Distribution Points extension from the same <see cref="CrlDistributionPoint"/> values

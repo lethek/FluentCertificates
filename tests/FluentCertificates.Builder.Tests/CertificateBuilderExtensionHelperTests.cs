@@ -122,6 +122,15 @@ public class CertificateBuilderExtensionHelperTests
 
 
     [Test]
+    public async Task SetCrlDistributionPoints_NoUris_ThrowsNamingTheUrisParameter()
+    {
+        var thrown = await Assert.That(() => new CertificateBuilder().SetCrlDistributionPoints(Array.Empty<string>(), false)).Throws<ArgumentException>();
+
+        await Assert.That(thrown!.ParamName).IsEqualTo("uris");
+    }
+
+
+    [Test]
     public async Task SetCrlDistributionPoints_MarkedCritical_CarriesTheCriticalFlag()
     {
         using var cert = new CertificateBuilder()

@@ -174,6 +174,91 @@ public class SignatureAlgorithmPssParameterTests
 
 
     [Test]
+    public async Task ThrowIfPssParametersNotVerifiable_NullParametersOnTheHashes_DoesNotThrow()
+    {
+        var der = Encode(w => {
+            using (w.PushSequence(Context(0)))
+            using (w.PushSequence()) {
+                w.WriteObjectIdentifier(Oids.Sha256);
+                w.WriteNull();
+            }
+            using (w.PushSequence(Context(1)))
+            using (w.PushSequence()) {
+                w.WriteObjectIdentifier(Oids.Mgf1);
+                using (w.PushSequence()) {
+                    w.WriteObjectIdentifier(Oids.Sha256);
+                    w.WriteNull();
+                }
+            }
+            WriteInteger(w, 2, 32);
+        });
+
+        SignatureAlgorithm.ThrowIfPssParametersNotVerifiable(der);
+
+        await Task.CompletedTask;
+    }
+
+
+    [Test]
+    public async Task ThrowIfPssParametersNotVerifiable_RepeatedSaltLength_ThrowsNotSupported()
+    {
+        var der = Encode(w => {
+            WriteHash(w, Oids.Sha256);
+            WriteMaskGenerator(w, Oids.Mgf1, Oids.Sha256);
+            WriteInteger(w, 2, 99);
+            WriteInteger(w, 2, 32);
+        });
+
+        await Assert.That(() => SignatureAlgorithm.ThrowIfPssParametersNotVerifiable(der)).Throws<NotSupportedException>();
+    }
+
+
+    [Test]
+    public async Task ThrowIfPssParametersNotVerifiable_FieldsOutOfOrder_ThrowsNotSupported()
+    {
+        var der = Encode(w => {
+            WriteHash(w, Oids.Sha256);
+            WriteInteger(w, 2, 32);
+            WriteMaskGenerator(w, Oids.Mgf1, Oids.Sha256);
+        });
+
+        await Assert.That(() => SignatureAlgorithm.ThrowIfPssParametersNotVerifiable(der)).Throws<NotSupportedException>();
+    }
+
+
+    [Test]
+    public async Task ThrowIfPssParametersNotVerifiable_ContentAfterAFieldsValue_ThrowsNotSupported()
+    {
+        var der = Encode(w => {
+            WriteHash(w, Oids.Sha256);
+            WriteMaskGenerator(w, Oids.Mgf1, Oids.Sha256);
+            using (w.PushSequence(Context(2))) {
+                w.WriteInteger(32);
+                w.WriteInteger(99);
+            }
+        });
+
+        await Assert.That(() => SignatureAlgorithm.ThrowIfPssParametersNotVerifiable(der)).Throws<NotSupportedException>();
+    }
+
+
+    [Test]
+    public async Task ThrowIfPssParametersNotVerifiable_ContentAfterTheHashIdentifier_ThrowsNotSupported()
+    {
+        var der = Encode(w => {
+            using (w.PushSequence(Context(0)))
+            using (w.PushSequence()) {
+                w.WriteObjectIdentifier(Oids.Sha256);
+                w.WriteNull();
+                w.WriteInteger(1);
+            }
+        });
+
+        await Assert.That(() => SignatureAlgorithm.ThrowIfPssParametersNotVerifiable(der)).Throws<NotSupportedException>();
+    }
+
+
+    [Test]
     public async Task ThrowIfPssParametersNotVerifiable_TrailerOtherThanOne_ThrowsNotSupported()
     {
         var der = Encode(w => {
