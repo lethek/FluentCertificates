@@ -362,24 +362,28 @@ public record CertificateBuilder
 
 
     /// <summary>Sets the CRL Distribution Points extension, naming where the issuer publishes its revocation lists.</summary>
-    /// <param name="uris">The URIs the CRL can be downloaded from. Must contain at least one URI, and each must be ASCII.</param>
+    /// <param name="uris">The URIs the CRL can be downloaded from. Must contain at least one URI, and each must be non-empty and ASCII.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty.</exception>
-    /// <exception cref="CryptographicException">Thrown when a URI contains a character outside the 7-bit ASCII set.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty, or an address is empty, <see langword="null"/> or contains a character outside the 7-bit ASCII set.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="uris"/> is <see langword="null"/>.</exception>
+    /// <remarks>Writes one distribution point per address. To publish one point at several addresses, pass a <see cref="CrlDistributionPoint"/>.</remarks>
     public CertificateBuilder SetCrlDistributionPoints(params IEnumerable<string> uris)
         => SetCrlDistributionPoints(uris, false);
 
     /// <summary>Sets the CRL Distribution Points extension, naming where the issuer publishes its revocation lists.</summary>
-    /// <param name="uris">The URIs the CRL can be downloaded from. Must contain at least one URI, and each must be ASCII.</param>
+    /// <param name="uris">The URIs the CRL can be downloaded from. Must contain at least one URI, and each must be non-empty and ASCII.</param>
     /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.1.13 says it SHOULD be non-critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
-    /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty.</exception>
-    /// <exception cref="CryptographicException">Thrown when a URI contains a character outside the 7-bit ASCII set.</exception>
-    /// <remarks>Removes any Freshest CRL extension set earlier, since it named delta addresses for the points replaced
+    /// <exception cref="ArgumentException">Thrown when <paramref name="uris"/> is empty, or an address is empty, <see langword="null"/> or contains a character outside the 7-bit ASCII set.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="uris"/> is <see langword="null"/>.</exception>
+    /// <remarks>Writes one distribution point per address. To publish one point at several addresses, pass a <see cref="CrlDistributionPoint"/>.
+    /// Removes any Freshest CRL extension set earlier, since it named delta addresses for the points replaced
     /// here. Set it afterwards with a <see cref="CrlDistributionPoint"/> that has <see cref="CrlDistributionPoint.DeltaUris"/>.</remarks>
     public CertificateBuilder SetCrlDistributionPoints(IEnumerable<string> uris, bool critical)
-        => SetExtension(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension(uris, critical))
-            .RemoveExtensionsByOidValue(Oids.FreshestCrl);
+    {
+        ArgumentNullException.ThrowIfNull(uris);
+        return SetCrlDistributionPoints([.. uris.Select(uri => new CrlDistributionPoint(uri))], critical);
+    }
 
     /// <summary>Sets the CRL Distribution Points extension from the same <see cref="CrlDistributionPoint"/> values
     /// that <see cref="X509CrlBuilder.SetDistributionPoint"/> writes into the CRLs.</summary>

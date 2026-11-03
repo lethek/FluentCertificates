@@ -158,7 +158,37 @@ public class CertificateBuilderExtensionHelperTests
     public async Task SetCrlDistributionPoints_NonAsciiUri_Throws()
     {
         await Assert.That(() => new CertificateBuilder().SetCrlDistributionPoints("http://crl.exámple.com/")) // DevSkim: ignore DS137138
-            .Throws<CryptographicException>();
+            .Throws<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task SetCrlDistributionPoints_EmptyUri_Throws()
+    {
+        await Assert.That(() => new CertificateBuilder().SetCrlDistributionPoints("")).Throws<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task SetCrlDistributionPoints_NullUriEntry_Throws()
+    {
+        await Assert.That(() => new CertificateBuilder().SetCrlDistributionPoints([CrlUri, null!])).Throws<ArgumentException>();
+    }
+
+
+    [Test]
+    [Arguments(1)]
+    [Arguments(2)]
+    public async Task SetCrlDistributionPoints_Uris_MatchesTheFrameworkEncodingByteForByte(int count)
+    {
+        string[] uris = [CrlUri, "http://crl2.example.com/other.crl"]; // DevSkim: ignore DS137138
+        uris = uris[..count];
+
+        var ours = new CertificateBuilder().SetCrlDistributionPoints(uris, false).Extensions.Single();
+        var framework = CertificateRevocationListBuilder.BuildCrlDistributionPointExtension(uris, false);
+
+        await Assert.That(ours.Oid!.Value).IsEqualTo(framework.Oid!.Value);
+        await Assert.That(ours.RawData).IsEquivalentTo(framework.RawData);
     }
 
 
