@@ -252,14 +252,32 @@ public class CertificateRevocationListTests
 
 
     [Test]
-    [Arguments(false)]
-    [Arguments(true)]
-    public async Task VerifySignature_RsaPssWithDefaultParameters_ReturnsFalseForAnotherKey(bool explicitNull)
+    public async Task VerifySignature_RsaPssWithAnEmptyParameterSequence_UsesTheDefaults()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         using var rsa = CreateCa(KeyAlgorithm.RSA(2048));
 
-        //RSASSA-PSS with its parameters absent, or NULL, which stand for the SHA-1 defaults
+        //Every field of RSASSA-PSS-params has a default, so an empty SEQUENCE is the SHA-1 parameters
+        var identifier = new AsnWriter(AsnEncodingRules.DER);
+        using (identifier.PushSequence()) {
+            identifier.WriteObjectIdentifier(Oids.RsaPss);
+            using (identifier.PushSequence()) { }
+        }
+        var crl = CertificateRevocationList.Load(BuildCrl(key, null, [], identifier.Encode()));
+
+        await Assert.That(crl.VerifySignature(rsa)).IsFalse();
+    }
+
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task VerifySignature_RsaPssWithAbsentOrNullParameters_ThrowsNotSupported(bool explicitNull)
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var rsa = CreateCa(KeyAlgorithm.RSA(2048));
+
+        //RFC 4055 s3.1: a signature's parameters MUST be present, as RSASSA-PSS-params
         var identifier = new AsnWriter(AsnEncodingRules.DER);
         using (identifier.PushSequence()) {
             identifier.WriteObjectIdentifier(Oids.RsaPss);
@@ -269,7 +287,7 @@ public class CertificateRevocationListTests
         }
         var crl = CertificateRevocationList.Load(BuildCrl(key, null, [], identifier.Encode()));
 
-        await Assert.That(crl.VerifySignature(rsa)).IsFalse();
+        await Assert.That(() => crl.VerifySignature(rsa)).Throws<NotSupportedException>();
     }
 
 

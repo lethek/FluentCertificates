@@ -185,17 +185,15 @@ public sealed record SignatureAlgorithm
         var reader = new AsnReader(algorithmIdentifier, AsnEncodingRules.BER).ReadSequence(Asn1Tag.Sequence);
         var algorithm = reader.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
         if (algorithm == Oids.RsaPss) {
-            //RFC 4055 s3.1: parameters that are absent or NULL stand for the defaults, which hash with SHA-1
-            if (!reader.HasData || reader.PeekTag() == Asn1Tag.Null) {
-                return CreateForRsaSsaPss(algorithm, Oids.Sha1);
-            }
-
             try {
-                var hashAlgorithm = reader
-                    .ReadSequence(Asn1Tag.Sequence)
-                    .ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0))
-                    .ReadSequence(Asn1Tag.Sequence)
-                    .ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+                //RFC 4055 s3.1: the parameters MUST be present in a signature's algorithm identifier, as
+                //RSASSA-PSS-params, so an absent or NULL one is refused. Within them every field has a default,
+                //and the hash is SHA-1 where hashAlgorithm is left out.
+                var parameters = reader.ReadSequence(Asn1Tag.Sequence);
+                var hashTag = new Asn1Tag(TagClass.ContextSpecific, 0);
+                var hashAlgorithm = parameters.HasData && parameters.PeekTag().HasSameClassAndValue(hashTag)
+                    ? parameters.ReadSequence(hashTag).ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier)
+                    : Oids.Sha1;
                 return CreateForRsaSsaPss(algorithm, hashAlgorithm);
             } catch (AsnContentException ex) {
                 throw new NotSupportedException("The RSASSA-PSS parameters are not in a form that can be read.", ex);
