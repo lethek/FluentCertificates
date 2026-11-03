@@ -89,9 +89,17 @@ public sealed class CertificateRevocationList
     /// <returns>The CRL.</returns>
     /// <exception cref="CryptographicException"><paramref name="data"/> is not a well-formed CRL.</exception>
     public static CertificateRevocationList Load(ReadOnlySpan<byte> data)
+        => LoadWithoutCopy(data.ToArray());
+
+
+    /// <summary>Reads a CRL from an array it then keeps and never copies.</summary>
+    /// <param name="data">The BER or DER encoded <c>CertificateList</c>. The caller must not change it afterwards.</param>
+    /// <exception cref="CryptographicException"><paramref name="data"/> is not a well-formed CRL.</exception>
+    /// <remarks>For a caller that has just made the array and holds no other reference to it.</remarks>
+    internal static CertificateRevocationList LoadWithoutCopy(byte[] data)
     {
         try {
-            return Parse(data.ToArray());
+            return Parse(data);
         } catch (AsnContentException ex) {
             throw new CryptographicException("The data is not a well-formed certificate revocation list", ex);
         }
@@ -111,7 +119,7 @@ public sealed class CertificateRevocationList
         var remaining = pem.AsSpan();
         while (PemEncoding.TryFind(remaining, out var fields)) {
             if (remaining[fields.Label].SequenceEqual(PemLabel.AsSpan())) {
-                return Load(PemTools.DecodeBlock(remaining, fields));
+                return LoadWithoutCopy(PemTools.DecodeBlock(remaining, fields));
             }
             remaining = remaining[fields.Location.End..];
         }

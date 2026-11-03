@@ -313,7 +313,8 @@ public record X509CrlBuilder
             crl.WriteBitString(signature);
         }
 
-        return CertificateRevocationList.Load(crl.Encode());
+        //The encoding is ours alone, so the CRL can keep it without a copy
+        return CertificateRevocationList.LoadWithoutCopy(crl.Encode());
     }
 
 
