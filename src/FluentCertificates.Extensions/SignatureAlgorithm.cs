@@ -1,5 +1,7 @@
 ﻿using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
+using System.Formats.Asn1;
+using System.Numerics;
 using System.Security.Cryptography;
 
 
@@ -171,6 +173,152 @@ public sealed record SignatureAlgorithm
         => oid.Value != null && InstanceLookup.TryGetValue(oid.Value, out var algorithm)
             ? algorithm
             : throw new NotSupportedException($"Unsupported signature algorithm: {oid.Value} ({oid.FriendlyName})");
+
+
+    /// <summary>
+    /// Reads the algorithm from an encoded <c>AlgorithmIdentifier</c>, taking an RSA-PSS hash from its parameters.
+    /// </summary>
+    /// <param name="algorithmIdentifier">The encoded <c>AlgorithmIdentifier</c> SEQUENCE.</param>
+    /// <returns>The matching <see cref="SignatureAlgorithm"/>.</returns>
+    /// <exception cref="NotSupportedException">Thrown if the signature algorithm is not recognised.</exception>
+    internal static SignatureAlgorithm FromAlgorithmIdentifier(ReadOnlyMemory<byte> algorithmIdentifier)
+    {
+        var reader = new AsnReader(algorithmIdentifier, AsnEncodingRules.BER).ReadSequence(Asn1Tag.Sequence);
+        var algorithm = reader.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+        if (algorithm == Oids.RsaPss) {
+            try {
+                //RFC 4055 s3.1: the parameters MUST be present in a signature's algorithm identifier, as
+                //RSASSA-PSS-params, so an absent or NULL one is refused. Within them every field has a default,
+                //and the hash is SHA-1 where hashAlgorithm is left out.
+                var parameters = ReadRsaPssParameters(reader.ReadSequence(Asn1Tag.Sequence), strict: false);
+                return CreateForRsaSsaPss(algorithm, parameters.Hash);
+            } catch (AsnContentException ex) {
+                throw new NotSupportedException("The RSASSA-PSS parameters are not in a form that can be read.", ex);
+            } catch (Exception ex) when (ex is CryptographicException or ArgumentException) {
+                //HashAlgorithmName.FromOid refuses a hash it does not know
+                throw new NotSupportedException("The RSASSA-PSS hash algorithm is not supported.", ex);
+            }
+        }
+        return FromOidValue(algorithm);
+    }
+
+
+    /// <summary>
+    /// Refuses an RSASSA-PSS identifier whose parameters are not the ones .NET verifies with, and does nothing for
+    /// any other algorithm.
+    /// </summary>
+    /// <remarks>.NET verifies PSS with MGF1 over the same hash, a salt as long as the hash, and trailer field 1.
+    /// Verifying a signature that declares anything else with those settings would reject a valid signature,
+    /// or accept one that is inconsistent with what it declares.</remarks>
+    /// <param name="algorithmIdentifier">The encoded <c>AlgorithmIdentifier</c> SEQUENCE.</param>
+    /// <exception cref="NotSupportedException">The parameters are not readable or are not the ones .NET verifies with.</exception>
+    internal static void ThrowIfPssParametersNotVerifiable(ReadOnlyMemory<byte> algorithmIdentifier)
+    {
+        var reader = new AsnReader(algorithmIdentifier, AsnEncodingRules.BER).ReadSequence(Asn1Tag.Sequence);
+        if (reader.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) != Oids.RsaPss) {
+            return;
+        }
+
+        try {
+            var (hash, maskHash, saltLength, trailer) = ReadRsaPssParameters(reader.ReadSequence(Asn1Tag.Sequence), strict: true);
+
+            //HashAlgorithmName.FromOid gives a name, not the digest size the salt length is compared with
+            var hashSize = hash switch {
+                Oids.Sha1 => 20,
+                Oids.Sha256 or Oids.Sha3_256 => 32,
+                Oids.Sha384 or Oids.Sha3_384 => 48,
+                Oids.Sha512 or Oids.Sha3_512 => 64,
+                _ => throw new NotSupportedException($"The RSASSA-PSS hash {hash} is not supported.")
+            };
+            if (maskHash != hash || saltLength != hashSize || trailer != 1) {
+                throw new NotSupportedException("The RSASSA-PSS parameters are not the ones that can be verified: MGF1 over the same hash, a salt as long as the hash, and trailer field 1.");
+            }
+        } catch (AsnContentException ex) {
+            throw new NotSupportedException("The RSASSA-PSS parameters are not in a form that can be read.", ex);
+        }
+    }
+
+
+    private static readonly Asn1Tag HashAlgorithmTag = new(TagClass.ContextSpecific, 0);
+
+
+    /// <summary>The fields of an RSASSA-PSS-params SEQUENCE, with the RFC 4055 defaults where a field is absent.</summary>
+    private readonly record struct RsaPssParameters(string Hash, string MaskHash, BigInteger SaltLength, BigInteger Trailer);
+
+
+    /// <summary>
+    /// Reads RSASSA-PSS-params. A lenient read takes only the hash, and only when it is the first field, and
+    /// ignores everything else. A strict read walks every field and refuses one that is out of order, repeated or
+    /// followed by content it does not read.
+    /// </summary>
+    /// <param name="parameters">The contents of the parameter SEQUENCE.</param>
+    /// <param name="strict">Whether to read and refuse every field, rather than only the hash.</param>
+    /// <exception cref="AsnContentException">A strict read met an unexpected field, or a field is malformed.</exception>
+    /// <exception cref="NotSupportedException">A strict read met a mask generation function other than MGF1.</exception>
+    private static RsaPssParameters ReadRsaPssParameters(AsnReader parameters, bool strict)
+    {
+        var result = new RsaPssParameters(Oids.Sha1, Oids.Sha1, 20, 1);
+        var previousTagValue = -1;
+        while (parameters.HasData) {
+            var tag = parameters.PeekTag();
+            if (!strict && !tag.HasSameClassAndValue(HashAlgorithmTag)) {
+                break;
+            }
+            if (tag.TagClass != TagClass.ContextSpecific) {
+                throw new AsnContentException("Unexpected field in the RSASSA-PSS parameters.");
+            }
+            if (strict && tag.TagValue <= previousTagValue) {
+                throw new AsnContentException("The RSASSA-PSS parameters are out of order or repeat a field.");
+            }
+            previousTagValue = tag.TagValue;
+
+            var field = parameters.ReadSequence(tag);
+            switch (tag.TagValue) {
+                case 0:
+                    result = result with { Hash = ReadHashAlgorithmOid(field, strict) };
+                    break;
+                case 1:
+                    var maskGenerator = field.ReadSequence(Asn1Tag.Sequence);
+                    if (maskGenerator.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) != Oids.Mgf1) {
+                        throw new NotSupportedException("The RSASSA-PSS mask generation function is not MGF1.");
+                    }
+                    result = result with { MaskHash = ReadHashAlgorithmOid(maskGenerator, strict) };
+                    if (strict) {
+                        maskGenerator.ThrowIfNotEmpty();
+                    }
+                    break;
+                case 2:
+                    result = result with { SaltLength = field.ReadInteger() };
+                    break;
+                case 3:
+                    result = result with { Trailer = field.ReadInteger() };
+                    break;
+                default:
+                    throw new AsnContentException("Unexpected field in the RSASSA-PSS parameters.");
+            }
+
+            if (!strict) {
+                break;
+            }
+            field.ThrowIfNotEmpty();
+        }
+        return result;
+    }
+
+
+    /// <summary>Reads the OID of a hash AlgorithmIdentifier. A strict read also refuses content after the optional NULL parameters.</summary>
+    private static string ReadHashAlgorithmOid(AsnReader container, bool strict)
+    {
+        var algorithm = container.ReadSequence(Asn1Tag.Sequence);
+        var oid = algorithm.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+        if (strict) {
+            if (algorithm.HasData) {
+                algorithm.ReadNull();
+            }
+            algorithm.ThrowIfNotEmpty();
+        }
+        return oid;
+    }
 
 
     /// <summary>

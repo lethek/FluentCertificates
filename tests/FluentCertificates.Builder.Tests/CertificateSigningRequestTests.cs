@@ -339,6 +339,74 @@ public class CertificateSigningRequestTests
     }
 
 
+    [Test]
+    public async Task FromDer_RsaPssWithAnEmptyParameterSequence_ReadsTheHashAsSha1()
+    {
+        //RFC 4055 s3.1: every RSASSA-PSS-params field has a default, and the defaults are SHA-1, MGF1 over SHA-1,
+        //a 20-byte salt and trailer 1, which is what .NET signs with for SHA-1 and PSS padding
+        using var keys = RSA.Create(2048);
+        var der = BuildRsaPssRequest(keys, EncodeRsaPssAlgorithm(hashOid: null), HashAlgorithmName.SHA1);
+
+        var parsed = CertificateSigningRequest.FromDer(der);
+
+        await Assert.That(parsed.GetSignatureAlgorithm().HashAlgorithm).IsEqualTo((HashAlgorithmName?)HashAlgorithmName.SHA1);
+        await Assert.That(parsed.GetSignatureAlgorithm().RSASignaturePadding).IsEqualTo(RSASignaturePadding.Pss);
+    }
+
+
+    [Test]
+    public async Task FromDer_RsaPssWithAnUnknownHash_StillParses()
+    {
+        using var keys = RSA.Create(2048);
+        var der = BuildRsaPssRequest(keys, EncodeRsaPssAlgorithm(hashOid: "1.2.3.4"), HashAlgorithmName.SHA256);
+
+        var parsed = CertificateSigningRequest.FromDer(der, CertificateRequestLoadOptions.SkipSignatureValidation);
+
+        await Assert.That(parsed.CertificateRequest.SubjectName.Name).IsEqualTo("CN=Pss Parameters");
+        await Assert.That(() => parsed.GetSignatureAlgorithm()).Throws<NotSupportedException>();
+    }
+
+
+    /// <summary>Re-signs a request's <c>CertificationRequestInfo</c> with RSASSA-PSS under the given algorithm identifier.</summary>
+    private static byte[] BuildRsaPssRequest(RSA keys, byte[] algorithmIdentifier, HashAlgorithmName signingHash)
+    {
+        var csr = new CertificateBuilder()
+            .SetSubject("CN=Pss Parameters")
+            .SetKeyPair(keys)
+            .SetHashAlgorithm(HashAlgorithmName.SHA256)
+            .SetRSASignaturePadding(RSASignaturePadding.Pkcs1)
+            .CreateCertificateSigningRequest();
+        var info = new AsnReader(csr.RawData, AsnEncodingRules.DER).ReadSequence().ReadEncodedValue().ToArray();
+
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) {
+            writer.WriteEncodedValue(info);
+            writer.WriteEncodedValue(algorithmIdentifier);
+            writer.WriteBitString(keys.SignData(info, signingHash, RSASignaturePadding.Pss));
+        }
+        return writer.Encode();
+    }
+
+
+    /// <summary>An RSASSA-PSS AlgorithmIdentifier naming only a hash, or with an empty parameter sequence.</summary>
+    private static byte[] EncodeRsaPssAlgorithm(string? hashOid)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence()) {
+            writer.WriteObjectIdentifier(Oids.RsaPss);
+            using (writer.PushSequence()) {
+                if (hashOid != null) {
+                    using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0)))
+                    using (writer.PushSequence()) {
+                        writer.WriteObjectIdentifier(hashOid);
+                    }
+                }
+            }
+        }
+        return writer.Encode();
+    }
+
+
     private static CertificateSigningRequest BuildEcdsaRequest(string subject)
     {
         using var keys = ECDsa.Create(ECCurve.NamedCurves.nistP256);

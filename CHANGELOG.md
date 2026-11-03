@@ -13,6 +13,26 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `X509CrlBuilder`, which builds and signs full, partitioned, delta and indirect CRLs.
+- `CertificateRevocationList`, which loads a CRL from DER, BER or PEM, reads its revoked certificates and extensions, and verifies its signature.
+- `RevokedCertificate`, `CrlDistributionPoint` and `CrlCoverage`, describing a CRL entry and a CRL's address and coverage.
+- `CertificateBuilder.SetCrlDistributionPoints` overloads taking `CrlDistributionPoint`, which also set the Freshest CRL extension for delta CRL addresses.
+- `Oids.InvalidityDate`, `DeltaCrlIndicator`, `IssuingDistributionPoint` and `CertificateIssuer`.
+
+### Changed
+
+- `CertificateBuilder.SetCrlDistributionPoints` with addresses as strings removes a Freshest CRL extension set earlier.
+- **Breaking:** `CertificateBuilder.SetCrlDistributionPoints` with addresses as strings throws `ArgumentException` in place of `CryptographicException` for a non-ASCII address, and for an empty address, which it previously accepted.
+- **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` with `verifySignature` throw `NotSupportedException` for an RSASSA-PSS signature whose parameters are not the ones .NET verifies, in place of returning `false`.
+
+### Fixed
+
+- `X509Certificate2Extensions.IsIssuedBy` with `verifySignature` returns `false` in place of throwing `NullReferenceException` or `CryptographicException` when the issuer's key is of a different kind than the signature algorithm.
+- `X509Certificate2Extensions.GetSignatureAlgorithm` and `CertificateSigningRequest.GetSignatureAlgorithm` read an RSASSA-PSS signature with an empty parameter sequence as SHA-1, and throw `NotSupportedException` for absent or unreadable parameters or an unrecognised hash, in place of `AsnContentException` or `CryptographicException`.
+- `CertificateSigningRequest.FromDer` and `FromPem` with `SkipSignatureValidation` load an RSASSA-PSS request with an unrecognised hash in place of throwing `CryptographicException`.
+
 ## [0.25.0] - 2026-11-02
 
 ### Added

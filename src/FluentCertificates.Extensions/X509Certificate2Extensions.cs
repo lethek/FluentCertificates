@@ -179,17 +179,7 @@ public static class X509Certificate2Extensions
     {
         var reader = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
         reader.ReadSequence(Asn1Tag.Sequence); //Skip TBSCertificate
-        var algIdentifier = reader.ReadSequence(Asn1Tag.Sequence);
-        var algorithm = algIdentifier.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-        if (algorithm == Oids.RsaPss) {
-            var hashAlgorithm = algIdentifier
-                .ReadSequence(Asn1Tag.Sequence)
-                .ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0))
-                .ReadSequence(Asn1Tag.Sequence)
-                .ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-            return SignatureAlgorithm.CreateForRsaSsaPss(algorithm, hashAlgorithm);
-        }
-        return SignatureAlgorithm.FromOidValue(algorithm);
+        return SignatureAlgorithm.FromAlgorithmIdentifier(reader.ReadEncodedValue());
     }
 
 
@@ -223,7 +213,8 @@ public static class X509Certificate2Extensions
     /// <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if self-signed; otherwise, false.</returns>
     /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
-    /// names match, and the certificate's signature algorithm is not recognised.</exception>
+    /// names match, and the certificate's signature algorithm is not recognised, or is RSASSA-PSS with parameters
+    /// other than MGF1 over the same hash, a salt as long as the hash, and trailer field 1.</exception>
     public static bool IsSelfSigned(
         this X509Certificate2 cert,
         bool verifySignature = false,
@@ -240,7 +231,8 @@ public static class X509Certificate2Extensions
     /// <returns>True if self-signed; otherwise, false.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
     /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
-    /// names match, and the certificate's signature algorithm is not recognised.</exception>
+    /// names match, and the certificate's signature algorithm is not recognised, or is RSASSA-PSS with parameters
+    /// other than MGF1 over the same hash, a salt as long as the hash, and trailer field 1.</exception>
     public static bool IsSelfSigned(
         this X509Certificate2 cert,
         bool verifySignature,
@@ -260,7 +252,8 @@ public static class X509Certificate2Extensions
     /// <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if issued by the specified issuer; otherwise, false.</returns>
     /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
-    /// names match, and the certificate's signature algorithm is not recognised.</exception>
+    /// names match, and the certificate's signature algorithm is not recognised, or is RSASSA-PSS with parameters
+    /// other than MGF1 over the same hash, a salt as long as the hash, and trailer field 1.</exception>
     /// <remarks>The default disregards how the names were encoded, which RFC 5280 s4.1.2.4 makes necessary:
     /// a conforming authority may encode a name as either PrintableString or UTF8String, and the RFC's own
     /// notes cite comparing the bytes across such a transition as a cause of name chaining failures. Pass
@@ -285,7 +278,8 @@ public static class X509Certificate2Extensions
     /// <returns>True if issued by the specified issuer; otherwise, false.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
     /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
-    /// names match, and the certificate's signature algorithm is not recognised.</exception>
+    /// names match, and the certificate's signature algorithm is not recognised, or is RSASSA-PSS with parameters
+    /// other than MGF1 over the same hash, a salt as long as the hash, and trailer field 1.</exception>
     public static bool IsIssuedBy(
         this X509Certificate2 cert,
         X509Certificate2 issuer,
@@ -306,9 +300,25 @@ public static class X509Certificate2Extensions
     /// <returns>True if the signature is valid; otherwise, false.</returns>
     private static bool VerifySignature(X509Certificate2 cert, X509Certificate2 issuer)
     {
-        var algorithm = cert.GetSignatureAlgorithm();
-        var tbs = cert.GetToBeSignedData().Span;
-        var sig = cert.GetSignatureData().Span;
+        var reader = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
+        reader.ReadSequence(Asn1Tag.Sequence); //Skip TBSCertificate
+        return VerifySignature(reader.ReadEncodedValue(), cert.GetToBeSignedData().Span, cert.GetSignatureData().Span, issuer);
+    }
+
+
+    /// <summary>
+    /// Verifies a signature over <paramref name="tbs"/> using the issuer's public key.
+    /// </summary>
+    /// <param name="algorithmIdentifier">The encoded <c>AlgorithmIdentifier</c> SEQUENCE the signature was made with.</param>
+    /// <param name="tbs">The signed bytes.</param>
+    /// <param name="sig">The signature.</param>
+    /// <param name="issuer">The certificate holding the public key.</param>
+    /// <returns>True if the signature is valid; otherwise, false.</returns>
+    /// <exception cref="NotSupportedException">The algorithm is not recognised, or is RSASSA-PSS with parameters .NET cannot verify.</exception>
+    internal static bool VerifySignature(ReadOnlyMemory<byte> algorithmIdentifier, ReadOnlySpan<byte> tbs, ReadOnlySpan<byte> sig, X509Certificate2 issuer)
+    {
+        var algorithm = SignatureAlgorithm.FromAlgorithmIdentifier(algorithmIdentifier);
+        SignatureAlgorithm.ThrowIfPssParametersNotVerifiable(algorithmIdentifier);
 
         //Each Get*PublicKey call returns a fresh instance that this method owns and must release
         switch (algorithm.Family) {
@@ -318,17 +328,22 @@ public static class X509Certificate2Extensions
                 //hands back a legacy CSP key that knows no hash algorithm beyond SHA-1 and throws for the
                 //SHA-256 the certificate was signed with
                 using var key = DSA.Create();
-                key.ImportSubjectPublicKeyInfo(issuer.PublicKey.ExportSubjectPublicKeyInfo(), out _);
+                try {
+                    key.ImportSubjectPublicKeyInfo(issuer.PublicKey.ExportSubjectPublicKeyInfo(), out _);
+                } catch (CryptographicException) {
+                    //The issuer's key is not a DSA key, which is a signature that does not verify
+                    return false;
+                }
                 return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
             }
             #pragma warning restore CS0618 // Type or member is obsolete
             case KeyAlgorithmFamily.Rsa: {
-                using var key = issuer.GetRSAPublicKey()!;
-                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, algorithm.RSASignaturePadding!);
+                using var key = issuer.GetRSAPublicKey();
+                return key != null && key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, algorithm.RSASignaturePadding!);
             }
             case KeyAlgorithmFamily.ECDsa: {
-                using var key = issuer.GetECDsaPublicKey()!;
-                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
+                using var key = issuer.GetECDsaPublicKey();
+                return key != null && key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
             }
 #if NET10_0_OR_GREATER
             //The post-quantum algorithms absorb the message directly, so there is no hash to pass and no
@@ -336,20 +351,20 @@ public static class X509Certificate2Extensions
             #pragma warning disable FLUENTCERT001 // Verifying a post-quantum signature is internal plumbing
             case KeyAlgorithmFamily.MLDsa: {
                 #pragma warning disable SYSLIB5006
-                using var key = issuer.GetMLDsaPublicKey()!;
-                return key.VerifyData(tbs, sig);
+                using var key = issuer.GetMLDsaPublicKey();
+                return key != null && key.VerifyData(tbs, sig);
                 #pragma warning restore SYSLIB5006
             }
             case KeyAlgorithmFamily.SlhDsa: {
                 #pragma warning disable SYSLIB5006
-                using var key = issuer.GetSlhDsaPublicKey()!;
-                return key.VerifyData(tbs, sig);
+                using var key = issuer.GetSlhDsaPublicKey();
+                return key != null && key.VerifyData(tbs, sig);
                 #pragma warning restore SYSLIB5006
             }
             case KeyAlgorithmFamily.CompositeMLDsa: {
                 #pragma warning disable SYSLIB5006
-                using var key = issuer.GetCompositeMLDsaPublicKey()!;
-                return key.VerifyData(tbs, sig);
+                using var key = issuer.GetCompositeMLDsaPublicKey();
+                return key != null && key.VerifyData(tbs, sig);
                 #pragma warning restore SYSLIB5006
             }
             #pragma warning restore FLUENTCERT001

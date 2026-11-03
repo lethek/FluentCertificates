@@ -669,7 +669,7 @@ your policy to set:
 > issued from it will sign other certificates that chain to your issuer.
 
 Almost nothing else in a request is screened. What an extension says is the `accept` predicate's decision,
-and every other field crosses over as the requester wrote it — **the subject name included**. Nothing here
+and every other field crosses over as the requester wrote it, **the subject name included**. Nothing here
 asks whether a requester is entitled to the name it wants, so call `SetSubject` afterwards if your CA issues
 only under names it has verified. RFC 5280 s6.3.3 accepts a revocation list from any certificate whose
 subject matches the target's issuer and whose key usage asserts `cRLSign`, without requiring `cA=TRUE`, so a
@@ -721,6 +721,64 @@ state. Which labels you honour is your policy, applied through the `accept` pred
 `Extensions` on the builder keeps reporting whatever it was handed.
 
 ---
+
+## Certificate revocation lists
+
+`X509CrlBuilder` encodes and signs a CRL. It does not keep the list of revoked certificates, number CRLs
+across publications, schedule them or publish them: those stay with the caller, who passes in the entries
+and the number each time.
+
+```csharp
+var crl = new X509CrlBuilder()
+    .SetIssuer(ca)                                   // needs a private key, and cRLSign if it states a key usage
+    .SetCrlNumber(42)                                // must rise with every CRL the issuer publishes
+    .SetNextUpdate(DateTimeOffset.UtcNow.AddDays(7))
+    .AddRevokedCertificate(RevokedCertificate.From(leaf, DateTimeOffset.UtcNow, X509RevocationReason.KeyCompromise))
+    .Create();
+
+File.WriteAllText("ca.crl.pem", crl.ToPemString());
+```
+
+An issuer made with `CertificateUsage.CrlSigning` works, which .NET's own `CertificateRevocationListBuilder`
+refuses because that certificate is not a CA.
+
+### Partitioned, delta and indirect CRLs
+
+A `CrlDistributionPoint` states where a CRL is published and which certificates it covers. Pass the same
+value to the certificates and to the CRL so the two agree:
+
+```csharp
+var endEntities = new CrlDistributionPoint("http://crl.example.test/ee.crl") {
+    Covers = CrlCoverage.EndEntityCertificates,
+    DeltaUris = ["http://crl.example.test/ee-delta.crl"]
+};
+
+var leaf = new CertificateBuilder().SetIssuer(ca).SetSubject("CN=leaf").SetCrlDistributionPoints(endEntities).Create();
+
+var full = new X509CrlBuilder().SetIssuer(ca).SetCrlNumber(10).SetNextUpdate(next)
+    .SetDistributionPoint(endEntities).AddRevokedCertificates(allRevokedSoFar).Create();
+
+// Everything revoked since `full`, numbered above it, with the same scope
+var delta = new X509CrlBuilder().SetIssuer(ca).SetCrlNumber(11).SetNextUpdate(next)
+    .SetDistributionPoint(endEntities).SetDeltaOf(full).AddRevokedCertificates(revokedSinceFull).Create();
+```
+
+A scope is always written, even for `CrlCoverage.AllCertificates`, because a CRL that states none claims to
+be the complete list and a relying party would read a shard's silence as "not revoked". A `CrlIssuer` on the
+distribution point makes the CRL indirect, listing certificates issued by other authorities; each
+`RevokedCertificate` then names its `CertificateIssuer`.
+
+Client support is uneven. Windows and .NET on Linux honour a scope and treat a CRL that does not match as
+unusable. Windows uses delta CRLs; .NET on Linux never fetches them. Neither honours indirect CRLs. Browsers
+do not read CRLs named in certificates. Reason partitioning is not supported.
+
+`CertificateRevocationList.Load` and `LoadPem` read any CRL, not only ones built here:
+
+```csharp
+var crl = CertificateRevocationList.LoadPem(File.ReadAllText("ca.crl.pem"));
+bool genuine = crl.VerifySignature(ca);
+foreach (var revoked in crl.RevokedCertificates) { /* serial, date, reason, invalidity date */ }
+```
 
 ## Key ownership and disposal
 
