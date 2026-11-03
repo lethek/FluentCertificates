@@ -372,6 +372,22 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    public async Task VerifySignature_ADsaCrlAgainstAnEcdsaKey_ReturnsFalse()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = CreateCa();
+
+        var identifier = new AsnWriter(AsnEncodingRules.DER);
+        using (identifier.PushSequence()) {
+            identifier.WriteObjectIdentifier(Oids.DsaWithSha256);
+        }
+        var crl = CertificateRevocationList.Load(BuildCrl(key, null, [], identifier.Encode()));
+
+        await Assert.That(crl.VerifySignature(ca)).IsFalse();
+    }
+
+
+    [Test]
     public async Task VerifySignature_ATamperedCrl_ReturnsFalse()
     {
         using var ca = CreateCa();

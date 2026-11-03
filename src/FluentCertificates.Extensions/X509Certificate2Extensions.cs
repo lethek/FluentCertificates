@@ -317,7 +317,12 @@ public static class X509Certificate2Extensions
                 //hands back a legacy CSP key that knows no hash algorithm beyond SHA-1 and throws for the
                 //SHA-256 the certificate was signed with
                 using var key = DSA.Create();
-                key.ImportSubjectPublicKeyInfo(issuer.PublicKey.ExportSubjectPublicKeyInfo(), out _);
+                try {
+                    key.ImportSubjectPublicKeyInfo(issuer.PublicKey.ExportSubjectPublicKeyInfo(), out _);
+                } catch (CryptographicException) {
+                    //The issuer's key is not a DSA key, which is a signature that does not verify
+                    return false;
+                }
                 return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
             }
             #pragma warning restore CS0618 // Type or member is obsolete

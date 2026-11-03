@@ -27,7 +27,7 @@ release rather than record it as it happened.
 
 ### Fixed
 
-- `X509Certificate2Extensions.IsIssuedBy` with `verifySignature` returns `false` in place of throwing `NullReferenceException` when the issuer's key is of a different kind than the signature algorithm.
+- `X509Certificate2Extensions.IsIssuedBy` with `verifySignature` returns `false` in place of throwing `NullReferenceException` or `CryptographicException` when the issuer's key is of a different kind than the signature algorithm.
 - `X509Certificate2Extensions.GetSignatureAlgorithm` reads an RSASSA-PSS signature with an empty parameter sequence as SHA-1, and throws `NotSupportedException` for absent or unreadable parameters, in place of `AsnContentException`.
 
 ## [0.25.0] - 2026-11-02
