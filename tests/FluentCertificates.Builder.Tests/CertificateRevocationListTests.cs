@@ -374,6 +374,38 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    [Arguments(7)]
+    [Arguments(11)]
+    [Arguments(99)]
+    public async Task Load_AReasonCodeOutsideTheKnownValues_StillLoadsTheCrl(int code)
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var entries = new AsnWriter(AsnEncodingRules.DER);
+        using (entries.PushSequence()) {
+            foreach (var serial in new[] { 1, 2 }) {
+                using (entries.PushSequence()) {
+                    entries.WriteInteger(serial);
+                    entries.WriteUtcTime(Now);
+                    using (entries.PushSequence())
+                    using (entries.PushSequence()) {
+                        entries.WriteObjectIdentifier(Oids.CrlReasons);
+                        entries.WriteOctetString(serial == 1 ? [0x0A, 0x01, (byte)code] : [0x0A, 0x01, 0x01]);
+                    }
+                }
+            }
+        }
+
+        var crl = CertificateRevocationList.Load(BuildCrl(key, entries.Encode(), []));
+
+        var read = crl.RevokedCertificates.ToList();
+        await Assert.That(read.Count).IsEqualTo(2);
+        await Assert.That(read[0].Reason).IsEqualTo((X509RevocationReason?)(X509RevocationReason)code);
+        await Assert.That(read[1].Reason).IsEqualTo((X509RevocationReason?)X509RevocationReason.KeyCompromise);
+    }
+
+
+    [Test]
     public async Task Load_CertificateIssuerWithNoDirectoryName_ThrowsCryptographicException()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
