@@ -299,11 +299,10 @@ public sealed class CertificateRevocationList
                     case Oids.CertificateIssuer:
                         //Held in CertificateIssuer once read, so it is not also kept as a raw extension
                         //that the builder would refuse to write again
-                        if (ReadCertificateIssuer(extension.RawData) is { } name) {
-                            issuer = name;
-                        } else {
-                            others.Add(extension);
-                        }
+                        //Without a directoryName the entry's issuer cannot be named, and carrying on with the
+                        //previous one would attribute the revocation to the wrong authority
+                        issuer = ReadCertificateIssuer(extension.RawData)
+                            ?? throw new AsnContentException("The Certificate Issuer extension names no directoryName.");
                         break;
                     default:
                         others.Add(extension);

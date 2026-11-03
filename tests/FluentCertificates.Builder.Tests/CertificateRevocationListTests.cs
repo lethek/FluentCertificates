@@ -32,6 +32,11 @@ public class CertificateRevocationListTests
 
     /// <summary>A CRL signed by <paramref name="key"/> whose CRL-wide extensions are exactly the ones given.</summary>
     private static byte[] BuildCrlWithExtensions(ECDsa key, params (string Oid, bool Critical, byte[] Value)[] extensions)
+        => BuildCrl(key, null, extensions);
+
+
+    /// <summary>As <see cref="BuildCrlWithExtensions"/>, with the encoded <c>revokedCertificates</c> SEQUENCE given.</summary>
+    private static byte[] BuildCrl(ECDsa key, byte[]? revokedCertificates, (string Oid, bool Critical, byte[] Value)[] extensions)
     {
         var generator = X509SignatureGenerator.CreateForECDsa(key);
         var algorithm = generator.GetSignatureAlgorithmIdentifier(HashAlgorithmName.SHA256);
@@ -43,6 +48,9 @@ public class CertificateRevocationListTests
             tbs.WriteEncodedValue(new X500DistinguishedName("CN=Hand Made").RawData);
             tbs.WriteUtcTime(Now);
             tbs.WriteUtcTime(Now.AddDays(1));
+            if (revokedCertificates != null) {
+                tbs.WriteEncodedValue(revokedCertificates);
+            }
             using (tbs.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0)))
             using (tbs.PushSequence()) {
                 foreach (var (oid, critical, value) in extensions) {
@@ -305,6 +313,35 @@ public class CertificateRevocationListTests
         await Assert.That(crl.DistributionPoint!.CrlIssuer!.Name).IsEqualTo("CN=Hand Made");
         await Assert.That(crl.DistributionPoint.Covers).IsEqualTo(CrlCoverage.AllCertificates);
         await Assert.That(crl.DistributionPoint.Uris).IsEmpty();
+    }
+
+
+    [Test]
+    public async Task Load_CertificateIssuerWithNoDirectoryName_ThrowsCryptographicException()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        //GeneralNames holding only a uniformResourceIdentifier
+        var names = new AsnWriter(AsnEncodingRules.DER);
+        using (names.PushSequence()) {
+            names.WriteCharacterString(UniversalTagNumber.IA5String, "http://a.test/", new Asn1Tag(TagClass.ContextSpecific, 6));
+        }
+        var entries = new AsnWriter(AsnEncodingRules.DER);
+        using (entries.PushSequence())
+        using (entries.PushSequence()) {
+            entries.WriteInteger(1);
+            entries.WriteUtcTime(Now);
+            using (entries.PushSequence())
+            using (entries.PushSequence()) {
+                entries.WriteObjectIdentifier(Oids.CertificateIssuer);
+                entries.WriteBoolean(true);
+                entries.WriteOctetString(names.Encode());
+            }
+        }
+
+        var der = BuildCrl(key, entries.Encode(), []);
+
+        await Assert.That(() => CertificateRevocationList.Load(der)).Throws<CryptographicException>();
     }
 
 
