@@ -297,6 +297,24 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    public async Task SetDeltaOf_ABaseWithAScopeItCannotExpress_Throws()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var idp = new AsnWriter(AsnEncodingRules.DER);
+        using (idp.PushSequence()) {
+            idp.WriteBitString([0x40], 6, new Asn1Tag(TagClass.ContextSpecific, 3));
+        }
+        var number = new AsnWriter(AsnEncodingRules.DER);
+        number.WriteInteger(5);
+        var baseCrl = CertificateRevocationList.Load(BuildCrlWithExtensions(key,
+            (Oids.CrlNumber, false, number.Encode()),
+            (Oids.IssuingDistributionPoint, true, idp.Encode())));
+
+        await Assert.That(() => new X509CrlBuilder().SetDeltaOf(baseCrl)).Throws<ArgumentException>();
+    }
+
+
+    [Test]
     public async Task Load_AnIndirectScope_NamesTheCrlIssuerAsTheCrlIssuer()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);

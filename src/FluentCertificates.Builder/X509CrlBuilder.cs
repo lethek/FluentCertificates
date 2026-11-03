@@ -194,7 +194,8 @@ public record X509CrlBuilder
     /// <param name="baseCrl">The last complete CRL.</param>
     /// <returns>A new instance of <see cref="X509CrlBuilder"/> that builds a delta CRL.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="baseCrl"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentException"><paramref name="baseCrl"/> has no CRL number, or is itself a delta CRL.</exception>
+    /// <exception cref="ArgumentException"><paramref name="baseCrl"/> has no CRL number, is itself a delta CRL, or has a
+    /// scope that <see cref="CertificateRevocationList.DistributionPoint"/> cannot express.</exception>
     /// <remarks><see cref="Create"/> refuses a <see cref="DistributionPoint"/> whose scope differs from the base's,
     /// since RFC 5280 s5.2.4 requires the two to match.</remarks>
     public X509CrlBuilder SetDeltaOf(CertificateRevocationList baseCrl)
@@ -205,6 +206,9 @@ public record X509CrlBuilder
         }
         if (baseCrl.BaseCrlNumber != null) {
             throw new ArgumentException("A delta CRL is cumulative from a complete CRL, so the base cannot be a delta CRL", nameof(baseCrl));
+        }
+        if (baseCrl.Extensions.Any(x => x.Oid?.Value == Oids.IssuingDistributionPoint)) {
+            throw new ArgumentException("The base CRL has a scope this library cannot express, such as one partitioned by reason, so a delta CRL cannot be given the same scope", nameof(baseCrl));
         }
         return this with { BaseCrlNumber = number, BaseCrl = baseCrl };
     }
