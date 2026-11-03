@@ -36,10 +36,10 @@ public class CertificateRevocationListTests
 
 
     /// <summary>As <see cref="BuildCrlWithExtensions"/>, with the encoded <c>revokedCertificates</c> SEQUENCE given.</summary>
-    private static byte[] BuildCrl(ECDsa key, byte[]? revokedCertificates, (string Oid, bool Critical, byte[] Value)[] extensions)
+    private static byte[] BuildCrl(ECDsa key, byte[]? revokedCertificates, (string Oid, bool Critical, byte[] Value)[] extensions, byte[]? algorithmIdentifier = null)
     {
         var generator = X509SignatureGenerator.CreateForECDsa(key);
-        var algorithm = generator.GetSignatureAlgorithmIdentifier(HashAlgorithmName.SHA256);
+        var algorithm = algorithmIdentifier ?? generator.GetSignatureAlgorithmIdentifier(HashAlgorithmName.SHA256);
 
         var tbs = new AsnWriter(AsnEncodingRules.DER);
         using (tbs.PushSequence()) {
@@ -248,6 +248,45 @@ public class CertificateRevocationListTests
 
         await Assert.That(crl.VerifySignature(ca)).IsTrue();
         await Assert.That(crl.VerifySignature(other)).IsFalse();
+    }
+
+
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    public async Task VerifySignature_RsaPssWithDefaultParameters_ReturnsFalseForAnotherKey(bool explicitNull)
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var rsa = CreateCa(KeyAlgorithm.RSA(2048));
+
+        //RSASSA-PSS with its parameters absent, or NULL, which stand for the SHA-1 defaults
+        var identifier = new AsnWriter(AsnEncodingRules.DER);
+        using (identifier.PushSequence()) {
+            identifier.WriteObjectIdentifier(Oids.RsaPss);
+            if (explicitNull) {
+                identifier.WriteNull();
+            }
+        }
+        var crl = CertificateRevocationList.Load(BuildCrl(key, null, [], identifier.Encode()));
+
+        await Assert.That(crl.VerifySignature(rsa)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task VerifySignature_RsaPssWithUnreadableParameters_ThrowsNotSupported()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var rsa = CreateCa(KeyAlgorithm.RSA(2048));
+
+        var identifier = new AsnWriter(AsnEncodingRules.DER);
+        using (identifier.PushSequence()) {
+            identifier.WriteObjectIdentifier(Oids.RsaPss);
+            identifier.WriteInteger(1);
+        }
+        var crl = CertificateRevocationList.Load(BuildCrl(key, null, [], identifier.Encode()));
+
+        await Assert.That(() => crl.VerifySignature(rsa)).Throws<NotSupportedException>();
     }
 
 

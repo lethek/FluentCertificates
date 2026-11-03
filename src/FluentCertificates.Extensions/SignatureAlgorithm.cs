@@ -185,12 +185,21 @@ public sealed record SignatureAlgorithm
         var reader = new AsnReader(algorithmIdentifier, AsnEncodingRules.BER).ReadSequence(Asn1Tag.Sequence);
         var algorithm = reader.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
         if (algorithm == Oids.RsaPss) {
-            var hashAlgorithm = reader
-                .ReadSequence(Asn1Tag.Sequence)
-                .ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0))
-                .ReadSequence(Asn1Tag.Sequence)
-                .ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-            return CreateForRsaSsaPss(algorithm, hashAlgorithm);
+            //RFC 4055 s3.1: parameters that are absent or NULL stand for the defaults, which hash with SHA-1
+            if (!reader.HasData || reader.PeekTag() == Asn1Tag.Null) {
+                return CreateForRsaSsaPss(algorithm, Oids.Sha1);
+            }
+
+            try {
+                var hashAlgorithm = reader
+                    .ReadSequence(Asn1Tag.Sequence)
+                    .ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0))
+                    .ReadSequence(Asn1Tag.Sequence)
+                    .ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+                return CreateForRsaSsaPss(algorithm, hashAlgorithm);
+            } catch (AsnContentException ex) {
+                throw new NotSupportedException("The RSASSA-PSS parameters are not in a form that can be read.", ex);
+            }
         }
         return FromOidValue(algorithm);
     }
