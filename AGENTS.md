@@ -187,8 +187,8 @@ so it stays visible independently. Every route into the surface must report it; 
 Lookups that read an existing certificate are exempt, since reading one is not opting in:
 `SignatureAlgorithm.FromOid`, `FromOidValue` and `GetSignatureAlgorithm` can return a post-quantum
 instance without the diagnostic.
-The public API does not vary by target framework, so never put PQC members behind `#if NET10_0_OR_GREATER`
-— only their implementations. The one exception is a member whose signature names a BCL post-quantum
+The public API does not vary by target framework, so never put PQC members behind `#if NET10_0_OR_GREATER`,
+only their implementations. The one exception is a member whose signature names a BCL post-quantum
 type, such as `CertificateKey`'s constructors and `As*` members, because that type does not exist
 before .NET 10.
 

@@ -13,6 +13,18 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Added
+
+- `X509CrlBuilder`, which builds and signs full, partitioned, delta and indirect CRLs.
+- `CertificateRevocationList`, which loads a CRL from DER, BER or PEM, reads its revoked certificates and extensions, and verifies its signature.
+- `RevokedCertificate`, `CrlDistributionPoint` and `CrlCoverage`, describing a CRL entry and a CRL's address and coverage.
+- `CertificateBuilder.SetCrlDistributionPoints` overloads taking `CrlDistributionPoint`, which also set the Freshest CRL extension for delta CRL addresses.
+- `Oids.InvalidityDate`, `DeltaCrlIndicator`, `IssuingDistributionPoint` and `CertificateIssuer`.
+
+### Fixed
+
+- `X509Certificate2Extensions.IsIssuedBy` with `verifySignature` returns `false` in place of throwing `NullReferenceException` when the issuer's key is of a different kind than the signature algorithm.
+
 ## [0.25.0] - 2026-11-02
 
 ### Added

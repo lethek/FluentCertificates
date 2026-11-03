@@ -427,6 +427,14 @@ public static class Oids
     public const string CrlNumber = "2.5.29.20";
     /// <summary>Certificate extension OID <c>2.5.29.21</c>.</summary>
     public const string CrlReasons = "2.5.29.21";
+    /// <summary>CRL entry extension OID <c>2.5.29.24</c> (invalidity date).</summary>
+    public const string InvalidityDate = "2.5.29.24";
+    /// <summary>CRL extension OID <c>2.5.29.27</c> (delta CRL indicator).</summary>
+    public const string DeltaCrlIndicator = "2.5.29.27";
+    /// <summary>CRL extension OID <c>2.5.29.28</c> (issuing distribution point).</summary>
+    public const string IssuingDistributionPoint = "2.5.29.28";
+    /// <summary>CRL entry extension OID <c>2.5.29.29</c> (certificate issuer).</summary>
+    public const string CertificateIssuer = "2.5.29.29";
     /// <summary>Certificate extension OID <c>2.5.29.30</c>.</summary>
     public const string NameConstraints = "2.5.29.30";
     /// <summary>Certificate extension OID <c>2.5.29.31</c>.</summary>

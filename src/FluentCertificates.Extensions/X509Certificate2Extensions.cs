@@ -305,10 +305,19 @@ public static class X509Certificate2Extensions
     /// <param name="issuer">The issuer certificate.</param>
     /// <returns>True if the signature is valid; otherwise, false.</returns>
     private static bool VerifySignature(X509Certificate2 cert, X509Certificate2 issuer)
+        => VerifySignature(cert.GetSignatureAlgorithm(), cert.GetToBeSignedData().Span, cert.GetSignatureData().Span, issuer);
+
+
+    /// <summary>
+    /// Verifies a signature over <paramref name="tbs"/> using the issuer's public key.
+    /// </summary>
+    /// <param name="algorithm">The algorithm the signature was made with.</param>
+    /// <param name="tbs">The signed bytes.</param>
+    /// <param name="sig">The signature.</param>
+    /// <param name="issuer">The certificate holding the public key.</param>
+    /// <returns>True if the signature is valid; otherwise, false.</returns>
+    internal static bool VerifySignature(SignatureAlgorithm algorithm, ReadOnlySpan<byte> tbs, ReadOnlySpan<byte> sig, X509Certificate2 issuer)
     {
-        var algorithm = cert.GetSignatureAlgorithm();
-        var tbs = cert.GetToBeSignedData().Span;
-        var sig = cert.GetSignatureData().Span;
 
         //Each Get*PublicKey call returns a fresh instance that this method owns and must release
         switch (algorithm.Family) {
@@ -323,12 +332,12 @@ public static class X509Certificate2Extensions
             }
             #pragma warning restore CS0618 // Type or member is obsolete
             case KeyAlgorithmFamily.Rsa: {
-                using var key = issuer.GetRSAPublicKey()!;
-                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, algorithm.RSASignaturePadding!);
+                using var key = issuer.GetRSAPublicKey();
+                return key != null && key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, algorithm.RSASignaturePadding!);
             }
             case KeyAlgorithmFamily.ECDsa: {
-                using var key = issuer.GetECDsaPublicKey()!;
-                return key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
+                using var key = issuer.GetECDsaPublicKey();
+                return key != null && key.VerifyData(tbs, sig, algorithm.HashAlgorithm!.Value, DSASignatureFormat.Rfc3279DerSequence);
             }
 #if NET10_0_OR_GREATER
             //The post-quantum algorithms absorb the message directly, so there is no hash to pass and no
@@ -336,20 +345,20 @@ public static class X509Certificate2Extensions
             #pragma warning disable FLUENTCERT001 // Verifying a post-quantum signature is internal plumbing
             case KeyAlgorithmFamily.MLDsa: {
                 #pragma warning disable SYSLIB5006
-                using var key = issuer.GetMLDsaPublicKey()!;
-                return key.VerifyData(tbs, sig);
+                using var key = issuer.GetMLDsaPublicKey();
+                return key != null && key.VerifyData(tbs, sig);
                 #pragma warning restore SYSLIB5006
             }
             case KeyAlgorithmFamily.SlhDsa: {
                 #pragma warning disable SYSLIB5006
-                using var key = issuer.GetSlhDsaPublicKey()!;
-                return key.VerifyData(tbs, sig);
+                using var key = issuer.GetSlhDsaPublicKey();
+                return key != null && key.VerifyData(tbs, sig);
                 #pragma warning restore SYSLIB5006
             }
             case KeyAlgorithmFamily.CompositeMLDsa: {
                 #pragma warning disable SYSLIB5006
-                using var key = issuer.GetCompositeMLDsaPublicKey()!;
-                return key.VerifyData(tbs, sig);
+                using var key = issuer.GetCompositeMLDsaPublicKey();
+                return key != null && key.VerifyData(tbs, sig);
                 #pragma warning restore SYSLIB5006
             }
             #pragma warning restore FLUENTCERT001

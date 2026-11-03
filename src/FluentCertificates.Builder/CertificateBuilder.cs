@@ -378,6 +378,45 @@ public record CertificateBuilder
     public CertificateBuilder SetCrlDistributionPoints(IEnumerable<string> uris, bool critical)
         => SetExtension(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension(uris, critical));
 
+    /// <summary>Sets the CRL Distribution Points extension from the same <see cref="CrlDistributionPoint"/> values
+    /// that <see cref="X509CrlBuilder.SetDistributionPoint"/> writes into the CRLs.</summary>
+    /// <param name="point">The first (or only) point where the issuer publishes its CRLs.</param>
+    /// <param name="morePoints">Any further points.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when a point names neither an address nor a CRL issuer, or an
+    /// address is not ASCII.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="morePoints"/> is <see langword="null"/>.</exception>
+    /// <remarks>A point with <see cref="CrlDistributionPoint.DeltaUris"/> also sets the Freshest CRL extension.
+    /// The certificate cannot state <see cref="CrlDistributionPoint.Covers"/>, which is the CRL's claim, so
+    /// nothing checks that the certificate is of the kind the CRL covers.</remarks>
+    public CertificateBuilder SetCrlDistributionPoints(CrlDistributionPoint point, params IEnumerable<CrlDistributionPoint> morePoints)
+        => SetCrlDistributionPoints([point, .. morePoints ?? throw new ArgumentNullException(nameof(morePoints))], false);
+
+    /// <summary>Sets the CRL Distribution Points extension from the same <see cref="CrlDistributionPoint"/> values
+    /// that <see cref="X509CrlBuilder.SetDistributionPoint"/> writes into the CRLs.</summary>
+    /// <param name="points">Where the issuer publishes its CRLs. Must contain at least one.</param>
+    /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.1.13 says it SHOULD be non-critical.</param>
+    /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="points"/> is empty, a point names neither an
+    /// address nor a CRL issuer, or an address is not ASCII.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="points"/> is <see langword="null"/>.</exception>
+    /// <remarks>A point with <see cref="CrlDistributionPoint.DeltaUris"/> also sets the Freshest CRL extension,
+    /// which is always non-critical.</remarks>
+    public CertificateBuilder SetCrlDistributionPoints(IEnumerable<CrlDistributionPoint> points, bool critical)
+    {
+        ArgumentNullException.ThrowIfNull(points);
+        var list = points.ToList();
+
+        var value = CrlEncoding.EncodeDistributionPoints(list, delta: false)
+            ?? throw new ArgumentException("At least one distribution point must be supplied", nameof(points));
+        var builder = SetExtension(new X509Extension(Oids.CrlDistributionPoints, value, critical));
+
+        var freshest = CrlEncoding.EncodeDistributionPoints(list, delta: true);
+        return freshest == null
+            ? builder
+            : builder.SetExtension(new X509Extension(Oids.FreshestCrl, freshest, false));
+    }
+
 
     /// <summary>Sets the Certificate Policies extension, naming the policies under which the certificate is issued.</summary>
     /// <param name="policyIdentifier">The OID of the first (or only) policy to assert.</param>
@@ -817,33 +856,11 @@ public record CertificateBuilder
             throw new InvalidOperationException($"Call {nameof(SetKeyPair)}(...) or {nameof(SetKeyAlgorithm)}() first to provide a public/private keypair");
         }
 
-#if NET10_0_OR_GREATER
-#pragma warning disable SYSLIB5006
-#pragma warning disable FLUENTCERT001
-        if (keys.AsMLDsa is { } mldsa) {
-            return X509SignatureGenerator.CreateForMLDsa(mldsa);
+        if (keys.AsAsymmetricAlgorithm is ECDiffieHellman) {
+            throw new NotSupportedException($"An {nameof(ECDiffieHellman)} key agrees on a shared secret and cannot sign. Set an {nameof(Issuer)} so the certificate is signed by a CA, or supply a {nameof(SignatureGenerator)}");
         }
 
-        if (keys.AsSlhDsa is { } slhdsa) {
-            return X509SignatureGenerator.CreateForSlhDsa(slhdsa);
-        }
-
-        if (keys.AsCompositeMLDsa is { } composite) {
-            return X509SignatureGenerator.CreateForCompositeMLDsa(composite);
-        }
-#pragma warning restore FLUENTCERT001
-#pragma warning restore SYSLIB5006
-#endif
-
-        return keys.AsAsymmetricAlgorithm switch {
-#pragma warning disable CS0618 // Type or member is obsolete
-            DSA dsa => new DSAX509SignatureGenerator(dsa),
-#pragma warning restore CS0618 // Type or member is obsolete
-            RSA rsa => X509SignatureGenerator.CreateForRSA(rsa, RSASignaturePadding),
-            ECDsa ecdsa => X509SignatureGenerator.CreateForECDsa(ecdsa),
-            ECDiffieHellman => throw new NotSupportedException($"An {nameof(ECDiffieHellman)} key agrees on a shared secret and cannot sign. Set an {nameof(Issuer)} so the certificate is signed by a CA, or supply a {nameof(SignatureGenerator)}"),
-            _ => throw new NotSupportedException($"Unsupported algorithm: {keys.Family}")
-        };
+        return SignatureGenerators.GetForKey(keys, RSASignaturePadding);
     }
 
 
