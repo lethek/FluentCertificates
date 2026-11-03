@@ -130,6 +130,29 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    public async Task Load_OuterAlgorithmDiffersFromTheSignedOne_ThrowsCryptographicException()
+    {
+        using var ca = CreateCa();
+        using var key = ECDsa.Create();
+        var sha384 = X509SignatureGenerator.CreateForECDsa(key).GetSignatureAlgorithmIdentifier(HashAlgorithmName.SHA384);
+
+        var reader = new AsnReader(CreateCrl(ca).RawData, AsnEncodingRules.DER).ReadSequence();
+        var tbs = reader.ReadEncodedValue();
+        reader.ReadEncodedValue();
+        var signature = reader.ReadBitString(out _);
+
+        var rewritten = new AsnWriter(AsnEncodingRules.DER);
+        using (rewritten.PushSequence()) {
+            rewritten.WriteEncodedValue(tbs.Span);
+            rewritten.WriteEncodedValue(sha384);
+            rewritten.WriteBitString(signature);
+        }
+
+        await Assert.That(() => CertificateRevocationList.Load(rewritten.Encode())).Throws<CryptographicException>();
+    }
+
+
+    [Test]
     public async Task Load_TrailingBytes_ThrowsCryptographicException()
     {
         using var ca = CreateCa();

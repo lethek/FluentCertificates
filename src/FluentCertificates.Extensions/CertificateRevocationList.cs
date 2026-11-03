@@ -172,7 +172,15 @@ public sealed class CertificateRevocationList
                 throw new AsnContentException($"CRL version {version + 1} is not supported.");
             }
         }
-        tbs.ReadSequence();
+
+        //RFC 5280 s5.1.1.2: the two identifiers name the same algorithm. Only the one inside the signed bytes
+        //is trusted for its parameters, since the outer one is not covered by the signature.
+        var signedAlgorithm = tbs.ReadEncodedValue();
+        if (ReadAlgorithmOid(signedAlgorithm) != ReadAlgorithmOid(algorithm)) {
+            throw new AsnContentException("The signature algorithm differs between the signed and unsigned parts of the CRL.");
+        }
+        algorithm = signedAlgorithm;
+
         var issuer = new X500DistinguishedName(tbs.ReadEncodedValue().ToArray());
         var thisUpdate = ReadTime(tbs);
         var nextUpdate = tbs.HasData && IsTime(tbs.PeekTag()) ? ReadTime(tbs) : (DateTimeOffset?)null;
@@ -424,6 +432,10 @@ public sealed class CertificateRevocationList
         deltaUris = [.. uris];
         return onlyAddresses;
     }
+
+
+    private static string ReadAlgorithmOid(ReadOnlyMemory<byte> algorithmIdentifier)
+        => new AsnReader(algorithmIdentifier, AsnEncodingRules.BER).ReadSequence().ReadObjectIdentifier();
 
 
     private static List<X509Extension> ReadExtensions(AsnReader sequence)
