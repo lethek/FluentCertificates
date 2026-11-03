@@ -75,7 +75,9 @@ public record X509CrlBuilder
     /// <returns>A new instance of <see cref="X509CrlBuilder"/> with the specified issuer.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="issuer"/> is <see langword="null"/>.</exception>
     /// <remarks>The issuer name is the certificate's subject, and the Authority Key Identifier is taken from its
-    /// Subject Key Identifier where it has one. The key is neither exported nor disposed.</remarks>
+    /// Subject Key Identifier where it has one. The key is neither exported nor disposed. Any generator set
+    /// earlier is cleared, so that the CRL is signed by this certificate's key: call
+    /// <see cref="SetSignatureGenerator"/> afterwards to sign with a key held elsewhere.</remarks>
     public X509CrlBuilder SetIssuer(X509Certificate2 issuer)
     {
         ArgumentNullException.ThrowIfNull(issuer);
@@ -83,6 +85,7 @@ public record X509CrlBuilder
         var ski = issuer.Extensions.OfType<X509SubjectKeyIdentifierExtension>().FirstOrDefault();
         return this with {
             Issuer = issuer,
+            SignatureGenerator = null,
             IssuerName = issuer.SubjectName,
             IssuerKeyIdentifier = ski?.SubjectKeyIdentifier is { } id ? Convert.FromHexString(id) : default
         };

@@ -156,6 +156,23 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task SetIssuer_ACertificateAfterANameAndGenerator_SignsWithTheCertificatesKey()
+    {
+        using var ca = CreateCa();
+        using var otherKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var crl = new X509CrlBuilder()
+            .SetIssuer(new X500DistinguishedName("CN=Somebody Else"), X509SignatureGenerator.CreateForECDsa(otherKey))
+            .SetIssuer(ca)
+            .SetCrlNumber(1)
+            .SetNextUpdate(Next)
+            .Create();
+
+        await Assert.That(crl.VerifySignature(ca)).IsTrue();
+    }
+
+
+    [Test]
     public async Task Create_WithoutAnIssuerNumberOrNextUpdate_Throws()
     {
         using var ca = CreateCa();
