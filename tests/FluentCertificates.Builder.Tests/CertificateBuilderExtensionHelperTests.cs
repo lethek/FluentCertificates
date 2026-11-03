@@ -251,7 +251,7 @@ public class CertificateBuilderExtensionHelperTests
 
         var thrown = await Assert.That(() => builder.SetCertificatePolicies(PolicyOid, (IEnumerable<string>)null!)).ThrowsExactly<ArgumentNullException>();
 
-        await Assert.That(thrown.ParamName).IsEqualTo("morePolicyIdentifiers");
+        await Assert.That(thrown!.ParamName).IsEqualTo("morePolicyIdentifiers");
     }
 
 
