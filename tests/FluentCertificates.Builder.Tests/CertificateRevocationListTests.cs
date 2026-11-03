@@ -292,6 +292,48 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    [Arguments(0, 32, 1, "different salt length")]
+    [Arguments(1, 20, 1, "salt shorter than the hash")]
+    [Arguments(2, 32, 2, "trailer field other than 1")]
+    [Arguments(3, 32, 1, "MGF1 over a different hash")]
+    public async Task VerifySignature_RsaPssWithParametersDotNetCannotVerifyWith_ThrowsNotSupported(int variant, int salt, int trailer, string reason)
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var rsa = CreateCa(KeyAlgorithm.RSA(2048));
+        _ = reason;
+
+        //SHA-256, MGF1 over SHA-256 unless the variant says otherwise, then the given salt length and trailer
+        var maskHash = variant == 3 ? Oids.Sha1 : Oids.Sha256;
+        var identifier = new AsnWriter(AsnEncodingRules.DER);
+        using (identifier.PushSequence()) {
+            identifier.WriteObjectIdentifier(Oids.RsaPss);
+            using (identifier.PushSequence()) {
+                using (identifier.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0)))
+                using (identifier.PushSequence()) {
+                    identifier.WriteObjectIdentifier(Oids.Sha256);
+                }
+                using (identifier.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 1)))
+                using (identifier.PushSequence()) {
+                    identifier.WriteObjectIdentifier(Oids.Mgf1);
+                    using (identifier.PushSequence()) {
+                        identifier.WriteObjectIdentifier(maskHash);
+                    }
+                }
+                using (identifier.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 2))) {
+                    identifier.WriteInteger(variant == 0 ? 0 : salt);
+                }
+                using (identifier.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 3))) {
+                    identifier.WriteInteger(trailer);
+                }
+            }
+        }
+        var crl = CertificateRevocationList.Load(BuildCrl(key, null, [], identifier.Encode()));
+
+        await Assert.That(() => crl.VerifySignature(rsa)).Throws<NotSupportedException>();
+    }
+
+
+    [Test]
     public async Task VerifySignature_RsaPssWithUnreadableParameters_ThrowsNotSupported()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);

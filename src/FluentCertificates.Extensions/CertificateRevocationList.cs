@@ -127,13 +127,15 @@ public sealed class CertificateRevocationList
     /// <returns><see langword="true"/> if the signature is valid for that key; otherwise <see langword="false"/>,
     /// including when the key is of a different kind than the one that signed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="issuer"/> is <see langword="null"/>.</exception>
-    /// <exception cref="NotSupportedException">The CRL's signature algorithm is not recognised.</exception>
+    /// <exception cref="NotSupportedException">The CRL's signature algorithm is not recognised, or is RSASSA-PSS with
+    /// parameters other than MGF1 over the same hash, a salt as long as the hash, and trailer field 1.</exception>
     /// <remarks>Only the signature is checked. That the certificate is the CRL's <see cref="Issuer"/>, that it may
     /// sign CRLs, and that it is trusted are for the caller to establish.</remarks>
     public bool VerifySignature(X509Certificate2 issuer)
     {
         ArgumentNullException.ThrowIfNull(issuer);
         var algorithm = SignatureAlgorithm.FromAlgorithmIdentifier(_signatureAlgorithm);
+        SignatureAlgorithm.ThrowIfPssParametersNotVerifiable(_signatureAlgorithm);
         return X509Certificate2Extensions.VerifySignature(algorithm, _toBeSigned.Span, _signature.Span, issuer);
     }
 

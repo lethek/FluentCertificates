@@ -204,6 +204,72 @@ public sealed record SignatureAlgorithm
 
 
     /// <summary>
+    /// Refuses an RSASSA-PSS identifier whose parameters are not the ones .NET verifies with, and does nothing for
+    /// any other algorithm.
+    /// </summary>
+    /// <remarks>.NET verifies PSS with MGF1 over the same hash, a salt as long as the hash, and trailer field 1.
+    /// Verifying a signature that declares anything else with those settings would reject a valid signature,
+    /// or accept one that is inconsistent with what it declares.</remarks>
+    /// <param name="algorithmIdentifier">The encoded <c>AlgorithmIdentifier</c> SEQUENCE.</param>
+    /// <exception cref="NotSupportedException">The parameters are not readable or are not the ones .NET verifies with.</exception>
+    internal static void ThrowIfPssParametersNotVerifiable(ReadOnlyMemory<byte> algorithmIdentifier)
+    {
+        var reader = new AsnReader(algorithmIdentifier, AsnEncodingRules.BER).ReadSequence(Asn1Tag.Sequence);
+        if (reader.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) != Oids.RsaPss) {
+            return;
+        }
+
+        try {
+            var parameters = reader.ReadSequence(Asn1Tag.Sequence);
+            string hash = Oids.Sha1, maskHash = Oids.Sha1;
+            System.Numerics.BigInteger saltLength = 20, trailer = 1;
+
+            while (parameters.HasData) {
+                var tag = parameters.PeekTag();
+                if (tag.TagClass != TagClass.ContextSpecific) {
+                    throw new AsnContentException("Unexpected field in the RSASSA-PSS parameters.");
+                }
+
+                var field = parameters.ReadSequence(tag);
+                switch (tag.TagValue) {
+                    case 0:
+                        hash = field.ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+                        break;
+                    case 1:
+                        var maskGenerator = field.ReadSequence(Asn1Tag.Sequence);
+                        if (maskGenerator.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) != Oids.Mgf1) {
+                            throw new NotSupportedException("The RSASSA-PSS mask generation function is not MGF1.");
+                        }
+                        maskHash = maskGenerator.ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+                        break;
+                    case 2:
+                        saltLength = field.ReadInteger();
+                        break;
+                    case 3:
+                        trailer = field.ReadInteger();
+                        break;
+                    default:
+                        throw new AsnContentException("Unexpected field in the RSASSA-PSS parameters.");
+                }
+            }
+
+            var hashSize = hash switch {
+                Oids.Sha1 => 20,
+                Oids.Sha256 or Oids.Sha3_256 => 32,
+                Oids.Sha384 or Oids.Sha3_384 => 48,
+                Oids.Sha512 or Oids.Sha3_512 => 64,
+                _ => throw new NotSupportedException($"The RSASSA-PSS hash {hash} is not supported.")
+            };
+            if (maskHash != hash || saltLength != hashSize || trailer != 1) {
+                throw new NotSupportedException("The RSASSA-PSS parameters are not the ones that can be verified: MGF1 over the same hash, a salt as long as the hash, and trailer field 1.");
+            }
+        } catch (AsnContentException ex) {
+            throw new NotSupportedException("The RSASSA-PSS parameters are not in a form that can be read.", ex);
+        }
+    }
+
+
+    /// <summary>
     /// Creates a <see cref="SignatureAlgorithm"/> for RSA-PSS with the specified signature and hash OIDs.
     /// </summary>
     /// <param name="signatureOid">Unused. The signature OID is always <see cref="Oids.RsaPss"/>.</param>
