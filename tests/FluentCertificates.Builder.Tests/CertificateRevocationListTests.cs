@@ -199,6 +199,28 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    [Arguments("SHA256")]
+    [Arguments("SHA384")]
+    [Arguments("SHA512")]
+    public async Task VerifySignature_RsaPss_VerifiesTheCrlTheBuilderSigned(string hash)
+    {
+        using var ca = CreateCa(KeyAlgorithm.RSA(2048));
+        using var other = CreateCa(KeyAlgorithm.RSA(2048));
+
+        var crl = new X509CrlBuilder()
+            .SetIssuer(ca)
+            .SetRSASignaturePadding(RSASignaturePadding.Pss)
+            .SetHashAlgorithm(new HashAlgorithmName(hash))
+            .SetCrlNumber(1)
+            .SetNextUpdate(Now.AddDays(1))
+            .Create();
+
+        await Assert.That(crl.VerifySignature(ca)).IsTrue();
+        await Assert.That(crl.VerifySignature(other)).IsFalse();
+    }
+
+
+    [Test]
     public async Task VerifySignature_ATamperedCrl_ReturnsFalse()
     {
         using var ca = CreateCa();

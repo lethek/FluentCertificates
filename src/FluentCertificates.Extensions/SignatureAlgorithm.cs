@@ -1,5 +1,6 @@
 ﻿using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 
 
@@ -171,6 +172,28 @@ public sealed record SignatureAlgorithm
         => oid.Value != null && InstanceLookup.TryGetValue(oid.Value, out var algorithm)
             ? algorithm
             : throw new NotSupportedException($"Unsupported signature algorithm: {oid.Value} ({oid.FriendlyName})");
+
+
+    /// <summary>
+    /// Reads the algorithm from an encoded <c>AlgorithmIdentifier</c>, taking an RSA-PSS hash from its parameters.
+    /// </summary>
+    /// <param name="algorithmIdentifier">The encoded <c>AlgorithmIdentifier</c> SEQUENCE.</param>
+    /// <returns>The matching <see cref="SignatureAlgorithm"/>.</returns>
+    /// <exception cref="NotSupportedException">Thrown if the signature algorithm is not recognised.</exception>
+    internal static SignatureAlgorithm FromAlgorithmIdentifier(ReadOnlyMemory<byte> algorithmIdentifier)
+    {
+        var reader = new AsnReader(algorithmIdentifier, AsnEncodingRules.BER).ReadSequence(Asn1Tag.Sequence);
+        var algorithm = reader.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+        if (algorithm == Oids.RsaPss) {
+            var hashAlgorithm = reader
+                .ReadSequence(Asn1Tag.Sequence)
+                .ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0))
+                .ReadSequence(Asn1Tag.Sequence)
+                .ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
+            return CreateForRsaSsaPss(algorithm, hashAlgorithm);
+        }
+        return FromOidValue(algorithm);
+    }
 
 
     /// <summary>

@@ -179,17 +179,7 @@ public static class X509Certificate2Extensions
     {
         var reader = new AsnReader(cert.RawData, AsnEncodingRules.DER).ReadSequence(Asn1Tag.Sequence);
         reader.ReadSequence(Asn1Tag.Sequence); //Skip TBSCertificate
-        var algIdentifier = reader.ReadSequence(Asn1Tag.Sequence);
-        var algorithm = algIdentifier.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-        if (algorithm == Oids.RsaPss) {
-            var hashAlgorithm = algIdentifier
-                .ReadSequence(Asn1Tag.Sequence)
-                .ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0))
-                .ReadSequence(Asn1Tag.Sequence)
-                .ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-            return SignatureAlgorithm.CreateForRsaSsaPss(algorithm, hashAlgorithm);
-        }
-        return SignatureAlgorithm.FromOidValue(algorithm);
+        return SignatureAlgorithm.FromAlgorithmIdentifier(reader.ReadEncodedValue());
     }
 
 

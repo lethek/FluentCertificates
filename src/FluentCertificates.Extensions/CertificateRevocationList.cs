@@ -25,14 +25,14 @@ public sealed class CertificateRevocationList
     private readonly ReadOnlyMemory<byte> _toBeSigned;
     private readonly ReadOnlyMemory<byte> _signature;
     private readonly ReadOnlyMemory<byte> _entries;
-    private readonly string _signatureAlgorithmOid;
+    private readonly ReadOnlyMemory<byte> _signatureAlgorithm;
 
 
     private CertificateRevocationList(
         byte[] rawData,
         ReadOnlyMemory<byte> toBeSigned,
         ReadOnlyMemory<byte> signature,
-        string signatureAlgorithmOid,
+        ReadOnlyMemory<byte> signatureAlgorithm,
         X500DistinguishedName issuer,
         DateTimeOffset thisUpdate,
         DateTimeOffset? nextUpdate,
@@ -41,7 +41,7 @@ public sealed class CertificateRevocationList
         _rawData = rawData;
         _toBeSigned = toBeSigned;
         _signature = signature;
-        _signatureAlgorithmOid = signatureAlgorithmOid;
+        _signatureAlgorithm = signatureAlgorithm;
         Issuer = issuer;
         ThisUpdate = thisUpdate;
         NextUpdate = nextUpdate;
@@ -136,7 +136,7 @@ public sealed class CertificateRevocationList
     public bool VerifySignature(X509Certificate2 issuer)
     {
         ArgumentNullException.ThrowIfNull(issuer);
-        var algorithm = SignatureAlgorithm.FromOidValue(_signatureAlgorithmOid);
+        var algorithm = SignatureAlgorithm.FromAlgorithmIdentifier(_signatureAlgorithm);
         return X509Certificate2Extensions.VerifySignature(algorithm, _toBeSigned.Span, _signature.Span, issuer);
     }
 
@@ -159,8 +159,7 @@ public sealed class CertificateRevocationList
 
         var toBeSigned = list.PeekEncodedValue();
         var tbs = list.ReadSequence();
-        var outerAlgorithm = list.ReadSequence();
-        var algorithmOid = outerAlgorithm.ReadObjectIdentifier();
+        var algorithm = list.ReadEncodedValue();
         var signature = list.ReadBitString(out var unusedBits);
         if (unusedBits != 0) {
             throw new AsnContentException("The signature has unused bits.");
@@ -184,7 +183,7 @@ public sealed class CertificateRevocationList
             tbs.ReadEncodedValue();
         }
 
-        var result = new CertificateRevocationList(raw, toBeSigned, signature, algorithmOid, issuer, thisUpdate, nextUpdate, entries);
+        var result = new CertificateRevocationList(raw, toBeSigned, signature, algorithm, issuer, thisUpdate, nextUpdate, entries);
 
         if (tbs.HasData) {
             var wrapper = tbs.ReadSequence(s_context0);
