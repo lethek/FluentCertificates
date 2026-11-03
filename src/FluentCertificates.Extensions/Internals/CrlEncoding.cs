@@ -127,11 +127,11 @@ internal static class CrlEncoding
     }
 
 
-    /// <summary>Writes a UTCTime where the year allows one, and a GeneralizedTime from 2050, as RFC 5280 s5.1.2.4 requires.</summary>
+    /// <summary>Writes a UTCTime for 1950 to 2049 and a GeneralizedTime outside it, as RFC 5280 s5.1.2.4 requires.</summary>
     public static void WriteTime(AsnWriter writer, DateTimeOffset time)
     {
         var utc = time.ToUniversalTime();
-        if (utc.Year < 2050) {
+        if (utc.Year is >= 1950 and < 2050) {
             writer.WriteUtcTime(utc);
         } else {
             writer.WriteGeneralizedTime(utc, omitFractionalSeconds: true);

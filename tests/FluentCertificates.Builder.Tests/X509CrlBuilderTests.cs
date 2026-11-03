@@ -196,6 +196,20 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task Create_DatesBefore1950_AreWrittenAsGeneralizedTime()
+    {
+        using var ca = CreateCa();
+        var early = new DateTimeOffset(1940, 6, 7, 8, 9, 10, TimeSpan.Zero);
+
+        var crl = NewBuilder(ca).SetThisUpdate(early).SetNextUpdate(Now)
+            .AddRevokedCertificate(new RevokedCertificate(new byte[] { 1 }, early)).Create();
+
+        await Assert.That(crl.ThisUpdate).IsEqualTo(early);
+        await Assert.That(crl.RevokedCertificates.Single().RevocationDate).IsEqualTo(early);
+    }
+
+
+    [Test]
     [Arguments(CrlCoverage.AllCertificates, false, false)]
     [Arguments(CrlCoverage.EndEntityCertificates, true, false)]
     [Arguments(CrlCoverage.CACertificates, false, true)]
