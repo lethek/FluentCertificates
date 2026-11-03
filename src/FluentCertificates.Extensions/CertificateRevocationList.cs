@@ -18,6 +18,10 @@ namespace FluentCertificates;
 /// <para>Loading does not check the signature, which needs the issuer's certificate: call
 /// <see cref="VerifySignature"/> for that. The BER encoding is accepted as well as DER, and
 /// <see cref="RawData"/> and the signed bytes are kept exactly as they were received.</para>
+/// <para>RFC 5280 s5.2 and s5.3 have a relying party reject a CRL that carries a critical extension it does not
+/// recognise. Loading does not: such an extension is kept in <see cref="Extensions"/> or
+/// <see cref="RevokedCertificate.Extensions"/> with its <see cref="X509Extension.Critical"/> flag, for the caller
+/// to judge.</para>
 /// </remarks>
 public sealed class CertificateRevocationList
 {
