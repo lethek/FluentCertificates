@@ -549,6 +549,20 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task SetCrlDistributionPoints_WithoutDeltaAddresses_RemovesAnEarlierFreshestCrl()
+    {
+        var builder = new CertificateBuilder()
+            .SetCrlDistributionPoints(new CrlDistributionPoint("http://crl.test/a.crl") { DeltaUris = ["http://crl.test/a-delta.crl"] });
+        await Assert.That(builder.Extensions.Any(x => x.Oid?.Value == Oids.FreshestCrl)).IsTrue();
+
+        builder = builder.SetCrlDistributionPoints(new CrlDistributionPoint("http://crl.test/a.crl"));
+
+        await Assert.That(builder.Extensions.Any(x => x.Oid?.Value == Oids.FreshestCrl)).IsFalse();
+        await Assert.That(builder.Extensions.Any(x => x.Oid?.Value == Oids.CrlDistributionPoints)).IsTrue();
+    }
+
+
+    [Test]
     public async Task SetCrlDistributionPoints_WithCrlIssuer_WritesTheIssuerName()
     {
         using var ca = CreateCa();

@@ -386,7 +386,8 @@ public record CertificateBuilder
     /// <exception cref="ArgumentException">Thrown when a point names neither an address nor a CRL issuer, or an
     /// address is not ASCII.</exception>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="morePoints"/> is <see langword="null"/>.</exception>
-    /// <remarks>A point with <see cref="CrlDistributionPoint.DeltaUris"/> also sets the Freshest CRL extension.
+    /// <remarks>A point with <see cref="CrlDistributionPoint.DeltaUris"/> also sets the Freshest CRL extension,
+    /// and where none has any, an earlier Freshest CRL extension is removed.
     /// The certificate cannot state <see cref="CrlDistributionPoint.Covers"/>, which is the CRL's claim, so
     /// nothing checks that the certificate is of the kind the CRL covers.</remarks>
     public CertificateBuilder SetCrlDistributionPoints(CrlDistributionPoint point, params IEnumerable<CrlDistributionPoint> morePoints)
@@ -401,7 +402,8 @@ public record CertificateBuilder
     /// address nor a CRL issuer, or an address is not ASCII.</exception>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="points"/> is <see langword="null"/>.</exception>
     /// <remarks>A point with <see cref="CrlDistributionPoint.DeltaUris"/> also sets the Freshest CRL extension,
-    /// which is always non-critical.</remarks>
+    /// which is always non-critical. Where no point has any, an earlier Freshest CRL extension is removed, since
+    /// the points given here are taken to describe every delta address.</remarks>
     public CertificateBuilder SetCrlDistributionPoints(IEnumerable<CrlDistributionPoint> points, bool critical)
     {
         ArgumentNullException.ThrowIfNull(points);
@@ -413,7 +415,7 @@ public record CertificateBuilder
 
         var freshest = CrlEncoding.EncodeDistributionPoints(list, delta: true);
         return freshest == null
-            ? builder
+            ? builder.RemoveExtensionsByOidValue(Oids.FreshestCrl)
             : builder.SetExtension(new X509Extension(Oids.FreshestCrl, freshest, false));
     }
 
