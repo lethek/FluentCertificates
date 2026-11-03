@@ -125,21 +125,12 @@ internal static class CrlEncoding
     {
         using (writer.PushSequence(s_context0))
         using (writer.PushSequence(s_context0)) {
-            CheckAddresses(uris, nameof(uris));
             foreach (var uri in uris) {
+                //A point read from a CRL skips the constructor's check and can carry an address it would refuse
+                if (String.IsNullOrEmpty(uri) || !Ascii.IsValid(uri)) {
+                    throw new ArgumentException($"A distribution point address must be a non-empty ASCII string, but was '{uri}'", nameof(uris));
+                }
                 writer.WriteCharacterString(UniversalTagNumber.IA5String, uri, s_uri);
-            }
-        }
-    }
-
-
-    /// <summary>Refuses an address that cannot be written as a URI: an empty one, or one with a character outside ASCII.</summary>
-    /// <exception cref="ArgumentException">An address is empty, <see langword="null"/> or not ASCII.</exception>
-    public static void CheckAddresses(IEnumerable<string> uris, string paramName)
-    {
-        foreach (var uri in uris) {
-            if (String.IsNullOrEmpty(uri) || !Ascii.IsValid(uri)) {
-                throw new ArgumentException($"A distribution point address must be a non-empty ASCII string, but was '{uri}'", paramName);
             }
         }
     }

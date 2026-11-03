@@ -450,6 +450,70 @@ public class CertificateRevocationListTests
     }
 
 
+    /// <summary>An Issuing Distribution Point holding one URI address, the first of which is given.</summary>
+    private static byte[] EncodeIssuingDistributionPoint(string uri)
+    {
+        var idp = new AsnWriter(AsnEncodingRules.DER);
+        using (idp.PushSequence())
+        using (idp.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0)))
+        using (idp.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0))) {
+            idp.WriteCharacterString(UniversalTagNumber.IA5String, uri, new Asn1Tag(TagClass.ContextSpecific, 6));
+        }
+        return idp.Encode();
+    }
+
+
+    [Test]
+    public async Task Load_AnIssuingDistributionPointWithAnEmptyAddress_LoadsAndExposesThePoint()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var crl = CertificateRevocationList.Load(BuildCrlWithExtensions(key, (Oids.IssuingDistributionPoint, true, EncodeIssuingDistributionPoint(""))));
+
+        await Assert.That(crl.DistributionPoint!.Uris).IsEquivalentTo([""]);
+    }
+
+
+    [Test]
+    public async Task Load_AFreshestCrlWithAnEmptyAddress_LoadsAndExposesTheDeltaAddress()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        //CRLDistributionPoints { DistributionPoint { distributionPoint { fullName { uri "" } } } }
+        var freshest = new AsnWriter(AsnEncodingRules.DER);
+        using (freshest.PushSequence())
+        using (freshest.PushSequence())
+        using (freshest.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0)))
+        using (freshest.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0))) {
+            freshest.WriteCharacterString(UniversalTagNumber.IA5String, "", new Asn1Tag(TagClass.ContextSpecific, 6));
+        }
+
+        var crl = CertificateRevocationList.Load(BuildCrlWithExtensions(key,
+            (Oids.IssuingDistributionPoint, true, EncodeIssuingDistributionPoint("http://crl.test/a.crl")),
+            (Oids.FreshestCrl, false, freshest.Encode())));
+
+        await Assert.That(crl.DistributionPoint!.DeltaUris).IsEquivalentTo([""]);
+    }
+
+
+    [Test]
+    public async Task SetDistributionPoint_APointLoadedWithAnEmptyAddress_IsRefusedWhenTheCrlIsCreated()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = CreateCa();
+        var loaded = CertificateRevocationList.Load(BuildCrlWithExtensions(key, (Oids.IssuingDistributionPoint, true, EncodeIssuingDistributionPoint(""))));
+
+        var builder = new X509CrlBuilder()
+            .SetIssuer(ca)
+            .SetCrlNumber(1)
+            .SetThisUpdate(Now)
+            .SetNextUpdate(Now.AddDays(1))
+            .SetDistributionPoint(loaded.DistributionPoint!);
+
+        await Assert.That(() => builder.Create()).Throws<ArgumentException>();
+    }
+
+
     [Test]
     public async Task Load_AnIndirectScope_NamesTheCrlIssuerAsTheCrlIssuer()
     {

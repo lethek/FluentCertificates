@@ -255,7 +255,7 @@ public sealed class CertificateRevocationList
 
         //Freshest CRL has a home only on a scope that could itself be read; otherwise both stay as received
         if (point != null && freshest != null && TryReadDeltaUris(freshest.Value.Value, out var deltaUris)) {
-            point = point with { DeltaUris = deltaUris };
+            point = CrlDistributionPoint.CreateUnchecked(point.Uris, deltaUris, point.Covers, point.CrlIssuer);
             freshest = null;
         }
         if (point == null && scope != null) {
@@ -397,10 +397,11 @@ public sealed class CertificateRevocationList
             return null;
         }
 
-        return new CrlDistributionPoint(uris) {
-            Covers = onlyUser ? CrlCoverage.EndEntityCertificates : onlyCa ? CrlCoverage.CACertificates : CrlCoverage.AllCertificates,
-            CrlIssuer = isIndirect ? crlIssuer : null
-        };
+        return CrlDistributionPoint.CreateUnchecked(
+            [.. uris],
+            [],
+            onlyUser ? CrlCoverage.EndEntityCertificates : onlyCa ? CrlCoverage.CACertificates : CrlCoverage.AllCertificates,
+            isIndirect ? crlIssuer : null);
     }
 
 

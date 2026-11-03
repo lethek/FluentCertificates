@@ -390,8 +390,8 @@ public record CertificateBuilder
     /// <param name="point">The first (or only) point where the issuer publishes its CRLs.</param>
     /// <param name="morePoints">Any further points.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
-    /// <exception cref="ArgumentException">Thrown when a point names neither an address nor a CRL issuer, or an
-    /// address is not ASCII.</exception>
+    /// <exception cref="ArgumentException">Thrown when a point names neither an address nor a CRL issuer, or one read
+    /// from a CRL carries an address that is empty or not ASCII, which <see cref="CrlDistributionPoint"/> refuses to construct.</exception>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="morePoints"/> is <see langword="null"/>.</exception>
     /// <remarks>A point with <see cref="CrlDistributionPoint.DeltaUris"/> also sets the Freshest CRL extension,
     /// and where none has any, an earlier Freshest CRL extension is removed.
@@ -406,7 +406,8 @@ public record CertificateBuilder
     /// <param name="critical">Whether to mark the extension critical. RFC 5280 s4.2.1.13 says it SHOULD be non-critical.</param>
     /// <returns>A new instance of <see cref="CertificateBuilder"/> with the specified CRL Distribution Points extension.</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="points"/> is empty, a point names neither an
-    /// address nor a CRL issuer, or an address is not ASCII.</exception>
+    /// address nor a CRL issuer, or one read from a CRL carries an address that is empty or not ASCII, which
+    /// <see cref="CrlDistributionPoint"/> refuses to construct.</exception>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="points"/> is <see langword="null"/>.</exception>
     /// <remarks>A point with <see cref="CrlDistributionPoint.DeltaUris"/> also sets the Freshest CRL extension,
     /// which is always non-critical. Where no point has any, an earlier Freshest CRL extension is removed, since

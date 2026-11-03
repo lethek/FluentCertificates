@@ -284,12 +284,20 @@ public class X509CrlBuilderTests
 
 
     [Test]
-    public async Task SetDistributionPoint_NonAsciiAddress_Throws()
+    public async Task CrlDistributionPoint_AnInvalidAddress_ThrowsWhenConstructed()
     {
-        await Assert.That(() => new X509CrlBuilder().SetDistributionPoint(new CrlDistributionPoint("http://crl.test/é.crl")))
-            .Throws<ArgumentException>();
-        await Assert.That(() => new X509CrlBuilder().SetDistributionPoint(new CrlDistributionPoint("http://crl.test/a.crl") { DeltaUris = ["é"] }))
-            .Throws<ArgumentException>();
+        await Assert.That(() => new CrlDistributionPoint("")).Throws<ArgumentException>();
+        await Assert.That(() => new CrlDistributionPoint("http://crl.test/é.crl")).Throws<ArgumentException>();
+        await Assert.That(() => new CrlDistributionPoint("http://crl.test/a.crl", null!)).Throws<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task CrlDistributionPoint_AnInvalidDeltaAddress_ThrowsWhenSet()
+    {
+        await Assert.That(() => new CrlDistributionPoint("http://crl.test/a.crl") { DeltaUris = [""] }).Throws<ArgumentException>();
+        await Assert.That(() => new CrlDistributionPoint("http://crl.test/a.crl") { DeltaUris = ["é"] }).Throws<ArgumentException>();
+        await Assert.That(() => new CrlDistributionPoint("http://crl.test/a.crl") { DeltaUris = [null!] }).Throws<ArgumentException>();
     }
 
 
