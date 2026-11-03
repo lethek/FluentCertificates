@@ -44,7 +44,9 @@ internal static class CrlEncoding
     /// </summary>
     /// <returns>The encoded value, or <see langword="null"/> when no point names an address in the chosen set.</returns>
     /// <exception cref="ArgumentException">A point names neither an address nor a CRL issuer, or an address is not ASCII.</exception>
-    public static byte[]? EncodeDistributionPoints(IEnumerable<CrlDistributionPoint> points, bool delta)
+    /// <remarks>A Freshest CRL inside a CRL leaves out <c>cRLIssuer</c> (RFC 5280 s5.2.6), so it passes
+    /// <paramref name="includeCrlIssuer"/> as <see langword="false"/>.</remarks>
+    public static byte[]? EncodeDistributionPoints(IEnumerable<CrlDistributionPoint> points, bool delta, bool includeCrlIssuer = true)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
         var any = false;
@@ -64,7 +66,7 @@ internal static class CrlEncoding
                     if (uris.Count > 0) {
                         WriteDistributionPointName(writer, uris);
                     }
-                    if (point.CrlIssuer != null) {
+                    if (includeCrlIssuer && point.CrlIssuer != null) {
                         using (writer.PushSequence(s_context2))
                         using (writer.PushSequence(s_directoryName)) {
                             writer.WriteEncodedValue(point.CrlIssuer.RawData);

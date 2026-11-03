@@ -299,6 +299,25 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task SetDistributionPoint_IndirectWithDeltaUris_WritesAFreshestCrlThatReadsBack()
+    {
+        using var signer = CreateCa("CN=CRL Signer", CertificateUsage.CrlSigning);
+        var point = new CrlDistributionPoint("http://crl.test/all.crl") {
+            CrlIssuer = signer.SubjectName,
+            DeltaUris = ["http://crl.test/all-delta.crl"]
+        };
+
+        var crl = NewBuilder(signer).SetDistributionPoint(point).Create();
+
+        await Assert.That(crl.DistributionPoint!.DeltaUris).IsEquivalentTo(["http://crl.test/all-delta.crl"]);
+        await Assert.That(crl.Extensions.Select(x => x.Oid?.Value)).DoesNotContain(Oids.FreshestCrl);
+        var freshest = CrlDistPoint.GetInstance(Asn1Object.FromByteArray(
+            ParseWithBouncyCastle(crl).GetExtensionValue(new DerObjectIdentifier(Oids.FreshestCrl)).GetOctets())).GetDistributionPoints();
+        await Assert.That(freshest[0].CrlIssuer).IsNull();
+    }
+
+
+    [Test]
     public async Task SetDeltaOf_WritesACriticalDeltaIndicatorNamingTheBase()
     {
         using var ca = CreateCa();

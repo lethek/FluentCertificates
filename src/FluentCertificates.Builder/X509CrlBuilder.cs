@@ -459,7 +459,7 @@ public record X509CrlBuilder
                     CrlEncoding.WriteExtension(tbs, Oids.IssuingDistributionPoint, true, w => CrlEncoding.WriteIssuingDistributionPoint(w, point, indirect));
 
                     //A delta CRL carries no Freshest CRL (RFC 5280 s5.2.6)
-                    if (BaseCrlNumber == null && CrlEncoding.EncodeDistributionPoints([point], delta: true) is { } freshest) {
+                    if (BaseCrlNumber == null && CrlEncoding.EncodeDistributionPoints([point], delta: true, includeCrlIssuer: false) is { } freshest) {
                         CrlEncoding.WriteExtension(tbs, Oids.FreshestCrl, false, freshest);
                     }
                 }
