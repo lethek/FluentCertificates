@@ -29,6 +29,7 @@ public sealed class CertificateRevocationList
     private readonly ReadOnlyMemory<byte> _toBeSigned;
     private readonly ReadOnlyMemory<byte> _signature;
     private readonly ReadOnlyMemory<byte> _signatureAlgorithm;
+    private bool _isIndirect;
 
 
     private CertificateRevocationList(
@@ -195,7 +196,6 @@ public sealed class CertificateRevocationList
         }
 
         var result = new CertificateRevocationList(raw, toBeSigned, signature, algorithm, issuer, thisUpdate, nextUpdate);
-        result.RevokedCertificates = [.. ReadEntries(entries)];
 
         if (tbs.HasData) {
             var wrapper = tbs.ReadSequence(s_context0);
@@ -204,6 +204,9 @@ public sealed class CertificateRevocationList
             result.ApplyExtensions(extensions, issuer);
         }
         tbs.ThrowIfNotEmpty();
+
+        //After the extensions, because whether the CRL is indirect decides whether its entries may name another issuer
+        result.RevokedCertificates = [.. ReadEntries(entries, result._isIndirect)];
 
         return result;
     }
@@ -226,7 +229,7 @@ public sealed class CertificateRevocationList
                     break;
                 case Oids.IssuingDistributionPoint:
                     scope = extension;
-                    point = ReadIssuingDistributionPoint(extension.RawData, crlIssuer);
+                    point = ReadIssuingDistributionPoint(extension.RawData, crlIssuer, out _isIndirect);
                     break;
                 case Oids.FreshestCrl:
                     freshest = extension;
@@ -254,7 +257,7 @@ public sealed class CertificateRevocationList
     }
 
 
-    private static IEnumerable<RevokedCertificate> ReadEntries(ReadOnlyMemory<byte> entries)
+    private static IEnumerable<RevokedCertificate> ReadEntries(ReadOnlyMemory<byte> entries, bool indirect)
     {
         if (entries.IsEmpty) {
             yield break;
@@ -266,7 +269,7 @@ public sealed class CertificateRevocationList
         while (list.HasData) {
             RevokedCertificate entry;
             try {
-                entry = ReadEntry(list.ReadSequence(), ref issuer);
+                entry = ReadEntry(list.ReadSequence(), indirect, ref issuer);
             } catch (AsnContentException ex) {
                 throw new CryptographicException("The certificate revocation list has a malformed entry", ex);
             }
@@ -275,7 +278,7 @@ public sealed class CertificateRevocationList
     }
 
 
-    private static RevokedCertificate ReadEntry(AsnReader entry, ref X500DistinguishedName? issuer)
+    private static RevokedCertificate ReadEntry(AsnReader entry, bool indirect, ref X500DistinguishedName? issuer)
     {
         var serial = entry.ReadIntegerBytes().ToArray();
         var start = 0;
@@ -302,6 +305,9 @@ public sealed class CertificateRevocationList
                         //that the builder would refuse to write again
                         //Without a directoryName the entry's issuer cannot be named, and carrying on with the
                         //previous one would attribute the revocation to the wrong authority
+                        if (!indirect) {
+                            throw new AsnContentException("An entry names a Certificate Issuer, but the CRL is not indirect (RFC 5280 s5.3.3).");
+                        }
                         issuer = ReadCertificateIssuer(extension.RawData)
                             ?? throw new AsnContentException("The Certificate Issuer extension names no directoryName.");
                         break;
@@ -337,8 +343,9 @@ public sealed class CertificateRevocationList
     }
 
 
-    private static CrlDistributionPoint? ReadIssuingDistributionPoint(byte[] value, X500DistinguishedName crlIssuer)
+    private static CrlDistributionPoint? ReadIssuingDistributionPoint(byte[] value, X500DistinguishedName crlIssuer, out bool isIndirect)
     {
+        isIndirect = false;
         var seq = ReadWhole(value, x => x.ReadSequence());
         List<string> uris = [];
         var representable = true;
@@ -376,6 +383,9 @@ public sealed class CertificateRevocationList
                     throw new AsnContentException("Unexpected field in the issuing distribution point.");
             }
         }
+
+        //Reported even where the scope cannot be expressed, since it decides what the entries may name
+        isIndirect = indirect;
 
         if (!representable || (onlyUser && onlyCa)) {
             return null;

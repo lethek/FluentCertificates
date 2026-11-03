@@ -516,6 +516,40 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    public async Task Load_CertificateIssuerOnACrlThatIsNotIndirect_ThrowsCryptographicException()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        //GeneralNames holding a directoryName
+        var names = new AsnWriter(AsnEncodingRules.DER);
+        using (names.PushSequence())
+        using (names.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 4))) {
+            names.WriteEncodedValue(new X500DistinguishedName("CN=Other CA").RawData);
+        }
+        var entries = new AsnWriter(AsnEncodingRules.DER);
+        using (entries.PushSequence())
+        using (entries.PushSequence()) {
+            entries.WriteInteger(1);
+            entries.WriteUtcTime(Now);
+            using (entries.PushSequence())
+            using (entries.PushSequence()) {
+                entries.WriteObjectIdentifier(Oids.CertificateIssuer);
+                entries.WriteBoolean(true);
+                entries.WriteOctetString(names.Encode());
+            }
+        }
+
+        //No Issuing Distribution Point, then one without the indirect flag
+        var notIndirect = new AsnWriter(AsnEncodingRules.DER);
+        using (notIndirect.PushSequence()) { }
+
+        await Assert.That(() => CertificateRevocationList.Load(BuildCrl(key, entries.Encode(), []))).Throws<CryptographicException>();
+        await Assert.That(() => CertificateRevocationList.Load(BuildCrl(key, entries.Encode(), [(Oids.IssuingDistributionPoint, true, notIndirect.Encode())])))
+            .Throws<CryptographicException>();
+    }
+
+
+    [Test]
     public async Task Load_AnExtensionValueWithBytesAfterIt_ThrowsCryptographicException()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
