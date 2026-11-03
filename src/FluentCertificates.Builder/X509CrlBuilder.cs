@@ -353,7 +353,9 @@ public record X509CrlBuilder
     private static bool HasSameScope(CrlDistributionPoint? a, CrlDistributionPoint? b)
         => a == null || b == null
             ? a == null && b == null
-            : a.Covers == b.Covers && a.Uris.SequenceEqual(b.Uris) && (a.CrlIssuer == null) == (b.CrlIssuer == null);
+            : a.Covers == b.Covers
+              && a.Uris.Order(StringComparer.Ordinal).SequenceEqual(b.Uris.Order(StringComparer.Ordinal))
+              &&(a.CrlIssuer == null) == (b.CrlIssuer == null);
 
 
     /// <summary>Whether the CRL is indirect, once the distribution point has been checked.</summary>

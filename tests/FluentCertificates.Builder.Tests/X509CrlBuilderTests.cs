@@ -366,6 +366,19 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task SetDeltaOf_ScopeWithTheSameAddressesInAnotherOrder_IsTheSameScope()
+    {
+        using var ca = CreateCa();
+        var full = NewBuilder(ca, 1).SetDistributionPoint(new CrlDistributionPoint("http://crl.test/a.crl", "http://crl.test/b.crl")).Create();
+
+        var delta = NewBuilder(ca, 2).SetDeltaOf(full)
+            .SetDistributionPoint(new CrlDistributionPoint("http://crl.test/b.crl", "http://crl.test/a.crl")).Create();
+
+        await Assert.That(delta.BaseCrlNumber).IsEqualTo((BigInteger?)1);
+    }
+
+
+    [Test]
     public async Task SetDeltaOf_ACrlOfAnotherIssuer_Throws()
     {
         using var ca = CreateCa();
