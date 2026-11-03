@@ -309,6 +309,27 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    public async Task Load_AnExtensionThatAppearsTwice_ThrowsCryptographicException()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        //A scope that partitions by reason, then an empty one that would hide it
+        var partitioned = new AsnWriter(AsnEncodingRules.DER);
+        using (partitioned.PushSequence()) {
+            partitioned.WriteBitString([0x40], 6, new Asn1Tag(TagClass.ContextSpecific, 3));
+        }
+        var empty = new AsnWriter(AsnEncodingRules.DER);
+        using (empty.PushSequence()) { }
+
+        var der = BuildCrlWithExtensions(key,
+            (Oids.IssuingDistributionPoint, true, partitioned.Encode()),
+            (Oids.IssuingDistributionPoint, true, empty.Encode()));
+
+        await Assert.That(() => CertificateRevocationList.Load(der)).Throws<CryptographicException>();
+    }
+
+
+    [Test]
     public async Task Load_BothCoverageFlags_IsNotAScopeItExpresses()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);

@@ -446,9 +446,14 @@ public sealed class CertificateRevocationList
     private static List<X509Extension> ReadExtensions(AsnReader sequence)
     {
         List<X509Extension> extensions = [];
+        HashSet<string> seen = [];
         while (sequence.HasData) {
             var extension = sequence.ReadSequence();
             var oid = extension.ReadObjectIdentifier();
+            //RFC 5280 s5.2: an extension appears at most once, and taking either of two would be a guess
+            if (!seen.Add(oid)) {
+                throw new AsnContentException($"The extension {oid} appears more than once.");
+            }
             var critical = extension.PeekTag() == Asn1Tag.Boolean && extension.ReadBoolean();
             var value = extension.ReadOctetString();
             extension.ThrowIfNotEmpty();
