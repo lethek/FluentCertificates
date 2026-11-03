@@ -24,7 +24,6 @@ public sealed class CertificateRevocationList
     private readonly byte[] _rawData;
     private readonly ReadOnlyMemory<byte> _toBeSigned;
     private readonly ReadOnlyMemory<byte> _signature;
-    private readonly ReadOnlyMemory<byte> _entries;
     private readonly ReadOnlyMemory<byte> _signatureAlgorithm;
 
 
@@ -35,8 +34,7 @@ public sealed class CertificateRevocationList
         ReadOnlyMemory<byte> signatureAlgorithm,
         X500DistinguishedName issuer,
         DateTimeOffset thisUpdate,
-        DateTimeOffset? nextUpdate,
-        ReadOnlyMemory<byte> entries)
+        DateTimeOffset? nextUpdate)
     {
         _rawData = rawData;
         _toBeSigned = toBeSigned;
@@ -45,7 +43,6 @@ public sealed class CertificateRevocationList
         Issuer = issuer;
         ThisUpdate = thisUpdate;
         NextUpdate = nextUpdate;
-        _entries = entries;
     }
 
 
@@ -77,10 +74,10 @@ public sealed class CertificateRevocationList
     public ImmutableList<X509Extension> Extensions { get; private set; } = [];
 
     /// <summary>Gets the revoked certificates.</summary>
-    /// <remarks>Read from <see cref="RawData"/> each time it is enumerated. Where the CRL is indirect, an entry's
+    /// <remarks>Read once, when the CRL is loaded. Where the CRL is indirect, an entry's
     /// <see cref="RevokedCertificate.CertificateIssuer"/> has the Certificate Issuer extension's inheritance
     /// already applied: an entry without the extension takes the issuer of the entry before it.</remarks>
-    public IEnumerable<RevokedCertificate> RevokedCertificates => ReadEntries(_entries);
+    public ImmutableList<RevokedCertificate> RevokedCertificates { get; private set; } = [];
 
 
     /// <summary>Reads a CRL from its binary encoding.</summary>
@@ -191,7 +188,8 @@ public sealed class CertificateRevocationList
             tbs.ReadEncodedValue();
         }
 
-        var result = new CertificateRevocationList(raw, toBeSigned, signature, algorithm, issuer, thisUpdate, nextUpdate, entries);
+        var result = new CertificateRevocationList(raw, toBeSigned, signature, algorithm, issuer, thisUpdate, nextUpdate);
+        result.RevokedCertificates = [.. ReadEntries(entries)];
 
         if (tbs.HasData) {
             var wrapper = tbs.ReadSequence(s_context0);
@@ -200,9 +198,6 @@ public sealed class CertificateRevocationList
             result.ApplyExtensions(extensions, issuer);
         }
         tbs.ThrowIfNotEmpty();
-
-        //Read every entry now, so that a malformed one fails the load rather than a later enumeration
-        foreach (var _ in result.RevokedCertificates) { }
 
         return result;
     }

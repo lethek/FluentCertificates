@@ -499,12 +499,12 @@ public class CertificateRevocationListTests
 
 
     [Test]
-    public async Task RevokedCertificates_EnumeratedTwice_GivesTheSameEntries()
+    public async Task RevokedCertificates_AreReadOnceAtLoad()
     {
         using var ca = CreateCa();
         var crl = CreateCrl(ca);
 
-        await Assert.That(crl.RevokedCertificates.Count()).IsEqualTo(1);
-        await Assert.That(crl.RevokedCertificates.Count()).IsEqualTo(1);
+        await Assert.That(crl.RevokedCertificates.Count).IsEqualTo(1);
+        await Assert.That(ReferenceEquals(crl.RevokedCertificates[0], crl.RevokedCertificates[0])).IsTrue();
     }
 }
