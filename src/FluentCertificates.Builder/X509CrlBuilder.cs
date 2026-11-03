@@ -88,7 +88,7 @@ public record X509CrlBuilder
             Issuer = issuer,
             SignatureGenerator = null,
             IssuerName = issuer.SubjectName,
-            IssuerKeyIdentifier = ski?.SubjectKeyIdentifier is { } id ? Convert.FromHexString(id) : default
+            IssuerKeyIdentifier = ski?.SubjectKeyIdentifierBytes ?? default
         };
     }
 
@@ -285,8 +285,8 @@ public record X509CrlBuilder
 
         CheckIssuerMaySignCrls();
         CheckDelta(crlNumber, issuerName);
-        var indirect = CheckDistributionPoint(issuerName);
-        var entries = CheckEntries(issuerName, indirect);
+        CheckDistributionPoint(issuerName);
+        var entries = CheckEntries(issuerName);
 
         //GetPrivateKey hands back a fresh instance which is ours to release, unlike a generator the caller supplied
         using var issuerKey = SignatureGenerator == null && Issuer != null
@@ -301,12 +301,12 @@ public record X509CrlBuilder
         //RFC 5280 s5.2.1: every CRL carries the Authority Key Identifier, so a signer that publishes none gets
         //the key identifier derived from its public key, as CertificateBuilder does for the certificates it issues
         var keyIdentifier = IssuerKeyIdentifier.IsEmpty
-            ? new X509SubjectKeyIdentifierExtension(generator.PublicKey, false).SubjectKeyIdentifierBytes.ToArray()
-            : IssuerKeyIdentifier.ToArray();
-        var toBeSigned = EncodeToBeSigned(algorithm, issuerName, thisUpdate, nextUpdate, crlNumber, entries, indirect, keyIdentifier);
+            ? new X509SubjectKeyIdentifierExtension(generator.PublicKey, false).SubjectKeyIdentifierBytes
+            : IssuerKeyIdentifier;
+        var toBeSigned = EncodeToBeSigned(algorithm, issuerName, thisUpdate, nextUpdate, crlNumber, entries, keyIdentifier.Span);
         var signature = generator.SignData(toBeSigned, HashAlgorithm);
 
-        var crl = new AsnWriter(AsnEncodingRules.DER);
+        var crl = new AsnWriter(AsnEncodingRules.DER, toBeSigned.Length + algorithm.Length + signature.Length + 16);
         using (crl.PushSequence()) {
             crl.WriteEncodedValue(toBeSigned);
             crl.WriteEncodedValue(algorithm);
@@ -327,6 +327,9 @@ public record X509CrlBuilder
     ];
 
     private static readonly Asn1Tag s_context0 = new(TagClass.ContextSpecific, 0);
+
+
+    private bool IsIndirect => DistributionPoint?.CrlIssuer != null;
 
 
     private void CheckIssuerMaySignCrls()
@@ -364,59 +367,98 @@ public record X509CrlBuilder
               &&(a.CrlIssuer == null) == (b.CrlIssuer == null);
 
 
-    /// <summary>Whether the CRL is indirect, once the distribution point has been checked.</summary>
-    private bool CheckDistributionPoint(X500DistinguishedName issuerName)
+    private void CheckDistributionPoint(X500DistinguishedName issuerName)
     {
-        if (DistributionPoint?.CrlIssuer is not { } crlIssuer) {
-            return false;
-        }
-        if (!X500NameComparer.Values.Equals(crlIssuer, issuerName)) {
+        if (DistributionPoint?.CrlIssuer is { } crlIssuer && !X500NameComparer.Values.Equals(crlIssuer, issuerName)) {
             throw new InvalidOperationException($"The distribution point's {nameof(CrlDistributionPoint.CrlIssuer)} names who signs the CRL, so it must be the issuer name '{issuerName.Name}' but was '{crlIssuer.Name}'");
         }
-        return true;
     }
 
 
-    /// <summary>The entries to write: validated, with exact repeats removed.</summary>
-    private List<RevokedCertificate> CheckEntries(X500DistinguishedName signer, bool indirect)
+    /// <summary>The entries to write: validated, with exact repeats removed, each paired with its issuer as one
+    /// shared instance per distinct name so that later comparisons are by reference.</summary>
+    private List<(RevokedCertificate Entry, X500DistinguishedName Issuer)> CheckEntries(X500DistinguishedName signer)
     {
-        var seen = new Dictionary<X500DistinguishedName, Dictionary<string, RevokedCertificate>>(X500NameComparer.Values);
-        var result = new List<RevokedCertificate>(RevokedCertificates.Count);
+        List<X500DistinguishedName> issuers = [signer];
+        var seen = new Dictionary<X500DistinguishedName, Dictionary<ReadOnlyMemory<byte>, RevokedCertificate>>(ReferenceEqualityComparer.Instance);
+        var result = new List<(RevokedCertificate, X500DistinguishedName)>(RevokedCertificates.Count);
 
         foreach (var entry in RevokedCertificates) {
-            var serial = Convert.ToHexString(entry.SerialNumber.Span).TrimStart('0');
             if (entry.SerialNumber.IsEmpty) {
                 throw new InvalidOperationException("A revoked certificate has no serial number");
             }
+            //The writer drops leading zero bytes, so a serial with and without them is the same certificate
+            var serial = entry.SerialNumber.TrimStart((byte)0);
 
-            var issuer = entry.CertificateIssuer ?? signer;
-            if (!indirect && !X500NameComparer.Values.Equals(issuer, signer)) {
-                throw new InvalidOperationException($"Certificate {serial} was issued by '{issuer.Name}', which is not the CRL issuer '{signer.Name}'. Only an indirect CRL can list another issuer's certificates: give the {nameof(DistributionPoint)} a {nameof(CrlDistributionPoint.CrlIssuer)}");
+            var issuer = entry.CertificateIssuer == null ? signer : ResolveIssuer(issuers, entry.CertificateIssuer);
+            if (!IsIndirect && !ReferenceEquals(issuer, signer)) {
+                throw new InvalidOperationException($"Certificate {GetSerialText(serial)} was issued by '{issuer.Name}', which is not the CRL issuer '{signer.Name}'. Only an indirect CRL can list another issuer's certificates: give the {nameof(DistributionPoint)} a {nameof(CrlDistributionPoint.CrlIssuer)}");
             }
             if (entry.Reason == X509RevocationReason.RemoveFromCrl && BaseCrlNumber == null) {
-                throw new InvalidOperationException($"Certificate {serial} has reason {nameof(X509RevocationReason.RemoveFromCrl)}, which means something only in a delta CRL (RFC 5280 s5.3.1)");
+                throw new InvalidOperationException($"Certificate {GetSerialText(serial)} has reason {nameof(X509RevocationReason.RemoveFromCrl)}, which means something only in a delta CRL (RFC 5280 s5.3.1)");
             }
             if (entry.Extensions.Any(x => x.Oid?.Value is not { } oid || s_entryExtensionOids.Contains(oid))) {
-                throw new InvalidOperationException($"Certificate {serial} has an extension the builder writes itself, from the entry's own properties, or one with no OID");
+                throw new InvalidOperationException($"Certificate {GetSerialText(serial)} has an extension the builder writes itself, from the entry's own properties, or one with no OID");
             }
-            if (entry.Extensions.GroupBy(x => x.Oid!.Value).FirstOrDefault(x => x.Count() > 1) is { } repeated) {
-                throw new InvalidOperationException($"Certificate {serial} has the {repeated.Key} extension more than once (RFC 5280 s5.3)");
+            if (entry.Extensions.Count > 1 && entry.Extensions.GroupBy(x => x.Oid!.Value).FirstOrDefault(x => x.Count() > 1) is { } repeated) {
+                throw new InvalidOperationException($"Certificate {GetSerialText(serial)} has the {repeated.Key} extension more than once (RFC 5280 s5.3)");
             }
 
             if (!seen.TryGetValue(issuer, out var byIssuer)) {
-                seen[issuer] = byIssuer = [];
+                seen[issuer] = byIssuer = new(SerialComparer.Instance);
             }
             if (byIssuer.TryGetValue(serial, out var existing)) {
                 if (!IsSameRevocation(existing, entry)) {
-                    throw new InvalidOperationException($"Certificate {serial} is listed twice with different details");
+                    throw new InvalidOperationException($"Certificate {GetSerialText(serial)} is listed twice with different details");
                 }
                 continue;
             }
             byIssuer[serial] = entry;
-            result.Add(entry);
+            result.Add((entry, issuer));
         }
 
         return result;
+    }
+
+
+    /// <summary>A serial with its leading zero bytes removed, in hex for a message.</summary>
+    private static string GetSerialText(ReadOnlyMemory<byte> serial)
+        => serial.IsEmpty ? "0" : Convert.ToHexString(serial.Span);
+
+
+    private sealed class SerialComparer : IEqualityComparer<ReadOnlyMemory<byte>>
+    {
+        public static readonly SerialComparer Instance = new();
+
+        public bool Equals(ReadOnlyMemory<byte> x, ReadOnlyMemory<byte> y)
+            => x.Span.SequenceEqual(y.Span);
+
+        public int GetHashCode(ReadOnlyMemory<byte> obj)
+        {
+            var hash = new HashCode();
+            hash.AddBytes(obj.Span);
+            return hash.ToHashCode();
+        }
+    }
+
+
+    /// <summary>The instance in <paramref name="known"/> naming the same issuer, added where there is none yet.</summary>
+    /// <remarks>An entry made from a certificate carries a name instance of its own, so the encoding is compared
+    /// before the comparer that decodes it, which would otherwise run for every entry.</remarks>
+    private static X500DistinguishedName ResolveIssuer(List<X500DistinguishedName> known, X500DistinguishedName name)
+    {
+        foreach (var candidate in known) {
+            if (candidate.RawData.AsSpan().SequenceEqual(name.RawData)) {
+                return candidate;
+            }
+        }
+        foreach (var candidate in known) {
+            if (X500NameComparer.Values.Equals(candidate, name)) {
+                return candidate;
+            }
+        }
+        known.Add(name);
+        return name;
     }
 
 
@@ -437,11 +479,17 @@ public record X509CrlBuilder
         DateTimeOffset thisUpdate,
         DateTimeOffset nextUpdate,
         BigInteger crlNumber,
-        List<RevokedCertificate> entries,
-        bool indirect,
-        byte[] keyIdentifier)
+        List<(RevokedCertificate Entry, X500DistinguishedName Issuer)> entries,
+        ReadOnlySpan<byte> keyIdentifier)
     {
-        var tbs = new AsnWriter(AsnEncodingRules.DER);
+        //AsnWriter grows 1 KB at a time, copying everything written so far, so a long list needs its room up front.
+        //Each entry's fixed fields take at most 96 bytes, and an extension's wrapper at most 64.
+        var capacity = 4096
+            + Extensions.Sum(x => x.RawData.Length + 64)
+            + entries.Sum(x => 96 + x.Entry.SerialNumber.Length + (x.Entry.CertificateIssuer?.RawData.Length ?? 0)
+                               + x.Entry.Extensions.Sum(e => e.RawData.Length + 64));
+
+        var tbs = new AsnWriter(AsnEncodingRules.DER, capacity);
         using (tbs.PushSequence()) {
             tbs.WriteInteger(1);
             tbs.WriteEncodedValue(algorithm);
@@ -452,19 +500,15 @@ public record X509CrlBuilder
             if (entries.Count > 0) {
                 using (tbs.PushSequence()) {
                     var current = issuerName;
-                    foreach (var entry in entries) {
-                        WriteEntry(tbs, entry, issuerName, ref current, indirect);
+                    foreach (var (entry, issuer) in entries) {
+                        WriteEntry(tbs, entry, issuer, ref current);
                     }
                 }
             }
 
             using (tbs.PushSequence(s_context0))
             using (tbs.PushSequence()) {
-                CrlEncoding.WriteExtension(tbs, Oids.AuthorityKeyIdentifier, false, w => {
-                    using (w.PushSequence()) {
-                        w.WriteOctetString(keyIdentifier, s_context0);
-                    }
-                });
+                CrlEncoding.WriteExtension(tbs, Oids.AuthorityKeyIdentifier, false, X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(keyIdentifier).RawData);
 
                 CrlEncoding.WriteExtension(tbs, Oids.CrlNumber, false, w => w.WriteInteger(crlNumber));
 
@@ -473,7 +517,7 @@ public record X509CrlBuilder
                 }
 
                 if (DistributionPoint is { } point) {
-                    CrlEncoding.WriteExtension(tbs, Oids.IssuingDistributionPoint, true, w => CrlEncoding.WriteIssuingDistributionPoint(w, point, indirect));
+                    CrlEncoding.WriteExtension(tbs, Oids.IssuingDistributionPoint, true, w => CrlEncoding.WriteIssuingDistributionPoint(w, point));
 
                     //A delta CRL carries no Freshest CRL (RFC 5280 s5.2.6)
                     if (BaseCrlNumber == null && CrlEncoding.EncodeDistributionPoints([point], delta: true, includeCrlIssuer: false) is { } freshest) {
@@ -491,12 +535,12 @@ public record X509CrlBuilder
     }
 
 
-    /// <summary>Writes one entry, adding the Certificate Issuer extension where the issuer changes from the entry before.</summary>
-    private static void WriteEntry(AsnWriter writer, RevokedCertificate entry, X500DistinguishedName signer, ref X500DistinguishedName current, bool indirect)
+    /// <summary>Writes one entry, adding the Certificate Issuer extension where the issuer changes from the entry
+    /// before. The issuers are the shared instances <see cref="CheckEntries"/> resolved, so they compare by reference.</summary>
+    private static void WriteEntry(AsnWriter writer, RevokedCertificate entry, X500DistinguishedName issuer, ref X500DistinguishedName current)
     {
-        var issuer = entry.CertificateIssuer ?? signer;
-        var changesIssuer = indirect && !X500NameComparer.Values.Equals(issuer, current);
-        current = indirect ? issuer : current;
+        var changesIssuer = !ReferenceEquals(issuer, current);
+        current = issuer;
 
         using (writer.PushSequence()) {
             //The writer takes the minimal form, with no redundant leading zero bytes
@@ -517,12 +561,7 @@ public record X509CrlBuilder
                 }
                 if (changesIssuer) {
                     //RFC 5280 s5.3.3: critical, and applies to this entry and every one after it until the next
-                    CrlEncoding.WriteExtension(writer, Oids.CertificateIssuer, true, w => {
-                        using (w.PushSequence())
-                        using (w.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 4))) {
-                            w.WriteEncodedValue(issuer.RawData);
-                        }
-                    });
+                    CrlEncoding.WriteExtension(writer, Oids.CertificateIssuer, true, w => CrlEncoding.WriteDirectoryName(w, issuer));
                 }
                 foreach (var extension in entry.Extensions) {
                     CrlEncoding.WriteExtension(writer, extension.Oid!.Value!, extension.Critical, extension.RawData);

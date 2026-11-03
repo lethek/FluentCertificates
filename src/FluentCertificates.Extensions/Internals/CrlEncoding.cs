@@ -11,7 +11,9 @@ namespace FluentCertificates.Internals;
 internal static class CrlEncoding
 {
     private static readonly Asn1Tag s_context0 = new(TagClass.ContextSpecific, 0);
+    private static readonly Asn1Tag s_context1 = new(TagClass.ContextSpecific, 1);
     private static readonly Asn1Tag s_context2 = new(TagClass.ContextSpecific, 2);
+    private static readonly Asn1Tag s_context4 = new(TagClass.ContextSpecific, 4);
     private static readonly Asn1Tag s_directoryName = new(TagClass.ContextSpecific, 4);
     private static readonly Asn1Tag s_uri = new(TagClass.ContextSpecific, 6);
 
@@ -19,9 +21,15 @@ internal static class CrlEncoding
     /// <summary>Writes one extension: its OID, its criticality when critical, and the value wrapped in an OCTET STRING.</summary>
     public static void WriteExtension(AsnWriter writer, string oid, bool critical, Action<AsnWriter> writeValue)
     {
-        var value = new AsnWriter(AsnEncodingRules.DER);
-        writeValue(value);
-        WriteExtension(writer, oid, critical, value.Encode());
+        using (writer.PushSequence()) {
+            writer.WriteObjectIdentifier(oid);
+            if (critical) {
+                writer.WriteBoolean(true);
+            }
+            using (writer.PushOctetString()) {
+                writeValue(writer);
+            }
+        }
     }
 
 
@@ -67,10 +75,7 @@ internal static class CrlEncoding
                         WriteDistributionPointName(writer, uris);
                     }
                     if (includeCrlIssuer && point.CrlIssuer != null) {
-                        using (writer.PushSequence(s_context2))
-                        using (writer.PushSequence(s_directoryName)) {
-                            writer.WriteEncodedValue(point.CrlIssuer.RawData);
-                        }
+                        WriteDirectoryName(writer, point.CrlIssuer, s_context2);
                     }
                 }
             }
@@ -84,22 +89,33 @@ internal static class CrlEncoding
     /// Writes an <c>IssuingDistributionPoint</c> value (RFC 5280 s5.2.5) stating the scope of the CRL it is in.
     /// </summary>
     /// <remarks>Only the fields this library supports are written. The reasons field is never written, since
-    /// reason partitioning is not supported, and neither is the attribute certificates field.</remarks>
-    public static void WriteIssuingDistributionPoint(AsnWriter writer, CrlDistributionPoint point, bool indirect)
+    /// reason partitioning is not supported, and neither is the attribute certificates field. A
+    /// <see cref="CrlDistributionPoint.CrlIssuer"/> marks the CRL indirect.</remarks>
+    public static void WriteIssuingDistributionPoint(AsnWriter writer, CrlDistributionPoint point)
     {
         using (writer.PushSequence()) {
             if (point.Uris.Count > 0) {
                 WriteDistributionPointName(writer, point.Uris);
             }
             if (point.Covers == CrlCoverage.EndEntityCertificates) {
-                writer.WriteBoolean(true, new Asn1Tag(TagClass.ContextSpecific, 1));
+                writer.WriteBoolean(true, s_context1);
             }
             if (point.Covers == CrlCoverage.CACertificates) {
-                writer.WriteBoolean(true, new Asn1Tag(TagClass.ContextSpecific, 2));
+                writer.WriteBoolean(true, s_context2);
             }
-            if (indirect) {
-                writer.WriteBoolean(true, new Asn1Tag(TagClass.ContextSpecific, 4));
+            if (point.CrlIssuer != null) {
+                writer.WriteBoolean(true, s_context4);
             }
+        }
+    }
+
+
+    /// <summary>Writes a <c>GeneralNames</c> holding one <c>directoryName</c>, under <paramref name="tag"/> where given.</summary>
+    public static void WriteDirectoryName(AsnWriter writer, X500DistinguishedName name, Asn1Tag? tag = null)
+    {
+        using (writer.PushSequence(tag))
+        using (writer.PushSequence(s_directoryName)) {
+            writer.WriteEncodedValue(name.RawData);
         }
     }
 

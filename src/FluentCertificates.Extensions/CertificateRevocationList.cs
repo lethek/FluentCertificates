@@ -29,7 +29,6 @@ public sealed class CertificateRevocationList
     private readonly ReadOnlyMemory<byte> _toBeSigned;
     private readonly ReadOnlyMemory<byte> _signature;
     private readonly ReadOnlyMemory<byte> _signatureAlgorithm;
-    private bool _isIndirect;
 
 
     private CertificateRevocationList(
@@ -64,25 +63,25 @@ public sealed class CertificateRevocationList
     public DateTimeOffset? NextUpdate { get; }
 
     /// <summary>Gets the CRL number, or <see langword="null"/> where the CRL carries none.</summary>
-    public BigInteger? CrlNumber { get; private set; }
+    public BigInteger? CrlNumber { get; private init; }
 
     /// <summary>Gets the number of the full CRL this delta CRL builds on, or <see langword="null"/> where this is not a delta CRL.</summary>
-    public BigInteger? BaseCrlNumber { get; private set; }
+    public BigInteger? BaseCrlNumber { get; private init; }
 
     /// <summary>Gets the address and coverage the CRL states for itself, or <see langword="null"/> where it states none.</summary>
     /// <remarks>Also <see langword="null"/> where the CRL states a scope this library cannot express, which is
     /// one that partitions by reason, covers only attribute certificates, or names its address in a form other
     /// than a URI. The extension is then left in <see cref="Extensions"/> as it was received.</remarks>
-    public CrlDistributionPoint? DistributionPoint { get; private set; }
+    public CrlDistributionPoint? DistributionPoint { get; private init; }
 
     /// <summary>Gets the CRL-wide extensions this type has no property for, as they were received.</summary>
-    public ImmutableList<X509Extension> Extensions { get; private set; } = [];
+    public ImmutableList<X509Extension> Extensions { get; private init; } = [];
 
     /// <summary>Gets the revoked certificates.</summary>
     /// <remarks>Read once, when the CRL is loaded. Where the CRL is indirect, an entry's
     /// <see cref="RevokedCertificate.CertificateIssuer"/> has the Certificate Issuer extension's inheritance
     /// already applied: an entry without the extension takes the issuer of the entry before it.</remarks>
-    public ImmutableList<RevokedCertificate> RevokedCertificates { get; private set; } = [];
+    public ImmutableList<RevokedCertificate> RevokedCertificates { get; private init; } = [];
 
 
     /// <summary>Reads a CRL from its binary encoding.</summary>
@@ -112,13 +111,7 @@ public sealed class CertificateRevocationList
         var remaining = pem.AsSpan();
         while (PemEncoding.TryFind(remaining, out var fields)) {
             if (remaining[fields.Label].SequenceEqual(PemLabel.AsSpan())) {
-                byte[] data;
-                try {
-                    data = Convert.FromBase64String(remaining[fields.Base64Data].ToString());
-                } catch (FormatException ex) {
-                    throw new CryptographicException("The PEM block is not valid base64", ex);
-                }
-                return Load(data);
+                return Load(PemTools.DecodeBlock(remaining, fields));
             }
             remaining = remaining[fields.Location.End..];
         }
@@ -153,6 +146,10 @@ public sealed class CertificateRevocationList
     private const string PemLabel = "X509 CRL";
 
     private static readonly Asn1Tag s_context0 = new(TagClass.ContextSpecific, 0);
+    private static readonly Asn1Tag s_directoryName = new(TagClass.ContextSpecific, 4);
+    private static readonly Asn1Tag s_uri = new(TagClass.ContextSpecific, 6);
+    private static readonly Asn1Tag s_utcTime = new(UniversalTagNumber.UtcTime);
+    private static readonly Asn1Tag s_generalizedTime = new(UniversalTagNumber.GeneralizedTime);
 
 
     private static CertificateRevocationList Parse(byte[] raw)
@@ -191,114 +188,123 @@ public sealed class CertificateRevocationList
 
         ReadOnlyMemory<byte> entries = default;
         if (tbs.HasData && tbs.PeekTag() == Asn1Tag.Sequence) {
-            entries = tbs.PeekEncodedValue();
-            tbs.ReadEncodedValue();
+            entries = tbs.ReadEncodedValue();
         }
 
-        var result = new CertificateRevocationList(raw, toBeSigned, signature, algorithm, issuer, thisUpdate, nextUpdate);
-
+        var extensions = new CrlExtensions(null, null, null, false, []);
         if (tbs.HasData) {
             var wrapper = tbs.ReadSequence(s_context0);
-            var extensions = ReadExtensions(wrapper.ReadSequence());
+            extensions = ReadCrlExtensions(ReadExtensions(wrapper.ReadSequence()), issuer);
             wrapper.ThrowIfNotEmpty();
-            result.ApplyExtensions(extensions, issuer);
         }
         tbs.ThrowIfNotEmpty();
 
-        //After the extensions, because whether the CRL is indirect decides whether its entries may name another issuer
-        result.RevokedCertificates = [.. ReadEntries(entries, result._isIndirect)];
-
-        return result;
+        return new CertificateRevocationList(raw, toBeSigned, signature, algorithm, issuer, thisUpdate, nextUpdate) {
+            CrlNumber = extensions.CrlNumber,
+            BaseCrlNumber = extensions.BaseCrlNumber,
+            DistributionPoint = extensions.DistributionPoint,
+            Extensions = extensions.Others,
+            //After the extensions, because whether the CRL is indirect decides whether its entries may name another issuer
+            RevokedCertificates = ReadEntries(entries, extensions.IsIndirect)
+        };
     }
 
 
-    private void ApplyExtensions(List<X509Extension> extensions, X500DistinguishedName crlIssuer)
+    private readonly record struct CrlExtensions(
+        BigInteger? CrlNumber,
+        BigInteger? BaseCrlNumber,
+        CrlDistributionPoint? DistributionPoint,
+        bool IsIndirect,
+        ImmutableList<X509Extension> Others);
+
+
+    /// <summary>An extension as read, before it is known whether it needs an <see cref="X509Extension"/>.</summary>
+    private readonly record struct RawExtension(string Oid, bool Critical, byte[] Value)
     {
+        public X509Extension ToX509Extension() => new(new Oid(Oid), Value, Critical);
+    }
+
+
+    private static CrlExtensions ReadCrlExtensions(List<RawExtension> extensions, X500DistinguishedName crlIssuer)
+    {
+        BigInteger? number = null, baseNumber = null;
         CrlDistributionPoint? point = null;
-        X509Extension? scope = null;
-        X509Extension? freshest = null;
+        var indirect = false;
+        RawExtension? scope = null;
+        RawExtension? freshest = null;
         var others = ImmutableList.CreateBuilder<X509Extension>();
 
         foreach (var extension in extensions) {
-            switch (extension.Oid?.Value) {
+            switch (extension.Oid) {
                 case Oids.CrlNumber:
-                    CrlNumber = ReadWhole(extension.RawData, x => x.ReadInteger());
+                    number = ReadWhole(extension.Value, x => x.ReadInteger());
                     break;
                 case Oids.DeltaCrlIndicator:
-                    BaseCrlNumber = ReadWhole(extension.RawData, x => x.ReadInteger());
+                    baseNumber = ReadWhole(extension.Value, x => x.ReadInteger());
                     break;
                 case Oids.IssuingDistributionPoint:
                     scope = extension;
-                    point = ReadIssuingDistributionPoint(extension.RawData, crlIssuer, out _isIndirect);
+                    point = ReadIssuingDistributionPoint(extension.Value, crlIssuer, out indirect);
                     break;
                 case Oids.FreshestCrl:
                     freshest = extension;
                     break;
                 default:
-                    others.Add(extension);
+                    others.Add(extension.ToX509Extension());
                     break;
             }
         }
 
         //Freshest CRL has a home only on a scope that could itself be read; otherwise both stay as received
-        if (point != null && freshest != null && TryReadDeltaUris(freshest.RawData, out var deltaUris)) {
+        if (point != null && freshest != null && TryReadDeltaUris(freshest.Value.Value, out var deltaUris)) {
             point = point with { DeltaUris = deltaUris };
             freshest = null;
         }
         if (point == null && scope != null) {
-            others.Add(scope);
+            others.Add(scope.Value.ToX509Extension());
         }
         if (freshest != null) {
-            others.Add(freshest);
+            others.Add(freshest.Value.ToX509Extension());
         }
 
-        DistributionPoint = point;
-        Extensions = others.ToImmutable();
+        return new CrlExtensions(number, baseNumber, point, indirect, others.ToImmutable());
     }
 
 
-    private static IEnumerable<RevokedCertificate> ReadEntries(ReadOnlyMemory<byte> entries, bool indirect)
+    private static ImmutableList<RevokedCertificate> ReadEntries(ReadOnlyMemory<byte> entries, bool indirect)
     {
         if (entries.IsEmpty) {
-            yield break;
+            return [];
         }
 
         var list = new AsnReader(entries, AsnEncodingRules.BER).ReadSequence();
+        var result = ImmutableList.CreateBuilder<RevokedCertificate>();
         X500DistinguishedName? issuer = null;
-
         while (list.HasData) {
-            RevokedCertificate entry;
-            try {
-                entry = ReadEntry(list.ReadSequence(), indirect, ref issuer);
-            } catch (AsnContentException ex) {
-                throw new CryptographicException("The certificate revocation list has a malformed entry", ex);
-            }
-            yield return entry;
+            result.Add(ReadEntry(list.ReadSequence(), indirect, ref issuer));
         }
+        return result.ToImmutable();
     }
 
 
     private static RevokedCertificate ReadEntry(AsnReader entry, bool indirect, ref X500DistinguishedName? issuer)
     {
-        var serial = entry.ReadIntegerBytes().ToArray();
-        var start = 0;
-        while (start < serial.Length - 1 && serial[start] == 0) {
-            start++;
-        }
+        var serial = entry.ReadIntegerBytes().Span.TrimStart((byte)0);
+        byte[] serialNumber = serial.IsEmpty ? [0] : serial.ToArray();
 
         var revokedAt = ReadTime(entry);
         X509RevocationReason? reason = null;
         DateTimeOffset? invalidity = null;
-        var others = ImmutableList.CreateBuilder<X509Extension>();
+        ImmutableList<X509Extension>.Builder? others = null;
 
         if (entry.HasData) {
             foreach (var extension in ReadExtensions(entry.ReadSequence())) {
-                switch (extension.Oid?.Value) {
+                switch (extension.Oid) {
                     case Oids.CrlReasons:
-                        reason = ReadWhole(extension.RawData, x => x.ReadEnumeratedValue<X509RevocationReason>());
+                        reason = ReadWhole(extension.Value, x => x.ReadEnumeratedValue<X509RevocationReason>());
                         break;
                     case Oids.InvalidityDate:
-                        invalidity = ReadWhole(extension.RawData, x => x.ReadGeneralizedTime());
+                        invalidity = ReadWhole(extension.Value, x => x.ReadGeneralizedTime());
                         break;
                     case Oids.CertificateIssuer:
                         //Held in CertificateIssuer once read, so it is not also kept as a raw extension
@@ -308,19 +314,19 @@ public sealed class CertificateRevocationList
                         if (!indirect) {
                             throw new AsnContentException("An entry names a Certificate Issuer, but the CRL is not indirect (RFC 5280 s5.3.3).");
                         }
-                        issuer = ReadCertificateIssuer(extension.RawData)
+                        issuer = ReadCertificateIssuer(extension.Value)
                             ?? throw new AsnContentException("The Certificate Issuer extension names no directoryName.");
                         break;
                     default:
-                        others.Add(extension);
+                        (others ??= ImmutableList.CreateBuilder<X509Extension>()).Add(extension.ToX509Extension());
                         break;
                 }
             }
         }
         entry.ThrowIfNotEmpty();
 
-        return new RevokedCertificate(serial[start..], revokedAt, reason, invalidity, issuer) {
-            Extensions = others.ToImmutable()
+        return new RevokedCertificate(serialNumber, revokedAt, reason, invalidity, issuer) {
+            Extensions = others?.ToImmutable() ?? []
         };
     }
 
@@ -329,10 +335,9 @@ public sealed class CertificateRevocationList
     private static X500DistinguishedName? ReadCertificateIssuer(byte[] value)
     {
         var names = ReadWhole(value, x => x.ReadSequence());
-        var directoryName = new Asn1Tag(TagClass.ContextSpecific, 4);
         while (names.HasData) {
-            if (names.PeekTag().HasSameClassAndValue(directoryName)) {
-                var wrapper = names.ReadSequence(directoryName);
+            if (names.PeekTag().HasSameClassAndValue(s_directoryName)) {
+                var wrapper = names.ReadSequence(s_directoryName);
                 var name = new X500DistinguishedName(wrapper.ReadEncodedValue().ToArray());
                 wrapper.ThrowIfNotEmpty();
                 return name;
@@ -345,11 +350,12 @@ public sealed class CertificateRevocationList
 
     private static CrlDistributionPoint? ReadIssuingDistributionPoint(byte[] value, X500DistinguishedName crlIssuer, out bool isIndirect)
     {
+        //Reported even where the scope cannot be expressed, since it decides what the entries may name
         isIndirect = false;
         var seq = ReadWhole(value, x => x.ReadSequence());
         List<string> uris = [];
         var representable = true;
-        bool onlyUser = false, onlyCa = false, indirect = false;
+        bool onlyUser = false, onlyCa = false;
         HashSet<int> seen = [];
 
         while (seq.HasData) {
@@ -379,7 +385,7 @@ public sealed class CertificateRevocationList
                     representable = false;
                     break;
                 case 4:
-                    indirect = seq.ReadBoolean(tag);
+                    isIndirect = seq.ReadBoolean(tag);
                     break;
                 case 5:
                     representable &= !seq.ReadBoolean(tag);
@@ -389,16 +395,13 @@ public sealed class CertificateRevocationList
             }
         }
 
-        //Reported even where the scope cannot be expressed, since it decides what the entries may name
-        isIndirect = indirect;
-
         if (!representable || (onlyUser && onlyCa)) {
             return null;
         }
 
         return new CrlDistributionPoint(uris) {
             Covers = onlyUser ? CrlCoverage.EndEntityCertificates : onlyCa ? CrlCoverage.CACertificates : CrlCoverage.AllCertificates,
-            CrlIssuer = indirect ? crlIssuer : null
+            CrlIssuer = isIndirect ? crlIssuer : null
         };
     }
 
@@ -406,18 +409,17 @@ public sealed class CertificateRevocationList
     /// <summary>Collects the URIs of a <c>DistributionPointName</c>, and reports whether that was all it held.</summary>
     private static bool ReadDistributionPointName(AsnReader name, List<string> uris)
     {
-        var fullName = new Asn1Tag(TagClass.ContextSpecific, 0);
-        if (!name.PeekTag().HasSameClassAndValue(fullName)) {
+        //fullName is [0]
+        if (!name.PeekTag().HasSameClassAndValue(s_context0)) {
             name.ReadEncodedValue();
             return false;
         }
 
-        var names = name.ReadSequence(fullName);
-        var uri = new Asn1Tag(TagClass.ContextSpecific, 6);
+        var names = name.ReadSequence(s_context0);
         var onlyUris = true;
         while (names.HasData) {
-            if (names.PeekTag().HasSameClassAndValue(uri)) {
-                uris.Add(names.ReadCharacterString(UniversalTagNumber.IA5String, uri));
+            if (names.PeekTag().HasSameClassAndValue(s_uri)) {
+                uris.Add(names.ReadCharacterString(UniversalTagNumber.IA5String, s_uri));
             } else {
                 names.ReadEncodedValue();
                 onlyUris = false;
@@ -458,9 +460,9 @@ public sealed class CertificateRevocationList
         => new AsnReader(algorithmIdentifier, AsnEncodingRules.BER).ReadSequence().ReadObjectIdentifier();
 
 
-    private static List<X509Extension> ReadExtensions(AsnReader sequence)
+    private static List<RawExtension> ReadExtensions(AsnReader sequence)
     {
-        List<X509Extension> extensions = [];
+        List<RawExtension> extensions = [];
         HashSet<string> seen = [];
         while (sequence.HasData) {
             var extension = sequence.ReadSequence();
@@ -472,7 +474,7 @@ public sealed class CertificateRevocationList
             var critical = extension.PeekTag() == Asn1Tag.Boolean && extension.ReadBoolean();
             var value = extension.ReadOctetString();
             extension.ThrowIfNotEmpty();
-            extensions.Add(new X509Extension(new Oid(oid), value, critical));
+            extensions.Add(new RawExtension(oid, critical, value));
         }
         return extensions;
     }
@@ -489,12 +491,11 @@ public sealed class CertificateRevocationList
 
 
     private static bool IsTime(Asn1Tag tag)
-        => tag.HasSameClassAndValue(new Asn1Tag(UniversalTagNumber.UtcTime))
-           || tag.HasSameClassAndValue(new Asn1Tag(UniversalTagNumber.GeneralizedTime));
+        => tag.HasSameClassAndValue(s_utcTime) || tag.HasSameClassAndValue(s_generalizedTime);
 
 
     private static DateTimeOffset ReadTime(AsnReader reader)
-        => reader.PeekTag().HasSameClassAndValue(new Asn1Tag(UniversalTagNumber.UtcTime))
+        => reader.PeekTag().HasSameClassAndValue(s_utcTime)
             ? reader.ReadUtcTime()
             : reader.ReadGeneralizedTime();
 }

@@ -461,6 +461,22 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task Create_ZeroSerialListedTwiceWithDifferentDetails_NamesItInTheMessage()
+    {
+        using var ca = CreateCa();
+
+        var ex = await Assert.That(() => NewBuilder(ca)
+                .AddRevokedCertificates(
+                    new RevokedCertificate(new byte[] { 0 }, Now, X509RevocationReason.KeyCompromise),
+                    new RevokedCertificate(new byte[] { 0, 0 }, Now, X509RevocationReason.Superseded))
+                .Create())
+            .Throws<InvalidOperationException>();
+
+        await Assert.That(ex!.Message).Contains("Certificate 0 is listed twice");
+    }
+
+
+    [Test]
     public async Task Create_SerialWithHighBit_IsWrittenAsAPositiveInteger()
     {
         using var ca = CreateCa();
