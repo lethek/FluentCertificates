@@ -350,11 +350,16 @@ public sealed class CertificateRevocationList
         List<string> uris = [];
         var representable = true;
         bool onlyUser = false, onlyCa = false, indirect = false;
+        HashSet<int> seen = [];
 
         while (seq.HasData) {
             var tag = seq.PeekTag();
             if (tag.TagClass != TagClass.ContextSpecific) {
                 throw new AsnContentException("Unexpected field in the issuing distribution point.");
+            }
+            //A field appears at most once, and taking the last of two would be a guess about the scope
+            if (!seen.Add(tag.TagValue)) {
+                throw new AsnContentException("The issuing distribution point repeats a field.");
             }
 
             switch (tag.TagValue) {

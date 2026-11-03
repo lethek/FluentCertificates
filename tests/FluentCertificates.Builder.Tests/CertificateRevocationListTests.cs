@@ -583,6 +583,23 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    public async Task Load_AnIssuingDistributionPointFieldRepeated_ThrowsCryptographicException()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        //onlyContainsUserCerts TRUE, then FALSE, which would widen the coverage back to everything
+        var idp = new AsnWriter(AsnEncodingRules.DER);
+        using (idp.PushSequence()) {
+            idp.WriteBoolean(true, new Asn1Tag(TagClass.ContextSpecific, 1));
+            idp.WriteBoolean(false, new Asn1Tag(TagClass.ContextSpecific, 1));
+        }
+
+        await Assert.That(() => CertificateRevocationList.Load(BuildCrlWithExtensions(key, (Oids.IssuingDistributionPoint, true, idp.Encode()))))
+            .Throws<CryptographicException>();
+    }
+
+
+    [Test]
     public async Task Load_BothCoverageFlags_IsNotAScopeItExpresses()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
