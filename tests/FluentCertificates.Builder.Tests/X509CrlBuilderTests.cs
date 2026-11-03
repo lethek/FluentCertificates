@@ -8,7 +8,9 @@ using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509;
 
-using BcX509Crl = Org.BouncyCastle.X509.X509Crl;
+using TUnit.Assertions.Enums;
+
+using BcX509Crl =Org.BouncyCastle.X509.X509Crl;
 using X509Extension = System.Security.Cryptography.X509Certificates.X509Extension;
 
 
@@ -400,10 +402,33 @@ public class X509CrlBuilderTests
         var entries = crl.RevokedCertificates.ToList();
         await Assert.That(entries.Select(x => x.CertificateIssuer!.Name)).IsEquivalentTo(["CN=CA A", "CN=CA A", "CN=CA B", "CN=CA B", "CN=CRL Signer"]);
 
-        //The extension is present on the entries where the issuer changes: the 1st, 3rd and 5th
-        var withExtension = entries.Select(x => x.Extensions.Any(e => e.Oid?.Value == Oids.CertificateIssuer)).ToList();
-        await Assert.That(withExtension).IsEquivalentTo([true, false, true, false, true]);
+        //Written where the issuer changes, the 1st, 3rd and 5th entries, and held in CertificateIssuer once read
+        var oid = new byte[] { 0x06, 0x03, 0x55, 0x1D, 0x1D };
+        var count = 0;
+        for (var rest = crl.RawData.Span; rest.IndexOf(oid) is var at and >= 0; rest = rest[(at + oid.Length)..]) {
+            count++;
+        }
+        await Assert.That(count).IsEqualTo(3);
+        await Assert.That(entries.SelectMany(x => x.Extensions)).IsEmpty();
         await Assert.That(crl.VerifySignature(signer)).IsTrue();
+    }
+
+
+    [Test]
+    public async Task Create_EntriesReadFromAnIndirectCrl_CanBeAddedToTheNextOne()
+    {
+        using var signer = CreateCa("CN=CRL Signer", CertificateUsage.CrlSigning);
+        var point = new CrlDistributionPoint("http://crl.test/all.crl") { CrlIssuer = signer.SubjectName };
+        var previous = NewBuilder(signer, 1)
+            .SetDistributionPoint(point)
+            .AddRevokedCertificates(
+                new RevokedCertificate(new byte[] { 1 }, Now, CertificateIssuer: new X500DistinguishedName("CN=CA A")),
+                new RevokedCertificate(new byte[] { 2 }, Now, CertificateIssuer: new X500DistinguishedName("CN=CA B")))
+            .Create();
+
+        var next = NewBuilder(signer, 2).SetDistributionPoint(point).AddRevokedCertificates(previous.RevokedCertificates).Create();
+
+        await Assert.That(next.RevokedCertificates.Select(x => x.CertificateIssuer!.Name)).IsEquivalentTo(["CN=CA A", "CN=CA B"], CollectionOrdering.Matching);
     }
 
 

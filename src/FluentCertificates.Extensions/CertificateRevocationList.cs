@@ -297,8 +297,13 @@ public sealed class CertificateRevocationList
                         invalidity = ReadWhole(extension.RawData).ReadGeneralizedTime();
                         break;
                     case Oids.CertificateIssuer:
-                        issuer = ReadCertificateIssuer(extension.RawData) ?? issuer;
-                        others.Add(extension);
+                        //Held in CertificateIssuer once read, so it is not also kept as a raw extension
+                        //that the builder would refuse to write again
+                        if (ReadCertificateIssuer(extension.RawData) is { } name) {
+                            issuer = name;
+                        } else {
+                            others.Add(extension);
+                        }
                         break;
                     default:
                         others.Add(extension);
