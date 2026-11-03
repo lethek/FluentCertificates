@@ -391,6 +391,9 @@ public record X509CrlBuilder
             if (entry.Extensions.Any(x => x.Oid?.Value is not { } oid || s_entryExtensionOids.Contains(oid))) {
                 throw new InvalidOperationException($"Certificate {serial} has an extension the builder writes itself, from the entry's own properties, or one with no OID");
             }
+            if (entry.Extensions.GroupBy(x => x.Oid!.Value).FirstOrDefault(x => x.Count() > 1) is { } repeated) {
+                throw new InvalidOperationException($"Certificate {serial} has the {repeated.Key} extension more than once (RFC 5280 s5.3)");
+            }
 
             if (!seen.TryGetValue(issuer, out var byIssuer)) {
                 seen[issuer] = byIssuer = [];

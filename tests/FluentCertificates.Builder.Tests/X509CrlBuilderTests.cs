@@ -563,6 +563,17 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task Create_EntryExtensionRepeated_Throws()
+    {
+        using var ca = CreateCa();
+        var first = new X509Extension("1.2.3.4.7", new byte[] { 0x05, 0x00 }, false);
+        var second = new X509Extension("1.2.3.4.7", new byte[] { 0x05, 0x00 }, true);
+
+        await Assert.That(() => NewBuilder(ca).AddRevokedCertificate(Revoked(1) with { Extensions = [first, second] }).Create()).Throws<InvalidOperationException>();
+    }
+
+
+    [Test]
     public async Task Create_EntryExtensionTheBuilderWritesItself_Throws()
     {
         using var ca = CreateCa();
