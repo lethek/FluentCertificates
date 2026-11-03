@@ -261,7 +261,7 @@ public record X509CrlBuilder
     /// <exception cref="CryptographicException">The <see cref="Issuer"/> certificate has no private key that can be found.</exception>
     /// <exception cref="NotSupportedException">The <see cref="Issuer"/>'s key cannot sign, such as an ECDH key, or is of an unsupported kind.</exception>
     /// <remarks>Refuses: a signing certificate whose key usage lacks <see cref="X509KeyUsageFlags.CrlSign"/>; a next
-    /// update before this update; a delta CRL whose number is not above its base's, or whose scope differs from the
+    /// update before this update; a delta CRL whose number is not above its base's, or whose issuer or scope differs from the
     /// base CRL passed to <see cref="SetDeltaOf(CertificateRevocationList)"/>; a certificate listed twice with
     /// different details; a <see cref="X509RevocationReason.RemoveFromCrl"/> entry in a full CRL; an entry naming
     /// another certificate issuer where the CRL is not indirect; and a <see cref="CrlDistributionPoint.CrlIssuer"/> other
@@ -279,7 +279,7 @@ public record X509CrlBuilder
         }
 
         CheckIssuerMaySignCrls();
-        CheckDelta(crlNumber);
+        CheckDelta(crlNumber, issuerName);
         var indirect = CheckDistributionPoint(issuerName);
         var entries = CheckEntries(issuerName, indirect);
 
@@ -329,10 +329,13 @@ public record X509CrlBuilder
     }
 
 
-    private void CheckDelta(BigInteger crlNumber)
+    private void CheckDelta(BigInteger crlNumber, X500DistinguishedName issuerName)
     {
         if (BaseCrlNumber is not { } baseNumber) {
             return;
+        }
+        if (BaseCrl != null && !X500NameComparer.Values.Equals(BaseCrl.Issuer, issuerName)) {
+            throw new InvalidOperationException($"A delta CRL must have the same issuer as its base CRL (RFC 5280 s5.2.4), but the base is issued by '{BaseCrl.Issuer.Name}' and this by '{issuerName.Name}'");
         }
         if (crlNumber <= baseNumber) {
             throw new InvalidOperationException($"A delta CRL must be numbered above its base: the CRL number is {crlNumber} but the base is {baseNumber}");

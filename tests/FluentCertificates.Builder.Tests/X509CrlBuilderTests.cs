@@ -366,6 +366,18 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task SetDeltaOf_ACrlOfAnotherIssuer_Throws()
+    {
+        using var ca = CreateCa();
+        using var other = CreateCa("CN=Other CA");
+        var full = NewBuilder(other, 1).Create();
+
+        await Assert.That(() => NewBuilder(ca, 2).SetDeltaOf(full).Create()).Throws<InvalidOperationException>();
+        await Assert.That(NewBuilder(other, 2).SetDeltaOf(full).Create().BaseCrlNumber).IsEqualTo((BigInteger?)1);
+    }
+
+
+    [Test]
     public async Task Create_RemoveFromCrl_IsRefusedInAFullCrlAndAllowedInADelta()
     {
         using var ca = CreateCa();
