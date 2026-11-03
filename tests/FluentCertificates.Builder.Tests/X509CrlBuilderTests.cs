@@ -473,7 +473,7 @@ public class X509CrlBuilderTests
         await Assert.That(crl.DistributionPoint!.CrlIssuer).IsNotNull();
 
         var entries = crl.RevokedCertificates.ToList();
-        await Assert.That(entries.Select(x => x.CertificateIssuer!.Name)).IsEquivalentTo(["CN=CA A", "CN=CA A", "CN=CA B", "CN=CA B", "CN=CRL Signer"]);
+        await Assert.That(entries.Select(x => x.CertificateIssuer!.Name)).IsEquivalentTo(["CN=CA A", "CN=CA A", "CN=CA B", "CN=CA B", "CN=CRL Signer"], CollectionOrdering.Matching);
 
         //Written where the issuer changes, the 1st, 3rd and 5th entries, and held in CertificateIssuer once read
         var oid = new byte[] { 0x06, 0x03, 0x55, 0x1D, 0x1D };

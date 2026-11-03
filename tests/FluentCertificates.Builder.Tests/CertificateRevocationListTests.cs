@@ -257,7 +257,7 @@ public class CertificateRevocationListTests
         using var ca = CreateCa();
         var der = CreateCrl(ca).RawData.ToArray();
 
-        //Flip a bit in the revocation date of the one entry, which the signature covers
+        //Flip a bit in nextUpdate, the second UTCTime, which the signature covers
         var index = der.AsSpan().IndexOf(new byte[] { 0x17, 0x0D });
         index = der.AsSpan(index + 2).IndexOf(new byte[] { 0x17, 0x0D }) + index + 2;
         der[index + 5] ^= 0x01;
@@ -414,7 +414,7 @@ public class CertificateRevocationListTests
 
 
     [Test]
-    public async Task Load_ACrlWithNoEntriesNumberOrNextUpdate_ReadsAsEmpty()
+    public async Task Load_ACrlWithNoEntriesOrNumber_ReadsAsEmpty()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
 
