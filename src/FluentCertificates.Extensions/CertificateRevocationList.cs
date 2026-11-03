@@ -218,10 +218,10 @@ public sealed class CertificateRevocationList
         foreach (var extension in extensions) {
             switch (extension.Oid?.Value) {
                 case Oids.CrlNumber:
-                    CrlNumber = ReadWhole(extension.RawData).ReadInteger();
+                    CrlNumber = ReadWhole(extension.RawData, x => x.ReadInteger());
                     break;
                 case Oids.DeltaCrlIndicator:
-                    BaseCrlNumber = ReadWhole(extension.RawData).ReadInteger();
+                    BaseCrlNumber = ReadWhole(extension.RawData, x => x.ReadInteger());
                     break;
                 case Oids.IssuingDistributionPoint:
                     scope = extension;
@@ -291,10 +291,10 @@ public sealed class CertificateRevocationList
             foreach (var extension in ReadExtensions(entry.ReadSequence())) {
                 switch (extension.Oid?.Value) {
                     case Oids.CrlReasons:
-                        reason = ReadWhole(extension.RawData).ReadEnumeratedValue<X509RevocationReason>();
+                        reason = ReadWhole(extension.RawData, x => x.ReadEnumeratedValue<X509RevocationReason>());
                         break;
                     case Oids.InvalidityDate:
-                        invalidity = ReadWhole(extension.RawData).ReadGeneralizedTime();
+                        invalidity = ReadWhole(extension.RawData, x => x.ReadGeneralizedTime());
                         break;
                     case Oids.CertificateIssuer:
                         //Held in CertificateIssuer once read, so it is not also kept as a raw extension
@@ -321,7 +321,7 @@ public sealed class CertificateRevocationList
     /// <summary>The first <c>directoryName</c> in a Certificate Issuer extension, or <see langword="null"/> where it holds none.</summary>
     private static X500DistinguishedName? ReadCertificateIssuer(byte[] value)
     {
-        var names = ReadWhole(value).ReadSequence();
+        var names = ReadWhole(value, x => x.ReadSequence());
         var directoryName = new Asn1Tag(TagClass.ContextSpecific, 4);
         while (names.HasData) {
             if (names.PeekTag().HasSameClassAndValue(directoryName)) {
@@ -338,7 +338,7 @@ public sealed class CertificateRevocationList
 
     private static CrlDistributionPoint? ReadIssuingDistributionPoint(byte[] value, X500DistinguishedName crlIssuer)
     {
-        var seq = ReadWhole(value).ReadSequence();
+        var seq = ReadWhole(value, x => x.ReadSequence());
         List<string> uris = [];
         var representable = true;
         bool onlyUser = false, onlyCa = false, indirect = false;
@@ -414,7 +414,7 @@ public sealed class CertificateRevocationList
     /// <summary>Reads the addresses out of a Freshest CRL value, and reports whether that was all it held.</summary>
     private static bool TryReadDeltaUris(byte[] value, out ImmutableList<string> deltaUris)
     {
-        var points = ReadWhole(value).ReadSequence();
+        var points = ReadWhole(value, x => x.ReadSequence());
         List<string> uris = [];
         var onlyAddresses = true;
 
@@ -462,8 +462,14 @@ public sealed class CertificateRevocationList
     }
 
 
-    private static AsnReader ReadWhole(byte[] value)
-        => new(value, AsnEncodingRules.BER);
+    /// <summary>Reads the one value an extension holds, and refuses anything after it.</summary>
+    private static T ReadWhole<T>(byte[] value, Func<AsnReader, T> read)
+    {
+        var reader = new AsnReader(value, AsnEncodingRules.BER);
+        var result = read(reader);
+        reader.ThrowIfNotEmpty();
+        return result;
+    }
 
 
     private static bool IsTime(Asn1Tag tag)

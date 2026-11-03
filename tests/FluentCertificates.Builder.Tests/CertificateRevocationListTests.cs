@@ -364,6 +364,18 @@ public class CertificateRevocationListTests
 
 
     [Test]
+    public async Task Load_AnExtensionValueWithBytesAfterIt_ThrowsCryptographicException()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        //INTEGER 3 followed by NULL
+        var der = BuildCrlWithExtensions(key, (Oids.CrlNumber, false, [0x02, 0x01, 0x03, 0x05, 0x00]));
+
+        await Assert.That(() => CertificateRevocationList.Load(der)).Throws<CryptographicException>();
+    }
+
+
+    [Test]
     public async Task Load_AnExtensionThatAppearsTwice_ThrowsCryptographicException()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
