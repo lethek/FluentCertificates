@@ -152,6 +152,9 @@ public record X509CrlBuilder
     /// for the certificates the CRL covers.</param>
     /// <returns>A new instance of <see cref="X509CrlBuilder"/> with the specified distribution point.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="point"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">An address is empty or not ASCII, or the point names no address and no
+    /// <see cref="CrlDistributionPoint.CrlIssuer"/> and covers <see cref="CrlCoverage.AllCertificates"/>, which would
+    /// write an empty Issuing Distribution Point that RFC 5280 s5.2.5 forbids.</exception>
     /// <remarks>
     /// <para>The scope is always written, even for <see cref="CrlCoverage.AllCertificates"/>, so that a CRL that is
     /// one shard of several is never read as the complete list.</para>
@@ -163,6 +166,11 @@ public record X509CrlBuilder
     public X509CrlBuilder SetDistributionPoint(CrlDistributionPoint point)
     {
         ArgumentNullException.ThrowIfNull(point);
+        CrlEncoding.CheckAddresses(point.Uris, nameof(point));
+        CrlEncoding.CheckAddresses(point.DeltaUris, nameof(point));
+        if (point.Uris.Count == 0 && point.CrlIssuer == null && point.Covers == CrlCoverage.AllCertificates) {
+            throw new ArgumentException("The distribution point states nothing, which would write an empty Issuing Distribution Point (RFC 5280 s5.2.5). Name an address or narrow the coverage", nameof(point));
+        }
         return this with { DistributionPoint = point };
     }
 

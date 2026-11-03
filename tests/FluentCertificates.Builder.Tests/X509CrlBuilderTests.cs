@@ -233,10 +233,21 @@ public class X509CrlBuilderTests
     [Test]
     public async Task SetDistributionPoint_NonAsciiAddress_Throws()
     {
-        using var ca = CreateCa();
-
-        await Assert.That(() => NewBuilder(ca).SetDistributionPoint(new CrlDistributionPoint("http://crl.test/é.crl")).Create())
+        await Assert.That(() => new X509CrlBuilder().SetDistributionPoint(new CrlDistributionPoint("http://crl.test/é.crl")))
             .Throws<ArgumentException>();
+        await Assert.That(() => new X509CrlBuilder().SetDistributionPoint(new CrlDistributionPoint("http://crl.test/a.crl") { DeltaUris = ["é"] }))
+            .Throws<ArgumentException>();
+    }
+
+
+    [Test]
+    public async Task SetDistributionPoint_StatingNothing_Throws()
+    {
+        await Assert.That(() => new X509CrlBuilder().SetDistributionPoint(new CrlDistributionPoint())).Throws<ArgumentException>();
+
+        //Narrowing the coverage, or naming a CRL issuer, is a statement
+        var narrowed = new X509CrlBuilder().SetDistributionPoint(new CrlDistributionPoint { Covers = CrlCoverage.CACertificates });
+        await Assert.That(narrowed.DistributionPoint).IsNotNull();
     }
 
 
