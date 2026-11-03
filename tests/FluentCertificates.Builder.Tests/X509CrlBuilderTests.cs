@@ -173,6 +173,28 @@ public class X509CrlBuilderTests
 
 
     [Test]
+    public async Task Create_SignerWithoutASubjectKeyIdentifier_DerivesTheAuthorityKeyIdentifier()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var signer = new CertificateRequest("CN=No SKI", key, HashAlgorithmName.SHA256)
+            .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        var expected = new X509SubjectKeyIdentifierExtension(signer.PublicKey, false).SubjectKeyIdentifierBytes.ToArray();
+        await Assert.That(signer.Extensions.OfType<X509SubjectKeyIdentifierExtension>().Any()).IsFalse();
+
+        var fromCertificate = NewBuilder(signer).Create();
+        var fromGenerator = new X509CrlBuilder()
+            .SetIssuer(signer.SubjectName, X509SignatureGenerator.CreateForECDsa(key))
+            .SetCrlNumber(1).SetNextUpdate(DateTimeOffset.UtcNow.AddDays(1)).Create();
+
+        foreach (var crl in new[] { fromCertificate, fromGenerator }) {
+            var aki = AuthorityKeyIdentifier.GetInstance(Asn1Object.FromByteArray(
+                ParseWithBouncyCastle(crl).GetExtensionValue(new DerObjectIdentifier(Oids.AuthorityKeyIdentifier)).GetOctets()));
+            await Assert.That(aki.KeyIdentifier.GetOctets().AsSpan().SequenceEqual(expected)).IsTrue();
+        }
+    }
+
+
+    [Test]
     public async Task Create_WithoutAnIssuerNumberOrNextUpdate_Throws()
     {
         using var ca = CreateCa();

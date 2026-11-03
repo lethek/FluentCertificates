@@ -32,7 +32,8 @@ public record X509CrlBuilder
     /// <summary>Gets the name written as the CRL's issuer.</summary>
     public X500DistinguishedName? IssuerName { get; init; }
 
-    /// <summary>Gets the key identifier written as the CRL's Authority Key Identifier, or empty to write none.</summary>
+    /// <summary>Gets the key identifier written as the CRL's Authority Key Identifier, or empty to derive it from
+    /// the signing key's public key (RFC 5280 s4.2.1.2 method 1), since s5.2.1 has every CRL carry one.</summary>
     public ReadOnlyMemory<byte> IssuerKeyIdentifier { get; init; }
 
     /// <summary>Gets the generator that signs the CRL, or <see langword="null"/> to sign with the
@@ -75,7 +76,7 @@ public record X509CrlBuilder
     /// <returns>A new instance of <see cref="X509CrlBuilder"/> with the specified issuer.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="issuer"/> is <see langword="null"/>.</exception>
     /// <remarks>The issuer name is the certificate's subject, and the Authority Key Identifier is taken from its
-    /// Subject Key Identifier where it has one. The key is neither exported nor disposed. Any generator set
+    /// Subject Key Identifier where it has one, and derived from its public key where it has not. The key is neither exported nor disposed. Any generator set
     /// earlier is cleared, so that the CRL is signed by this certificate's key: call
     /// <see cref="SetSignatureGenerator"/> afterwards to sign with a key held elsewhere.</remarks>
     public X509CrlBuilder SetIssuer(X509Certificate2 issuer)
@@ -96,7 +97,7 @@ public record X509CrlBuilder
     /// <param name="name">The issuer name.</param>
     /// <param name="generator">The generator that signs the CRL.</param>
     /// <param name="keyIdentifier">The identifier of the signing key, written as the Authority Key Identifier, or
-    /// empty to write none.</param>
+    /// empty to derive it from the generator's public key.</param>
     /// <returns>A new instance of <see cref="X509CrlBuilder"/> with the specified issuer.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> or <paramref name="generator"/> is <see langword="null"/>.</exception>
     /// <remarks>Nothing checks that the generator matches the name or the key identifier.</remarks>
@@ -297,7 +298,12 @@ public record X509CrlBuilder
                 : throw new InvalidOperationException($"Call {nameof(SetIssuer)}(...) with a certificate that has a private key, or {nameof(SetSignatureGenerator)}(...), to say how to sign"));
 
         var algorithm = generator.GetSignatureAlgorithmIdentifier(HashAlgorithm);
-        var toBeSigned = EncodeToBeSigned(algorithm, issuerName, thisUpdate, nextUpdate, crlNumber, entries, indirect);
+        //RFC 5280 s5.2.1: every CRL carries the Authority Key Identifier, so a signer that publishes none gets
+        //the key identifier derived from its public key, as CertificateBuilder does for the certificates it issues
+        var keyIdentifier = IssuerKeyIdentifier.IsEmpty
+            ? new X509SubjectKeyIdentifierExtension(generator.PublicKey, false).SubjectKeyIdentifierBytes.ToArray()
+            : IssuerKeyIdentifier.ToArray();
+        var toBeSigned = EncodeToBeSigned(algorithm, issuerName, thisUpdate, nextUpdate, crlNumber, entries, indirect, keyIdentifier);
         var signature = generator.SignData(toBeSigned, HashAlgorithm);
 
         var crl = new AsnWriter(AsnEncodingRules.DER);
@@ -432,7 +438,8 @@ public record X509CrlBuilder
         DateTimeOffset nextUpdate,
         BigInteger crlNumber,
         List<RevokedCertificate> entries,
-        bool indirect)
+        bool indirect,
+        byte[] keyIdentifier)
     {
         var tbs = new AsnWriter(AsnEncodingRules.DER);
         using (tbs.PushSequence()) {
@@ -453,13 +460,11 @@ public record X509CrlBuilder
 
             using (tbs.PushSequence(s_context0))
             using (tbs.PushSequence()) {
-                if (!IssuerKeyIdentifier.IsEmpty) {
-                    CrlEncoding.WriteExtension(tbs, Oids.AuthorityKeyIdentifier, false, w => {
-                        using (w.PushSequence()) {
-                            w.WriteOctetString(IssuerKeyIdentifier.Span, s_context0);
-                        }
-                    });
-                }
+                CrlEncoding.WriteExtension(tbs, Oids.AuthorityKeyIdentifier, false, w => {
+                    using (w.PushSequence()) {
+                        w.WriteOctetString(keyIdentifier, s_context0);
+                    }
+                });
 
                 CrlEncoding.WriteExtension(tbs, Oids.CrlNumber, false, w => w.WriteInteger(crlNumber));
 
