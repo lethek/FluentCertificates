@@ -143,11 +143,11 @@ public sealed class CertificateRevocationList
 
     private const string PemLabel = "X509 CRL";
 
-    private static readonly Asn1Tag s_context0 = new(TagClass.ContextSpecific, 0);
-    private static readonly Asn1Tag s_directoryName = new(TagClass.ContextSpecific, 4);
-    private static readonly Asn1Tag s_uri = new(TagClass.ContextSpecific, 6);
-    private static readonly Asn1Tag s_utcTime = new(UniversalTagNumber.UtcTime);
-    private static readonly Asn1Tag s_generalizedTime = new(UniversalTagNumber.GeneralizedTime);
+    private static readonly Asn1Tag Context0Tag = new(TagClass.ContextSpecific, 0);
+    private static readonly Asn1Tag DirectoryNameTag = new(TagClass.ContextSpecific, 4);
+    private static readonly Asn1Tag UriTag = new(TagClass.ContextSpecific, 6);
+    private static readonly Asn1Tag UtcTimeTag = new(UniversalTagNumber.UtcTime);
+    private static readonly Asn1Tag GeneralizedTimeTag = new(UniversalTagNumber.GeneralizedTime);
 
 
     private static CertificateRevocationList Parse(byte[] raw)
@@ -191,7 +191,7 @@ public sealed class CertificateRevocationList
 
         var extensions = new CrlExtensions(null, null, null, false, []);
         if (tbs.HasData) {
-            var wrapper = tbs.ReadSequence(s_context0);
+            var wrapper = tbs.ReadSequence(Context0Tag);
             extensions = ReadCrlExtensions(ReadExtensions(wrapper.ReadSequence()), issuer);
             wrapper.ThrowIfNotEmpty();
         }
@@ -334,8 +334,8 @@ public sealed class CertificateRevocationList
     {
         var names = ReadWhole(value, x => x.ReadSequence());
         while (names.HasData) {
-            if (names.PeekTag().HasSameClassAndValue(s_directoryName)) {
-                var wrapper = names.ReadSequence(s_directoryName);
+            if (names.PeekTag().HasSameClassAndValue(DirectoryNameTag)) {
+                var wrapper = names.ReadSequence(DirectoryNameTag);
                 var name = new X500DistinguishedName(wrapper.ReadEncodedValue().ToArray());
                 wrapper.ThrowIfNotEmpty();
                 return name;
@@ -409,16 +409,16 @@ public sealed class CertificateRevocationList
     private static bool ReadDistributionPointName(AsnReader name, List<string> uris)
     {
         //fullName is [0]
-        if (!name.PeekTag().HasSameClassAndValue(s_context0)) {
+        if (!name.PeekTag().HasSameClassAndValue(Context0Tag)) {
             name.ReadEncodedValue();
             return false;
         }
 
-        var names = name.ReadSequence(s_context0);
+        var names = name.ReadSequence(Context0Tag);
         var onlyUris = true;
         while (names.HasData) {
-            if (names.PeekTag().HasSameClassAndValue(s_uri)) {
-                uris.Add(names.ReadCharacterString(UniversalTagNumber.IA5String, s_uri));
+            if (names.PeekTag().HasSameClassAndValue(UriTag)) {
+                uris.Add(names.ReadCharacterString(UniversalTagNumber.IA5String, UriTag));
             } else {
                 names.ReadEncodedValue();
                 onlyUris = false;
@@ -439,7 +439,7 @@ public sealed class CertificateRevocationList
             var point = points.ReadSequence();
             while (point.HasData) {
                 var tag = point.PeekTag();
-                if (tag.HasSameClassAndValue(s_context0)) {
+                if (tag.HasSameClassAndValue(Context0Tag)) {
                     var name = point.ReadSequence(tag);
                     onlyAddresses &= ReadDistributionPointName(name, uris);
                     name.ThrowIfNotEmpty();
@@ -490,11 +490,11 @@ public sealed class CertificateRevocationList
 
 
     private static bool IsTime(Asn1Tag tag)
-        => tag.HasSameClassAndValue(s_utcTime) || tag.HasSameClassAndValue(s_generalizedTime);
+        => tag.HasSameClassAndValue(UtcTimeTag) || tag.HasSameClassAndValue(GeneralizedTimeTag);
 
 
     private static DateTimeOffset ReadTime(AsnReader reader)
-        => reader.PeekTag().HasSameClassAndValue(s_utcTime)
+        => reader.PeekTag().HasSameClassAndValue(UtcTimeTag)
             ? reader.ReadUtcTime()
             : reader.ReadGeneralizedTime();
 }

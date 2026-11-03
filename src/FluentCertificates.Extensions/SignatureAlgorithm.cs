@@ -1,6 +1,7 @@
 ﻿using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using System.Formats.Asn1;
+using System.Numerics;
 using System.Security.Cryptography;
 
 
@@ -189,12 +190,8 @@ public sealed record SignatureAlgorithm
                 //RFC 4055 s3.1: the parameters MUST be present in a signature's algorithm identifier, as
                 //RSASSA-PSS-params, so an absent or NULL one is refused. Within them every field has a default,
                 //and the hash is SHA-1 where hashAlgorithm is left out.
-                var parameters = reader.ReadSequence(Asn1Tag.Sequence);
-                var hashTag = new Asn1Tag(TagClass.ContextSpecific, 0);
-                var hashAlgorithm = parameters.HasData && parameters.PeekTag().HasSameClassAndValue(hashTag)
-                    ? parameters.ReadSequence(hashTag).ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier)
-                    : Oids.Sha1;
-                return CreateForRsaSsaPss(algorithm, hashAlgorithm);
+                var parameters = ReadRsaPssParameters(reader.ReadSequence(Asn1Tag.Sequence), strict: false);
+                return CreateForRsaSsaPss(algorithm, parameters.Hash);
             } catch (AsnContentException ex) {
                 throw new NotSupportedException("The RSASSA-PSS parameters are not in a form that can be read.", ex);
             } catch (Exception ex) when (ex is CryptographicException or ArgumentException) {
@@ -223,39 +220,9 @@ public sealed record SignatureAlgorithm
         }
 
         try {
-            var parameters = reader.ReadSequence(Asn1Tag.Sequence);
-            string hash = Oids.Sha1, maskHash = Oids.Sha1;
-            System.Numerics.BigInteger saltLength = 20, trailer = 1;
+            var (hash, maskHash, saltLength, trailer) = ReadRsaPssParameters(reader.ReadSequence(Asn1Tag.Sequence), strict: true);
 
-            while (parameters.HasData) {
-                var tag = parameters.PeekTag();
-                if (tag.TagClass != TagClass.ContextSpecific) {
-                    throw new AsnContentException("Unexpected field in the RSASSA-PSS parameters.");
-                }
-
-                var field = parameters.ReadSequence(tag);
-                switch (tag.TagValue) {
-                    case 0:
-                        hash = field.ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-                        break;
-                    case 1:
-                        var maskGenerator = field.ReadSequence(Asn1Tag.Sequence);
-                        if (maskGenerator.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) != Oids.Mgf1) {
-                            throw new NotSupportedException("The RSASSA-PSS mask generation function is not MGF1.");
-                        }
-                        maskHash = maskGenerator.ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier);
-                        break;
-                    case 2:
-                        saltLength = field.ReadInteger();
-                        break;
-                    case 3:
-                        trailer = field.ReadInteger();
-                        break;
-                    default:
-                        throw new AsnContentException("Unexpected field in the RSASSA-PSS parameters.");
-                }
-            }
-
+            //HashAlgorithmName.FromOid gives a name, not the digest size the salt length is compared with
             var hashSize = hash switch {
                 Oids.Sha1 => 20,
                 Oids.Sha256 or Oids.Sha3_256 => 32,
@@ -269,6 +236,63 @@ public sealed record SignatureAlgorithm
         } catch (AsnContentException ex) {
             throw new NotSupportedException("The RSASSA-PSS parameters are not in a form that can be read.", ex);
         }
+    }
+
+
+    private static readonly Asn1Tag HashAlgorithmTag = new(TagClass.ContextSpecific, 0);
+
+
+    /// <summary>The fields of an RSASSA-PSS-params SEQUENCE, with the RFC 4055 defaults where a field is absent.</summary>
+    private readonly record struct RsaPssParameters(string Hash, string MaskHash, BigInteger SaltLength, BigInteger Trailer);
+
+
+    /// <summary>
+    /// Reads RSASSA-PSS-params. A lenient read takes only the hash, and only when it is the first field, and
+    /// ignores everything else. A strict read walks every field.
+    /// </summary>
+    /// <param name="parameters">The contents of the parameter SEQUENCE.</param>
+    /// <param name="strict">Whether to read and refuse every field, rather than only the hash.</param>
+    /// <exception cref="AsnContentException">A strict read met an unexpected field, or a field is malformed.</exception>
+    /// <exception cref="NotSupportedException">A strict read met a mask generation function other than MGF1.</exception>
+    private static RsaPssParameters ReadRsaPssParameters(AsnReader parameters, bool strict)
+    {
+        var result = new RsaPssParameters(Oids.Sha1, Oids.Sha1, 20, 1);
+        while (parameters.HasData) {
+            var tag = parameters.PeekTag();
+            if (!strict && !tag.HasSameClassAndValue(HashAlgorithmTag)) {
+                break;
+            }
+            if (tag.TagClass != TagClass.ContextSpecific) {
+                throw new AsnContentException("Unexpected field in the RSASSA-PSS parameters.");
+            }
+
+            var field = parameters.ReadSequence(tag);
+            switch (tag.TagValue) {
+                case 0:
+                    result = result with { Hash = field.ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) };
+                    break;
+                case 1:
+                    var maskGenerator = field.ReadSequence(Asn1Tag.Sequence);
+                    if (maskGenerator.ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) != Oids.Mgf1) {
+                        throw new NotSupportedException("The RSASSA-PSS mask generation function is not MGF1.");
+                    }
+                    result = result with { MaskHash = maskGenerator.ReadSequence(Asn1Tag.Sequence).ReadObjectIdentifier(Asn1Tag.ObjectIdentifier) };
+                    break;
+                case 2:
+                    result = result with { SaltLength = field.ReadInteger() };
+                    break;
+                case 3:
+                    result = result with { Trailer = field.ReadInteger() };
+                    break;
+                default:
+                    throw new AsnContentException("Unexpected field in the RSASSA-PSS parameters.");
+            }
+
+            if (!strict) {
+                break;
+            }
+        }
+        return result;
     }
 
 

@@ -249,7 +249,7 @@ public record X509CrlBuilder
     {
         ArgumentNullException.ThrowIfNull(extension);
         var oid = extension.Oid?.Value ?? throw new ArgumentException("The extension has no OID", nameof(extension));
-        if (s_crlExtensionOids.Contains(oid)) {
+        if (CrlExtensionOids.Contains(oid)) {
             throw new ArgumentException($"The builder writes the {oid} extension itself, from its own settings", nameof(extension));
         }
         if (Extensions.Any(x => x.Oid?.Value == oid)) {
@@ -318,15 +318,15 @@ public record X509CrlBuilder
 
 
     //Extensions the builder writes itself, which a caller cannot also supply
-    private static readonly ImmutableHashSet<string> s_crlExtensionOids = [
+    private static readonly ImmutableHashSet<string> CrlExtensionOids = [
         Oids.AuthorityKeyIdentifier, Oids.CrlNumber, Oids.DeltaCrlIndicator, Oids.IssuingDistributionPoint, Oids.FreshestCrl
     ];
 
-    private static readonly ImmutableHashSet<string> s_entryExtensionOids = [
+    private static readonly ImmutableHashSet<string> EntryExtensionOids = [
         Oids.CrlReasons, Oids.InvalidityDate, Oids.CertificateIssuer
     ];
 
-    private static readonly Asn1Tag s_context0 = new(TagClass.ContextSpecific, 0);
+    private static readonly Asn1Tag ExtensionsTag = new(TagClass.ContextSpecific, 0);
 
 
     private bool IsIndirect => DistributionPoint?.CrlIssuer != null;
@@ -397,7 +397,7 @@ public record X509CrlBuilder
             if (entry.Reason == X509RevocationReason.RemoveFromCrl && BaseCrlNumber == null) {
                 throw new InvalidOperationException($"Certificate {GetSerialText(serial)} has reason {nameof(X509RevocationReason.RemoveFromCrl)}, which means something only in a delta CRL (RFC 5280 s5.3.1)");
             }
-            if (entry.Extensions.Any(x => x.Oid?.Value is not { } oid || s_entryExtensionOids.Contains(oid))) {
+            if (entry.Extensions.Any(x => x.Oid?.Value is not { } oid || EntryExtensionOids.Contains(oid))) {
                 throw new InvalidOperationException($"Certificate {GetSerialText(serial)} has an extension the builder writes itself, from the entry's own properties, or one with no OID");
             }
             if (entry.Extensions.Count > 1 && entry.Extensions.GroupBy(x => x.Oid!.Value).FirstOrDefault(x => x.Count() > 1) is { } repeated) {
@@ -506,7 +506,7 @@ public record X509CrlBuilder
                 }
             }
 
-            using (tbs.PushSequence(s_context0))
+            using (tbs.PushSequence(ExtensionsTag))
             using (tbs.PushSequence()) {
                 CrlEncoding.WriteExtension(tbs, Oids.AuthorityKeyIdentifier, false, X509AuthorityKeyIdentifierExtension.CreateFromSubjectKeyIdentifier(keyIdentifier).RawData);
 

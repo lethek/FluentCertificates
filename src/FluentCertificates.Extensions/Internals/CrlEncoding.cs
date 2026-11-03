@@ -10,12 +10,12 @@ namespace FluentCertificates.Internals;
 /// </summary>
 internal static class CrlEncoding
 {
-    private static readonly Asn1Tag s_context0 = new(TagClass.ContextSpecific, 0);
-    private static readonly Asn1Tag s_context1 = new(TagClass.ContextSpecific, 1);
-    private static readonly Asn1Tag s_context2 = new(TagClass.ContextSpecific, 2);
-    private static readonly Asn1Tag s_context4 = new(TagClass.ContextSpecific, 4);
-    private static readonly Asn1Tag s_directoryName = new(TagClass.ContextSpecific, 4);
-    private static readonly Asn1Tag s_uri = new(TagClass.ContextSpecific, 6);
+    private static readonly Asn1Tag Context0Tag = new(TagClass.ContextSpecific, 0);
+    private static readonly Asn1Tag Context1Tag = new(TagClass.ContextSpecific, 1);
+    private static readonly Asn1Tag Context2Tag = new(TagClass.ContextSpecific, 2);
+    private static readonly Asn1Tag Context4Tag = new(TagClass.ContextSpecific, 4);
+    private static readonly Asn1Tag DirectoryNameTag = new(TagClass.ContextSpecific, 4);
+    private static readonly Asn1Tag UriTag = new(TagClass.ContextSpecific, 6);
 
 
     /// <summary>Writes one extension: its OID, its criticality when critical, and the value wrapped in an OCTET STRING.</summary>
@@ -75,7 +75,7 @@ internal static class CrlEncoding
                         WriteDistributionPointName(writer, uris);
                     }
                     if (includeCrlIssuer && point.CrlIssuer != null) {
-                        WriteDirectoryName(writer, point.CrlIssuer, s_context2);
+                        WriteDirectoryName(writer, point.CrlIssuer, Context2Tag);
                     }
                 }
             }
@@ -98,13 +98,13 @@ internal static class CrlEncoding
                 WriteDistributionPointName(writer, point.Uris);
             }
             if (point.Covers == CrlCoverage.EndEntityCertificates) {
-                writer.WriteBoolean(true, s_context1);
+                writer.WriteBoolean(true, Context1Tag);
             }
             if (point.Covers == CrlCoverage.CACertificates) {
-                writer.WriteBoolean(true, s_context2);
+                writer.WriteBoolean(true, Context2Tag);
             }
             if (point.CrlIssuer != null) {
-                writer.WriteBoolean(true, s_context4);
+                writer.WriteBoolean(true, Context4Tag);
             }
         }
     }
@@ -114,7 +114,7 @@ internal static class CrlEncoding
     public static void WriteDirectoryName(AsnWriter writer, X500DistinguishedName name, Asn1Tag? tag = null)
     {
         using (writer.PushSequence(tag))
-        using (writer.PushSequence(s_directoryName)) {
+        using (writer.PushSequence(DirectoryNameTag)) {
             writer.WriteEncodedValue(name.RawData);
         }
     }
@@ -123,14 +123,14 @@ internal static class CrlEncoding
     /// <summary>Writes <c>distributionPoint [0] { fullName [0] { uniformResourceIdentifier [6]... } }</c>.</summary>
     private static void WriteDistributionPointName(AsnWriter writer, IEnumerable<string> uris)
     {
-        using (writer.PushSequence(s_context0))
-        using (writer.PushSequence(s_context0)) {
+        using (writer.PushSequence(Context0Tag))
+        using (writer.PushSequence(Context0Tag)) {
             foreach (var uri in uris) {
                 //A point read from a CRL skips the constructor's check and can carry an address it would refuse
                 if (String.IsNullOrEmpty(uri) || !Ascii.IsValid(uri)) {
                     throw new ArgumentException($"A distribution point address must be a non-empty ASCII string, but was '{uri}'", nameof(uris));
                 }
-                writer.WriteCharacterString(UniversalTagNumber.IA5String, uri, s_uri);
+                writer.WriteCharacterString(UniversalTagNumber.IA5String, uri, UriTag);
             }
         }
     }
