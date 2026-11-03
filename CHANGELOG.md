@@ -24,6 +24,7 @@ release rather than record it as it happened.
 ### Changed
 
 - `CertificateBuilder.SetCrlDistributionPoints` with addresses as strings removes a Freshest CRL extension set earlier.
+- **Breaking:** `X509Certificate2Extensions.IsIssuedBy` and `IsSelfSigned` with `verifySignature` throw `NotSupportedException` for an RSASSA-PSS signature whose parameters are not the ones .NET verifies, in place of returning `false`.
 
 ### Fixed
 

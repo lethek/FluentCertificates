@@ -60,6 +60,35 @@ public class X509Certificate2ExtensionsTests
     }
 
 
+    [Test]
+    public async Task IsSelfSigned_PssCertificateWithNonDefaultSalt_ThrowsWhenVerifyingTheSignature()
+    {
+        using var cert = X509Certificate2.CreateFromPem(PssMaxSaltCertificatePem);
+
+        //Guards the test: the certificate really is signed with a 0xDE-byte salt, not the 32 .NET verifies with
+        await Assert.That(cert.SignatureAlgorithm.Value).IsEqualTo("1.2.840.113549.1.1.10");
+        await Assert.That(cert.RawData.AsSpan().IndexOf(new byte[] { 0xA2, 0x04, 0x02, 0x02, 0x00, 0xDE })).IsGreaterThan(0);
+
+        await Assert.That(cert.IsSelfSigned()).IsTrue();
+        await Assert.That(() => cert.IsSelfSigned(verifySignature: true)).ThrowsExactly<NotSupportedException>();
+        await Assert.That(() => cert.IsIssuedBy(cert, verifySignature: true)).ThrowsExactly<NotSupportedException>();
+    }
+
+
+    [Test]
+    public async Task IsSelfSigned_PssCertificateWithDefaultParameters_VerifiesTheSignature()
+    {
+        using var cert = new CertificateBuilder()
+            .SetSubject(x => x.SetCommonName("PSS Default Salt"))
+            .SetKeyAlgorithm(KeyAlgorithm.RSA(2048))
+            .SetRSASignaturePadding(RSASignaturePadding.Pss)
+            .Create();
+
+        await Assert.That(cert.SignatureAlgorithm.Value).IsEqualTo("1.2.840.113549.1.1.10");
+        await Assert.That(cert.IsSelfSigned(verifySignature: true)).IsTrue();
+    }
+
+
     /// <summary>
     /// The default disregards how the names were encoded, which RFC 5280 s4.1.2.4 makes reachable by
     /// letting a conforming CA choose either PrintableString or UTF8String for the same characters.
@@ -663,4 +692,28 @@ public class X509Certificate2ExtensionsTests
 
 
     private const string TestPassword = "nHLYyNcicPsEaV7T";
+
+    //Self-signed by OpenSSL with RSASSA-PSS, SHA-256, MGF1 over SHA-256, a 0xDE-byte salt and trailer 1
+    private const string PssMaxSaltCertificatePem = """
+        -----BEGIN CERTIFICATE-----
+        MIIDNzCCAeqgAwIBAgIUJz+mgEvDiHWOIH6cFvioMxvUw0owQgYJKoZIhvcNAQEK
+        MDWgDzANBglghkgBZQMEAgEFAKEcMBoGCSqGSIb3DQEBCDANBglghkgBZQMEAgEF
+        AKIEAgIA3jAOMQwwCgYDVQQDDANwc3MwIBcNMjYxMTAzMTEwMTU3WhgPMjEyNjEw
+        MTAxMTAxNTdaMA4xDDAKBgNVBAMMA3BzczCCASIwDQYJKoZIhvcNAQEBBQADggEP
+        ADCCAQoCggEBAOdliOaI0DlORwh+AFAZXmgKQuzg21gADoQ66hjvxqECnorOl/w5
+        S4mPW/rhDf7SsrD9EBi4nIDwF8qkYG/R6nIfI/PfRAhM+UaXAk9WRMW/22YYZTHI
+        alcHbecXoSwJSMNX8w2oBJg7/SM6U7KKdO60C7l5EI+vfQciuf8iD7iPHqVwItjM
+        fvMCg4VcsQt9rnBZnEA8Ycotud2vA78uPu0HMUATDGZ+CyEptHU47lrw1w0vklRJ
+        D4krqSrW5GB7TrP3KpdOpzfYcLy7mGwJVwi9eVvHcOUJoTQ/8BR+uWjzZgOrBshk
+        wXyZ4lcyOWKdLbG0LoCEfmCF3jJEE5HYyKMCAwEAAaMhMB8wHQYDVR0OBBYEFPXk
+        bBbXxXY42QSAygvTA1XiR4o8MEIGCSqGSIb3DQEBCjA1oA8wDQYJYIZIAWUDBAIB
+        BQChHDAaBgkqhkiG9w0BAQgwDQYJYIZIAWUDBAIBBQCiBAICAN4DggEBACaBZJ3I
+        jC4Zs8rGw2ZFfgZs6b0P9jKhzZwopXnTvxvn7t0samwNgeavqU0FM5eBhLLxHy0S
+        WQBEsV3TB3kct57GjrZkpu574+yKfK4mQ07xKgfXDz1dzJVwkoTBqU+VcaIOc2x7
+        Q/lVZSw3vboi+xrbiKOr18Cn02YWHBbb/YSC1Y2YdwAXDzXIJhGuaWGGwb74wYu7
+        r/oAM23rqFIM3j+s93yHPvtCYSyaajOCWJDs6qsM8YdDcMkMLCt56w3SBsymj7cM
+        SiFHaE8c6D32vviu/hVe+PZddeSmqvYv0ZiZpIJpV16tu/FT1QCyeMdsO+GQA3w8
+        8vieYiyMtaBy3RE=
+        -----END CERTIFICATE-----
+        """;
 }

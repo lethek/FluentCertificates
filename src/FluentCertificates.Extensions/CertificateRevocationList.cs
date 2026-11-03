@@ -132,9 +132,7 @@ public sealed class CertificateRevocationList
     public bool VerifySignature(X509Certificate2 issuer)
     {
         ArgumentNullException.ThrowIfNull(issuer);
-        var algorithm = SignatureAlgorithm.FromAlgorithmIdentifier(_signatureAlgorithm);
-        SignatureAlgorithm.ThrowIfPssParametersNotVerifiable(_signatureAlgorithm);
-        return X509Certificate2Extensions.VerifySignature(algorithm, _toBeSigned.Span, _signature.Span, issuer);
+        return X509Certificate2Extensions.VerifySignature(_signatureAlgorithm,_toBeSigned.Span, _signature.Span, issuer);
     }
 
 
