@@ -70,6 +70,66 @@ public record X509CrlBuilder
     private CertificateRevocationList? BaseCrl { get; init; }
 
 
+    /// <summary>Determines whether another builder is configured identically to this one.</summary>
+    /// <param name="other">The other builder to compare.</param>
+    /// <returns>True if the two builders describe the same CRL; otherwise, false.</returns>
+    /// <remarks>This is the record's value equality, so the immutable-collection fields are compared by their
+    /// contents rather than by reference. Names and the base CRL are compared by their encoded bytes. A
+    /// <see cref="SignatureGenerator"/> has no value equality, so it is compared by reference.</remarks>
+    public virtual bool Equals(X509CrlBuilder? other)
+    {
+        if (other is null || other.GetType() != GetType()) {
+            return false;
+        }
+        if (ReferenceEquals(this, other)) {
+            return true;
+        }
+
+        return Equals(Issuer, other.Issuer)
+            && HasSameBytes(IssuerName?.RawData, other.IssuerName?.RawData)
+            && IssuerKeyIdentifier.Span.SequenceEqual(other.IssuerKeyIdentifier.Span)
+            && ReferenceEquals(SignatureGenerator, other.SignatureGenerator)
+            && HashAlgorithm == other.HashAlgorithm
+            && EqualityComparer<RSASignaturePadding>.Default.Equals(RSASignaturePadding, other.RSASignaturePadding)
+            && CrlNumber == other.CrlNumber
+            && ThisUpdate == other.ThisUpdate
+            && NextUpdate == other.NextUpdate
+            && EqualityComparer<CrlDistributionPoint?>.Default.Equals(DistributionPoint, other.DistributionPoint)
+            && BaseCrlNumber == other.BaseCrlNumber
+            && RevokedCertificates.SequenceEqual(other.RevokedCertificates)
+            && CrlEncoding.HaveSameExtensions(Extensions, other.Extensions)
+            && (BaseCrl is null
+                ? other.BaseCrl is null
+                : other.BaseCrl is not null && BaseCrl.RawData.Span.SequenceEqual(other.BaseCrl.RawData.Span));
+    }
+
+
+    /// <inheritdoc/>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        if (IssuerName != null) {
+            hash.AddBytes(IssuerName.RawData);
+        }
+        hash.AddBytes(IssuerKeyIdentifier.Span);
+        hash.Add(HashAlgorithm);
+        hash.Add(CrlNumber);
+        hash.Add(ThisUpdate);
+        hash.Add(NextUpdate);
+        hash.Add(DistributionPoint);
+        hash.Add(BaseCrlNumber);
+        foreach (var entry in RevokedCertificates) {
+            hash.Add(entry);
+        }
+        CrlEncoding.AddExtensionsToHash(ref hash, Extensions);
+        return hash.ToHashCode();
+    }
+
+
+    private static bool HasSameBytes(byte[]? a, byte[]? b)
+        => a is null ? b is null : b is not null && a.AsSpan().SequenceEqual(b);
+
+
     /// <summary>Sets the certificate that signs the CRL, using its private key.</summary>
     /// <param name="issuer">The signing certificate. It need not be a certificate authority, but its key usage,
     /// where it states one, must allow <see cref="X509KeyUsageFlags.CrlSign"/>.</param>
@@ -266,6 +326,8 @@ public record X509CrlBuilder
     /// <returns>The signed CRL, read back from its encoding.</returns>
     /// <exception cref="InvalidOperationException">The issuer, signing key, CRL number or next update is missing;
     /// or the settings contradict each other or RFC 5280. The message says which.</exception>
+    /// <exception cref="ArgumentException">The <see cref="DistributionPoint"/> holds an address that is empty or not
+    /// ASCII, as one loaded from a CRL another tool wrote can.</exception>
     /// <exception cref="CryptographicException">The <see cref="Issuer"/> certificate has no private key that can be found.</exception>
     /// <exception cref="NotSupportedException">The <see cref="Issuer"/>'s key cannot sign, such as an ECDH key, or is of an unsupported kind.</exception>
     /// <remarks>Refuses: a signing certificate whose key usage lacks <see cref="X509KeyUsageFlags.CrlSign"/>; a next
@@ -470,11 +532,7 @@ public record X509CrlBuilder
         => a.RevocationDate.ToUnixTimeSeconds() == b.RevocationDate.ToUnixTimeSeconds()
            && a.Reason == b.Reason
            && a.InvalidityDate?.ToUnixTimeSeconds() == b.InvalidityDate?.ToUnixTimeSeconds()
-           && a.Extensions.Count == b.Extensions.Count
-           && a.Extensions.Zip(b.Extensions).All(x =>
-               x.First.Oid?.Value == x.Second.Oid?.Value
-               && x.First.Critical == x.Second.Critical
-               && x.First.RawData.AsSpan().SequenceEqual(x.Second.RawData));
+           && CrlEncoding.HaveSameExtensions(a.Extensions, b.Extensions);
 
 
     private byte[] EncodeToBeSigned(

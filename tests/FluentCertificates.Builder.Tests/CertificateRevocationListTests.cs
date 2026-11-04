@@ -243,6 +243,7 @@ public class CertificateRevocationListTests
             .SetRSASignaturePadding(RSASignaturePadding.Pss)
             .SetHashAlgorithm(new HashAlgorithmName(hash))
             .SetCrlNumber(1)
+            .SetThisUpdate(Now)
             .SetNextUpdate(Now.AddDays(1))
             .Create();
 

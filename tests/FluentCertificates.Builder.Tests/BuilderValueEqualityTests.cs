@@ -334,3 +334,118 @@ public class CertificateBuilderEqualityTests
         await Assert.That(a.Equals(b)).IsFalse();
     }
 }
+
+
+public class X509CrlBuilderEqualityTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 11, 3, 0, 0, 0, TimeSpan.Zero);
+
+
+    private static X509CrlBuilder Fixed(X509Certificate2 issuer)
+        => new X509CrlBuilder()
+            .SetIssuer(issuer)
+            .SetCrlNumber(1)
+            .SetThisUpdate(Now)
+            .SetNextUpdate(Now.AddDays(1))
+            .AddRevokedCertificate(new RevokedCertificate(new byte[] { 1 }, Now, X509RevocationReason.KeyCompromise))
+            .AddExtension(new X509Extension(new Oid("1.2.3.4"), [5], false));
+
+
+    [Test]
+    public async Task Equals_TwoIdenticallyBuiltCrlBuilders_AreEqualWithMatchingHashCode()
+    {
+        using var ca = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Test CA").SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
+
+        var a = Fixed(ca);
+        var b = Fixed(ca);
+
+        await Assert.That(a.Equals(b)).IsTrue();
+        await Assert.That(a.GetHashCode()).IsEqualTo(b.GetHashCode());
+    }
+
+
+    [Test]
+    public async Task Equals_EqualButDistinctIssuerCertificates_AreEqual()
+    {
+        using var ca = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Test CA").SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
+        using var first = Internals.CertTools.LoadCertificate(ca.RawData);
+        using var second = Internals.CertTools.LoadCertificate(ca.RawData);
+
+        var a = Fixed(first);
+        var b = Fixed(second);
+
+        await Assert.That(a.Equals(b)).IsTrue();
+        await Assert.That(a.GetHashCode()).IsEqualTo(b.GetHashCode());
+    }
+
+
+    [Test]
+    public async Task Equals_BuildersDifferingInAnEntry_AreNotEqual()
+    {
+        using var ca = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Test CA").SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
+
+        var a = Fixed(ca);
+        var b = Fixed(ca).AddRevokedCertificate(new RevokedCertificate(new byte[] { 2 }, Now));
+
+        await Assert.That(a.Equals(b)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Equals_BuildersDifferingInACrlWideExtension_AreNotEqual()
+    {
+        using var ca = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Test CA").SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
+
+        var a = Fixed(ca);
+        var b = new X509CrlBuilder()
+            .SetIssuer(ca)
+            .SetCrlNumber(1)
+            .SetThisUpdate(Now)
+            .SetNextUpdate(Now.AddDays(1))
+            .AddRevokedCertificate(new RevokedCertificate(new byte[] { 1 }, Now, X509RevocationReason.KeyCompromise))
+            .AddExtension(new X509Extension(new Oid("1.2.3.4"), [6], false));
+
+        await Assert.That(a.Equals(b)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task Equals_BuildersDifferingInTheCrlNumber_AreNotEqual()
+    {
+        using var ca = new CertificateBuilder().SetUsage(CertificateUsage.CA).SetSubject("CN=Test CA").SetKeyAlgorithm(KeyAlgorithm.ECDsa()).Create();
+
+        await Assert.That(Fixed(ca).Equals(Fixed(ca).SetCrlNumber(2))).IsFalse();
+    }
+}
+
+
+public class RevokedCertificateEqualityTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 11, 3, 0, 0, 0, TimeSpan.Zero);
+
+
+    [Test]
+    public async Task Equals_SameContentInSeparateArraysAndLists_AreEqualWithMatchingHashCode()
+    {
+        var a = new RevokedCertificate(new byte[] { 1, 2 }, Now, X509RevocationReason.Superseded, Now.AddDays(-1), new X500DistinguishedName("CN=Other CA")) {
+            Extensions = [new X509Extension(new Oid("1.2.3.4"), [5], false)]
+        };
+        var b = new RevokedCertificate(new byte[] { 1, 2 }, Now, X509RevocationReason.Superseded, Now.AddDays(-1), new X500DistinguishedName("CN=Other CA")) {
+            Extensions = [new X509Extension(new Oid("1.2.3.4"), [5], false)]
+        };
+
+        await Assert.That(a.Equals(b)).IsTrue();
+        await Assert.That(a.GetHashCode()).IsEqualTo(b.GetHashCode());
+    }
+
+
+    [Test]
+    public async Task Equals_EntriesDifferingInSerialIssuerOrExtension_AreNotEqual()
+    {
+        var entry = new RevokedCertificate(new byte[] { 1 }, Now);
+
+        await Assert.That(entry.Equals(new RevokedCertificate(new byte[] { 2 }, Now))).IsFalse();
+        await Assert.That(entry.Equals(entry with { CertificateIssuer = new X500DistinguishedName("CN=Other CA") })).IsFalse();
+        await Assert.That(entry.Equals(entry with { Extensions = [new X509Extension(new Oid("1.2.3.4"), [5], false)] })).IsFalse();
+    }
+}

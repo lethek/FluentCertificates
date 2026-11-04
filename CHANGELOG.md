@@ -13,6 +13,10 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Fixed
+
+- `X509CrlBuilder` and `RevokedCertificate` compare by value, so two identically-configured instances are equal and share a hash code, where their serial numbers, entries and extension lists previously compared by reference.
+
 ## [0.26.0] - 2026-11-03
 
 ### Added
