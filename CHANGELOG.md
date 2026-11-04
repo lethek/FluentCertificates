@@ -13,6 +13,14 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `CertificateRevocationList.VerifySignature`, and `IsIssuedBy` and `IsSelfSigned` with `verifySignature`, throw `NotSupportedException` for a post-quantum signature on .NET 8 and 9 in place of returning `false`.
+
+### Fixed
+
+- `X509CrlBuilder` and `RevokedCertificate` compare by value, so two identically-configured instances are equal and share a hash code, where their serial numbers, entries and extension lists previously compared by reference.
+
 ## [0.26.0] - 2026-11-03
 
 ### Added

@@ -136,6 +136,35 @@ internal static class CrlEncoding
     }
 
 
+    /// <summary>Whether two extension lists hold the same extensions in the same order, each compared by OID,
+    /// criticality and encoded value.</summary>
+    public static bool HaveSameExtensions(IReadOnlyList<X509Extension> a, IReadOnlyList<X509Extension> b)
+    {
+        if (a.Count != b.Count) {
+            return false;
+        }
+        for (var i = 0; i < a.Count; i++) {
+            if (a[i].Oid?.Value != b[i].Oid?.Value
+                || a[i].Critical != b[i].Critical
+                || !a[i].RawData.AsSpan().SequenceEqual(b[i].RawData)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+
+    /// <summary>Adds what <see cref="HaveSameExtensions"/> compares to a hash.</summary>
+    public static void AddExtensionsToHash(ref HashCode hash, IEnumerable<X509Extension> extensions)
+    {
+        foreach (var extension in extensions) {
+            hash.Add(extension.Oid?.Value);
+            hash.Add(extension.Critical);
+            hash.AddBytes(extension.RawData);
+        }
+    }
+
+
     /// <summary>Writes a UTCTime for 1950 to 2049 and a GeneralizedTime outside it, as RFC 5280 s5.1.2.4 requires.</summary>
     public static void WriteTime(AsnWriter writer, DateTimeOffset time)
     {

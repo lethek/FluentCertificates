@@ -243,11 +243,33 @@ public class CertificateRevocationListTests
             .SetRSASignaturePadding(RSASignaturePadding.Pss)
             .SetHashAlgorithm(new HashAlgorithmName(hash))
             .SetCrlNumber(1)
+            .SetThisUpdate(Now)
             .SetNextUpdate(Now.AddDays(1))
             .Create();
 
         await Assert.That(crl.VerifySignature(ca)).IsTrue();
         await Assert.That(crl.VerifySignature(other)).IsFalse();
+    }
+
+
+    [Test]
+    public async Task VerifySignature_APostQuantumSignature_IsNotReportedAsAFailedVerificationWhereTheTargetCannotCheckIt()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var ca = CreateCa();
+
+        var identifier = new AsnWriter(AsnEncodingRules.DER);
+        using (identifier.PushSequence()) {
+            identifier.WriteObjectIdentifier("2.16.840.1.101.3.4.3.18"); //ML-DSA-65
+        }
+        var crl = CertificateRevocationList.Load(BuildCrl(key, null, [], identifier.Encode()));
+
+#if NET10_0_OR_GREATER
+        //The target can check it, and an elliptic-curve key is the wrong kind for the signature
+        await Assert.That(crl.VerifySignature(ca)).IsFalse();
+#else
+        await Assert.That(() => crl.VerifySignature(ca)).Throws<NotSupportedException>();
+#endif
     }
 
 

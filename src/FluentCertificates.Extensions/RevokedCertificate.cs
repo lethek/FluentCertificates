@@ -1,11 +1,13 @@
 using System.Collections.Immutable;
 using System.Security.Cryptography.X509Certificates;
 
+using FluentCertificates.Internals;
+
 namespace FluentCertificates;
 
 /// <summary>One entry of a CRL: a certificate that has been revoked, and when and why.</summary>
-/// <remarks>Equality compares <see cref="SerialNumber"/> by reference, as it does for any
-/// <see cref="ReadOnlyMemory{T}"/>. A serial number is unsigned. A loaded CRL that lists a negative one, which
+/// <remarks>Equality compares <see cref="SerialNumber"/> and <see cref="Extensions"/> by content, and
+/// <see cref="CertificateIssuer"/> by its encoded bytes. A serial number is unsigned. A loaded CRL that lists a negative one, which
 /// RFC 5280 s4.1.2.2 forbids, yields its two's-complement bytes, and writing those back gives a different,
 /// positive number.</remarks>
 /// <param name="SerialNumber">The revoked certificate's serial number, as unsigned big-endian bytes.</param>
@@ -26,6 +28,36 @@ public sealed record RevokedCertificate(
     /// <summary>Gets the entry extensions this library has no property for, kept so that a CRL read and
     /// written again does not lose them.</summary>
     public ImmutableList<X509Extension> Extensions { get; init; } = [];
+
+
+    /// <summary>Gets whether another entry describes the same revocation, comparing the serial number, the entry
+    /// extensions and the certificate issuer by content.</summary>
+    /// <param name="other">The entry to compare with.</param>
+    public bool Equals(RevokedCertificate? other)
+        => other != null
+           && SerialNumber.Span.SequenceEqual(other.SerialNumber.Span)
+           && RevocationDate == other.RevocationDate
+           && Reason == other.Reason
+           && InvalidityDate == other.InvalidityDate
+           && (CertificateIssuer?.RawData is { } issuer
+               ? other.CertificateIssuer?.RawData is { } otherIssuer && issuer.AsSpan().SequenceEqual(otherIssuer)
+               : other.CertificateIssuer == null)
+           && CrlEncoding.HaveSameExtensions(Extensions, other.Extensions);
+
+    /// <summary>Gets a hash code consistent with <see cref="Equals(RevokedCertificate)"/>.</summary>
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.AddBytes(SerialNumber.Span);
+        hash.Add(RevocationDate);
+        hash.Add(Reason);
+        hash.Add(InvalidityDate);
+        if (CertificateIssuer != null) {
+            hash.AddBytes(CertificateIssuer.RawData);
+        }
+        CrlEncoding.AddExtensionsToHash(ref hash, Extensions);
+        return hash.ToHashCode();
+    }
 
 
     /// <summary>Describes the revocation of a certificate.</summary>

@@ -213,7 +213,7 @@ public static class X509Certificate2Extensions
     /// <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if self-signed; otherwise, false.</returns>
     /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
-    /// names match, and the certificate's signature algorithm is not recognised, or is RSASSA-PSS with parameters
+    /// names match, and the certificate's signature algorithm is not recognised, is post-quantum on a target before .NET 10, or is RSASSA-PSS with parameters
     /// other than MGF1 over the same hash, a salt as long as the hash, and trailer field 1.</exception>
     public static bool IsSelfSigned(
         this X509Certificate2 cert,
@@ -231,7 +231,7 @@ public static class X509Certificate2Extensions
     /// <returns>True if self-signed; otherwise, false.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
     /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
-    /// names match, and the certificate's signature algorithm is not recognised, or is RSASSA-PSS with parameters
+    /// names match, and the certificate's signature algorithm is not recognised, is post-quantum on a target before .NET 10, or is RSASSA-PSS with parameters
     /// other than MGF1 over the same hash, a salt as long as the hash, and trailer field 1.</exception>
     public static bool IsSelfSigned(
         this X509Certificate2 cert,
@@ -252,7 +252,7 @@ public static class X509Certificate2Extensions
     /// <see cref="X500NameComparer.FoldedAnyOrder"/>. Null means <see cref="X500NameComparer.Values"/>.</param>
     /// <returns>True if issued by the specified issuer; otherwise, false.</returns>
     /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
-    /// names match, and the certificate's signature algorithm is not recognised, or is RSASSA-PSS with parameters
+    /// names match, and the certificate's signature algorithm is not recognised, is post-quantum on a target before .NET 10, or is RSASSA-PSS with parameters
     /// other than MGF1 over the same hash, a salt as long as the hash, and trailer field 1.</exception>
     /// <remarks>The default disregards how the names were encoded, which RFC 5280 s4.1.2.4 makes necessary:
     /// a conforming authority may encode a name as either PrintableString or UTF8String, and the RFC's own
@@ -278,7 +278,7 @@ public static class X509Certificate2Extensions
     /// <returns>True if issued by the specified issuer; otherwise, false.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="comparer"/> is null.</exception>
     /// <exception cref="NotSupportedException">Thrown when <paramref name="verifySignature"/> is true, the
-    /// names match, and the certificate's signature algorithm is not recognised, or is RSASSA-PSS with parameters
+    /// names match, and the certificate's signature algorithm is not recognised, is post-quantum on a target before .NET 10, or is RSASSA-PSS with parameters
     /// other than MGF1 over the same hash, a salt as long as the hash, and trailer field 1.</exception>
     public static bool IsIssuedBy(
         this X509Certificate2 cert,
@@ -314,7 +314,7 @@ public static class X509Certificate2Extensions
     /// <param name="sig">The signature.</param>
     /// <param name="issuer">The certificate holding the public key.</param>
     /// <returns>True if the signature is valid; otherwise, false.</returns>
-    /// <exception cref="NotSupportedException">The algorithm is not recognised, or is RSASSA-PSS with parameters .NET cannot verify.</exception>
+    /// <exception cref="NotSupportedException">The algorithm is not recognised, is post-quantum on a target before .NET 10, or is RSASSA-PSS with parameters .NET cannot verify.</exception>
     internal static bool VerifySignature(ReadOnlyMemory<byte> algorithmIdentifier, ReadOnlySpan<byte> tbs, ReadOnlySpan<byte> sig, X509Certificate2 issuer)
     {
         var algorithm = SignatureAlgorithm.FromAlgorithmIdentifier(algorithmIdentifier);
@@ -370,7 +370,9 @@ public static class X509Certificate2Extensions
             #pragma warning restore FLUENTCERT001
 #endif
             default:
-                return false;
+                //Reached only for a post-quantum algorithm on a target before .NET 10, which cannot verify it. That is not
+                //a signature that failed, so it must not read as one
+                throw new NotSupportedException($"A {algorithm.Family} signature cannot be verified on this target framework");
         }
     }
 
