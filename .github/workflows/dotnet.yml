@@ -100,7 +100,7 @@ jobs:
 
     - name: Generate coverage summary
       if: ${{ !cancelled() }}
-      uses: danielpalme/ReportGenerator-GitHub-Action@5.5.12
+      uses: danielpalme/ReportGenerator-GitHub-Action@5.6.0
       with:
         reports: ${{ github.workspace }}/coverage/*.cobertura.xml
         targetdir: ${{ github.workspace }}/coveragereport
