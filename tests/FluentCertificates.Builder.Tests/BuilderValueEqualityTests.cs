@@ -93,10 +93,13 @@ public class GeneralNameListBuilderEqualityTests
 public class CertificateBuilderEqualityTests
 {
     //The clock-dependent NotBefore/NotAfter defaults would confound equality, so pin them
+    private static readonly DateTimeOffset Start = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+
     private static CertificateBuilder Fixed()
         => new CertificateBuilder()
-            .SetNotBefore(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero))
-            .SetNotAfter(new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero));
+            .SetNotBefore(Start)
+            .SetNotAfter(Start.AddYears(10));
 
 
     [Test]
@@ -338,7 +341,7 @@ public class CertificateBuilderEqualityTests
 
 public class X509CrlBuilderEqualityTests
 {
-    private static readonly DateTimeOffset Now = new(2026, 11, 3, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
 
     private static X509CrlBuilder Fixed(X509Certificate2 issuer)
@@ -421,7 +424,7 @@ public class X509CrlBuilderEqualityTests
 
 public class RevokedCertificateEqualityTests
 {
-    private static readonly DateTimeOffset Now = new(2026, 11, 3, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
 
     [Test]

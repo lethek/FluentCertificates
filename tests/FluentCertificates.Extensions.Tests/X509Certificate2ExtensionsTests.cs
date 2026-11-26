@@ -436,8 +436,9 @@ public class X509Certificate2ExtensionsTests
     [Test]
     public async Task IsValidAt_InsideAndOutsideTheValidityWindow()
     {
-        var from = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var to = new DateTimeOffset(2030, 12, 31, 0, 0, 0, TimeSpan.Zero);
+        //Whole seconds, which is all a certificate keeps, so the inclusive bounds below compare exactly
+        var from = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        var to = from.AddDays(365);
 
         using var cert = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName("Validity Test"))
@@ -460,7 +461,7 @@ public class X509Certificate2ExtensionsTests
     public async Task IsValidAt_SameInstantInDifferentOffsets_GivesTheSameAnswer()
     {
         //A window narrow enough that mistaking the offset for part of the value crosses a bound
-        var instant = new DateTimeOffset(2030, 6, 1, 12, 0, 0, TimeSpan.Zero);
+        var instant = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
         using var cert = new CertificateBuilder()
             .SetSubject(x => x.SetCommonName("Offset Test"))
