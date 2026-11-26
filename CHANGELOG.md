@@ -13,6 +13,8 @@ release rather than record it as it happened.
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-26
+
 ### Changed
 
 - **Breaking:** `CertificateRevocationList.VerifySignature`, and `IsIssuedBy` and `IsSelfSigned` with `verifySignature`, throw `NotSupportedException` for a post-quantum signature on .NET 8 and 9 in place of returning `false`.
@@ -661,7 +663,8 @@ release rather than record it as it happened.
 - Initial release: `CertificateBuilder`, `X509NameBuilder`, certificate finding, and PEM export
   including `X509Chain.ToPemString()`. Targets .NET Standard 2.1, .NET 5 and .NET 6.
 
-[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/lethek/FluentCertificates/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/lethek/FluentCertificates/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/lethek/FluentCertificates/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/lethek/FluentCertificates/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/lethek/FluentCertificates/compare/v0.23.0...v0.24.0
