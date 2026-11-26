@@ -18,7 +18,8 @@ namespace FluentCertificates;
 
 public class X509CrlBuilderTests
 {
-    private static readonly DateTimeOffset Now = new(2026, 11, 3, 0, 0, 0, TimeSpan.Zero);
+    //Relative to the real clock, because the code under test reads it, and in whole seconds, which is all a CRL keeps
+    private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     private static readonly DateTimeOffset Next = Now.AddDays(7);
 
 

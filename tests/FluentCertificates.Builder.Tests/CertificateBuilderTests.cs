@@ -669,7 +669,7 @@ public class CertificateBuilderTests
     [Test]
     public async Task SetValidity_FromAndDuration_SetsBothBounds()
     {
-        var from = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var from = DateTimeOffset.UtcNow;
 
         var builder = new CertificateBuilder().SetValidity(from, TimeSpan.FromDays(30));
 
