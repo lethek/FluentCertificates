@@ -67,12 +67,12 @@ jobs:
         fetch-depth: 0
 
     - name: Setup GitVersion
-      uses: gittools/actions/gitversion/setup@v4
+      uses: gittools/actions/gitversion/setup@v5
       with:
-        versionSpec: 6.x
+        versionSpec: 7.0.x
 
     - name: Execute GitVersion
-      uses: gittools/actions/gitversion/execute@v4
+      uses: gittools/actions/gitversion/execute@v5
       id: gitversion
 
     - name: Setup .NET
