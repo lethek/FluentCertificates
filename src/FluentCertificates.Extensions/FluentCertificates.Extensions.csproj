@@ -33,7 +33,7 @@
   <Choose>
     <When Condition="'$(TargetFramework)' == 'net8.0'">
       <ItemGroup>
-        <PackageReference Include="System.Collections.Immutable" Version="10.0.15" />
+        <PackageReference Include="System.Collections.Immutable" Version="8.0.0" />
       </ItemGroup>
     </When>
     <Otherwise>
