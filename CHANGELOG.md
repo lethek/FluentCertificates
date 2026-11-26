@@ -16,7 +16,7 @@ release rather than record it as it happened.
 ### Changed
 
 - **Breaking:** `CertificateRevocationList.VerifySignature`, and `IsIssuedBy` and `IsSelfSigned` with `verifySignature`, throw `NotSupportedException` for a post-quantum signature on .NET 8 and 9 in place of returning `false`.
-- Bumped `TestableIO.System.IO.Abstractions` to 23.1.0.
+- Bumped `TestableIO.System.IO.Abstractions` to 23.1.0, and `System.Collections.Immutable` to 10.0.15 for net9.0 and net10.0.
 
 ### Fixed
 
